@@ -1,0 +1,10 @@
+Django>=4.2
+djangorestframework
+channels>=4.0
+channels-redis
+pandas
+requests
+openpyxl
+asgiref
+python-dotenv
+celery[redis]

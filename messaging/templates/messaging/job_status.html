@@ -1,0 +1,69 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WhatsApp Sending Progress</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f9fafc;
+        }
+        .progress-container {
+            max-width: 700px;
+            margin: 80px auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.08);
+        }
+        .progress-bar {
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+    <script>
+        // Auto-refresh every 5 seconds until 100%
+        setInterval(() => {
+            const progress = parseFloat(document.getElementById('progressValue').innerText);
+            if (progress < 100) {
+                window.location.reload();
+            }
+        }, 5000);
+    </script>
+</head>
+<body>
+    <div class="progress-container">
+        <h3 class="text-center mb-4">📤 WhatsApp Bulk Sending Progress</h3>
+
+        <div class="mb-3">
+            <p><strong>Job ID:</strong> {{ job.job_id }}</p>
+            <p><strong>Template:</strong> {{ job.template_name }}</p>
+            <p><strong>Total Customers:</strong> {{ job.total_customers }}</p>
+            <p><strong>Sent:</strong> {{ job.sent_count }}</p>
+            <p><strong>Status:</strong> {{ job.status }}</p>
+        </div>
+
+        <div class="progress mb-3" style="height: 30px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                 role="progressbar"
+                 style="width: {{ progress }}%;"
+                 aria-valuenow="{{ progress }}"
+                 aria-valuemin="0"
+                 aria-valuemax="100">
+                {{ progress }}%
+            </div>
+        </div>
+
+        <div class="text-center">
+            <h5 id="progressValue">{{ progress }}</h5>
+            {% if progress < 100 %}
+                <p class="text-muted">Processing... Please wait</p>
+            {% else %}
+                <p class="text-success fw-bold">✅ All messages sent!</p>
+                <a href="{% url 'download_success_report' job.job_id %}" class="btn btn-success btn-sm">Download Success Report</a>
+                <a href="{% url 'download_failed_report' job.job_id %}" class="btn btn-danger btn-sm">Download Failed Report</a>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
