@@ -23,6 +23,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('',include('messaging.urls')),
     path('messaging2/',include('messaging2.urls')),
+    path('adminpanel/', include('adminpanel.urls')),
+    path('financehub/', include('financehub.urls')),
 
 
 ]

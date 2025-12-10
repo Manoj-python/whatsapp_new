@@ -9,6 +9,8 @@ TEMPLATE_CHOICES = [
     ("6", "Nach Balance Reminder (English)"),
     ("7", "Vehicle Registration Reminder (English)"),
     ("8", "Welcome Message (English)"),
+    ("9", "NOC Dispatch Template (English)"),
+
 ]
 
 class UploadForm(forms.Form):

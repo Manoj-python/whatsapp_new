@@ -1,5 +1,4 @@
 from django import forms
-
 TEMPLATE_CHOICES = [
     ("1", "EMI Reminder (English)"),
     ("2", "EMI Tenure Reminder (Telugu)"),
@@ -9,7 +8,10 @@ TEMPLATE_CHOICES = [
     ("6", "Nach Balance Reminder (English)"),
     ("7", "Vehicle Registration Reminder (English)"),
     ("8", "Welcome Message (English)"),
+    ("9", "NOC Dispatch Template (English)"),
 ]
+
+
 
 class UploadForm(forms.Form):
     template_choice = forms.ChoiceField(choices=TEMPLATE_CHOICES, label="Select Template")

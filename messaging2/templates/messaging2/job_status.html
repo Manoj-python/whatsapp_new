@@ -60,10 +60,17 @@
                 <p class="text-muted">Processing... Please wait</p>
             {% else %}
                 <p class="text-success fw-bold">✅ All messages sent!</p>
-                <a href="{% url 'download_success_report' job.job_id %}" class="btn btn-success btn-sm">Download Success Report</a>
-                <a href="{% url 'download_failed_report' job.job_id %}" class="btn btn-danger btn-sm">Download Failed Report</a>
+           <a href="{% url 'download_success_report2' job.job_id %}" class="btn btn-success btn-sm">
+    Download Success Report
+</a>
+
+<a href="{% url 'download_failed_report2' job.job_id %}" class="btn btn-danger btn-sm">
+    Download Failed Report
+</a>
+
             {% endif %}
         </div>
     </div>
 </body>
 </html>
+

@@ -11,8 +11,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY & DEBUG
 # ---------------------------------------------------------------------
 SECRET_KEY = 'django-insecure-&ec&(!u@z9b7of8+l$rm74f)zptc9o-(2-4wk4r+cb6w80a-1h'
-DEBUG = True
-ALLOWED_HOSTS = ["*"]
+DEBUG = False
+
+ALLOWED_HOSTS = ["padmasai.info", "www.padmasai.info", "localhost", "127.0.0.1"]
 
 # ---------------------------------------------------------------------
 # INSTALLED APPS
@@ -23,11 +24,14 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles",
+    "django.contrib.staticfiles", 
+     "channels", 
+     "storages",
+     'adminpanel',
 
-    # WhatsApp Apps
-    "messaging",
-    "messaging2",
+     "messaging",
+     "messaging2",
+     "financehub",
 ]
 
 # ---------------------------------------------------------------------
@@ -44,6 +48,10 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "whatsapp_sender.urls"
+
+
+LOGIN_URL = '/adminpanel/login/'
+LOGIN_REDIRECT_URL = '/adminpanel/dashboard/'
 
 TEMPLATES = [
     {
@@ -67,8 +75,16 @@ WSGI_APPLICATION = "whatsapp_sender.wsgi.application"
 # ---------------------------------------------------------------------
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": "whatsappdb",
+        "USER": "django",
+        "PASSWORD": "DjangoDBpass123!",
+        "HOST": "127.0.0.1",
+        "PORT": "3306",
+        "OPTIONS": {
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            "charset": "utf8mb4",
+        },
     }
 }
 
@@ -126,6 +142,29 @@ WHATSAPP2_PHONE_NUMBER_ID = os.environ.get("WHATSAPP2_PHONE_NUMBER_ID", "9014588
 WHATSAPP2_BUSINESS_ACCOUNT_ID = "1121446340109803"
 WHATSAPP2_VERIFY_TOKEN = os.environ.get("WHATSAPP2_VERIFY_TOKEN", "smsquare_verify_2")
 
+
+
+# ---------------------------------------------------------------------
+# AWS S3 STORAGE CONFIGURATION
+# ---------------------------------------------------------------------
+AWS_ACCESS_KEY_ID = "AKIA2PW4BLO5V222Z5OX"
+AWS_SECRET_ACCESS_KEY = "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"
+AWS_STORAGE_BUCKET_NAME = "whatsapp-sender-files"
+AWS_S3_REGION_NAME = "ap-south-1"
+AWS_S3_SIGNATURE_VERSION = "s3v4"
+
+AWS_DEFAULT_ACL = None
+AWS_S3_FILE_OVERWRITE = False
+AWS_S3_VERIFY = True
+
+# CRITICAL FIX
+AWS_S3_ADDRESSING_STYLE = "virtual"
+
+# Use S3 for all uploaded media (images, documents, WhatsApp media, Excel, etc.)
+DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+
+
+
 # ---------------------------------------------------------------------
 # CELERY + REDIS CONFIG
 # ---------------------------------------------------------------------
@@ -140,6 +179,7 @@ CELERY_TIMEZONE = "Asia/Kolkata"
 CELERY_TASK_ROUTES = {
     "messaging.tasks.*": {"queue": "whatsapp_main"},
     "messaging2.tasks.*": {"queue": "whatsapp_secondary"},
+    "financehub.tasks.*": {"queue": "whatsapp_main"},   # NEW
 }
 
 # ---------------------------------------------------------------------
@@ -159,3 +199,15 @@ UPLOAD_DIR_2 = os.path.join(BASE_DIR, "uploads2")
 
 os.makedirs(UPLOAD_DIR_1, exist_ok=True)
 os.makedirs(UPLOAD_DIR_2, exist_ok=True)
+
+
+ASGI_APPLICATION = "whatsapp_sender.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}

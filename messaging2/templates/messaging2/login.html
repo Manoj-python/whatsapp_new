@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Messaging2 — PADMA SAI HOLDINGS PRIVATE LIMITED</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --brand:#198754;      /* green theme for Padma Sai */
+      --accent:#157347;
+      --muted:#6c757d;
+      --card-radius:14px;
+    }
+
+    body{
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: linear-gradient(180deg, #f4fff8 0%, #e9ffef 100%);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+
+    .login-wrap{
+      width:100%;
+      max-width:980px;
+      margin:24px;
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:28px;
+      align-items:center;
+    }
+
+    .brand-card{
+      background: linear-gradient(180deg, rgba(25,135,84,0.06), rgba(25,135,84,0.03));
+      border-radius: var(--card-radius);
+      padding:28px;
+      box-shadow:0 8px 30px rgba(0,0,0,0.06);
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+    }
+
+    .brand-logo{
+      width:64px;
+      height:64px;
+      border-radius:10px;
+      background:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:700;
+      font-size:20px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.05);
+      color: var(--brand);
+    }
+
+    .company-title{
+      font-size:18px;
+      font-weight:700;
+      line-height:1.1;
+      color:#0b4a29;
+    }
+
+    .company-sub{
+      font-size:14px;
+      color:var(--muted);
+    }
+
+    .illustration{
+      width:100%;
+      height:220px;
+      border-radius:10px;
+      background: linear-gradient(90deg,#dfffe7,#fff);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:22px;
+      font-weight:600;
+      color: var(--accent);
+    }
+
+    .benefits{
+      color:#0b4a29;
+      font-size:14px;
+    }
+
+    .card-login{
+      padding:28px;
+      background:#fff;
+      border-radius:var(--card-radius);
+      box-shadow:0 12px 32px rgba(0,0,0,0.07);
+    }
+
+    .show-pass{
+      cursor:pointer;
+      user-select:none;
+    }
+
+    @media (max-width: 900px) {
+      .login-wrap{
+        grid-template-columns:1fr;
+      }
+      .illustration{ height:160px; }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="login-wrap">
+
+  <!-- LEFT PANEL -->
+  <div class="brand-card">
+
+    <div class="d-flex align-items-center gap-3">
+      <div class="brand-logo">PS</div>
+
+      <div>
+        <div class="company-title">
+          PADMA SAI HOLDINGS<br/>
+          <small style="font-weight:600;color:var(--brand);">Private Limited</small>
+        </div>
+
+        <div class="company-sub">Secure Messaging Portal — Internal Use</div>
+      </div>
+    </div>
+
+    <div class="illustration mt-2">
+      Messaging2 Portal
+    </div>
+
+    <div class="benefits mt-2">
+      <ul style="margin:0;padding-left:18px;">
+        <li>Send bulk WhatsApp messages easily</li>
+        <li>Downloadable success & failure reports</li>
+        <li>Secure login with admin-created users</li>
+      </ul>
+    </div>
+
+    <div class="text-muted small mt-2">
+      If you don't have access, please contact the system administrator.
+    </div>
+  </div>
+
+  <!-- RIGHT LOGIN FORM -->
+  <div class="card-login">
+
+    <h4 class="mb-3">Sign in to Messaging2</h4>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-danger alert-dismissible fade show">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="POST" novalidate>
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Username</label>
+        <input name="username" type="text" class="form-control form-control-lg" placeholder="Enter username" required autofocus>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Password</label>
+        <div class="input-group">
+          <input name="password" id="passwordField" type="password" class="form-control form-control-lg" placeholder="Enter password" required>
+          <span class="input-group-text show-pass" id="togglePass">👁️</span>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="rememberMe">
+          <label class="form-check-label" for="rememberMe">Remember me</label>
+        </div>
+        <a href="#" class="small text-decoration-none text-muted">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="btn btn-success btn-lg w-100">
+        Sign in
+      </button>
+
+      <div class="text-center mt-3">
+        <small class="text-muted">Use credentials provided by the admin</small>
+      </div>
+
+    </form>
+
+    <div class="text-center mt-3">
+      <small class="text-muted">© {{ now.year }} PADMA SAI HOLDINGS PRIVATE LIMITED</small>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  document.getElementById('togglePass')?.addEventListener('click', function(){
+    const f = document.getElementById('passwordField');
+    if(f.type === 'password'){
+      f.type = 'text';
+      this.textContent = '🙈';
+    } else {
+      f.type = 'password';
+      this.textContent = '👁️';
+    }
+  });
+</script>
+
+</body>
+</html>

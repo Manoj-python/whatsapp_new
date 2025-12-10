@@ -16,8 +16,20 @@ urlpatterns = [
     path('chat/', views.chat_dashboard2, name='chat_dashboard2'),
     path('api/messages/<str:mobile>/', views.chat_messages_api2, name='chat_messages_api2'),
     path('api/send-reply/', views.send_reply_api2, name='send_reply_api2'),
+    path("api/contacts2/", views.contacts_api2, name="contacts_api2"),
+    path("api/mark-read/<str:mobile>/", views.mark_read),
+    path("login/", views.messaging2_login, name="messaging2_login"),
+    path("logout/", views.messaging2_logout, name="messaging2_logout"),
+
+
 
     # Webhook and exports
     path('webhook/', views.whatsapp_webhook2, name='whatsapp_webhook2'),
     path('export/received/', views.export_received_messages_to_excel2, name='export_received2'),
+
+
+     # -----------------------------
+    # Real-time Chat Features (App2)
+    # -----------------------------
+
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

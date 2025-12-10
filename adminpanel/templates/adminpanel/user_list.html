@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create User</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark mb-3">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'admin_dashboard' %}">Admin Panel</a>
+        <a href="{% url 'admin_logout' %}" class="btn btn-outline-light">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <h3>Create New User</h3>
+
+    <form method="POST" class="card p-4 shadow-sm mt-3">
+        {% csrf_token %}
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-danger">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input name="username" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input name="password" type="password" class="form-control" required>
+        </div>
+
+        <div class="form-check mb-3">
+            <input type="checkbox" name="is_staff" class="form-check-input">
+            <label class="form-check-label">Staff User?</label>
+        </div>
+
+        <button class="btn btn-success">Create User</button>
+    </form>
+
+</div>
+
+</body>
+</html>

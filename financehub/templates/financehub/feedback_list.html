@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feedback List</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        .table-responsive-horizontal { overflow-x: auto; white-space: nowrap; }
+        td.remarks-col { white-space: normal !important; max-width: 400px; }
+        .remarks-box { white-space: pre-wrap; }
+    </style>
+</head>
+
+<body class="bg-light">
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
+    <div class="container-fluid">
+
+        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'feedback_create' %}">Add Feedback</a></li>
+                <li class="nav-item"><a class="nav-link active" href="{% url 'feedback_list' %}">Feedback List</a></li>
+            </ul>
+
+            <div class="d-flex">
+                <span class="text-white me-3">👤 {{ request.user.username }}</span>
+                <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
+            </div>
+        </div>
+
+    </div>
+</nav>
+
+
+<div class="container-fluid mt-4">
+
+    <div class="d-flex justify-content-between mb-3">
+        <h3>Feedback Records</h3>
+        <a href="{% url 'feedback_create' %}" class="btn btn-primary">Add Feedback</a>
+    </div>
+
+    <!-- FILTER FORM -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Search anything</label>
+                    <input type="text" name="search" value="{{ filters.search }}" class="form-control" placeholder="Loan / Name / Vehicle / Remarks">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Employee</label>
+                    <input type="text" name="emp" value="{{ filters.emp }}" class="form-control">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Date</label>
+                    <input type="date" name="date" value="{{ filters.date }}" class="form-control">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Feedback Type</label>
+                    <select name="ftype" class="form-control">
+                        <option value="">Select</option>
+                        {% for val,label in FTYPES %}
+                        <option value="{{ val }}" {% if filters.ftype == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Contact Type</label>
+                    <select name="ctype" class="form-control">
+                        <option value="">Select</option>
+                        {% for val,label in CTYPES %}
+                        <option value="{{ val }}" {% if filters.ctype == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Visiting Required</label>
+                    <select name="visiting" class="form-control">
+                        <option value="">Select</option>
+                        <option value="yes" {% if filters.visiting == "yes" %}selected{% endif %}>Yes</option>
+                        <option value="no" {% if filters.visiting == "no" %}selected{% endif %}>No</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Executive ID</label>
+                    <input type="text" name="executive" value="{{ filters.executive }}" class="form-control">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">PTP Date</label>
+                    <input type="date" name="ptp" value="{{ filters.ptp }}" class="form-control">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Visit Date</label>
+                    <input type="date" name="vdate" value="{{ filters.vdate }}" class="form-control">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100">Apply</button>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <a href="{% url 'feedback_list' %}" class="btn btn-secondary w-100">Reset</a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+
+            <div class="table-responsive-horizontal">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Emp</th>
+                            <th>Loan</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Vehicle</th>
+                            <th>Type</th>
+                            <th>Contact</th>
+                            <th>PTP</th>
+                            <th>Remarks</th>
+                            <th>Visit</th>
+                            <th>Executive</th>
+                            <th>Visit Date</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for f in data %}
+                        <tr>
+                            <td>{{ f.id }}</td>
+                            <td>{{ f.EmpID }}</td>
+                            <td>{{ f.LoanNO }}</td>
+                            <td>{{ f.Date }}</td>
+                            <td>{{ f.customer_name }}</td>
+                            <td>{{ f.vehicle_no }}</td>
+                            <td>{{ f.Dropdown }}</td>
+                            <td>{{ f.feedback_dropdwon }}</td>
+                            <td>{{ f.PTPDate }}</td>
+                            <td class="remarks-col"><div class="remarks-box">{{ f.Remarks }}</div></td>
+                            <td>{% if f.visiting_required %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+                            <td>{{ f.executive_id }}</td>
+                            <td>{{ f.visit_date }}</td>
+                            <td>{{ f.created_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- PAGINATION -->
+            <nav class="mt-3">
+                <ul class="pagination justify-content-center">
+                    {% if data.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ data.previous_page_number }}&{{ query_string }}">« Prev</a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in data.paginator.page_range %}
+                        {% if num == data.number %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% else %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}&{{ query_string }}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if data.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ data.next_page_number }}&{{ query_string }}">Next »</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

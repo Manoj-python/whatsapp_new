@@ -58,8 +58,9 @@ class BulkJob(models.Model):
     excel_file = models.FileField(upload_to="uploads/")
 
     # optional: store per-job report filenames (recommended)
-    success_report = models.FileField(upload_to="reports/", blank=True, null=True)
-    failed_report = models.FileField(upload_to="reports/", blank=True, null=True)
+    success_report = models.FileField(upload_to="reports/", blank=True, null=True,max_length=500)
+    failed_report = models.FileField(upload_to="reports/", blank=True, null=True,max_length=500)
 
     def __str__(self):
         return f"{self.template_name} ({self.job_id})"
+

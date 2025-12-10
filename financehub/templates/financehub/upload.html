@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Loan Data</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+<!-- NAVBAR START -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
+    <div class="container-fluid">
+
+        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link active" href="{% url 'upload_loan_data' %}">Upload File</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'feedback_create' %}">Add Feedback</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'feedback_list' %}">Feedback List</a></li>
+            </ul>
+
+            <div class="d-flex">
+                <span class="text-white me-3">👤 {{ request.user.username }}</span>
+                <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
+            </div>
+
+        </div>
+    </div>
+</nav>
+<!-- NAVBAR END -->
+
+<div style="margin-top: 80px;"></div>
+
+<div class="container mt-4">
+    <div class="card shadow-lg p-4">
+
+        <h3 class="text-center mb-3">📄 Upload Loan CSV / Excel</h3>
+
+        {% if error %}
+        <div class="alert alert-danger">{{ error|safe }}</div>
+        {% endif %}
+
+        {% if msg %}
+        <div class="alert alert-success">{{ msg|safe }}</div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label"><strong>Select CSV or Excel File</strong></label>
+                <input type="file" name="file" class="form-control" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+                Upload & Process
+            </button>
+        </form>
+
+    </div>
+</div>
+
+</body>
+</html>
