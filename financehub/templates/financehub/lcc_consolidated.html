@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LCC Consolidated</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 6px 8px;
+            vertical-align: top;
+        }
+        th {
+            background: #222;
+            color: #fff;
+        }
+        .paid { color: green; font-weight: bold; }
+        .repo { color: red; font-weight: bold; }
+        .closed { color: blue; font-weight: bold; }
+        .active { color: orange; font-weight: bold; }
+        .small {
+            font-size: 12px;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>LCC Consolidated View</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Loan No</th>
+            <th>Customer</th>
+            <th>Vehicle</th>
+            <th>EMI Due</th>
+            <th>Latest CLU</th>
+            <th>Total Received</th>
+            <th>Executive</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for r in data %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ r.loan_number }}</td>
+            <td>{{ r.customer_name }}</td>
+            <td>{{ r.vehicle_no }}</td>
+            <td>{{ r.emi_due_2 }}</td>
+
+            <td>
+                {% if r.clu_visited_on %}
+                    <div><b>{{ r.clu_status }} / {{ r.clu_sub_status }}</b></div>
+                    <div class="small">{{ r.clu_visited_on }}</div>
+                    <div class="small">{{ r.clu_remarks }}</div>
+                {% else %}
+                    <span class="small">No CLU</span>
+                {% endif %}
+            </td>
+
+            <td>{{ r.total_received|default:"0" }}</td>
+
+            <td>{{ r.executive_name|default:"-" }}</td>
+
+            <td>
+                {% if r.final_status == "PAID" %}
+                    <span class="paid">PAID</span>
+                {% elif r.final_status == "REPO" %}
+                    <span class="repo">REPO</span>
+                {% elif r.final_status == "CLOSED" %}
+                    <span class="closed">CLOSED</span>
+                {% else %}
+                    <span class="active">ACTIVE</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="9" style="text-align:center;">No data found</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</body>
+</html>

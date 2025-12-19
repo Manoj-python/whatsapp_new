@@ -10,8 +10,29 @@ class LccAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
     list_per_page = 50
 
+from django.contrib import admin
+from .models import UploadHistory
+
 @admin.register(UploadHistory)
 class UploadHistoryAdmin(admin.ModelAdmin):
-    list_display = ("filename", "uploaded_by", "uploaded_at", "rows_in_file", "rows_inserted")
-    readonly_fields = ("uploaded_at",)
-    ordering = ("-uploaded_at",)
+    list_display = (
+        "id",
+        "filename",
+        "file_type",
+        "uploaded_by",
+        "uploaded_at",
+        "total_rows",
+        "processed_rows",
+        "status",
+    )
+
+    readonly_fields = (
+        "filename",
+        "file_type",
+        "uploaded_by",
+        "uploaded_at",
+        "total_rows",
+        "processed_rows",
+        "status",
+        "error_message",
+    )

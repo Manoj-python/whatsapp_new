@@ -2,33 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Upload Loan Data</title>
+    <title>Upload Data</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
 
-<!-- NAVBAR START -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
+<!-- 🚀 RESPONSIVE NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
     <div class="container-fluid">
 
         <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
 
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarNav">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
 
             <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link active" href="{% url 'upload_loan_data' %}">Upload File</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'feedback_create' %}">Add Feedback</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'feedback_list' %}">Feedback List</a></li>
-            </ul>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'upload_loan_data' %}active{% endif %}"
+                       href="{% url 'upload_loan_data' %}">Upload File</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'feedback_create' %}">Add Feedback</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'feedback_list' %}">Feedback List</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'executive_visit_schedule_list' %}">
+                 Executive Visit Schedule
+                 </a>
+                 </li>
 
-            <div class="d-flex">
+                             <!-- 👤 EXECUTIVE VIEW (NEW) -->
+                 <li class="nav-item">
+                  <a class="nav-link {% if request.resolver_match.url_name == 'executive_my_visits' %}active{% endif %}"
+                  href="{% url 'executive_my_visits' %}">
+                  My Visit Schedules
+                 </a>
+                 </li>
+
+                 </ul>
+
+            <div class="d-flex align-items-center">
                 <span class="text-white me-3">👤 {{ request.user.username }}</span>
                 <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
             </div>
@@ -36,38 +58,132 @@
         </div>
     </div>
 </nav>
-<!-- NAVBAR END -->
 
-<div style="margin-top: 80px;"></div>
+<div style="margin-top: 90px;"></div>
 
 <div class="container mt-4">
     <div class="card shadow-lg p-4">
-
-        <h3 class="text-center mb-3">📄 Upload Loan CSV / Excel</h3>
+        <h3 class="text-center mb-3">📄 Upload CSV / Excel</h3>
 
         {% if error %}
-        <div class="alert alert-danger">{{ error|safe }}</div>
+            <div class="alert alert-danger">{{ error }}</div>
         {% endif %}
 
         {% if msg %}
-        <div class="alert alert-success">{{ msg|safe }}</div>
+            <div class="alert alert-success">{{ msg }}</div>
         {% endif %}
 
-        <form method="post" enctype="multipart/form-data">
+        {% if upload_id %}
+            <div id="upload_id" data-id="{{ upload_id }}" style="display:none;"></div>
+        {% endif %}
+
+        <!-- Upload Form -->
+        <form id="uploadForm" method="post" enctype="multipart/form-data">
             {% csrf_token %}
 
             <div class="mb-3">
-                <label class="form-label"><strong>Select CSV or Excel File</strong></label>
-                <input type="file" name="file" class="form-control" required>
+                <label class="form-label"><strong>Select File Type</strong></label>
+                <select name="file_type" class="form-select" required>
+                    <option value="">-- Select File Type --</option>
+                    {% for val, label in file_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
-            <button type="submit" class="btn btn-primary w-100">
+            <div class="mb-3">
+                <label class="form-label"><strong>Select CSV or Excel File</strong></label>
+                <input type="file" name="file" class="form-control"
+                       accept=".csv,.xls,.xlsx" required>
+            </div>
+
+            <button type="submit" id="uploadBtn" class="btn btn-primary w-100">
                 Upload & Process
             </button>
         </form>
 
+        <!-- 🔄 Progress -->
+        <div id="progressWrapper" class="mt-4" style="display:none;">
+            <div class="mb-2"><strong>Processing Progress</strong></div>
+            <div class="progress">
+                <div id="progressBar" class="progress-bar bg-info" style="width:0%;">0%</div>
+            </div>
+            <div id="completeNote" class="text-success mt-2" style="display:none;">
+                ✅ Upload completed successfully. Refresh manually if needed.
+            </div>
+        </div>
+
+        <!-- ❌ Error -->
+        <div id="errorBox" class="alert alert-danger mt-3"
+             style="display:none; white-space:pre-wrap;"></div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+document.getElementById("uploadForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const fd = new FormData(form);
+    const uploadBtn = document.getElementById("uploadBtn");
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerText = "Uploading...";
+
+    fetch("", { method: "POST", body: fd })
+        .then(r => r.text())
+        .then(html => {
+            const doc = new DOMParser().parseFromString(html, "text/html");
+            const uploadElem = doc.getElementById("upload_id");
+
+            if (uploadElem && uploadElem.dataset.id) {
+                document.getElementById("progressWrapper").style.display = "block";
+                pollProgress(uploadElem.dataset.id);
+            } else {
+                location.reload();
+            }
+        })
+        .catch(err => {
+            alert("Upload failed: " + err);
+            uploadBtn.disabled = false;
+            uploadBtn.innerText = "Upload & Process";
+        });
+});
+
+function pollProgress(upload_id) {
+    const url = "/financehub/upload-progress/" + upload_id + "/";
+
+    const timer = setInterval(() => {
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                const bar = document.getElementById("progressBar");
+                const errorBox = document.getElementById("errorBox");
+
+                bar.style.width = (data.percent || 0) + "%";
+                bar.innerText = (data.percent || 0) + "%";
+
+                if (data.status === "completed") {
+                    clearInterval(timer);
+                    bar.classList.replace("bg-info", "bg-success");
+                    bar.style.width = "100%";
+                    bar.innerText = "Completed 100%";
+                    document.getElementById("completeNote").style.display = "block";
+                }
+
+                if (data.status === "error") {
+                    clearInterval(timer);
+                    bar.classList.replace("bg-info", "bg-danger");
+                    bar.innerText = "Failed";
+                    errorBox.style.display = "block";
+                    errorBox.innerText = data.error || "Unknown Error";
+                }
+            });
+    }, 2000);
+}
+</script>
 
 </body>
 </html>

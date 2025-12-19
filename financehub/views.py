@@ -2,6 +2,9 @@
 
 import os
 import tempfile
+import unicodedata
+import datetime
+
 from django.conf import settings
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -9,10 +12,27 @@ from django.contrib.auth import authenticate, login
 from django.core.paginator import Paginator
 from django.db.models import Q
 
-from .models import UploadHistory, Lcc, Feedback
-from .forms import FeedbackForm
-from financehub.tasks import process_loan_file
+# Models
+from datetime import datetime
 
+from .models import (
+    UploadHistory,
+    Lcc,
+    Feedback,
+    ExecutiveVisitScheduling,
+    Clu,   # ✅ ADD THIS
+)
+
+# Forms
+from .forms import FeedbackForm
+
+# Celery tasks
+from financehub.tasks import (
+    process_universal_file,
+)
+
+# Decorator for session protection
+from django.contrib.auth.decorators import login_required
 
 # ---------------------------------------------------------------------
 # LOGIN
@@ -59,6 +79,34 @@ MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 MB
 # ---------------------------------------------------------------------
 # FILE UPLOAD + CELERY PROCESSING
 # ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# UNIVERSAL FILE UPLOAD (WITH DROPDOWN)
+# ---------------------------------------------------------------------
+from financehub.tasks import process_universal_file
+from .models import UploadHistory
+
+FILE_TYPES = [
+    ("lcc", "LCC"),
+    ("collection_allocations", "Collection Allocations"),
+    ("clu", "CLU"),
+    ("repo", "Repo"),
+    ("paid", "Paid"),
+    ("closed", "Closed"),
+    ("dialer", "Dialer"),
+    ("duenotice", "Due Notice"),
+    ("visiter", "Visiter"),
+    ("employee_master", "Employee Master"),
+    ("freshdesk", "Freshdesk"),
+    ("esebuzz", "EseBuzz"),
+    ("hero", "Hero"),
+    ("kotakecs", "Kotak ECS"),
+    ("smsquare", "SMSquare"),
+    ("upi", "UPI"),
+    ("executive_visit_scheduling", "Executive Visit Scheduling"),
+
+
+
+]
 @financehub_required
 def upload_loan_data(request):
 
@@ -66,43 +114,55 @@ def upload_loan_data(request):
     error = None
 
     if request.method == "POST":
+
+        file_type = request.POST.get("file_type")
         file = request.FILES.get("file")
-        user = request.user.username
+
+        if not file_type:
+            return render(request, "financehub/upload.html",
+                          {"error": "Please select file type.", "file_types": FILE_TYPES})
 
         if not file:
             return render(request, "financehub/upload.html",
-                          {"error": "Please select a file."})
+                          {"error": "Please choose a file.", "file_types": FILE_TYPES})
 
-        if file.size > MAX_UPLOAD_SIZE:
-            return render(request, "financehub/upload.html",
-                          {"error": "File too large. Max 25MB allowed."})
-
-        filename = file.name
-        ext = filename.split(".")[-1].lower()
-
+        ext = file.name.split(".")[-1].lower()
         if ext not in ("csv", "xlsx", "xls"):
             return render(request, "financehub/upload.html",
-                          {"error": "Only CSV/XLS/XLSX allowed."})
+                          {"error": "Only CSV / XLS / XLSX allowed.", "file_types": FILE_TYPES})
 
+        # save temp file
         tmp_dir = getattr(settings, "DATA_UPLOAD_TEMP_DIR", tempfile.gettempdir())
-        tmp_path = os.path.join(tmp_dir, f"upload_{filename}")
+        tmp_path = os.path.join(tmp_dir, f"upload_{file.name}")
 
         with open(tmp_path, "wb+") as f:
             for chunk in file.chunks():
                 f.write(chunk)
 
-        upload_record = UploadHistory.objects.create(
-            filename=filename,
-            uploaded_by=user
+        # create upload history entry
+        upload = UploadHistory.objects.create(
+            filename=file.name,
+            uploaded_by=request.user.username,
+            file_type=file_type,
+            status="processing",
+            total_rows=0,
+            processed_rows=0
         )
 
-        # Send to Celery Worker
-        process_loan_file.delay(upload_record.id, tmp_path, ext)
+        # launch celery
+        process_universal_file.delay(upload.id, tmp_path, ext, file_type)
 
-        msg = "Upload successful! Background processing started."
+        msg = f"Upload started! Upload ID = {upload.id}"
 
-    return render(request, "financehub/upload.html", {"msg": msg, "error": error})
+        return render(request, "financehub/upload.html", {
+            "msg": msg,
+            "file_types": FILE_TYPES,
+            "upload_id": upload.id
+        })
 
+    return render(request, "financehub/upload.html", {
+        "file_types": FILE_TYPES
+    })
 
 
 
@@ -478,3 +538,333 @@ def feedback_list(request):
         "FTYPES": Feedback.DROPDOWN_CHOICES,
         "CTYPES": Feedback.FEEDBACK_CHOICES,
     })
+
+
+
+
+
+# ---------------------------------------------------------------
+# AJAX PROGRESS CHECK
+# ---------------------------------------------------------------
+# financehub/views.py (top imports)
+from django.http import JsonResponse
+# ... other imports remain
+
+# upload_progress (already exists), ensure it uses JsonResponse
+def upload_progress(request, upload_id):
+    try:
+        u = UploadHistory.objects.get(id=upload_id)
+        return JsonResponse({
+            "status": u.status,
+            "processed": u.processed_rows,
+            "total": u.total_rows,
+            "percent": u.progress_percentage(),
+            "error": u.error_message or "",
+        })
+    except UploadHistory.DoesNotExist:
+        return JsonResponse({"error": "Invalid Upload ID"}, status=404)
+
+
+
+
+
+
+
+
+
+import datetime
+from django.shortcuts import render
+from django.core.paginator import Paginator
+
+from .models import (
+    Lcc,
+    ExecutiveVisitScheduling,
+    Clu,
+)
+
+from django.contrib.auth.decorators import login_required
+
+
+# ------------------------------------------------------------------
+# CLU VISIT DATE PARSER (ROBUST)
+# ------------------------------------------------------------------
+def parse_visited_on(value):
+    if not value:
+        return None
+
+    value = value.strip()
+
+    formats = [
+        "%b %d,%Y, %I:%M:%S %p",   # Nov 14,2024, 9:50:54 PM
+        "%d-%b-%Y %I:%M %p",       # 14-Nov-2024 09:50 PM
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.datetime.strptime(value, fmt)
+        except Exception:
+            continue
+
+    return None
+
+
+# ------------------------------------------------------------------
+# EXECUTIVE VISIT SCHEDULE LIST
+# ------------------------------------------------------------------
+@login_required
+def executive_visit_schedule_list(request):
+
+    division   = request.GET.get("division", "").strip()
+    loanno     = request.GET.get("loanno", "").strip()
+    empid      = request.GET.get("empid", "").strip()
+    from_date  = request.GET.get("from_date", "").strip()
+    to_date    = request.GET.get("to_date", "").strip()
+
+    final_data = []
+
+    # ==========================================================
+    # 1️⃣ BASE → LCC
+    # ==========================================================
+    lcc_qs = Lcc.objects.all().order_by("loan_number")
+
+    if division:
+        lcc_qs = lcc_qs.filter(division__icontains=division)
+
+    if loanno:
+        lcc_qs = lcc_qs.filter(loan_number__icontains=loanno)
+
+    loan_numbers = list(
+        lcc_qs.values_list("loan_number", flat=True)
+    )
+
+    # ==========================================================
+    # 2️⃣ VISIT SCHEDULING
+    # ==========================================================
+    visit_qs = ExecutiveVisitScheduling.objects.filter(
+        loanno__in=loan_numbers
+    )
+
+    if empid:
+        visit_qs = visit_qs.filter(empid__icontains=empid)
+
+    if from_date and to_date:
+        visit_qs = visit_qs.filter(
+            visit_schedule_date__range=[from_date, to_date]
+        )
+    elif from_date:
+        visit_qs = visit_qs.filter(visit_schedule_date__gte=from_date)
+    elif to_date:
+        visit_qs = visit_qs.filter(visit_schedule_date__lte=to_date)
+
+    # ----------------------------------------------------------
+    # MAP: loan_number → list of visits
+    # ----------------------------------------------------------
+    visit_map = {}
+    for v in visit_qs:
+        visit_map.setdefault(v.loanno, []).append(v)
+
+    # ==========================================================
+    # 3️⃣ CLU → LATEST VISIT PER LOAN
+    # ==========================================================
+    clu_rows = Clu.objects.filter(
+        loan_number__in=loan_numbers
+    ).values("loan_number", "visited_on")
+
+    latest_visit_map = {}
+
+    for c in clu_rows:
+        dt = parse_visited_on(c["visited_on"])
+        if not dt:
+            continue
+
+        loan = c["loan_number"]
+
+        if (
+            loan not in latest_visit_map
+            or dt > latest_visit_map[loan]["dt"]
+        ):
+            latest_visit_map[loan] = {
+                "dt": dt,
+                "visited_on": c["visited_on"],
+            }
+
+    # ==========================================================
+    # 4️⃣ FINAL MERGE (1 ROW PER LOAN)
+    # ==========================================================
+    for l in lcc_qs:
+
+        visits = visit_map.get(l.loan_number, [])
+        last_visit = latest_visit_map.get(l.loan_number)
+
+        if visits:
+            # earliest scheduled visit
+            v = min(visits, key=lambda x: x.visit_schedule_date)
+
+            final_data.append({
+                "obj": v,
+                "loan_number": l.loan_number,
+                "customer_name": l.customer_name,
+                "vehicle_no": l.vehicle_no,
+                "empid": v.empid,
+                "visit_date": v.visit_schedule_date,
+                "visit_status": v.visit_status,
+                "not_visited_reason": v.not_visited_reason,
+                "latest_visited_on": last_visit["visited_on"] if last_visit else "",
+                "has_schedule": True,
+            })
+        else:
+            final_data.append({
+                "obj": None,
+                "loan_number": l.loan_number,
+                "customer_name": l.customer_name,
+                "vehicle_no": l.vehicle_no,
+                "empid": None,
+                "visit_date": None,
+                "visit_status": None,
+                "not_visited_reason": None,
+                "latest_visited_on": last_visit["visited_on"] if last_visit else "",
+                "has_schedule": False,
+            })
+
+    # ==========================================================
+    # 5️⃣ SORT → SCHEDULED FIRST
+    # ==========================================================
+    final_data.sort(
+        key=lambda x: (
+            not x["has_schedule"],
+            x["visit_date"] or datetime.date.max
+        )
+    )
+
+    # ==========================================================
+    # 6️⃣ PAGINATION
+    # ==========================================================
+    paginator = Paginator(final_data, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(request, "financehub/executive_visit_schedule_list.html", {
+        "data": page_obj,
+        "total_count": paginator.count,
+
+        "division": division,
+        "loanno": loanno,
+        "empid": empid,
+        "from_date": from_date,
+        "to_date": to_date,
+    })
+
+
+
+
+
+
+
+
+
+
+@financehub_required
+def executive_visit_schedule_edit(request, pk):
+    obj = ExecutiveVisitScheduling.objects.get(pk=pk)
+
+    if request.method == "POST":
+        obj.loanno = request.POST.get("loanno")
+        obj.empid = request.POST.get("empid")
+        obj.visit_schedule_date = request.POST.get("visit_schedule_date")
+        obj.save()
+
+        messages.success(request, "Visit schedule updated successfully")
+        return redirect("executive_visit_schedule_list")
+
+    return render(request, "financehub/executive_visit_schedule_edit.html", {
+        "obj": obj
+    })
+
+
+
+
+
+@financehub_required
+def executive_my_visits(request):
+    empid = request.user.username  # employee_id
+
+    visits = ExecutiveVisitScheduling.objects.filter(
+        empid=empid
+    ).order_by("visit_schedule_date")
+
+    # collect loan numbers
+    loan_numbers = list(
+        visits.values_list("loanno", flat=True)
+    )
+
+    # fetch LCC data
+    lcc_map = {
+        l.loan_number: l
+        for l in Lcc.objects.filter(loan_number__in=loan_numbers)
+    }
+
+    # merge data
+    data = []
+    for v in visits:
+        lcc = lcc_map.get(v.loanno)
+
+        data.append({
+            "visit": v,                          # IMPORTANT
+            "loan_number": v.loanno,
+            "visit_date": v.visit_schedule_date,
+            "status": v.visit_status,
+            "customer_name": lcc.customer_name if lcc else "",
+            "vehicle_no": lcc.vehicle_no if lcc else "",
+        })
+
+    return render(request, "financehub/executive_my_visits.html", {
+        "data": data
+    })
+
+
+
+
+
+
+
+
+from django.utils import timezone
+
+@financehub_required
+def executive_visit_response(request, pk):
+    obj = ExecutiveVisitScheduling.objects.get(pk=pk)
+
+    if not (
+        request.user.is_staff
+        or request.user.is_superuser
+        or obj.empid == request.user.username
+    ):
+        messages.error(request, "Unauthorized access")
+        return redirect("executive_visit_schedule_list")
+
+    if request.method == "POST":
+        status = request.POST.get("visit_status")
+        reason = request.POST.get("not_visited_reason")
+
+        obj.visit_status = status
+        obj.not_visited_reason = reason if status == "not_visited" else ""
+        obj.responded_at = timezone.now()   # ✅ FIX
+        obj.save()
+
+        messages.success(request, "Visit response saved successfully")
+
+        if request.user.is_staff or request.user.is_superuser:
+            return redirect("executive_visit_schedule_list")
+        else:
+            return redirect("executive_my_visits")
+
+    return render(request, "financehub/executive_visit_response.html", {
+        "obj": obj
+    })
+
+
+
+
+

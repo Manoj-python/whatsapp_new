@@ -13,33 +13,57 @@
 
 <body class="bg-light">
 
-<!-- NAVBAR -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
+
+<!-- 🚀 RESPONSIVE NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
     <div class="container-fluid">
 
         <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
 
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarNav">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'feedback_create' %}">Add Feedback</a></li>
-                <li class="nav-item"><a class="nav-link active" href="{% url 'feedback_list' %}">Feedback List</a></li>
-            </ul>
 
-            <div class="d-flex">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'upload_loan_data' %}active{% endif %}"
+                       href="{% url 'upload_loan_data' %}">Upload File</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'feedback_create' %}">Add Feedback</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'feedback_list' %}">Feedback List</a>
+                </li>
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'executive_visit_schedule_list' %}">
+                 Executive Visit Schedule
+                 </a>
+                 </li>
+
+                             <!-- 👤 EXECUTIVE VIEW (NEW) -->
+                 <li class="nav-item">
+                  <a class="nav-link {% if request.resolver_match.url_name == 'executive_my_visits' %}active{% endif %}"
+                  href="{% url 'executive_my_visits' %}">
+                  My Visit Schedules
+                 </a>
+                 </li>
+
+                 </ul>
+
+            <div class="d-flex align-items-center">
                 <span class="text-white me-3">👤 {{ request.user.username }}</span>
                 <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
             </div>
-        </div>
 
+        </div>
     </div>
 </nav>
-
 
 <div class="container-fluid mt-4">
 

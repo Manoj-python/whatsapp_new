@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Visit Schedule</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            padding-top: 80px;
+        }
+
+        /* Mobile Card View */
+        @media (max-width: 767px) {
+            .desktop-table {
+                display: none;
+            }
+        }
+
+        /* Desktop Table View */
+        @media (min-width: 768px) {
+            .mobile-card {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+
+<!-- ================= NAVBAR ================= -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
+    <div class="container-fluid">
+
+        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">
+            FinanceHub
+        </a>
+
+        <button class="navbar-toggler" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'upload_loan_data' %}">Upload File</a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'feedback_list' %}">Feedback</a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'executive_visit_schedule_list' %}">
+                        Executive Visit Schedule
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link active" href="{% url 'executive_my_visits' %}">
+                        My Visit Schedules
+                    </a>
+                </li>
+
+            </ul>
+
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-white small">
+                    👤 {{ request.user.username }}
+                </span>
+                <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">
+                    Logout
+                </a>
+            </div>
+
+        </div>
+    </div>
+</nav>
+
+<!-- ================= CONTENT ================= -->
+<div class="container-fluid">
+
+    <h4 class="mb-3">📋 My Visit Assignments</h4>
+
+    <!-- ================= DESKTOP TABLE ================= -->
+    <div class="table-responsive bg-white shadow-sm rounded desktop-table">
+
+        <table class="table table-bordered table-hover align-middle mb-0">
+
+            <thead class="table-dark text-center">
+                <tr>
+                    <th>Loan No</th>
+                    <th>Customer Name</th>
+                    <th>Vehicle No</th>
+                    <th>Visit Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+            {% for r in data %}
+                <tr>
+
+                    <td class="text-center fw-semibold">
+                        {{ r.loan_number }}
+                    </td>
+
+                    <td>
+                        {{ r.customer_name|default:"-" }}
+                    </td>
+
+                    <td class="text-center">
+                        {{ r.vehicle_no|default:"-" }}
+                    </td>
+
+                    <td class="text-center">
+                        {{ r.visit_date }}
+                    </td>
+
+                    <td class="text-center">
+                        {% if r.status == "visited" %}
+                            <span class="badge bg-success">Visited</span>
+                        {% elif r.status == "not_visited" %}
+                            <span class="badge bg-danger">Not Visited</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">Pending</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-center">
+                        {% if not r.status %}
+                            <a href="{% url 'executive_visit_response' r.visit.id %}"
+                               class="btn btn-sm btn-primary">
+                                Respond
+                            </a>
+                        {% else %}
+                            <a href="{% url 'executive_visit_response' r.visit.id %}"
+                               class="btn btn-sm btn-warning">
+                                Edit Response
+                            </a>
+                        {% endif %}
+                    </td>
+
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-3">
+                        No visit assignments found
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+
+        </table>
+
+    </div>
+
+    <!-- ================= MOBILE CARD VIEW ================= -->
+    {% for r in data %}
+    <div class="card mb-3 shadow-sm mobile-card">
+
+        <div class="card-body">
+
+            <div class="d-flex justify-content-between mb-2">
+                <h6 class="mb-0 fw-bold">Loan: {{ r.loan_number }}</h6>
+                {% if r.status == "visited" %}
+                    <span class="badge bg-success">Visited</span>
+                {% elif r.status == "not_visited" %}
+                    <span class="badge bg-danger">Not Visited</span>
+                {% else %}
+                    <span class="badge bg-warning text-dark">Pending</span>
+                {% endif %}
+            </div>
+
+            <p class="mb-1">
+                <strong>Customer:</strong> {{ r.customer_name|default:"-" }}
+            </p>
+
+            <p class="mb-1">
+                <strong>Vehicle No:</strong> {{ r.vehicle_no|default:"-" }}
+            </p>
+
+            <p class="mb-3">
+                <strong>Visit Date:</strong> {{ r.visit_date }}
+            </p>
+
+            <div class="d-grid">
+                {% if not r.status %}
+                    <a href="{% url 'executive_visit_response' r.visit.id %}"
+                       class="btn btn-primary btn-sm">
+                        Respond
+                    </a>
+                {% else %}
+                    <a href="{% url 'executive_visit_response' r.visit.id %}"
+                       class="btn btn-warning btn-sm">
+                        Edit Response
+                    </a>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+    {% empty %}
+        <div class="text-center text-muted py-4 mobile-card">
+            No visit assignments found
+        </div>
+    {% endfor %}
+
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

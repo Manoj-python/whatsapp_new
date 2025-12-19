@@ -1,15 +1,47 @@
 from django.urls import path
-from .views import fh_login, fh_logout, upload_loan_data, lcc_list, feedback_list, feedback_create
+from . import views
 
 urlpatterns = [
-    # FinanceHub Authentication
-    path("login/", fh_login, name="fh_login"),
-    path("logout/", fh_logout, name="fh_logout"),
 
-    # App Views
-    path("upload-loan-data/", upload_loan_data, name="upload_loan_data"),
-    path("lcc-data/", lcc_list, name="lcc_list"),
-    path("feedback/", feedback_list, name="feedback_list"),
-    path("feedback/add/", feedback_create, name="feedback_create"),
+    # ---------------- AUTH ----------------
+    path("login/", views.fh_login, name="fh_login"),
+    path("logout/", views.fh_logout, name="fh_logout"),
+
+    # ---------------- UPLOAD ----------------
+    path("upload-loan-data/", views.upload_loan_data, name="upload_loan_data"),
+    path("upload-progress/<int:upload_id>/", views.upload_progress, name="upload_progress"),
+
+    # ---------------- LCC ----------------
+    path("lcc-data/", views.lcc_list, name="lcc_list"),
+
+    # ---------------- FEEDBACK ----------------
+    path("feedback/", views.feedback_list, name="feedback_list"),
+    path("feedback/add/", views.feedback_create, name="feedback_create"),
+
+    # ---------------- ADMIN : VISIT SCHEDULE ----------------
+    path(
+        "executive-visit-schedule/",
+        views.executive_visit_schedule_list,
+        name="executive_visit_schedule_list",
+    ),
+    path(
+        "executive-visit-schedule/edit/<int:pk>/",
+        views.executive_visit_schedule_edit,
+        name="executive_visit_schedule_edit",
+    ),
+
+    # ---------------- EXECUTIVE ----------------
+    path(
+        "executive/my-visits/",
+        views.executive_my_visits,
+        name="executive_my_visits",
+    ),
+    path(
+        "executive/visit-response/<int:pk>/",
+        views.executive_visit_response,
+        name="executive_visit_response",
+    ),
+      
+
 
 ]

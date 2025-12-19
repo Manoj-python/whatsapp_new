@@ -1,3 +1,4 @@
+
 """
 Django settings for whatsapp_sender project.
 """
@@ -24,8 +25,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles", 
-     "channels", 
+    "django.contrib.staticfiles",
+     "channels",
      "storages",
      'adminpanel',
 
@@ -125,7 +126,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ---------------------------------------------------------------------
 WHATSAPP_ACCESS_TOKEN = os.environ.get(
     "WHATSAPP_ACCESS_TOKEN",
-    "EAAQJIMeFEA0BPstK4UJZBZCa1RDUXk9HCGrlgydJhJnKAJnAlvZAmLLD9qx7T5hQioN50oECZC8msUZBZCD3o1gytncqKR6PoOCLCPGeJdXgG3TVuMVaoEsxcpwkZCsU7dAi2KQGG2kKgQR4LL5k61d7Qlaq7RK5PSTnYLlezrmxLilJZC6ZBYAUGwRcCVOS4EaMEGEuYSOGZCZC2QNygqbIuXQjMkJpTwGuLxeKNIS",
+   "EAAQJIMeFEA0BQLF5vC4yoPLWEso64Bu7M1keMzto6Itos9WH36JRS6lH8m7zyGTX7ZCXhMuTiPlHAdQHrbrYPvoMe4vJXPBHzMTgnLbPHkLGcC4jhSelAhOnvqBIwGt1xZCIs6t76TS5QF4BjER9cwdcwdFjJ1v5JkmNj113quUTF0Yxotju8ZC6LhAKP2xCwZDZD",
 )
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "238505906024065")
 WHATSAPP_BUSINESS_ACCOUNT_ID = "284960064705398"
@@ -211,3 +212,4 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
