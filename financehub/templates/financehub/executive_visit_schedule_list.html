@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,17 +9,7 @@
 
     <style>
         body { padding-top: 80px; }
-
-        @media (max-width: 767px) {
-            .desktop-table { display: none; }
-        }
-        @media (min-width: 768px) {
-            .mobile-card { display: none; }
-        }
-
-        .row-scheduled {
-            background-color: #f1fdf4;
-        }
+        .row-scheduled { background-color: #f1fdf4; }
     </style>
 </head>
 
@@ -32,29 +20,9 @@
     <div class="container-fluid">
         <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
 
-        <button class="navbar-toggler" type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" href="{% url 'upload_loan_data' %}">Upload</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'lcc_list' %}">LCC</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'feedback_list' %}">Feedback</a></li>
-                <li class="nav-item">
-                    <a class="nav-link active" href="{% url 'executive_visit_schedule_list' %}">
-                        Executive Visit Schedule
-                    </a>
-                </li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'executive_my_visits' %}">My Visits</a></li>
-            </ul>
-
-            <div class="d-flex align-items-center gap-2">
-                <span class="text-white small">👤 {{ request.user.username }}</span>
-                <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
-            </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-white small">👤 {{ request.user.username }}</span>
+            <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
         </div>
     </div>
 </nav>
@@ -64,7 +32,6 @@
 
     <h5 class="mb-2">📅 Executive Visit Scheduling</h5>
 
-    <!-- ================= COUNT ================= -->
     <div class="small text-muted mb-2">
         Showing <strong>{{ total_count }}</strong> records
     </div>
@@ -72,48 +39,30 @@
     <!-- ================= FILTERS ================= -->
     <form method="get" class="mb-3">
 
-        <!-- LCC FILTER -->
         <div class="card shadow-sm mb-2">
             <div class="card-header py-2 bg-dark text-white small fw-semibold">
-                🔍 LCC Filters
+                🔍 Filters
             </div>
+
             <div class="card-body py-2">
                 <div class="row g-2 align-items-end">
-                    <div class="col-md-4">
+
+                    <div class="col-md-2">
                         <label class="form-label small">Division</label>
                         <input type="text" name="division"
                                class="form-control form-control-sm"
-                               value="{{ division }}"
-                               placeholder="collection, sales...">
+                               value="{{ division }}">
                     </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-sm btn-success w-100">Apply</button>
-                    </div>
-                    <div class="col-md-2">
-                        <a href="{% url 'executive_visit_schedule_list' %}"
-                           class="btn btn-sm btn-outline-secondary w-100">Reset</a>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- SCHEDULING FILTER -->
-        <div class="card shadow-sm mb-2">
-            <div class="card-header py-2 bg-primary text-white small fw-semibold">
-                📅 Scheduling Filters
-            </div>
-            <div class="card-body py-2">
-                <div class="row g-2 align-items-end">
-
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label small">Loan No</label>
                         <input type="text" name="loanno"
                                class="form-control form-control-sm"
                                value="{{ loanno }}">
                     </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label small">Employee ID</label>
+                    <div class="col-md-2">
+                        <label class="form-label small">Visit Emp ID</label>
                         <input type="text" name="empid"
                                class="form-control form-control-sm"
                                value="{{ empid }}">
@@ -133,21 +82,40 @@
                                value="{{ to_date }}">
                     </div>
 
-                    <div class="col-md-1">
+                    <div class="col-md-2">
+                        <label class="form-label small">Role</label>
+                        <select name="role" class="form-select form-select-sm">
+                            <option value="">-- Select --</option>
+                            <option value="CM" {% if role == "CM" %}selected{% endif %}>CM</option>
+                            <option value="TL" {% if role == "TL" %}selected{% endif %}>TL</option>
+                            <option value="EXEC" {% if role == "EXEC" %}selected{% endif %}>Executive</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label small">Hierarchy Emp ID</label>
+                        <input type="text" name="search_empid"
+                               class="form-control form-control-sm"
+                               value="{{ search_empid }}">
+                    </div>
+
+                    <div class="col-md-2">
                         <button class="btn btn-sm btn-success w-100">Apply</button>
                     </div>
 
-                    <div class="col-md-1">
+                    <div class="col-md-2">
                         <a href="{% url 'executive_visit_schedule_list' %}"
                            class="btn btn-sm btn-outline-secondary w-100">Reset</a>
                     </div>
+
                 </div>
             </div>
         </div>
+
     </form>
 
-    <!-- ================= DESKTOP TABLE ================= -->
-    <div class="table-responsive bg-white shadow-sm rounded desktop-table">
+    <!-- ================= TABLE ================= -->
+    <div class="table-responsive bg-white shadow-sm rounded">
         <table class="table table-bordered table-hover table-sm align-middle mb-0 small">
 
             <thead class="table-dark text-center">
@@ -156,6 +124,19 @@
                 <th>Loan No</th>
                 <th>Customer</th>
                 <th>Vehicle</th>
+
+                <!-- EXISTING -->
+                <th>CM</th>
+                <th>TL</th>
+                <th>Executive</th>
+                <th>Company</th>
+
+                <!-- 🔹 NEW COLUMNS -->
+                <th>Division</th>
+                <th>Bucket</th>
+                <th>Loan Status</th>
+
+                <!-- EXISTING -->
                 <th>Employee</th>
                 <th>Visit Date</th>
                 <th>Latest CLU</th>
@@ -167,6 +148,7 @@
             <tbody>
             {% for r in data %}
             <tr class="{% if r.has_schedule %}row-scheduled{% endif %}">
+
                 <td class="text-center">
                     {% if r.obj %}{{ r.obj.id }}{% else %}-{% endif %}
                 </td>
@@ -175,9 +157,40 @@
                 <td>{{ r.customer_name }}</td>
                 <td>{{ r.vehicle_no }}</td>
 
-                <td class="text-center">
-                    {{ r.empid|default:"—" }}
+                <td>
+                    {{ r.cm }}<br>
+                    <span class="text-muted small">{{ r.cm_id }}</span>
                 </td>
+
+                <td>
+                    {{ r.tl }}<br>
+                    <span class="text-muted small">{{ r.tl_id }}</span>
+                </td>
+
+                <td>
+                    {{ r.exec }}<br>
+                    <span class="text-muted small">{{ r.exec_id }}</span>
+                </td>
+
+                 <td>{{ r.company|default:"—" }}</td>  
+              <!-- 🔹 NEW DATA -->
+                <td class="text-center">{{ r.division }}</td>
+                <td class="text-center">{{ r.bucket_position }}</td>
+                <td class="text-center">
+                    {% if r.loan_status == "PAID" %}
+                        <span class="badge bg-success">PAID</span>
+                    {% elif r.loan_status == "PARTLY PAID" %}
+                        <span class="badge bg-warning text-dark">PARTLY PAID</span>
+                    {% elif r.loan_status == "NOT PAID" %}
+                        <span class="badge bg-danger">NOT PAID</span>
+                    {% elif r.loan_status == "REPO" %}
+                        <span class="badge bg-dark">REPO</span>
+                    {% elif r.loan_status == "CLOSED" %}
+                        <span class="badge bg-secondary">CLOSED</span>
+                    {% endif %}
+                </td>
+
+                <td class="text-center">{{ r.empid|default:"—" }}</td>
 
                 <td class="text-center">
                     {% if r.visit_date %}
@@ -198,7 +211,6 @@
                 <td class="text-center">
                     {% if r.visit_status == "visited" %}
                         <span class="badge bg-success">Visited</span>
-
                     {% elif r.visit_status == "not_visited" %}
                         <span class="badge bg-danger">Not Visited</span>
                         {% if r.not_visited_reason %}
@@ -206,10 +218,8 @@
                                 {{ r.not_visited_reason }}
                             </div>
                         {% endif %}
-
                     {% elif r.has_schedule %}
                         <span class="badge bg-warning text-dark">Pending</span>
-
                     {% else %}
                         <span class="badge bg-secondary">No Schedule</span>
                     {% endif %}
@@ -225,10 +235,11 @@
                         —
                     {% endif %}
                 </td>
+
             </tr>
             {% empty %}
             <tr>
-                <td colspan="9" class="text-center text-muted py-3">
+                <td colspan="15" class="text-center text-muted py-3">
                     No records found
                 </td>
             </tr>
@@ -242,31 +253,29 @@
     {% if data.paginator.num_pages > 1 %}
     <nav class="mt-3">
         <ul class="pagination pagination-sm justify-content-center">
+
             {% if data.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ data.previous_page_number }}&division={{ division }}&loanno={{ loanno }}&empid={{ empid }}&from_date={{ from_date }}&to_date={{ to_date }}">« Prev</a>
-                </li>
-            {% else %}
-                <li class="page-item disabled"><span class="page-link">« Prev</span></li>
+            <li class="page-item">
+                <a class="page-link"
+                   href="?page={{ data.previous_page_number }}&division={{ division }}&loanno={{ loanno }}&empid={{ empid }}&from_date={{ from_date }}&to_date={{ to_date }}&role={{ role }}&search_empid={{ search_empid }}">
+                    « Prev
+                </a>
+            </li>
             {% endif %}
 
-            {% for num in data.paginator.page_range %}
-                {% if num == data.number %}
-                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                {% elif num >= data.number|add:-2 and num <= data.number|add:2 %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ num }}&division={{ division }}&loanno={{ loanno }}&empid={{ empid }}&from_date={{ from_date }}&to_date={{ to_date }}">{{ num }}</a>
-                    </li>
-                {% endif %}
-            {% endfor %}
+            <li class="page-item active">
+                <span class="page-link">{{ data.number }}</span>
+            </li>
 
             {% if data.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ data.next_page_number }}&division={{ division }}&loanno={{ loanno }}&empid={{ empid }}&from_date={{ from_date }}&to_date={{ to_date }}">Next »</a>
-                </li>
-            {% else %}
-                <li class="page-item disabled"><span class="page-link">Next »</span></li>
+            <li class="page-item">
+                <a class="page-link"
+                   href="?page={{ data.next_page_number }}&division={{ division }}&loanno={{ loanno }}&empid={{ empid }}&from_date={{ from_date }}&to_date={{ to_date }}&role={{ role }}&search_empid={{ search_empid }}">
+                    Next »
+                </a>
+            </li>
             {% endif %}
+
         </ul>
     </nav>
     {% endif %}
@@ -276,4 +285,3 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-

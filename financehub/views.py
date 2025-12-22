@@ -566,37 +566,33 @@ def upload_progress(request, upload_id):
 
 
 
-
-
-
-
-
-
 import datetime
 from django.shortcuts import render
 from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 
 from .models import (
     Lcc,
     ExecutiveVisitScheduling,
     Clu,
+    CollectionAllocations,
+    Repo,        # ✅ NEW
+    Paid,        # ✅ NEW
+    Closed,      # ✅ NEW
 )
 
-from django.contrib.auth.decorators import login_required
-
-
 # ------------------------------------------------------------------
-# CLU VISIT DATE PARSER (ROBUST)
+# CLU VISIT DATE PARSER
 # ------------------------------------------------------------------
 def parse_visited_on(value):
     if not value:
         return None
 
     value = value.strip()
-
     formats = [
-        "%b %d,%Y, %I:%M:%S %p",   # Nov 14,2024, 9:50:54 PM
-        "%d-%b-%Y %I:%M %p",       # 14-Nov-2024 09:50 PM
+        "%b %d,%Y, %I:%M:%S %p",
+        "%d-%b-%Y %I:%M %p",
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d",
         "%d/%m/%Y",
@@ -612,6 +608,45 @@ def parse_visited_on(value):
 
 
 # ------------------------------------------------------------------
+# PAYMENT STATUS LOGIC (FROM YOUR PYTHON CODE)
+# ------------------------------------------------------------------
+TOLERANCE = 500
+
+def get_loan_status(lcc, paid_amount, repo_set, closed_set):
+    loan_no = lcc.loan_number
+
+    if loan_no in repo_set:
+        return "REPO"
+
+    if loan_no in closed_set:
+        return "CLOSED"
+
+    # 🔒 NEW GUARD (IMPORTANT)
+    if str(lcc.emi_due_2).strip().lower() in ("0", "", "none", "sez"):
+        return "PARTLY PAID" if paid_amount and paid_amount > 0 else "NOT PAID"
+
+    try:
+        received = float(paid_amount or 0)
+        month_tbc = float(lcc.month_tbc or 0)
+        total_dues = float(lcc.total_dues or 0)
+        emi_due_2 = float(lcc.emi_due_2)
+    except Exception:
+        return "NOT PAID"
+
+    if month_tbc == 0:
+        revised_month_tbc = total_dues / emi_due_2
+    else:
+        revised_month_tbc = month_tbc
+
+    if received >= revised_month_tbc or (revised_month_tbc - received) <= 500:
+        return "PAID"
+    elif received > 0:
+        return "PARTLY PAID"
+    else:
+        return "NOT PAID"
+
+
+# ------------------------------------------------------------------
 # EXECUTIVE VISIT SCHEDULE LIST
 # ------------------------------------------------------------------
 @login_required
@@ -623,10 +658,14 @@ def executive_visit_schedule_list(request):
     from_date  = request.GET.get("from_date", "").strip()
     to_date    = request.GET.get("to_date", "").strip()
 
-    final_data = []
+    role = request.GET.get("role", "").strip()
+    search_empid = request.GET.get("search_empid", "").strip()
+
+    login_empid = request.user.username
+    today = datetime.date.today()
 
     # ==========================================================
-    # 1️⃣ BASE → LCC
+    # 1️⃣ BASE LCC
     # ==========================================================
     lcc_qs = Lcc.objects.all().order_by("loan_number")
 
@@ -636,12 +675,71 @@ def executive_visit_schedule_list(request):
     if loanno:
         lcc_qs = lcc_qs.filter(loan_number__icontains=loanno)
 
-    loan_numbers = list(
-        lcc_qs.values_list("loan_number", flat=True)
-    )
+    loan_numbers = list(lcc_qs.values_list("loan_number", flat=True))
 
     # ==========================================================
-    # 2️⃣ VISIT SCHEDULING
+    # 🔹 NEW: REPO / CLOSED / PAID DATA
+    # ==========================================================
+    repo_set = set(
+        Repo.objects.filter(
+            agreement_number__in=loan_numbers
+        ).values_list("agreement_number", flat=True)
+    )
+
+    closed_set = set(
+        Closed.objects.filter(
+            loan_number__in=loan_numbers
+        ).values_list("loan_number", flat=True)
+    )
+
+    paid_map = {}
+    for p in Paid.objects.filter(loan_number__in=loan_numbers):
+        try:
+            amt = float(p.received_amount or 0)
+        except Exception:
+            amt = 0
+        paid_map[p.loan_number] = paid_map.get(p.loan_number, 0) + amt
+
+    # ==========================================================
+    # 2️⃣ COLLECTION ALLOCATIONS
+    # ==========================================================
+    alloc_qs = CollectionAllocations.objects.filter(
+        loan_number__in=loan_numbers
+    )
+
+    if CollectionAllocations.objects.filter(manager_employee_id=login_empid).exists():
+        login_role = "CM"
+    elif CollectionAllocations.objects.filter(tl_employee_id=login_empid).exists():
+        login_role = "TL"
+    else:
+        login_role = "EXEC"
+
+    if login_role == "CM":
+        alloc_qs = alloc_qs.filter(manager_employee_id=login_empid)
+    elif login_role == "TL":
+        alloc_qs = alloc_qs.filter(tl_employee_id=login_empid)
+    else:
+        alloc_qs = alloc_qs.filter(employee_id=login_empid)
+
+    if role == "CM" and search_empid:
+        alloc_qs = alloc_qs.filter(
+            Q(tl_employee_id=search_empid) |
+            Q(employee_id=search_empid)
+        )
+    elif role == "TL" and search_empid:
+        alloc_qs = alloc_qs.filter(tl_employee_id=search_empid)
+    elif role == "EXEC" and search_empid:
+        alloc_qs = alloc_qs.filter(employee_id=search_empid)
+
+    if role or search_empid:
+        loan_numbers = list(
+            alloc_qs.values_list("loan_number", flat=True)
+        )
+
+    alloc_map = {a.loan_number: a for a in alloc_qs}
+
+    # ==========================================================
+    # 3️⃣ VISITS
     # ==========================================================
     visit_qs = ExecutiveVisitScheduling.objects.filter(
         loanno__in=loan_numbers
@@ -659,108 +757,96 @@ def executive_visit_schedule_list(request):
     elif to_date:
         visit_qs = visit_qs.filter(visit_schedule_date__lte=to_date)
 
-    # ----------------------------------------------------------
-    # MAP: loan_number → list of visits
-    # ----------------------------------------------------------
     visit_map = {}
     for v in visit_qs:
         visit_map.setdefault(v.loanno, []).append(v)
 
     # ==========================================================
-    # 3️⃣ CLU → LATEST VISIT PER LOAN
+    # 4️⃣ CLU LATEST VISIT
     # ==========================================================
-    clu_rows = Clu.objects.filter(
-        loan_number__in=loan_numbers
-    ).values("loan_number", "visited_on")
-
     latest_visit_map = {}
-
-    for c in clu_rows:
+    for c in Clu.objects.filter(loan_number__in=loan_numbers).values("loan_number", "visited_on"):
         dt = parse_visited_on(c["visited_on"])
         if not dt:
             continue
-
         loan = c["loan_number"]
-
-        if (
-            loan not in latest_visit_map
-            or dt > latest_visit_map[loan]["dt"]
-        ):
-            latest_visit_map[loan] = {
-                "dt": dt,
-                "visited_on": c["visited_on"],
-            }
+        if loan not in latest_visit_map or dt > latest_visit_map[loan]["dt"]:
+            latest_visit_map[loan] = {"dt": dt, "visited_on": c["visited_on"]}
 
     # ==========================================================
-    # 4️⃣ FINAL MERGE (1 ROW PER LOAN)
+    # 5️⃣ FINAL DATA
     # ==========================================================
-    for l in lcc_qs:
+    final_data = []
+
+    for l in lcc_qs.filter(loan_number__in=loan_numbers):
 
         visits = visit_map.get(l.loan_number, [])
+        alloc = alloc_map.get(l.loan_number)
         last_visit = latest_visit_map.get(l.loan_number)
 
-        if visits:
-            # earliest scheduled visit
-            v = min(visits, key=lambda x: x.visit_schedule_date)
+        future_visits = [x for x in visits if x.visit_schedule_date >= today]
+        pending_visits = [x for x in visits if not x.visit_status]
 
-            final_data.append({
-                "obj": v,
-                "loan_number": l.loan_number,
-                "customer_name": l.customer_name,
-                "vehicle_no": l.vehicle_no,
-                "empid": v.empid,
-                "visit_date": v.visit_schedule_date,
-                "visit_status": v.visit_status,
-                "not_visited_reason": v.not_visited_reason,
-                "latest_visited_on": last_visit["visited_on"] if last_visit else "",
-                "has_schedule": True,
-            })
+        if future_visits:
+            v = min(future_visits, key=lambda x: x.visit_schedule_date)
+        elif pending_visits:
+            v = max(pending_visits, key=lambda x: x.visit_schedule_date)
+        elif visits:
+            v = max(visits, key=lambda x: x.visit_schedule_date)
         else:
-            final_data.append({
-                "obj": None,
-                "loan_number": l.loan_number,
-                "customer_name": l.customer_name,
-                "vehicle_no": l.vehicle_no,
-                "empid": None,
-                "visit_date": None,
-                "visit_status": None,
-                "not_visited_reason": None,
-                "latest_visited_on": last_visit["visited_on"] if last_visit else "",
-                "has_schedule": False,
-            })
+            v = None
 
-    # ==========================================================
-    # 5️⃣ SORT → SCHEDULED FIRST
-    # ==========================================================
+        final_data.append({
+            "obj": v,
+            "loan_number": l.loan_number,
+            "customer_name": l.customer_name,
+            "vehicle_no": l.vehicle_no,
+
+            "company": l.company,
+            "division": l.division,                 # ✅ NEW
+            "bucket_position": l.emi_due_2,         # ✅ NEW
+            "loan_status": get_loan_status(          # ✅ NEW
+                l,
+                paid_map.get(l.loan_number, 0),
+                repo_set,
+                closed_set
+            ),
+
+            "cm": alloc.cm if alloc else "",
+            "cm_id": alloc.manager_employee_id if alloc else "",
+
+            "tl": alloc.tl if alloc else "",
+            "tl_id": alloc.tl_employee_id if alloc else "",
+
+            "exec": alloc.executive_name if alloc else "",
+            "exec_id": alloc.employee_id if alloc else "",
+
+            "empid": v.empid if v else None,
+            "visit_date": v.visit_schedule_date if v else None,
+            "visit_status": v.visit_status if v else None,
+            "not_visited_reason": v.not_visited_reason if v else None,
+            "latest_visited_on": last_visit["visited_on"] if last_visit else "",
+            "has_schedule": bool(v),
+        })
+
     final_data.sort(
-        key=lambda x: (
-            not x["has_schedule"],
-            x["visit_date"] or datetime.date.max
-        )
+        key=lambda x: (not x["has_schedule"], x["visit_date"] or datetime.date.max)
     )
 
-    # ==========================================================
-    # 6️⃣ PAGINATION
-    # ==========================================================
     paginator = Paginator(final_data, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     return render(request, "financehub/executive_visit_schedule_list.html", {
         "data": page_obj,
         "total_count": paginator.count,
-
         "division": division,
         "loanno": loanno,
         "empid": empid,
         "from_date": from_date,
         "to_date": to_date,
+        "role": role,
+        "search_empid": search_empid,
     })
-
-
-
-
-
-
 
 
 
@@ -827,6 +913,10 @@ def executive_my_visits(request):
 
 
 
+
+
+
+from django.utils import timezone
 
 
 
