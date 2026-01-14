@@ -190,7 +190,15 @@ def build_payload(choice: str, row: dict) -> Tuple[dict, str]:
                {"type": "text", "text": str(row.get("PODS", ""))},              # {{5}}
                {"type": "text", "text": format_whatsapp_date(row.get("Couirer Date", ""))}, # {{6}}
                {"type": "text", "text": "7"},                                   # {{7}}
-    ]), 
+    ]),
+
+     "10": ("noc_address_confirmation_v2", "en", [
+            {"type": "text", "text": str(row.get("customer_name", ""))},
+            {"type": "text", "text": str(row.get("loan_number", ""))},
+            {"type": "text", "text": str(row.get("vehicle_number", ""))},
+            {"type": "text", "text": str(row.get("customer_address", ""))},
+        ]),
+ 
     }
 
     template_name, lang, parameters = templates.get(choice, templates["8"])
@@ -208,3 +216,4 @@ def build_payload(choice: str, row: dict) -> Tuple[dict, str]:
         },
     }
     return payload, rendered_text
+

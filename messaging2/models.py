@@ -27,16 +27,20 @@ class SmsWhatsAppLog2(models.Model):
     error_message = models.TextField(blank=True, null=True)
     sent_at = models.DateTimeField(auto_now_add=True)
 
-    # ✅ New fields
     message_type = models.CharField(max_length=10, choices=MESSAGE_TYPE_CHOICES, default="Sent")
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default="text")
     media_file = models.FileField(upload_to="whatsapp2_media/", blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        """Normalize mobile before saving."""
         if self.mobile:
             self.mobile = format_mobile2(self.mobile)
         super().save(*args, **kwargs)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["mobile", "sent_at"]),
+            models.Index(fields=["message_type", "status"]),
+        ]
 
     def __str__(self):
         return f"{self.mobile} - {self.message_type} - {self.content_type}"

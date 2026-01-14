@@ -166,6 +166,14 @@ def build_payload2(choice: str, row: dict) -> Tuple[dict, str]:
             {"type": "text", "text": "7"},                                        # {{7}}
         ]), 
 
+        "10": ("whatsapp_noc", "en", [
+            {"type": "text", "text": str(row.get("customer_name", ""))},     # {{1}}
+            {"type": "text", "text": str(row.get("loan_number", ""))},       # {{2}}
+            {"type": "text", "text": str(row.get("vehicle_number", ""))},    # {{3}}
+            {"type": "text", "text": format_mobile2(row.get("cust_mobile", ""))},  # {{4}}
+        ]),
+
+
     }
 
     template_name, lang, parameters = templates.get(choice, templates["8"])

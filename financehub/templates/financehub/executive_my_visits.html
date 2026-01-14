@@ -125,7 +125,7 @@
                     </td>
 
                     <td class="text-center">
-                        {{ r.visit_date }}
+                        {{ r.visit_date|date:"d M Y" }}
                     </td>
 
                     <td class="text-center">
@@ -140,12 +140,12 @@
 
                     <td class="text-center">
                         {% if not r.status %}
-                            <a href="{% url 'executive_visit_response' r.visit.id %}"
+                            <a href="{% url 'executive_visit_response' r.visit.id %}?next={{ request.get_full_path|urlencode }}"
                                class="btn btn-sm btn-primary">
                                 Respond
                             </a>
                         {% else %}
-                            <a href="{% url 'executive_visit_response' r.visit.id %}"
+                            <a href="{% url 'executive_visit_response' r.visit.id %}?next={{ request.get_full_path|urlencode }}"
                                class="btn btn-sm btn-warning">
                                 Edit Response
                             </a>
@@ -192,17 +192,17 @@
             </p>
 
             <p class="mb-3">
-                <strong>Visit Date:</strong> {{ r.visit_date }}
+                <strong>Visit Date:</strong> {{ r.visit_date|date:"d M Y" }}
             </p>
 
             <div class="d-grid">
                 {% if not r.status %}
-                    <a href="{% url 'executive_visit_response' r.visit.id %}"
+                    <a href="{% url 'executive_visit_response' r.visit.id %}?next={{ request.get_full_path|urlencode }}"
                        class="btn btn-primary btn-sm">
                         Respond
                     </a>
                 {% else %}
-                    <a href="{% url 'executive_visit_response' r.visit.id %}"
+                    <a href="{% url 'executive_visit_response' r.visit.id %}?next={{ request.get_full_path|urlencode }}"
                        class="btn btn-warning btn-sm">
                         Edit Response
                     </a>

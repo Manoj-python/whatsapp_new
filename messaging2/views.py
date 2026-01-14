@@ -67,20 +67,55 @@ def send_whatsapp2_text(to_number, text_body):
     resp.raise_for_status()
     return resp.json()
 
+
 def send_whatsapp2_media(to_number, file_obj, media_type):
     access_token = settings.WHATSAPP2_ACCESS_TOKEN
     phone_number_id = settings.WHATSAPP2_PHONE_NUMBER_ID
-    upload_url = f'https://graph.facebook.com/v22.0/{phone_number_id}/media'
-    headers = {'Authorization': f'Bearer {access_token}'}
-    files = {'file': (file_obj.name, file_obj, file_obj.content_type)}
-    data = {'messaging_product': 'whatsapp'}
+
+    upload_url = f"https://graph.facebook.com/v22.0/{phone_number_id}/media"
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    files = {
+        "file": (
+            file_obj.name,
+            file_obj,
+            getattr(file_obj, "content_type", "application/octet-stream")
+        )
+    }
+
+    data = {"messaging_product": "whatsapp"}
+
+    # 1️⃣ Upload media
     resp = requests.post(upload_url, headers=headers, files=files, data=data, timeout=60)
     resp.raise_for_status()
-    media_id = resp.json().get('id')
-    url = f'https://graph.facebook.com/v22.0/{phone_number_id}/messages'
-    payload = {"messaging_product": "whatsapp", "to": to_number, "type": media_type, media_type: {"id": media_id}}
-    resp2 = requests.post(url, headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'},
-                          json=payload, timeout=30)
+    media_id = resp.json().get("id")
+
+    # 2️⃣ Send message (IMPORTANT DIFFERENCE)
+    msg_url = f"https://graph.facebook.com/v22.0/{phone_number_id}/messages"
+
+    media_payload = {"id": media_id}
+
+    # ✅ filename ONLY for document
+    if media_type == "document":
+        media_payload["filename"] = file_obj.name
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": media_type,
+        media_type: media_payload
+    }
+
+    resp2 = requests.post(
+        msg_url,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=30,
+    )
+
     resp2.raise_for_status()
     return resp2.json()
 
@@ -141,18 +176,37 @@ def chat_dashboard2(request):
             mobile_list.append({"mobile": normalized})
     return render(request, "messaging2/chat.html", {"mobile_list": mobile_list, "MEDIA_URL": settings.MEDIA_URL})
 
+
+# =====================================================
+# CHAT MESSAGES API  (🔥 IMPORTANT FIXES HERE)
+# =====================================================
+
 @messaging2_required
 def chat_messages_api2(request, mobile):
     normalized = format_mobile2(str(mobile))
-    messages_qs = SmsWhatsAppLog2.objects.filter(mobile=normalized).order_by("sent_at")
+    qs = (
+        SmsWhatsAppLog2.objects
+        .filter(mobile=normalized)
+        .order_by("sent_at")
+    )
+
     messages = []
-    for msg in messages_qs:
+
+    for msg in qs:
+        is_secure_noc = (
+            msg.content_type == "document"
+            and msg.message_type == "Sent"
+            and msg.media_file
+            and "noc" in (msg.media_file.name or "").lower()
+        )
+
         media_url = ""
-        if msg.media_file:
+        if msg.media_file and not is_secure_noc:
             try:
                 media_url = default_storage.url(msg.media_file.name)
             except Exception:
-                media_url = msg.media_file.url
+                media_url = ""
+
         messages.append({
             "id": msg.id,
             "mobile": msg.mobile,
@@ -162,17 +216,24 @@ def chat_messages_api2(request, mobile):
             "message_id": msg.message_id,
             "content_type": msg.content_type or "text",
             "media_file": media_url,
-            "status": msg.status or ""
+            "secure_media_id": msg.id if is_secure_noc else None,
+            "status": msg.status or "",
         })
+
     return JsonResponse({"messages": messages})
+
+
 
 @csrf_exempt
 def send_reply_api2(request):
     try:
         if request.method != "POST":
             return HttpResponseBadRequest("POST required")
-        content_type_header = request.META.get("CONTENT_TYPE", "") or request.content_type or ""
-        if content_type_header.startswith("multipart/form-data"):
+
+        # -------------------------------
+        # Parse request
+        # -------------------------------
+        if request.content_type and request.content_type.startswith("multipart/form-data"):
             mobile = request.POST.get("mobile", "").strip()
             text = request.POST.get("text", "").strip()
             media_file = request.FILES.get("media")
@@ -181,115 +242,152 @@ def send_reply_api2(request):
             mobile = payload.get("mobile", "").strip()
             text = payload.get("text", "").strip()
             media_file = None
+
         if not mobile:
             return HttpResponseBadRequest("mobile required")
+
         mobile = format_mobile2(mobile)
         msg_id = ""
         content_type = "text"
-        send_resp = None
+
+        # -------------------------------
+        # MEDIA MESSAGE
+        # -------------------------------
         if media_file:
-            mime_main = (media_file.content_type.split("/")[0] if media_file.content_type else "").lower()
-            media_type = mime_main if mime_main in ("image", "video", "audio") else "document"
+            ct = getattr(media_file, "content_type", "") or ""
+            mime_main = ct.split("/")[0].lower()
+
+            media_type = (
+                mime_main if mime_main in ("image", "video", "audio")
+                else "document"
+            )
+
             send_resp = send_whatsapp2_media(mobile, media_file, media_type)
+
             content_type = media_type
-            if isinstance(send_resp, dict) and "messages" in send_resp and send_resp["messages"]:
-                msg_id = send_resp["messages"][0].get("id", "")
-            if text:
-                try:
-                    send_whatsapp2_text(mobile, text)
-                except Exception:
-                    pass
+            msg_id = send_resp.get("messages", [{}])[0].get("id", "")
+
+        # -------------------------------
+        # TEXT MESSAGE
+        # -------------------------------
         else:
             send_resp = send_whatsapp2_text(mobile, text)
-            if isinstance(send_resp, dict) and "messages" in send_resp and send_resp["messages"]:
-                msg_id = send_resp["messages"][0].get("id", "")
-        status_field = "Sent"
+            msg_id = send_resp.get("messages", [{}])[0].get("id", "")
+
+        # -------------------------------
+        # SAVE DB
+        # -------------------------------
         log = SmsWhatsAppLog2.objects.create(
             customer_name="",
             mobile=mobile,
             template_name="manual",
-            sent_text_message=text or "",
-            status=status_field,
+            sent_text_message=text or (media_file.name if media_file else ""),
+            status="Sent",
             message_id=msg_id,
             message_type="Sent",
             content_type=content_type,
         )
-        if media_file:
-            log.media_file.save(media_file.name, media_file)
-            log.save()
-        return JsonResponse({"status": "ok", "api_response": send_resp})
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
 
+        # -------------------------------
+        # SAVE MEDIA FILE (SAFE)
+        # -------------------------------
+        if media_file:
+            log.media_file.save(
+                media_file.name,
+                ContentFile(media_file.read())
+            )
+
+        return JsonResponse({"status": "ok"})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)
 @csrf_exempt
 def whatsapp_webhook2(request):
     if request.method == "GET":
         mode = request.GET.get("hub.mode")
         token = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge")
-        if mode == "subscribe" and token == getattr(settings, "WHATSAPP2_VERIFY_TOKEN", ""):
+        if mode == "subscribe" and token == settings.WHATSAPP2_VERIFY_TOKEN:
             return HttpResponse(challenge)
-        return HttpResponseBadRequest("Invalid verification token.")
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body.decode("utf-8") or "{}")
-            entries = data.get("entry", [])
-            for entry in entries:
-                for change in entry.get("changes", []):
-                    value = change.get("value", {})
-                    messages = value.get("messages", [])
-                    contacts = value.get("contacts", [])
-                    for msg in messages:
-                        from_num = format_mobile2(msg.get("from", ""))
-                        msg_id = msg.get("id", "")
-                        msg_type = msg.get("type", "text")
-                        text_body = ""
-                        content_type = "unknown"
-                        media_file = None
-                        if msg_type == "text":
-                            text_body = msg["text"].get("body", "")
-                            content_type = "text"
-                        elif msg_type == "image":
-                            content_type = "image"
-                            media_id = msg["image"].get("id")
-                            text_body = f"[Image received: {media_id}]"
-                            media_file = download_whatsapp2_media(media_id)
-                        elif msg_type == "document":
-                            content_type = "document"
-                            media_id = msg["document"].get("id")
-                            text_body = msg["document"].get("filename", "[Document]")
-                            media_file = download_whatsapp2_media(media_id)
-                        log = SmsWhatsAppLog2.objects.create(
-                            customer_name=(contacts[0].get("profile", {}).get("name") if contacts else ""),
-                            mobile=from_num,
-                            template_name="incoming",
-                            sent_text_message=text_body,
-                            status="Unread",
-                            message_type="Received",
-                            message_id=msg_id,
-                            content_type=content_type,
-                        )
-                        if media_file:
-                            filename, content = media_file
-                            if filename and content:
-                                log.media_file.save(filename, ContentFile(content))
-                                log.save()
-                    statuses = value.get("statuses", [])
-                    for st in statuses:
-                        mid = st.get("id")
-                        delivery_status = st.get("status")
-                        SmsWhatsAppLog2.objects.filter(message_id=mid).update(status=delivery_status)
-                        errors = st.get("errors", [])
-                        if errors:
-                            err = errors[0]
-                            SmsWhatsAppLog2.objects.filter(message_id=mid).update(
-                                error_message=f"{err.get('code')} - {err.get('title')}: {err.get('message')}"
-                            )
-            return JsonResponse({"status": "received"})
-        except Exception as e:
-            print("Webhook2 error:", e)
-            return JsonResponse({"error": str(e)}, status=400)
-    return HttpResponseBadRequest("Unsupported method.")
+        return HttpResponseBadRequest("Invalid token")
+
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+
+        for entry in payload.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                for msg in value.get("messages", []):
+
+                    from_num = format_mobile2(msg.get("from", ""))
+                    msg_id = msg.get("id", "")
+                    msg_type = msg.get("type", "text")
+
+                    text_body = ""
+                    content_type = "text"
+                    media_file = None
+
+                    # ================================
+                    # TEXT
+                    # ================================
+                    if msg_type == "text":
+                        content_type = "text"
+                        text_body = msg.get("text", {}).get("body", "")
+
+                    # ================================
+                    # IMAGE / VIDEO / AUDIO / DOCUMENT
+                    # ================================
+                    elif msg_type in ("image", "video", "audio", "document"):
+                        content_type = msg_type
+                        media_info = msg.get(msg_type, {})
+                        media_id = media_info.get("id")
+
+                        # Filename / label
+                        if msg_type == "document":
+                            text_body = media_info.get("filename", "Document")
+                        else:
+                            text_body = msg_type.capitalize()
+
+                        # Download bytes from WhatsApp Cloud
+                        media_file = download_whatsapp2_media(media_id)
+
+                    else:
+                        # Ignore unsupported types (location, contacts, etc.)
+                        continue
+
+                    # ================================
+                    # SAVE MESSAGE
+                    # ================================
+                    log = SmsWhatsAppLog2.objects.create(
+                        customer_name="",
+                        mobile=from_num,
+                        template_name="incoming",
+                        sent_text_message=text_body,
+                        status="Unread",
+                        message_type="Received",
+                        message_id=msg_id,
+                        content_type=content_type,
+                    )
+
+
+                    # ================================
+                    # SAVE MEDIA FILE
+                    # ================================
+                    if media_file:
+                        filename, content = media_file
+                        log.media_file.save(filename, ContentFile(content))
+
+
+        return JsonResponse({"status": "received"})
+
+    except Exception as e:
+        print("Webhook error:", e)
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 def download_success_report2(request, job_id):
@@ -474,3 +572,26 @@ def download_whatsapp2_media(media_id):
         return None
 
 
+
+@login_required
+def view_secure_document2(request, log_id):
+    log = get_object_or_404(SmsWhatsAppLog2, id=log_id)
+
+    filename = (log.media_file.name or "").lower()
+
+    if (
+        log.content_type != "document"
+        or log.message_type != "Sent"
+        or "noc" not in filename
+    ):
+        return HttpResponseForbidden("Not allowed")
+
+    file_obj = default_storage.open(log.media_file.name, "rb")
+
+    response = StreamingHttpResponse(file_obj, content_type="application/pdf")
+    response["Content-Disposition"] = "inline; filename=NOC.pdf"
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response["Pragma"] = "no-cache"
+    response["X-Content-Type-Options"] = "nosniff"
+
+    return response

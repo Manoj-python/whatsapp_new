@@ -220,6 +220,464 @@
 
 </div>
 
+<!-- FRESHDESK MATCHED TICKETS -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-info text-dark">
+        <h5 class="mb-0">Freshdesk Tickets (Matched by Loan Number)</h5>
+    </div>
+
+    <div class="card-body">
+
+        {% if freshdesk_tickets %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Ticket ID</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Description</th>
+                        <th>Group</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in freshdesk_tickets %}
+                    <tr>
+                        <td>{{ t.ticket_id }}</td>
+                        <td>{{ t.subject }}</td>
+                        <td>{{ t.status }}</td>
+                        <td>{{ t.description }}</td>
+                        <td>{{ t.group }}</td>
+                        <td>{{ t.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="text-muted text-center">
+                No Freshdesk tickets found for this loan number.
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+<!-- DUENOTICES MATCHED RECORDS -->
+<div class="card shadow-sm mt-4 mb-5">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">Due Notices (Matched by Loan Number)</h5>
+    </div>
+
+    <div class="card-body">
+
+        {% if duenotices %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>S.No</th>
+                        <th>Company</th>
+                        <th>Branch</th>
+                        <th>Loan Number</th>
+                        <th>Customer Name</th>
+                        <th>Vehicle No</th>
+                        <th>Send To</th>
+                        <th>Bar Number</th>
+                        <th>Notice Date</th>
+                        <th>Created At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dn in duenotices %}
+                    <tr>
+                        <td>{{ dn.id }}</td>
+                        <td>{{ dn.sno }}</td>
+                        <td>{{ dn.company }}</td>
+                        <td>{{ dn.branch }}</td>
+                        <td>{{ dn.loan_number }}</td>
+                        <td>{{ dn.customer_name }}</td>
+                        <td>{{ dn.vehicle_no }}</td>
+                        <td>{{ dn.send_to }}</td>
+                        <td>{{ dn.bar_number }}</td>
+                        <td>{{ dn.notice_date }}</td>
+                    
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="text-muted text-center">
+                No Due Notices found for this loan number.
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+<!-- CLU FULL DETAILS -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">CLU Full Data (Matched by Loan Number)</h5>
+    </div>
+
+    <div class="card-body">
+
+        {% if clu_visits %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>employee_id</th>
+                        <th>employee_name</th>
+                        <th>employee_status</th>
+                        <th>designation</th>
+                        <th>area</th>
+                        <th>branch_name</th>
+                        <th>state</th>
+                        <th>visit_under_manager</th>
+                        <th>employee_mobile_number</th>
+
+                        <th>customer_name</th>
+                        <th>customer_contact_number</th>
+
+                        <th>address_type</th>
+                        <th>visit_address</th>
+                        <th>is_cust_address_changed</th>
+                        <th>new_address</th>
+
+                        <th>reason_for_visit</th>
+                        <th>time_spent_in_visit_location_in_mins</th>
+                        <th>jointly_visited_emps</th>
+
+                        <th>loan_number</th>
+
+                        <th>type_of_visit</th>
+                        <th>status</th>
+                        <th>sub_status</th>
+
+                        <th>payment_mode</th>
+                        <th>payment_towards</th>
+                        <th>amount_paid</th>
+                        <th>payment_date</th>
+                        <th>transaction_id</th>
+
+                        <th>promised_payment_date</th>
+                        <th>promised_time_slot</th>
+                        <th>ptp_amount</th>
+
+                        <th>is_vehicle_released</th>
+                        <th>amount_paid_for_vehicle_release</th>
+                        <th>vehicle_released_date_time</th>
+                        <th>reason_for_vehicle_release</th>
+                        <th>days_bw_repossessed_and_released</th>
+
+                        <th>product_name</th>
+                        <th>application_no</th>
+                        <th>rejection_reason</th>
+                        <th>loan_date</th>
+                        <th>loan_type</th>
+
+                        <th>fi_address</th>
+                        <th>visited_on</th>
+                        <th>is_visit_done_at_customer_address</th>
+                        <th>dist_bw_cust_addr_visit_addr</th>
+
+                        <th>last_paid</th>
+                        <th>cp_name</th>
+                        <th>ag_date</th>
+
+                        <th>vehicle_no</th>
+                        <th>due_date</th>
+
+                        <th>new_mobile_no</th>
+                        <th>visit_allocated</th>
+
+                        <th>visit_latitude_longitude</th>
+                        <th>customer_latitude_longitude</th>
+
+                        <th>time_difference_bw_prev_visit</th>
+                        <th>remarks</th>
+
+                        <th>l2_manager_emp_id</th>
+                        <th>l2_manager_emp_name</th>
+                        <th>l3_manager_emp_id</th>
+                        <th>l3_manager_emp_name</th>
+
+                        <th>created_at</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for c in clu_visits %}
+                    <tr>
+                        <td>{{ c.employee_id|default:"" }}</td>
+                        <td>{{ c.employee_name|default:"" }}</td>
+                        <td>{{ c.employee_status|default:"" }}</td>
+                        <td>{{ c.designation|default:"" }}</td>
+                        <td>{{ c.area|default:"" }}</td>
+                        <td>{{ c.branch_name|default:"" }}</td>
+                        <td>{{ c.state|default:"" }}</td>
+                        <td>{{ c.visit_under_manager|default:"" }}</td>
+                        <td>{{ c.employee_mobile_number|default:"" }}</td>
+
+                        <td>{{ c.customer_name|default:"" }}</td>
+                        <td>{{ c.customer_contact_number|default:"" }}</td>
+
+                        <td>{{ c.address_type|default:"" }}</td>
+                        <td class="remarks-text">{{ c.visit_address|default:"" }}</td>
+                        <td>{{ c.is_cust_address_changed|default:"" }}</td>
+                        <td class="remarks-text">{{ c.new_address|default:"" }}</td>
+
+                        <td class="remarks-text">{{ c.reason_for_visit|default:"" }}</td>
+                        <td>{{ c.time_spent_in_visit_location_in_mins|default:"" }}</td>
+                        <td>{{ c.jointly_visited_emps|default:"" }}</td>
+
+                        <td>{{ c.loan_number|default:"" }}</td>
+
+                        <td>{{ c.type_of_visit|default:"" }}</td>
+                        <td>{{ c.status|default:"" }}</td>
+                        <td>{{ c.sub_status|default:"" }}</td>
+
+                        <td>{{ c.payment_mode|default:"" }}</td>
+                        <td>{{ c.payment_towards|default:"" }}</td>
+                        <td>{{ c.amount_paid|default:"" }}</td>
+                        <td>{{ c.payment_date|default:"" }}</td>
+                        <td>{{ c.transaction_id|default:"" }}</td>
+
+                        <td>{{ c.promised_payment_date|default:"" }}</td>
+                        <td>{{ c.promised_time_slot|default:"" }}</td>
+                        <td>{{ c.ptp_amount|default:"" }}</td>
+
+                        <td>{{ c.is_vehicle_released|default:"" }}</td>
+                        <td>{{ c.amount_paid_for_vehicle_release|default:"" }}</td>
+                        <td>{{ c.vehicle_released_date_time|default:"" }}</td>
+                        <td class="remarks-text">{{ c.reason_for_vehicle_release|default:"" }}</td>
+                        <td>{{ c.days_bw_repossessed_and_released|default:"" }}</td>
+
+                        <td>{{ c.product_name|default:"" }}</td>
+                        <td>{{ c.application_no|default:"" }}</td>
+                        <td class="remarks-text">{{ c.rejection_reason|default:"" }}</td>
+                        <td>{{ c.loan_date|default:"" }}</td>
+                        <td>{{ c.loan_type|default:"" }}</td>
+
+                        <td class="remarks-text">{{ c.fi_address|default:"" }}</td>
+                        <td>{{ c.visited_on|default:"" }}</td>
+                        <td>{{ c.is_visit_done_at_customer_address|default:"" }}</td>
+                        <td>{{ c.dist_bw_cust_addr_visit_addr|default:"" }}</td>
+
+                        <td>{{ c.last_paid|default:"" }}</td>
+                        <td>{{ c.cp_name|default:"" }}</td>
+                        <td>{{ c.ag_date|default:"" }}</td>
+
+                        <td>{{ c.vehicle_no|default:"" }}</td>
+                        <td>{{ c.due_date|default:"" }}</td>
+
+                        <td>{{ c.new_mobile_no|default:"" }}</td>
+                        <td>{{ c.visit_allocated|default:"" }}</td>
+
+                        <td>{{ c.visit_latitude_longitude|default:"" }}</td>
+                        <td>{{ c.customer_latitude_longitude|default:"" }}</td>
+
+                        <td>{{ c.time_difference_bw_prev_visit|default:"" }}</td>
+                        <td class="remarks-text">{{ c.remarks|default:"" }}</td>
+
+                        <td>{{ c.l2_manager_emp_id|default:"" }}</td>
+                        <td>{{ c.l2_manager_emp_name|default:"" }}</td>
+                        <td>{{ c.l3_manager_emp_id|default:"" }}</td>
+                        <td>{{ c.l3_manager_emp_name|default:"" }}</td>
+
+                        <td>{{ c.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% else %}
+        <div class="text-muted text-center">
+            No CLU records found for this loan number.
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+<!-- VISITERS FULL DETAILS -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Visitors Data (Matched by Loan Number)</h5>
+    </div>
+
+    <div class="card-body">
+
+        {% if visitors %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>name</th>
+                        <th>phone_number</th>
+                        <th>host</th>
+                        <th>email</th>
+
+                        <th>purpose</th>
+                        <th>loan_number</th>
+                        <th>vehicle_number</th>
+                        <th>company_name</th>
+
+                        <th>remarks</th>
+
+                        <th>check_in</th>
+                        <th>check_out</th>
+
+                        <th>profile_picture</th>
+                        <th>rating</th>
+
+                        <th>created_at</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for v in visitors %}
+                    <tr>
+                        <td>{{ v.name|default:"" }}</td>
+                        <td>{{ v.phone_number|default:"" }}</td>
+                        <td>{{ v.host|default:"" }}</td>
+                        <td>{{ v.email|default:"" }}</td>
+
+                        <td>{{ v.purpose|default:"" }}</td>
+                        <td>{{ v.loan_number|default:"" }}</td>
+                        <td>{{ v.vehicle_number|default:"" }}</td>
+                        <td>{{ v.company_name|default:"" }}</td>
+
+                        <td class="remarks-text">{{ v.remarks|default:"" }}</td>
+
+                        <td>{{ v.check_in|default:"" }}</td>
+                        <td>{{ v.check_out|default:"" }}</td>
+
+                        <td>{{ v.profile_picture|default:"" }}</td>
+                        <td>{{ v.rating|default:"" }}</td>
+
+                        <td>{{ v.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% else %}
+        <div class="text-muted text-center">
+            No visitor records found for this loan number.
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+<!-- LATEST PAYMENT TABLE -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Latest Payment Details</h5>
+    </div>
+
+    <div class="card-body">
+
+        {% if payment %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Status</th>
+                        <th>Payment Date</th>
+                        <th>Amount</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ payment.status|default:"-" }}</td>
+                        <td>{{ payment.date|date:"d-m-Y"|default:"-" }}</td>
+                        <td>{{ payment.amount|default:"-" }}</td>
+                        <td>{{ payment.source|default:"-" }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="text-muted text-center">
+                No payment found for this loan.
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+</div>
+
+<!-- DIALER DATA TABLE -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Dialer Latest Data</h5>
+    </div>
+
+    <div class="card-body">
+
+        {% if dialer_row %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm align-middle">
+                <thead class="table-dark text-center">
+                    <tr>
+                        <th>Dialer_PTP</th>
+                        <th>Dialer_PTP_Date</th>
+                        <th>Dialer_PTP_Remarks</th>
+
+                        <th>Dialer_RTP</th>
+                        <th>Dialer_RTP_Date</th>
+                        <th>Dialer_RTP_Remarks</th>
+
+                        <th>Dialer_Thirdparty</th>
+                        <th>Dialer_Thirdparty_Date</th>
+                        <th>Dialer_Thirdparty_Remarks</th>
+
+                        <th>Dialer_other</th>
+                        <th>Dialer_other_Date</th>
+                        <th>Dialer_other_Remarks</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr>
+                        <td>{{ dialer_row.Dialer_PTP|default:"-" }}</td>
+                        <td>{{ dialer_row.Dialer_PTP_Date|default:"-" }}</td>
+                        <td class="remarks-text">{{ dialer_row.Dialer_PTP_Remarks|default:"-" }}</td>
+
+                        <td>{{ dialer_row.Dialer_RTP|default:"-" }}</td>
+                        <td>{{ dialer_row.Dialer_RTP_Date|default:"-" }}</td>
+                        <td class="remarks-text">{{ dialer_row.Dialer_RTP_Remarks|default:"-" }}</td>
+
+                        <td>{{ dialer_row.Dialer_Thirdparty|default:"-" }}</td>
+                        <td>{{ dialer_row.Dialer_Thirdparty_Date|default:"-" }}</td>
+                        <td class="remarks-text">{{ dialer_row.Dialer_Thirdparty_Remarks|default:"-" }}</td>
+
+                        <td>{{ dialer_row.Dialer_other|default:"-" }}</td>
+                        <td>{{ dialer_row.Dialer_other_Date|default:"-" }}</td>
+                        <td class="remarks-text">{{ dialer_row.Dialer_other_Remarks|default:"-" }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="text-muted text-center">
+                No Dialer data found for this customer.
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>    
+
 </body>
 </html>
+
 

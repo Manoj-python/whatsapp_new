@@ -87,8 +87,44 @@
 
   </div>
 </div>
+<div id="pdfModal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.85);
+  z-index:9999;">
+  <div style="
+    width:80%;
+    height:90%;
+    margin:5% auto;
+    background:#fff;">
+    <iframe
+      id="pdfFrame"
+      sandbox="allow-scripts"
+      style="width:100%;height:100%;border:none;">
+    </iframe>
+  </div>
+</div>
+
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+function openSecurePdf2(id){
+  const frame = document.getElementById("pdfFrame");
+  frame.src = `/messaging2/secure-document2/${id}/`;
+  document.getElementById("pdfModal").style.display = "block";
+}
+
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+document.addEventListener("visibilitychange", () => {
+  const frame = document.getElementById("pdfFrame");
+  if (!frame) return;
+  frame.style.filter = document.hidden ? "blur(12px)" : "none";
+});
+</script>
+
+
 
 <script>
 (function() {
@@ -96,6 +132,10 @@
   let selectedMobile = null;
   let searchText = "";
   let searchTimer = null;
+  let contactsPage = 1;
+  let hasMoreContacts = true;
+  let isLoadingContacts = false;
+
 
   let lastContactsKey = "";
   let lastChatKey = "";
@@ -111,39 +151,45 @@
   setInterval(fetchContacts, 30000);
   fetchContacts();
 
-  function fetchContacts() {
+  function fetchContacts(reset = false) {
 
-    if (searchText.length > 0) return;
+    if (isLoadingContacts) return;
+    if (!hasMoreContacts && !reset) return;
 
-    $.getJSON('/messaging2/api/contacts2/', function(data) {
+    isLoadingContacts = true;
+
+    if (reset) {
+      contactsPage = 1;
+      hasMoreContacts = true;
+      $("#contactList").empty();
+    }
+
+    $.getJSON("/messaging2/api/contacts2/", {
+      page: contactsPage,
+      search: searchText
+    }, function(data) {
 
       let contacts = data.contacts || [];
-      const key = JSON.stringify(contacts.map(c => [c.mobile, c.last_time, c.unread]));
 
-      if (key === lastContactsKey) return;
-      lastContactsKey = key;
-
-      const list = $("#contactList");
-      list.empty();
-
-      contacts.sort((a,b) => new Date(b.last_time) - new Date(a.last_time));
-
-      if (!contacts.length) {
-        list.append('<li class="list-group-item">No contacts</li>');
-        return;
+      if (!contacts.length && contactsPage === 1) {
+        $("#contactList").html('<li class="list-group-item">No contacts</li>');
       }
 
       contacts.forEach(c => {
-        list.append(`
-          <li class="list-group-item contact-item ${selectedMobile === c.mobile ? 'active' : ''}"
+        $("#contactList").append(`
+          <li class="list-group-item contact-item"
               data-mobile="${c.mobile}">
             ${c.mobile}
-            ${c.unread > 0 ? `<span class="badge bg-danger float-end">${c.unread}</span>` : ""}
+            ${c.unread > 0
+              ? `<span class="badge bg-danger float-end">${c.unread}</span>`
+              : ""}
           </li>
         `);
       });
 
-      if (searchText.length > 0) filterContacts();
+      hasMoreContacts = data.has_more;
+      contactsPage++;
+      isLoadingContacts = false;
     });
   }
 
@@ -219,30 +265,113 @@
         // S3 PUBLIC MEDIA HANDLING (uses base64 fallback)
         // ================================================
         if (msg.content_type === "image") {
-          c = `
-            <img src="${msg.media_file}"
-                 class="chat-image"
-                 onerror="this.onerror=null;this.src='${BASE64_FALLBACK}';">
-            <br>${msg.sent_text_message || ""}
-          `;
+
+          const filename = msg.sent_text_message || "image";
+
+          // Incoming image → downloadable
+          if (msg.message_type === "Received") {
+            c = `
+              <a href="${msg.media_file}" download="${filename}">
+                <img src="${msg.media_file}"
+                    class="chat-image"
+                    title="Click to download"
+                    onerror="this.onerror=null;this.src='${BASE64_FALLBACK}';">
+              </a>
+              <br>
+              <small class="text-muted">📥 ${filename}</small>
+            `;
+          }
+          // Sent image → preview only
+          else {
+            c = `
+              <img src="${msg.media_file}"
+                  class="chat-image"
+                  onerror="this.onerror=null;this.src='${BASE64_FALLBACK}';">
+              <br>${msg.sent_text_message || ""}
+            `;
+          }
         }
-        else if (msg.content_type === "video") {
-          c = `
-            <video controls class="chat-video" width="260">
-              <source src="${msg.media_file}">
-            </video>
-          `;
-        }
+
+
         else if (msg.content_type === "audio") {
-          c = `
-            <audio controls class="chat-audio">
-              <source src="${msg.media_file}">
-            </audio>
-          `;
+
+          const filename = msg.sent_text_message || "audio_message";
+
+          // Incoming audio → play + download
+          if (msg.message_type === "Received") {
+            c = `
+              <audio controls class="chat-audio" preload="metadata">
+                <source src="${msg.media_file}" type="audio/mpeg">
+                Your browser does not support audio playback.
+              </audio>
+              <br>
+              <a href="${msg.media_file}" download="${filename}">
+                ⬇ Download audio
+              </a>
+            `;
+          }
+          // Sent audio → play only
+          else {
+            c = `
+              <audio controls class="chat-audio" preload="metadata">
+                <source src="${msg.media_file}" type="audio/mpeg">
+                Your browser does not support audio playback.
+              </audio>
+            `;
+          }
         }
+
+        else if (msg.content_type === "audio") {
+
+          const filename = msg.sent_text_message || "audio_message";
+
+          // Incoming audio → play + download
+          if (msg.message_type === "Received") {
+            c = `
+              <audio controls class="chat-audio" preload="metadata">
+                <source src="${msg.media_file}" type="audio/mpeg">
+                Your browser does not support audio playback.
+              </audio>
+              <br>
+              <a href="${msg.media_file}" download="${filename}">
+                ⬇ Download audio
+              </a>
+            `;
+          }
+          // Sent audio → play only
+          else {
+            c = `
+              <audio controls class="chat-audio" preload="metadata">
+                <source src="${msg.media_file}" type="audio/mpeg">
+                Your browser does not support audio playback.
+              </audio>
+            `;
+          }
+        }
+
         else if (msg.content_type === "document") {
-          c = `<a href="${msg.media_file}" target="_blank">📄 Open Document</a>`;
+
+          const filename = msg.sent_text_message || "Document";
+
+          if (msg.secure_media_id) {
+            c = `
+              <div
+                onclick="openSecurePdf2(${msg.secure_media_id})"
+                style="cursor:pointer;color:#dc3545;font-weight:600;">
+                📄 ${filename} <br>
+                <small>(Restricted)</small>
+              </div>
+            `;
+          } else {
+            c = `
+              <a href="${msg.media_file}" target="_blank" download>
+                📄 ${filename}
+              </a>
+            `;
+          }
         }
+
+
         else {
           c = msg.sent_text_message || "";
         }

@@ -35,6 +35,11 @@ SMART_HEADER_MAP = {
     # Due Notice
     "vehicleno": "vehicle_no",
     "barno": "bar_number",
+    "sendto": "send_to",
+    "typenotice": "type_of_notice",
+    "noticetype": "type_of_notice",
+    "statustype": "notice_status",
+    "noticestatus": "notice_status",
 
     # General
     "mobileno": "mobile_number",

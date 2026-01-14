@@ -783,4 +783,3 @@ def mark_read(request, mobile):
 
 
 
-

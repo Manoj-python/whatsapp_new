@@ -19,7 +19,7 @@ class Lcc(models.Model):
     vehicle_class = models.CharField(max_length=255, blank=True, null=True)  # used "class" name avoided
     first_due_date = models.CharField(max_length=100, blank=True, null=True)  # keep raw
     last_due_date = models.CharField(max_length=100, blank=True, null=True)
-    installment_date = models.CharField(max_length=100, blank=True, null=True)
+    installment_date = models.DateField(blank=True, null=True)
     month_tbc = models.CharField(max_length=100, blank=True, null=True)
     total_dues = models.CharField(max_length=100, blank=True, null=True)
     lpc_dues = models.CharField(max_length=100, blank=True, null=True)
@@ -426,6 +426,8 @@ class Dialer(models.Model):
 
 
 
+
+
 class DueNotice(models.Model):
     sno = models.CharField(max_length=50, null=True, blank=True)
     company = models.CharField(max_length=255, null=True, blank=True)
@@ -433,11 +435,14 @@ class DueNotice(models.Model):
 
     loan_number = models.CharField(max_length=150, db_index=True)
     vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    send_to=models.CharField(max_length=255, null=True, blank=True)
+    type_of_notice = models.CharField(max_length=255, null=True, blank=True)
+    notice_status = models.CharField(max_length=100, null=True, blank=True)    
 
     customer_name = models.CharField(max_length=255, null=True, blank=True)
     bar_number = models.CharField(max_length=100, null=True, blank=True)
 
-    notice_date = models.CharField(max_length=100, null=True, blank=True)
+    notice_date = models.DateField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -446,6 +451,7 @@ class DueNotice(models.Model):
 
     def __str__(self):
         return f"{self.loan_number} - {self.customer_name}"
+
 
 
 
@@ -563,13 +569,17 @@ class Freshdesk(models.Model):
 
 
 
+
+
+
+
 class EseBuzz(models.Model):
     loanno = models.CharField(max_length=150, db_index=True, null=True, blank=True)
     loantype = models.CharField(max_length=255, null=True, blank=True)
     umrnno = models.CharField(max_length=255, null=True, blank=True)
     amount = models.CharField(max_length=100, null=True, blank=True)
     postingdate = models.CharField(max_length=100, null=True, blank=True)
-    initiateddate = models.CharField(max_length=100, null=True, blank=True)
+    initiateddate =  models.DateField(blank=True, null=True)
     customername = models.CharField(max_length=255, null=True, blank=True)
     bankaccountno = models.CharField(max_length=255, null=True, blank=True)
     ifsccode = models.CharField(max_length=100, null=True, blank=True)
@@ -597,7 +607,7 @@ class Hero(models.Model):
     heroagreementno = models.CharField(max_length=255, null=True, blank=True)
     referencenumber = models.CharField(max_length=255, null=True, blank=True)
     customername = models.CharField(max_length=255, null=True, blank=True)
-    date = models.CharField(max_length=100, null=True, blank=True)
+    date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=255, null=True, blank=True)
     branchcode = models.CharField(max_length=100, null=True, blank=True)
     branchname = models.CharField(max_length=255, null=True, blank=True)
@@ -621,7 +631,7 @@ class KotakECS(models.Model):
     vehicleno = models.CharField(max_length=100, null=True, blank=True)
     company = models.CharField(max_length=255, null=True, blank=True)
     amount = models.CharField(max_length=100, null=True, blank=True)
-    ecsdate = models.CharField(max_length=100, null=True, blank=True)
+    ecsdate = models.DateField(blank=True, null=True)
     ecsstatus = models.CharField(max_length=255, null=True, blank=True)
     releasestatus = models.CharField(max_length=255, null=True, blank=True)
     released = models.TextField(null=True, blank=True)
@@ -644,7 +654,7 @@ class Smsquare(models.Model):
     presentmentmode = models.CharField(max_length=255, null=True, blank=True)
     customername = models.CharField(max_length=255, null=True, blank=True)
     amount = models.CharField(max_length=100, null=True, blank=True)
-    date = models.CharField(max_length=100, null=True, blank=True)
+    date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=255, null=True, blank=True)
     reasoncode = models.CharField(max_length=100, null=True, blank=True)
     reasondescription = models.CharField(max_length=500, null=True, blank=True)
@@ -685,6 +695,7 @@ class Upi(models.Model):
 
     def __str__(self):
         return f"{self.loannoreference} - {self.customername}"
+
 
 
 

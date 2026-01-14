@@ -1,9 +1,10 @@
-# messaging2/consumers.py
 import json
 import uuid
+
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from asgiref.sync import async_to_sync
+
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
@@ -26,14 +27,23 @@ class Chat2Consumer(AsyncWebsocketConsumer):
 
         await self.channel_layer.group_send(
             "presence_group2",
-            {"type": "presence.update", "mobile": self.mobile, "status": "online"}
+            {
+                "type": "presence.update",
+                "mobile": self.mobile,
+                "status": "online"
+            }
         )
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_send(
             "presence_group2",
-            {"type": "presence.update", "mobile": self.mobile, "status": "offline"}
+            {
+                "type": "presence.update",
+                "mobile": self.mobile,
+                "status": "offline"
+            }
         )
+
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
         await self.channel_layer.group_discard("presence_group2", self.channel_name)
         await self.channel_layer.group_discard("delivery_group2", self.channel_name)
@@ -41,7 +51,7 @@ class Chat2Consumer(AsyncWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None):
         try:
             data = json.loads(text_data or "{}")
-        except:
+        except Exception:
             return
 
         event_type = data.get("type")
@@ -64,7 +74,7 @@ class Chat2Consumer(AsyncWebsocketConsumer):
             await self._mark_read_and_broadcast(mob)
             return
 
-        # sending a message (with or without media)
+        # send message (text / media)
         if event_type == "message":
             text = data.get("text", "")
             media_meta = data.get("media")
@@ -81,8 +91,9 @@ class Chat2Consumer(AsyncWebsocketConsumer):
                     "type": "chat.message",
                     "message_type": "Sent",
                     "mobile": self.mobile,
-                    "text": text,
-                    "media": saved["media_url"],
+                    "text": saved.get("display_text", ""),
+                    "media": saved.get("media_url", ""),
+                    "secure_media_id": saved.get("secure_media_id"),
                     "content_type": saved["content_type"],
                     "sent_at": saved["sent_at"],
                     "message_id": saved["message_id"],
@@ -91,7 +102,9 @@ class Chat2Consumer(AsyncWebsocketConsumer):
             )
             return
 
+    # ======================================================
     # EVENT HANDLERS (WS -> UI)
+    # ======================================================
 
     async def chat_message(self, event):
         await self.send(json.dumps({
@@ -99,7 +112,8 @@ class Chat2Consumer(AsyncWebsocketConsumer):
             "message_type": event["message_type"],
             "mobile": event["mobile"],
             "text": event["text"],
-            "media": event["media"],
+            "media": event.get("media", ""),
+            "secure_media_id": event.get("secure_media_id"),
             "content_type": event["content_type"],
             "sent_at": event["sent_at"],
             "message_id": event["message_id"],
@@ -128,24 +142,28 @@ class Chat2Consumer(AsyncWebsocketConsumer):
             "error": event.get("error", "")
         }))
 
+    # ======================================================
     # DB HELPERS
+    # ======================================================
 
     @database_sync_to_async
     def _save_message_with_tempid(self, mobile, text, media_meta):
         tmp_id = f"tmp-{uuid.uuid4().hex}"
         content_type = "text"
-        media_url = None
+        media_url = ""
         path = None
 
-        # MEDIA SAVING IF ATTACHED
+        # -------- Save media if present --------
         if media_meta:
             try:
-                filename = media_meta.get("name")
+                original_filename = media_meta.get("name", "")
                 raw = ContentFile(media_meta["data"].encode("latin1"))
                 ct = media_meta.get("content_type", "")
-                path = f"whatsapp2_media/{tmp_id}_{filename}"
+
+                path = f"whatsapp2_media/{tmp_id}_{original_filename}"
                 default_storage.save(path, raw)
                 media_url = default_storage.url(path)
+
                 if ct.startswith("image/"):
                     content_type = "image"
                 elif ct.startswith("video/"):
@@ -154,35 +172,51 @@ class Chat2Consumer(AsyncWebsocketConsumer):
                     content_type = "audio"
                 else:
                     content_type = "document"
-            except:
+            except Exception:
                 pass
 
+        # -------- Display text logic --------
+        display_text = text.strip() if text else ""
+        if not display_text and path:
+            # extract original filename
+            display_text = path.split("_", 1)[-1]
+
+        # -------- Save DB record --------
         log = SmsWhatsAppLog2.objects.create(
             mobile=mobile,
             customer_name="",
             template_name="manual",
-            sent_text_message=text,
+            sent_text_message=display_text,
             status="Pending",
             message_id=tmp_id,
             message_type="Sent",
             content_type=content_type,
         )
 
-        if path:
-            log.media_file.name = path
-            log.save()
+        # -------- Secure NOC handling --------
+        filename_lower = (path or "").lower()
+        secure_media_id = None
+        final_media_url = media_url
+
+        if content_type == "document" and "noc" in filename_lower:
+            secure_media_id = log.id
+            final_media_url = ""  # DO NOT expose S3 URL
 
         return {
-            "media_url": media_url,
+            "media_url": final_media_url,
+            "secure_media_id": secure_media_id,
             "content_type": content_type,
             "sent_at": log.sent_at.isoformat(),
-            "message_id": tmp_id
+            "message_id": tmp_id,
+            "display_text": display_text,
         }
 
     @database_sync_to_async
     def _mark_read_and_broadcast(self, mobile):
         SmsWhatsAppLog2.objects.filter(
-            mobile=mobile, message_type="Received", status="Unread"
+            mobile=mobile,
+            message_type="Received",
+            status="Unread"
         ).update(status="Read")
 
         async_to_sync(self.channel_layer.group_send)(
@@ -195,3 +229,4 @@ class Chat2Consumer(AsyncWebsocketConsumer):
         )
 
         return True
+

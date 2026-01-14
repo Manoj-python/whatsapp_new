@@ -166,6 +166,7 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
 
                 headers = [clean_header(h) for h in chunk.columns]
                 chunk.columns = headers
+                header_map = {h: h for h in headers if h in model_fields}
 
                 upload.total_rows += len(chunk)
                 upload.save(update_fields=["total_rows"])

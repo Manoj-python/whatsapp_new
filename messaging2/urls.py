@@ -26,7 +26,11 @@ urlpatterns = [
     # Webhook and exports
     path('webhook/', views.whatsapp_webhook2, name='whatsapp_webhook2'),
     path('export/received/', views.export_received_messages_to_excel2, name='export_received2'),
-
+    path(
+    "secure-document2/<int:log_id>/",
+    views.view_secure_document2,
+    name="secure_document2"
+),
 
      # -----------------------------
     # Real-time Chat Features (App2)

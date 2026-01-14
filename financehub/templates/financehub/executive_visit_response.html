@@ -42,53 +42,91 @@
     <div class="card shadow-sm response-card">
         <div class="card-body">
 
-            <h5 class="mb-4 text-center">
-                📄 Visit Response
-            </h5>
+            <h5 class="mb-3 text-center">📄 Visit Response</h5>
 
-            <p class="fw-semibold text-center">
-                Loan: {{ obj.loanno }}
+            <p class="fw-semibold text-center mb-4">
+                Loan: {{ visit.loanno }}
             </p>
 
             <form method="post">
                 {% csrf_token %}
 
-                <!-- Visit Status -->
+                <!-- ✅ PRESERVE FILTER / PAGE STATE -->
+                <input type="hidden" name="next" value="{{ next }}">
+
+                <!-- ================= VISIT RESPONSE ================= -->
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        Visit Status
-                    </label>
+                    <label class="form-label fw-semibold">Visit Status</label>
                     <select name="visit_status"
                             id="status"
                             class="form-select"
                             required>
                         <option value="">-- Select --</option>
-                        <option value="visited">Yes (Visited)</option>
-                        <option value="not_visited">No (Not Visited)</option>
+                        <option value="visited"
+                            {% if visit.visit_status == "visited" %}selected{% endif %}>
+                            Yes (Visited)
+                        </option>
+                        <option value="not_visited"
+                            {% if visit.visit_status == "not_visited" %}selected{% endif %}>
+                            No (Not Visited)
+                        </option>
                     </select>
                 </div>
 
-                <!-- Reason -->
-                <div class="mb-3" id="reasonBox" style="display:none">
-                    <label class="form-label fw-semibold">
-                        Reason
-                    </label>
+                <!-- ================= REASON ================= -->
+                <div class="mb-3"
+                     id="reasonBox"
+                     {% if visit.visit_status != "not_visited" %}style="display:none"{% endif %}>
+                    <label class="form-label fw-semibold">Reason</label>
                     <textarea name="not_visited_reason"
+                              id="reason"
                               class="form-control"
                               rows="3"
-                              placeholder="Enter reason if not visited"></textarea>
+                              placeholder="Enter reason if not visited">{{ visit.not_visited_reason|default_if_none:"" }}</textarea>
                 </div>
 
-                <!-- Buttons -->
+                {% if not is_exec %}
+                <hr>
+
+                <!-- ================= SCHEDULING (CM / TL ONLY) ================= -->
+                <h6 class="fw-bold text-success mb-3">
+                    📅 Schedule / Update Visit
+                </h6>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Employee ID</label>
+                    <input type="text"
+                           name="empid"
+                           id="empid"
+                           class="form-control"
+                           value="{{ visit.empid }}">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Visit Date</label>
+                    <input type="date"
+                           name="visit_schedule_date"
+                           id="visitDate"
+                           class="form-control"
+                           value="{{ visit.visit_schedule_date|date:'Y-m-d' }}">
+                </div>
+                {% endif %}
+
+                <!-- ================= ACTION BUTTONS ================= -->
                 <div class="d-flex flex-wrap gap-2 mt-4">
                     <button type="submit" class="btn btn-success flex-fill">
-                        Submit
+                        Save
                     </button>
 
-                    <a href="{% url 'executive_my_visits' %}"
-                       class="btn btn-secondary flex-fill">
-                        Back
-                    </a>
+                    {% if next %}
+                        <a href="{{ next }}" class="btn btn-secondary flex-fill">
+                            Back
+                        </a>
+                    {% else %}
+                        <a href="{% url 'executive_my_visits' %}" class="btn btn-secondary flex-fill">
+                            Back
+                        </a>
+                    {% endif %}
                 </div>
 
             </form>
@@ -98,12 +136,41 @@
 
 </div>
 
-<!-- Toggle Reason -->
+<!-- ================= JS (SAFE UX LOGIC) ================= -->
 <script>
-document.getElementById("status").addEventListener("change", function () {
-    document.getElementById("reasonBox").style.display =
-        this.value === "not_visited" ? "block" : "none";
-});
+const statusSelect = document.getElementById("status");
+const reasonBox = document.getElementById("reasonBox");
+const reasonInput = document.getElementById("reason");
+
+// scheduling fields (may not exist for exec)
+const empid = document.getElementById("empid");
+const visitDate = document.getElementById("visitDate");
+
+function handleStatusChange() {
+    if (statusSelect.value === "not_visited") {
+        reasonBox.style.display = "block";
+        reasonInput.required = true;
+
+        // allow scheduling
+        if (empid) empid.disabled = false;
+        if (visitDate) visitDate.disabled = false;
+
+    } else {
+        reasonBox.style.display = "none";
+        reasonInput.required = false;
+        reasonInput.value = "";
+
+        // 🔒 disable scheduling when visited (prevents accidental change)
+        if (empid) empid.disabled = true;
+        if (visitDate) visitDate.disabled = true;
+    }
+}
+
+// init on load
+handleStatusChange();
+
+// change handler
+statusSelect.addEventListener("change", handleStatusChange);
 </script>
 
 </body>
