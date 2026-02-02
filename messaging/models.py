@@ -22,10 +22,10 @@ class SmsWhatsAppLog(models.Model):
     mobile = models.CharField(max_length=30, db_index=True)
     template_name = models.CharField(max_length=50, blank=True, null=True)
     status = models.CharField(max_length=50, blank=True, null=True)
-    message_id = models.CharField(max_length=200, blank=True, null=True)
+    message_id = models.CharField(max_length=200, blank=True, null=True, db_index=True)
     sent_text_message = models.TextField(blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
-    sent_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     # ✅ New fields
     message_type = models.CharField(max_length=10, choices=MESSAGE_TYPE_CHOICES, default="Sent")
@@ -37,6 +37,11 @@ class SmsWhatsAppLog(models.Model):
         if self.mobile:
             self.mobile = format_mobile(self.mobile)
         super().save(*args, **kwargs)
+    class Meta:
+        indexes = [
+            models.Index(fields=["mobile", "-sent_at"]),
+        ]
+
 
     def __str__(self):
         return f"{self.mobile} - {self.message_type} - {self.content_type}"

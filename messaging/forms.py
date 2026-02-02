@@ -11,6 +11,10 @@ TEMPLATE_CHOICES = [
     ("8", "Welcome Message (English)"),
     ("9", "NOC Dispatch Template (English)"),
     ("10", "noc_address_confirmation_v2 (English)"),
+    ("11", "Tenure Reminder to Guarantor (Telugu)"),
+    ("12", "customer_awareness_ (English)"),
+    ("13", "customer_awareness_ (Telugu)"),
+    ("14", "health_insurance (English)"),
 
 ]
 

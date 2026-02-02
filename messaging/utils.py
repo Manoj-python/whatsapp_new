@@ -198,22 +198,59 @@ def build_payload(choice: str, row: dict) -> Tuple[dict, str]:
             {"type": "text", "text": str(row.get("vehicle_number", ""))},
             {"type": "text", "text": str(row.get("customer_address", ""))},
         ]),
+
+        "11": ("tenure_reminder_garantor", "te", [
+            {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
+            {"type": "text", "text": str(row.get("loan_number", ""))},     # {{2}}
+            {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{3}}
+            {"type": "text", "text": str(row.get("pending_emis", ""))},    # {{4}}
+         ]),
+
+          "12": ("customer_awareness", "en", [
+            {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
+            {"type": "text", "text": str(row.get("loan_number", ""))},     # {{2}}
+            {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{3}}
+
+        ]),
+        "13": ("awareness_customer", "te", [
+            {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
+            {"type": "text", "text": str(row.get("loan_number", ""))},     # {{2}}
+            {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{3}}
+
+        ]),
+
+         "14": ("health_insurance", "en", []),
+
+
  
     }
 
     template_name, lang, parameters = templates.get(choice, templates["8"])
+
     template_body = get_template_text_from_whatsapp(template_name)
     rendered_text = render_template_text(template_body, parameters)
+
     mobile_number = row.get("cust_mobile") or row.get("CustMobile") or ""
+
+    # ---- UPDATED PAYLOAD LOGIC (SAFE FOR NO-VARIABLE TEMPLATES) ----
+    template_data = {
+        "name": template_name,
+        "language": {"code": lang},
+    }
+
+    # Add components ONLY if parameters exist (templates 1–13)
+    if parameters:
+        template_data["components"] = [
+            {"type": "body", "parameters": parameters}
+        ]
+
     payload = {
         "messaging_product": "whatsapp",
         "to": format_mobile(mobile_number),
         "type": "template",
-        "template": {
-            "name": template_name,
-            "language": {"code": lang},
-            "components": [{"type": "body", "parameters": parameters}],
-        },
+        "template": template_data,
     }
+
     return payload, rendered_text
+
 

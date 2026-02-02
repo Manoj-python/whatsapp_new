@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Due Notices</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+
+    <style>
+        body { font-size: 13px; }
+        table th, table td {
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .table-responsive {
+            max-height: 75vh;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid mt-3">
+
+    <h5>Due Notice List</h5>
+
+    <!-- SEARCH -->
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-4">
+            <input type="text" name="q" value="{{ query }}"
+                   class="form-control form-control-sm"
+                   placeholder="Search...">
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary btn-sm">Search</button>
+            <a href="{% url 'due_notice_list' %}" class="btn btn-secondary btn-sm">
+                Reset
+            </a>
+        </div>
+    </form>
+
+    <!-- TABLE -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover table-sm">
+            <thead class="table-dark">
+            <tr>
+                <th>#</th>
+                <th>Company</th>
+                <th>Branch</th>
+                <th>Loan No</th>
+                <th>Vehicle No</th>
+                <th>Customer Name</th>
+                <th>Bar No</th>
+                <th>Send To</th>
+                <th>Notice Type</th>
+                <th>Notice Date</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Update</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            {% for notice in page_obj %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ notice.company }}</td>
+                <td>{{ notice.branch }}</td>
+                <td>{{ notice.loan_number }}</td>
+                <td>{{ notice.vehicle_no }}</td>
+                <td>{{ notice.customer_name }}</td>
+                <td>{{ notice.bar_number }}</td>
+                <td>{{ notice.send_to }}</td>
+                <td>{{ notice.type_of_notice }}</td>
+                <td>{{ notice.notice_date }}</td>
+
+                <!-- STATUS COLUMN -->
+                <td style="min-width:150px;">
+                    {% if notice.notice_status == "delivered" %}
+                        <span class="badge bg-success mb-1">Delivered</span>
+                    {% elif notice.notice_status == "returned" %}
+                        <span class="badge bg-danger mb-1">Returned</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark mb-1">In Transit</span>
+                    {% endif %}
+
+                    <select class="form-select form-select-sm status-select mt-1"
+                            style="width:130px;"
+                            onchange="toggleDate(this)">
+                        {% for key, value in status_choices %}
+                            <option value="{{ key }}"
+                                {% if notice.notice_status == key %}selected{% endif %}>
+                                {{ value }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </td>
+
+                <!-- DATE COLUMN -->
+                <td style="min-width:150px;">
+                    <input type="date"
+                           class="form-control form-control-sm delivery-date"
+                           value="{{ notice.delivery_date|date:'Y-m-d' }}"
+                           style="display:none;">
+
+                    <input type="date"
+                           class="form-control form-control-sm return-date"
+                           value="{{ notice.return_date|date:'Y-m-d' }}"
+                           style="display:none;">
+                </td>
+
+                <!-- UPDATE COLUMN -->
+                <td>
+                    <form method="post" class="status-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="notice_id" value="{{ notice.id }}">
+                        <input type="hidden" name="notice_status">
+                        <input type="hidden" name="delivery_date">
+                        <input type="hidden" name="return_date">
+
+                        <button class="btn btn-success btn-sm">
+                            Update
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="13" class="text-center text-muted">
+                    No records found
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ✅ PAGINATION (RESTORED & WORKING) -->
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?q={{ query }}&page=1">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?q={{ query }}&page={{ page_obj.previous_page_number }}">
+                        Prev
+                    </a>
+                </li>
+            {% endif %}
+
+            <li class="page-item active">
+                <span class="page-link">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+            </li>
+
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?q={{ query }}&page={{ page_obj.next_page_number }}">
+                        Next
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?q={{ query }}&page={{ page_obj.paginator.num_pages }}">
+                        Last
+                    </a>
+                </li>
+            {% endif %}
+
+        </ul>
+    </nav>
+
+</div>
+
+<!-- JAVASCRIPT -->
+<script>
+function toggleDate(selectEl) {
+    const row = selectEl.closest("tr");
+    const status = selectEl.value;
+
+    const delivery = row.querySelector(".delivery-date");
+    const returned = row.querySelector(".return-date");
+
+    delivery.style.display = "none";
+    returned.style.display = "none";
+
+    if (status === "delivered") {
+        delivery.style.display = "block";
+    }
+    else if (status === "returned") {
+        returned.style.display = "block";
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".status-select").forEach(select => {
+        toggleDate(select);
+    });
+
+    document.querySelectorAll(".status-form").forEach(form => {
+        form.addEventListener("submit", function () {
+            const row = form.closest("tr");
+
+            form.querySelector('input[name="notice_status"]').value =
+                row.querySelector(".status-select").value;
+
+            const delivery = row.querySelector(".delivery-date");
+            const returned = row.querySelector(".return-date");
+
+            form.querySelector('input[name="delivery_date"]').value =
+                delivery.style.display === "block" ? delivery.value : "";
+
+            form.querySelector('input[name="return_date"]').value =
+                returned.style.display === "block" ? returned.value : "";
+        });
+    });
+});
+</script>
+
+</body>
+</html>

@@ -236,6 +236,13 @@
                                 class="btn btn-success btn-sm w-100">
                             ⬇ PDF
                         </button>
+                          <button type="submit"
+                                  name="download"
+                                  value="excel"
+                                  class="btn btn-success btn-sm w-100">
+                             ⬇ Excel    
+                            </button>
+
 
                         <a href="{% url 'executive_visit_schedule_list' %}"
                            class="btn btn-outline-secondary btn-sm w-100">
@@ -265,6 +272,39 @@
                     <th>BLC Case</th>
                     <th>EMI</th>
                     <th>Loan Status</th>
+                    <th>FD Desc</th>
+                    <th>FD Status</th>
+                    <th>FD Group</th>
+                    <th>FD Time</th>
+
+                    <th>PTP</th>
+                    <th>PTP Date</th>
+                    <th>PTP Remarks</th>
+
+                    <th>RTP</th>
+                    <th>RTP Date</th>
+                    <th>RTP Remarks</th>
+
+                    <th>Third Party</th>
+                    <th>TP Date</th>
+                    <th>TP Remarks</th>
+
+                    <th>Other</th>
+                    <th>Other Date</th>
+                    <th>Other Remarks</th>
+
+                    <th>Send To</th>
+                    <th>Bar No</th>
+                    <th>Notice Date</th>
+                    <th>Notice Type</th>
+                    <th>Notice Status</th>
+                    <th>Delivery Date</th>
+                    <th>Return Date</th>
+                    <th>Visitor Purpose</th>
+                    <th>Visitor Remark</th>
+
+
+
 
                     <!-- ✅ NEW PAYMENT COLUMNS -->
                     <th>Payment Source</th>
@@ -328,6 +368,78 @@
                         {{ r.loan_status }}
                     </span>
                 </td>
+                <td>{{ r.Freshdesk_Description }}</td>
+                <td>{{ r.Freshdesk_Status }}</td>
+                <td>{{ r.Freshdesk_Group }}</td>
+                <td>{{ r.Freshdesk_Createdtime }}</td>
+
+                <td>{{ r.Dialer_PTP }}</td>
+                <td>{{ r.Dialer_PTP_Date }}</td>
+                <td>{{ r.Dialer_PTP_Remarks }}</td>
+
+                <td>{{ r.Dialer_RTP }}</td>
+                <td>{{ r.Dialer_RTP_Date }}</td>
+                <td>{{ r.Dialer_RTP_Remarks }}</td>
+
+                <td>{{ r.Dialer_Thirdparty }}</td>
+                <td>{{ r.Dialer_Thirdparty_Date }}</td>
+                <td>{{ r.Dialer_Thirdparty_Remarks }}</td>
+
+                <td>{{ r.Dialer_other }}</td>
+                <td>{{ r.Dialer_other_Date }}</td>
+                <td>{{ r.Dialer_other_Remarks }}</td>
+
+                <td>{{ r.notice_send_to|default:"—" }}</td>
+
+                <td>
+                    {% if r.notice_bar_number %}
+                        <span class="badge bg-danger">{{ r.notice_bar_number }}</span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <td>{{ r.notice_date|default:"—" }}</td>
+                <td>{{ r.notice_type|default:"—" }}</td>
+
+                <td>
+                    {% if r.notice_status %}
+                        <span class="badge
+                            {% if r.notice_status == 'delivered' %}bg-success
+                            {% elif r.notice_status == 'in_transit' %}bg-warning text-dark
+                            {% elif r.notice_status == 'returned' %}bg-danger
+                            {% else %}bg-secondary{% endif %}">
+                            {{ r.notice_status_label }}
+                        </span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <td>{{ r.notice_delivery_date|default:"—" }}</td>
+                <td>{{ r.notice_return_date|default:"—" }}</td>
+
+                <td>
+                    {% if r.visitor_purpose %}
+                        <span class="badge bg-info text-dark">
+                            {{ r.visitor_purpose }}
+                        </span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if r.visitor_remark %}
+                        {{ r.visitor_remark|truncatechars:40 }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                                
+
+
 
                 <!-- ✅ PAYMENT DETAILS -->
                 <td>

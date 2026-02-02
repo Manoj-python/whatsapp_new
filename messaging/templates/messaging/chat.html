@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Chat Dashboard — WhatsApp-like UI</title>
+  <title>SM SQUARE CREDIT SERVICES PRIVATE LIMITED</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -178,6 +178,12 @@ body{background:#f3f4f6;color:#111}
 <body>
   <div class="container-fluid">
     <div class="row">
+      <div class="col text-center">
+        <h3>SM SQUARE CREDIT SERVICES PRIVATE LIMITED - Chat Dashboard</h3>
+      </div>
+    </div>
+  <div class="container-fluid">
+    <div class="row">
 
       <!-- SIDEBAR -->
       <div class="col-3">
@@ -251,7 +257,7 @@ body{background:#f3f4f6;color:#111}
 <script>
   (function(){
   // === CONFIG & STATE ===
-  const PAGE_SIZE = 200;
+  const PAGE_SIZE = 30;
   const CONTACT_ROW_HEIGHT = 76;
   const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
@@ -262,6 +268,7 @@ body{background:#f3f4f6;color:#111}
   let msgMap = new Map();
   let loadedPages = new Set();
   let totalPages = 1;
+  let contactPage = 1;
 
   // virtualization
   let messageHeights = [];
@@ -289,7 +296,7 @@ body{background:#f3f4f6;color:#111}
       rq.onupgradeneeded = e=>{
         const db = e.target.result;
         if(!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts',{keyPath:'mobile'});
-        if(!db.objectStoreNames.contains('messages')) db.createObjectStore('messages',{keyPath:'key'});
+        
       };
       rq.onsuccess = e=>resolve(e.target.result);
       rq.onerror = e=>reject(e.target.error);
@@ -345,10 +352,12 @@ body{background:#f3f4f6;color:#111}
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(scheme + '://' + location.host + '/ws/chat/');
 
+
     ws.onopen = ()=>{
       wsConnected = true;
-      sendWS({ type:'get_contacts' });
+      sendWS({ type:'get_contacts', page: contactPage });
     };
+
 
     ws.onmessage = e=>{
       try{
@@ -404,7 +413,18 @@ body{background:#f3f4f6;color:#111}
       contactVirtual.appendChild(row);
     }
   }
-  contactWrapper.addEventListener('scroll', renderVirtualContacts);
+  contactWrapper.addEventListener('scroll', ()=>{
+  renderVirtualContacts();
+
+  if (
+    contactWrapper.scrollTop + contactWrapper.clientHeight
+      >= contactWrapper.scrollHeight - 40
+  ) {
+    contactPage++;
+    sendWS({ type:'get_contacts', page: contactPage });
+  }
+});
+
 
   async function saveContactsToIdb(list){
     for (const c of list) await idbPut('contacts', c);
@@ -609,8 +629,7 @@ bubble.innerHTML = `
       setTimeout(()=> chatViewport.scrollTop = chatViewport.scrollHeight, 40);
     }
 
-    const idbKey = `${selectedMobile}::append::${key}`;
-    idbPut('messages', { key:idbKey, page:null, messages:[m] });
+   
 
     if (moveToTop){
       upsertContact({
@@ -644,44 +663,28 @@ bubble.innerHTML = `
     chatViewport.scrollTop = newMsgs.length * estimatedHeight;
   }
 
-  async function saveMessagesPageToIdb(m,page,list){
-    const key = `${m}::page::${page}`;
-    await idbPut('messages', { key, page, messages:list });
-  }
-
-  async function loadMessagesPageFromIdb(m,page){
-    const key = `${m}::page::${page}`;
-    const data = await idbGet('messages', key);
-    return data ? data.messages : null;
-  }
-
-  async function hydrateMessagesFromIdb(m){
-    const first = await loadMessagesPageFromIdb(m,1);
-    if (first && first.length){
-      messages = first.slice();
-      msgMap.clear();
-
-      for (const x of messages) msgMap.set(getMsgKey(x), true);
-
-      messageHeights = new Array(messages.length).fill(null);
-      renderVisibleMessages();
-
-      setTimeout(()=>chatViewport.scrollTop = chatViewport.scrollHeight, 20);
-      return true;
-    }
-    messages=[]; msgMap.clear(); messageHeights=[]; messageOffsets=[];
-    return false;
-  }
-
   // ==== HANDLE WEBSOCKET EVENTS ====
   async function handleWS(d){
+    // ===== GLOBAL SEARCH RESULTS =====
+    if (d.type === 'contacts.list') {
+        contactData = d.contacts || [];
+        renderVirtualContacts();
+        return;
+    }
+
+
     if (!d || !d.type) return;
 
-    if (d.type === 'contacts.list'){
-      contactData = d.contacts || [];
+    if (d.type === 'contacts.page'){
+      if (d.page === 1){
+        contactData = d.contacts || [];
+      } else {
+        contactData = contactData.concat(d.contacts || []);
+      }
+
       contactData.sort((a,b)=> new Date(b.last_time||0) - new Date(a.last_time||0));
       renderVirtualContacts();
-      saveContactsToIdb(contactData);
+    
     }
 
     else if (d.type === 'messages.page'){
@@ -705,7 +708,7 @@ bubble.innerHTML = `
       }
 
       loadedPages.add(page);
-      saveMessagesPageToIdb(selectedMobile, page, list);
+      
     }
 
     // ====== NEW MESSAGE ======
@@ -832,36 +835,42 @@ bubble.innerHTML = `
     loadedPages.clear();
     totalPages=1;
 
-    await hydrateMessagesFromIdb(m);
-
+    
     sendWS({type:'join', mobile:m});
     sendWS({type:'mark_read', mobile:m});
     sendWS({type:'get_messages', mobile:m, page:1, page_size:PAGE_SIZE});
   }
 
   // ==== SCROLL FOR PAGINATION ====
-  chatViewport.addEventListener('scroll', async ()=>{
+  chatViewport.addEventListener('scroll', ()=>{
     renderVisibleMessages();
 
     if (chatViewport.scrollTop < estimatedHeight*6 && selectedMobile){
       let nextPage = loadedPages.size ? Math.max(...loadedPages)+1 : 2;
       if (nextPage > totalPages) return;
 
-      const cached = await loadMessagesPageFromIdb(selectedMobile, nextPage);
-      if (cached && cached.length){
-        prependMessages(cached);
-        loadedPages.add(nextPage);
-        return;
-      }
-      sendWS({ type:'get_messages', mobile:selectedMobile, page:nextPage, page_size:PAGE_SIZE });
+      sendWS({
+        type:'get_messages',
+        mobile:selectedMobile,
+        page: nextPage,
+        page_size: PAGE_SIZE
+      });
     }
   });
+
 
   // ==== CONTACT SEARCH ====
   document.getElementById("contactSearch").addEventListener("input", e=>{
     const q = e.target.value.trim();
-    sendWS({ type:"search_contacts", q });
+
+    if (q === "") {
+      contactPage = 1;
+      sendWS({ type:"get_contacts", page: 1 });
+    } else {
+      sendWS({ type:"search_contacts", q });
+    }
   });
+
 
   // ==== SEND MESSAGE ====
   document.getElementById('sendBtn').addEventListener('click', ()=>{
@@ -965,7 +974,6 @@ bubble.innerHTML = `
   // ==== INIT ====
   (async function init(){
     try{ await loadContactsFromIdb(); }catch(e){}
-    sendWS({ type:'get_contacts' });
   })();
 
 })();

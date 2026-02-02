@@ -286,7 +286,12 @@
                         <th>Send To</th>
                         <th>Bar Number</th>
                         <th>Notice Date</th>
+                        <th>type_of_notice</th>
+                        <th>Notice Status</th>
+                        <th>delivery_date</th>
+                        <th>return_date</th>
                         <th>Created At</th>
+
                     </tr>
                 </thead>
                 <tbody>
@@ -302,6 +307,11 @@
                         <td>{{ dn.send_to }}</td>
                         <td>{{ dn.bar_number }}</td>
                         <td>{{ dn.notice_date }}</td>
+                        <td>{{ dn.type_of_notice }}</td>
+                        <td>{{ dn.notice_status }}</td>
+                        <td>{{ dn.delivery_date }}</td>
+                        <td>{{ dn.return_date }}</td>
+                        <td>{{ dn.created_at }}</td>
                     
                     </tr>
                     {% endfor %}

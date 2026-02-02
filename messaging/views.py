@@ -324,7 +324,7 @@ from django.core.paginator import Paginator
 def chat_messages_api(request, mobile):
     mobile = format_mobile(mobile)
     page = int(request.GET.get("page", 1))
-    size = 500  # 500 messages per page
+    size = 50  # 500 messages per page
 
     qs = SmsWhatsAppLog.objects.filter(mobile=mobile).order_by("-sent_at")
 
@@ -780,6 +780,5 @@ def mark_read(request, mobile):
         return JsonResponse({"status": "ok"})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-
 
 

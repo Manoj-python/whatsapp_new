@@ -41,6 +41,9 @@ urlpatterns = [
         views.executive_visit_response,
         name="executive_visit_response",
     ),
+
+    path("due-notices/", views.due_notice_list, name="due_notice_list"),
+      
       
 
 

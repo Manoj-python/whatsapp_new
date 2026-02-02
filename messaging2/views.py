@@ -12,7 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest, FileResponse
+from django.http import HttpResponseForbidden, JsonResponse, HttpResponse, HttpResponseBadRequest, FileResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.db.models import Max
@@ -303,6 +303,10 @@ def send_reply_api2(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({"error": str(e)}, status=500)
+
+
+
+    
 @csrf_exempt
 def whatsapp_webhook2(request):
     if request.method == "GET":

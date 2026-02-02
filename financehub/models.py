@@ -428,29 +428,50 @@ class Dialer(models.Model):
 
 
 
+
+
+
 class DueNotice(models.Model):
+
+    class NoticeStatus(models.TextChoices):
+        DELIVERED = "delivered", "Delivered"
+        IN_TRANSIT = "in_transit", "In transit"
+        RETURNED = "returned", "Returned"
+
     sno = models.CharField(max_length=50, null=True, blank=True)
     company = models.CharField(max_length=255, null=True, blank=True)
     branch = models.CharField(max_length=255, null=True, blank=True)
 
     loan_number = models.CharField(max_length=150, db_index=True)
     vehicle_no = models.CharField(max_length=100, null=True, blank=True)
-    send_to=models.CharField(max_length=255, null=True, blank=True)
-    type_of_notice = models.CharField(max_length=255, null=True, blank=True)
-    notice_status = models.CharField(max_length=100, null=True, blank=True)    
-
-    customer_name = models.CharField(max_length=255, null=True, blank=True)
     bar_number = models.CharField(max_length=100, null=True, blank=True)
 
-    notice_date = models.DateField(blank=True, null=True)
+    send_to = models.CharField(max_length=255, null=True, blank=True)
+    type_of_notice = models.CharField(max_length=255, null=True, blank=True)
+
+    notice_status = models.CharField(
+        max_length=20,
+        choices=NoticeStatus.choices,
+        default=NoticeStatus.DELIVERED
+    )
+
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
+    notice_date = models.DateField(null=True, blank=True)
+
+    # ✅ NEW FIELDS
+    delivery_date = models.DateField(null=True, blank=True)
+    return_date = models.DateField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "duenotice"
+        indexes = [
+            models.Index(fields=["loan_number", "bar_number", "vehicle_no"])
+        ]
 
     def __str__(self):
-        return f"{self.loan_number} - {self.customer_name}"
+        return f"{self.loan_number} - {self.notice_status}"
 
 
 

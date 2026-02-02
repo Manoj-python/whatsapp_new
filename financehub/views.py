@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.core.paginator import Paginator
 from django.db.models import Q
-
+from django.core.cache import cache
 
 # Models
 from datetime import datetime
@@ -1017,6 +1017,7 @@ from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 
+
 from .models import (
     Lcc,
     ExecutiveVisitScheduling,
@@ -1030,8 +1031,10 @@ from .models import (
     EseBuzz,
     Smsquare,
     Upi,
+    Freshdesk, 
+    Dialer,
+    DueNotice,
 )
-
 
 def parse_emi_bucket(value):
     try:
@@ -1153,11 +1156,23 @@ def get_loan_status(lcc, paid_amount, repo_set, closed_set):
         return "NOT PAID"
 
 
+
+
+
+
+
 # ------------------------------------------------------------------
 # EXECUTIVE VISIT SCHEDULE LIST
 # ------------------------------------------------------------------
+import hashlib
 @financehub_required
 def executive_visit_schedule_list(request):
+
+    qs_hash = hashlib.md5(
+            request.GET.urlencode().encode()
+        ).hexdigest()
+
+    cache_key = f"exec_schedule_{request.user.id}_{qs_hash}"
 
     division   = request.GET.get("division", "").strip()
     blc_case = request.GET.get("blc_case", "").strip()
@@ -1413,12 +1428,151 @@ def executive_visit_schedule_list(request):
         if loan not in latest_visit_map or dt > latest_visit_map[loan]["dt"]:
             latest_visit_map[loan] = {"dt": dt, "visited_on": c["visited_on"]}
 
+
+
+    
+    # =========================================================
+    # VISITOR (LATEST PER LOAN NUMBER)
+    # =========================================================
+    visitor_map = {}
+
+    for v in (
+        Visiter.objects
+        .filter(loan_number__in=loan_numbers)
+        .order_by("-created_at")
+    ):
+        if v.loan_number not in visitor_map:
+            visitor_map[v.loan_number] = v
+
+
+    # =========================================================
+    # DUE NOTICE (LATEST PER LOAN)
+    # =========================================================
+    due_notice_map = {}
+
+    for n in (
+        DueNotice.objects
+        .filter(loan_number__in=loan_numbers)
+        .order_by("-notice_date", "-id")
+    ):
+        if n.loan_number not in due_notice_map:
+            due_notice_map[n.loan_number] = n
+
+
+    # =========================================================
+# FRESHDESK (LATEST PER LOAN NUMBER)
+# =========================================================
+    freshdesk_map = {}
+    loan_set = set(loan_numbers)
+    for f in Freshdesk.objects.filter(subject__isnull=False).order_by("-created_time"):
+        subject = f.subject or ""
+        for ln in loan_set:
+            if ln in subject:
+                freshdesk_map.setdefault(ln, f)
+
+
+
+    # =========================================================
+# DIALER FULL DATA (SAME AS FEEDBACK / EXCEL)
+# =========================================================
+
+    def normalize_mobile(num):
+        if not num:
+            return None
+        s = str(num).strip()
+        if s.startswith("91") and len(s) == 12:
+            return s[2:]
+        return s
+
+
+    dialer_map = {}
+
+    cust_mobiles = {
+        normalize_mobile(l.cust_mobile)
+        for l in lcc_qs
+        if l.cust_mobile
+    }
+
+    dialer_qs = Dialer.objects.filter(
+        mobile__in=cust_mobiles
+    ).order_by("-created_at")
+
+
+    for d in dialer_qs:
+        mobile = normalize_mobile(d.mobile)
+        if not mobile:
+            continue
+
+        dialer_map.setdefault(mobile, {
+            "Dialer_PTP": "",
+            "Dialer_PTP_Date": "",
+            "Dialer_PTP_Remarks": "",
+
+            "Dialer_RTP": "",
+            "Dialer_RTP_Date": "",
+            "Dialer_RTP_Remarks": "",
+
+            "Dialer_Thirdparty": "",
+            "Dialer_Thirdparty_Date": "",
+            "Dialer_Thirdparty_Remarks": "",
+
+            "Dialer_other": "",
+            "Dialer_other_Date": "",
+            "Dialer_other_Remarks": "",
+        })
+
+        row = dialer_map[mobile]
+        disp = (d.disp or "").upper()
+
+        if disp == "PTP" and not row["Dialer_PTP"]:
+            row.update({
+                "Dialer_PTP": d.disp,
+                "Dialer_PTP_Date": d.ptp_date,
+                "Dialer_PTP_Remarks": d.remarks,
+            })
+
+        elif disp == "RTP" and not row["Dialer_RTP"]:
+            row.update({
+                "Dialer_RTP": d.disp,
+                "Dialer_RTP_Date": d.ptp_date,
+                "Dialer_RTP_Remarks": d.remarks,
+            })
+
+        elif disp == "THIRD PARTY" and not row["Dialer_Thirdparty"]:
+            row.update({
+                "Dialer_Thirdparty": d.disp,
+                "Dialer_Thirdparty_Date": d.ptp_date,
+                "Dialer_Thirdparty_Remarks": d.remarks,
+            })
+
+        elif not row["Dialer_other"]:
+            row.update({
+                "Dialer_other": d.disp,
+                "Dialer_other_Date": d.ptp_date,
+                "Dialer_other_Remarks": d.remarks,
+            })
+
+
+
+
+
     # ==========================================================
     # 5️⃣ FINAL DATA (UNCHANGED LOGIC)
     # ==========================================================
     final_data = []
 
     for l in lcc_qs.filter(loan_number__in=loan_numbers):
+        visitor = visitor_map.get(l.loan_number)
+
+        notice = due_notice_map.get(l.loan_number)
+
+
+        cust_mobile_norm = normalize_mobile(l.cust_mobile)
+
+        dialer = dialer_map.get(cust_mobile_norm, {})
+        
+        fd = freshdesk_map.get(l.loan_number)
+
         payment = payment_latest_map.get(l.loan_number)
 
         emi_value = normalize_emi(l.emi_due_2)
@@ -1511,6 +1665,53 @@ def executive_visit_schedule_list(request):
             "payment_date": payment["date"].date() if payment else "",
             "payment_amount": payment["amount"] if payment else "",
             "payment_source": payment["source"] if payment else "",
+
+            
+            # =========================
+            # FRESHDESK
+            # =========================
+            "Freshdesk_Description": fd.description if fd else "",
+            "Freshdesk_Status": fd.status if fd else "",
+            "Freshdesk_Group": fd.group if fd else "",
+            "Freshdesk_Createdtime": fd.created_time if fd else "",
+
+            # =========================
+            # DIALER (FULL)
+            # =========================
+            "Dialer_PTP": dialer.get("Dialer_PTP", ""),
+            "Dialer_PTP_Date": dialer.get("Dialer_PTP_Date", ""),
+            "Dialer_PTP_Remarks": dialer.get("Dialer_PTP_Remarks", ""),
+
+            "Dialer_RTP": dialer.get("Dialer_RTP", ""),
+            "Dialer_RTP_Date": dialer.get("Dialer_RTP_Date", ""),
+            "Dialer_RTP_Remarks": dialer.get("Dialer_RTP_Remarks", ""),
+
+            "Dialer_Thirdparty": dialer.get("Dialer_Thirdparty", ""),
+            "Dialer_Thirdparty_Date": dialer.get("Dialer_Thirdparty_Date", ""),
+            "Dialer_Thirdparty_Remarks": dialer.get("Dialer_Thirdparty_Remarks", ""),
+
+            "Dialer_other": dialer.get("Dialer_other", ""),
+            "Dialer_other_Date": dialer.get("Dialer_other_Date", ""),
+            "Dialer_other_Remarks": dialer.get("Dialer_other_Remarks", ""),
+            # =========================
+            # DUE NOTICE
+            # =========================
+            "notice_send_to": notice.send_to if notice else "",
+            "notice_bar_number": notice.bar_number if notice else "",
+            "notice_date": notice.notice_date if notice else "",
+            "notice_type": notice.type_of_notice if notice else "",
+            "notice_status": notice.notice_status if notice else "",
+            "notice_status_label": notice.get_notice_status_display() if notice else "",
+            "notice_delivery_date": notice.delivery_date if notice else "",
+            "notice_return_date": notice.return_date if notice else "",
+
+            # =========================
+            # VISITOR
+            # =========================
+            "visitor_purpose": visitor.purpose if visitor else "",
+            "visitor_remark": visitor.remarks if visitor else "",
+
+
         })
 
 
@@ -1624,10 +1825,11 @@ def executive_visit_schedule_list(request):
         return export_lcc_excel(final_data)
 
 
-    paginator = Paginator(final_data, 200)
+    paginator = Paginator(final_data, 500)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    return render(request, "financehub/executive_visit_schedule_list.html", {
+ 
+    response = render(request, "financehub/executive_visit_schedule_list.html", {
         "data": page_obj,
         "total_count": paginator.count,
         "division": division,
@@ -1639,10 +1841,9 @@ def executive_visit_schedule_list(request):
         "search_empid": search_empid,
         "loan_status": loan_status_filter,
         "status_counts": status_counts,
+
         "remove_zeros": remove_zeros,
         "remove_sez": remove_sez,
-
-        # ✅ NEW
         "branch": branch,
         "centre_name": centre_name,
         "branches": branches,
@@ -1651,8 +1852,12 @@ def executive_visit_schedule_list(request):
         "visit_filter": visit_filter,
         "blc_cases": blc_cases,
         "selected_blc_case": blc_case,
-
     })
+
+    cache.set(cache_key, response, 60)
+    return response
+
+
 
 @financehub_required
 def executive_visit_schedule_edit(request, pk):
@@ -1773,3 +1978,76 @@ def executive_visit_response(request, pk):
         "is_exec": is_exec,
     })
 
+
+
+
+from django.db.models import Q
+from django.core.paginator import Paginator
+from .models import DueNotice
+
+@financehub_required
+def due_notice_list(request):
+
+    query = request.GET.get("q", "").strip()
+    qs = DueNotice.objects.all().order_by("-created_at")
+
+    # 🔍 SEARCH
+    if query:
+        qs = qs.filter(
+            Q(loan_number__icontains=query) |
+            Q(bar_number__icontains=query) |
+            Q(vehicle_no__icontains=query) |
+            Q(customer_name__icontains=query) |
+            Q(company__icontains=query) |
+            Q(branch__icontains=query) |
+            Q(send_to__icontains=query) |
+            Q(type_of_notice__icontains=query) |
+            Q(notice_status__icontains=query)
+        )
+
+    # 🔄 UPDATE STATUS + DATE
+    if request.method == "POST":
+        notice_id = request.POST.get("notice_id")
+        status = request.POST.get("notice_status")
+        delivery_date = request.POST.get("delivery_date")
+        return_date = request.POST.get("return_date")
+
+        if notice_id and status:
+            update_data = {"notice_status": status}
+
+            if status == DueNotice.NoticeStatus.DELIVERED:
+                if not delivery_date:
+                    return redirect(f"{request.path}?q={query}")
+                update_data["delivery_date"] = delivery_date
+                update_data["return_date"] = None
+
+            elif status == DueNotice.NoticeStatus.RETURNED:
+                if not return_date:
+                    return redirect(f"{request.path}?q={query}")
+                update_data["return_date"] = return_date
+                update_data["delivery_date"] = None
+
+            else:  # IN TRANSIT
+                update_data["delivery_date"] = None
+                update_data["return_date"] = None
+
+            DueNotice.objects.filter(id=notice_id).update(**update_data)
+
+        return redirect(f"{request.path}?q={query}")
+
+    # 📄 PAGINATION
+    paginator = Paginator(qs, 500)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    STATUS_CHOICES = DueNotice.NoticeStatus.choices
+
+    return render(
+        request,
+        "financehub/due_notice_list.html",
+        {
+            "page_obj": page_obj,
+            "query": query,
+            "status_choices": STATUS_CHOICES,
+        },
+    )

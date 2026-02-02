@@ -10,6 +10,8 @@ TEMPLATE_CHOICES = [
     ("8", "Welcome Message (English)"),
     ("9", "NOC Dispatch Template (English)"),
     ("10", "WhatsApp NOC Template (English)"),
+    ("11", "Tenure Reminder to Guarantor (Telugu)"),
+    
 ]
 
 
