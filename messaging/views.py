@@ -14,6 +14,8 @@ from django.db.models import Max, Count, Q
 from django.conf import settings
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from .utils import upload_whatsapp_media, send_whatsapp_media
+
 from .models import SmsWhatsAppLog, BulkJob
 from .utils import format_mobile  # keep existing
 from django.utils import timezone
@@ -159,7 +161,7 @@ def messaging_required(view_func):
 # WhatsApp API - SEND TEXT
 # -----------------------------------------------------
 def send_whatsapp_text(to_number, text_body):
-    url = f"https://graph.facebook.com/v17.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
                "Content-Type": "application/json"}
     payload = {
@@ -173,46 +175,10 @@ def send_whatsapp_text(to_number, text_body):
     return resp.json()
 
 
-# -----------------------------------------------------
-# Upload media to WhatsApp Cloud (same behaviour)
-# -----------------------------------------------------
-def upload_whatsapp_media(file_obj):
-    access_token = settings.WHATSAPP_ACCESS_TOKEN
-    phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
-    url = f"https://graph.facebook.com/v17.0/{phone_number_id}/media"
-    headers = {"Authorization": f"Bearer {access_token}"}
-
-    file_obj.seek(0)
-    files = {'file': (file_obj.name, file_obj.read(), file_obj.content_type)}
-    data = {'messaging_product': 'whatsapp'}
-
-    resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
-
 
 # -----------------------------------------------------
-# Send media (image/video/audio/document)
+# Bulk Upload Start (S3-safe)
 # -----------------------------------------------------
-def send_whatsapp_media(to_number, media_id, media_type, caption=""):
-    url = f"https://graph.facebook.com/v17.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
-    headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-               "Content-Type": "application/json"}
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": media_type,
-        media_type: {"id": media_id},
-    }
-    if caption and media_type in ("image", "video"):
-        payload[media_type]["caption"] = caption
-
-    resp = requests.post(url, headers=headers, json=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
-
-
 # -----------------------------------------------------
 # Bulk Upload Start (S3-safe)
 # -----------------------------------------------------
@@ -229,12 +195,14 @@ def upload_and_send(request):
             s3_key = f"uploads/{unique_name}"
             default_storage.save(s3_key, excel_file)
 
-            # Read Excel from S3 into pandas via a small temp buffer
+            # Read Excel from S3 into pandas
             with default_storage.open(s3_key, "rb") as f:
                 data = f.read()
+
             df = pd.read_excel(io.BytesIO(data), dtype=str).fillna("")
             job_id = str(uuid.uuid4())
 
+            # Create Bulk Job
             BulkJob.objects.create(
                 job_id=job_id,
                 template_name=choice,
@@ -243,11 +211,17 @@ def upload_and_send(request):
                 status="Pending",
             )
 
-            # Kick off background Celery job using S3 key
-            process_bulk_whatsapp.delay(s3_key, choice, job_id)
+            # 🔥 FORCE TASK INTO whatsapp_main QUEUE
+            process_bulk_whatsapp.apply_async(
+                args=(s3_key, choice, job_id),
+                queue="whatsapp_main"
+            )
+
             return redirect("job_status", job_id=job_id)
+
     else:
         form = UploadForm()
+
     return render(request, "messaging/index.html", {"form": form})
 
 
@@ -324,7 +298,7 @@ from django.core.paginator import Paginator
 def chat_messages_api(request, mobile):
     mobile = format_mobile(mobile)
     page = int(request.GET.get("page", 1))
-    size = 50  # 500 messages per page
+    size = 500  # 500 messages per page
 
     qs = SmsWhatsAppLog.objects.filter(mobile=mobile).order_by("-sent_at")
 

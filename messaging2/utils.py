@@ -1,5 +1,7 @@
 # messaging2/utils.py
+from pathlib import Path
 import re
+import boto3
 import requests
 from datetime import datetime
 from django.conf import settings
@@ -109,6 +111,109 @@ def render_template_text2(template_body: str, parameters: list) -> str:
     for i, p in enumerate(parameters, start=1):
         out = out.replace(f"{{{{{i}}}}}", str(p.get("text", "")))
     return out
+# --------------------------------------------------
+from pathlib import Path
+import boto3
+import requests
+from django.conf import settings
+
+
+# ======================================================
+# OPEN LEGAL PDF (LOCAL + S3 AUTO SWITCH)
+# ======================================================
+def open_legal_pdf2(filename):
+    """
+    Load PDF from:
+    - Local folder if DEBUG=True
+    - AWS S3 if DEBUG=False
+    """
+
+    filename = Path(str(filename)).name.strip()
+
+    # ==================================================
+    # LOCAL FILE MODE
+    # ==================================================
+    if settings.DEBUG:
+        file_path = Path(settings.LEGAL_PDF_DIR) / filename
+
+        if not file_path.exists():
+            raise FileNotFoundError(
+                f"Local legal PDF not found: {file_path}"
+            )
+
+        return open(file_path, "rb")
+
+    # ==================================================
+    # S3 FILE MODE
+    # ==================================================
+    s3 = boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.AWS_S3_REGION_NAME,
+    )
+
+    # IMPORTANT — correct folder name
+    key = f"legal_pdfs/{filename}"
+
+    try:
+        obj = s3.get_object(
+            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+            Key=key,
+        )
+        return obj["Body"]
+
+    except Exception as e:
+        raise FileNotFoundError(
+            f"S3 legal PDF not found: s3://{settings.AWS_STORAGE_BUCKET_NAME}/{key} ({e})"
+        )
+
+
+# ======================================================
+# UPLOAD FILE TO WHATSAPP CLOUD
+# ======================================================
+def upload_whatsapp_media2(file_obj):
+    url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP2_PHONE_NUMBER_ID}/media"
+
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP2_ACCESS_TOKEN}"
+    }
+
+    file_obj.seek(0)
+
+    files = {
+        "file": (
+            file_obj.name,
+            file_obj.read(),
+            "application/pdf"
+        )
+    }
+
+    data = {"messaging_product": "whatsapp"}
+
+    resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+    resp.raise_for_status()
+    return resp.json()
+
+
+# ======================================================
+# UPLOAD LEGAL PDF TO WHATSAPP
+# ======================================================
+def upload_legal_pdf_to_whatsapp2(pdf_filename):
+
+    file_stream = open_legal_pdf2(pdf_filename)
+
+    class WhatsAppFile:
+        name = pdf_filename
+        content_type = "application/pdf"
+
+        def read(self):
+            return file_stream.read()
+
+        def seek(self, pos):
+            pass
+
+    return upload_whatsapp_media2(WhatsAppFile())
 
 # ---------------------------
 # Build payload (app2)
@@ -173,29 +278,125 @@ def build_payload2(choice: str, row: dict) -> Tuple[dict, str]:
             {"type": "text", "text": format_mobile2(row.get("cust_mobile", ""))},  # {{4}}
         ]),
 
-
         "11": ("guarantor", "te", [
             {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
             {"type": "text", "text": str(row.get("loan_number", ""))},     # {{2}}
             {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{3}}
             {"type": "text", "text": str(row.get("pending_emis", ""))},    # {{4}}
         ]),
-            
+         "12": ("noc_address_confirmation_v2", "en", [
+                {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
+                {"type": "text", "text": str(row.get("loan_number", ""))},        # {{2}}
+                {"type": "text", "text": str(row.get("vehicle_number", ""))},     # {{3}}
+                {"type": "text", "text": str(row.get("customer_address", ""))}  
+        ]),
+         "13": (
+            "customer_notice",
+            "en",
+            [
+                {"type": "text", "text": str(row.get("customer_name", ""))},
+                {"type": "text", "text": str(row.get("loan_number", ""))},
+                {"type": "text", "text": str(row.get("vehicle_number", ""))},
+                {"type": "text", "text": str(row.get("amount", ""))},
+                {"type": "text", "text": format_whatsapp_date2(row.get("timeline", ""))},
+            ],
+        ),
+
+        "14": (
+            "guarantor_notice",
+            "en",
+            [
+                {"type": "text", "text": str(row.get("guarantor_name", ""))},
+                {"type": "text", "text": str(row.get("loan_number", ""))},
+                {"type": "text", "text": str(row.get("vehicle_number", ""))},
+                {"type": "text", "text": str(row.get("amount", ""))},
+                {"type": "text", "text": format_whatsapp_date2(row.get("timeline", ""))},
+            ],
+        ),
+
+       
+            "15": (
+                "public_notice",  # EXACT name from WhatsApp Manager
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("branch_name", ""))},  # {{1}}
+                    {"type": "text", "text": str(row.get("employee_name", ""))},    # {{2}}
+                ],
+            ),
+
 
     }
-
+        
     template_name, lang, parameters = templates.get(choice, templates["8"])
-    template_body = get_template_text_from_whatsapp2(template_name)
-    rendered_text = render_template_text2(template_body, parameters)
-    mobile_number = row.get("cust_mobile") or row.get("CustMobile") or ""
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": format_mobile2(mobile_number),
-        "type": "template",
-        "template": {
-            "name": template_name,
-            "language": {"code": lang},
-            "components": [{"type": "body", "parameters": parameters}],
-        },
-    }
+    mobile = format_mobile2(row.get("cust_mobile") or row.get("CustMobile"))
+
+    # =================================================
+    # DOCUMENT HEADER TEMPLATE
+    # =================================================
+    if choice in ("13", "14"):
+
+        pdf_filename = (
+            row.get("guarantor_pdf_file")
+            if choice == "14"
+            else row.get("borrower_pdf_file") or row.get("customer_pdf_file")
+        )
+
+        if not pdf_filename:
+            raise ValueError("PDF missing")
+
+        media = upload_legal_pdf_to_whatsapp2(pdf_filename)
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": mobile,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": lang},
+                "components": [
+                    {
+                        "type": "header",
+                        "parameters": [{
+                            "type": "document",
+                            "document": {
+                                "id": media["id"],
+                                "filename": Path(pdf_filename).name
+                            }
+                        }]
+                    },
+                    {
+                        "type": "body",
+                        "parameters": parameters
+                    }
+                ]
+            }
+        }
+
+    else:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": mobile,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": lang},
+                "components": [{"type": "body", "parameters": parameters}]
+            }
+        }
+
+
+    # =================================================
+    # ⭐ AUTO GENERATE TEMPLATE TEXT (IMPORTANT FIX)
+    # =================================================
+    try:
+        template_body = get_template_text_from_whatsapp2(template_name)
+        rendered_text = render_template_text2(template_body, parameters)
+    except Exception:
+        # fallback if WhatsApp template fetch fails
+        rendered_text = template_name
+
+
+    # =================================================
+    # RETURN PAYLOAD + RENDERED MESSAGE
+    # =================================================
     return payload, rendered_text

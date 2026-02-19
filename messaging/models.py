@@ -17,6 +17,7 @@ class SmsWhatsAppLog(models.Model):
         ("interactive", "Interactive"),
         ("unknown", "Unknown"),
     )
+    job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 
     customer_name = models.CharField(max_length=100, blank=True, null=True)
     mobile = models.CharField(max_length=30, db_index=True)

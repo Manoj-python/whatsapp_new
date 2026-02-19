@@ -11,7 +11,11 @@ TEMPLATE_CHOICES = [
     ("9", "NOC Dispatch Template (English)"),
     ("10", "WhatsApp NOC Template (English)"),
     ("11", "Tenure Reminder to Guarantor (Telugu)"),
-    
+    ("12", "noc_address_confirmation_v2 (English)"),
+    ("13", "Customer Notice (English)"),
+    ("14", "Guarantor Notice (English)"),
+    ("15", "Public Notice")
+
 ]
 
 

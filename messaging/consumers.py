@@ -1,4 +1,3 @@
-
 # messaging/consumers.py
 import json
 import re
@@ -423,4 +422,5 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "progress": event.get("progress"),
             "filename": event.get("filename",""),
         })
+
 

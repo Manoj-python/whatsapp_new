@@ -144,6 +144,11 @@ WHATSAPP2_BUSINESS_ACCOUNT_ID = "1121446340109803"
 WHATSAPP2_VERIFY_TOKEN = os.environ.get("WHATSAPP2_VERIFY_TOKEN", "smsquare_verify_2")
 
 
+# =========================
+# LOCAL TEST STORAGE ONLY
+# =========================
+# DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+
 
 # ---------------------------------------------------------------------
 # AWS S3 STORAGE CONFIGURATION
@@ -158,20 +163,23 @@ AWS_DEFAULT_ACL = None
 AWS_S3_FILE_OVERWRITE = False
 AWS_S3_VERIFY = True
 
-
 # CRITICAL FIX
 AWS_S3_ADDRESSING_STYLE = "virtual"
 
 # Use S3 for all uploaded media (images, documents, WhatsApp media, Excel, etc.)
 DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
 
-
+# =========================
+# LEGAL PDF LOCATION (LOCAL)
+# =========================
+LEGAL_PDF_DIR = BASE_DIR / "legal_pdfs"
 
 # ---------------------------------------------------------------------
 # CELERY + REDIS CONFIG
 # ---------------------------------------------------------------------
+
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
-CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/0"
+CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/2"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
@@ -205,11 +213,13 @@ os.makedirs(UPLOAD_DIR_2, exist_ok=True)
 
 ASGI_APPLICATION = "whatsapp_sender.asgi.application"
 
+
+# # settings.py
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [("127.0.0.1", 6379, 1)],  # DB 1
         },
     },
 }

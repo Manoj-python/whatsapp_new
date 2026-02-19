@@ -117,10 +117,12 @@ class Clu(models.Model):
     new_address = models.TextField(null=True, blank=True)
 
     reason_for_visit = models.TextField(null=True, blank=True)
+    remarks_for_visit_away_from_cust = models.TextField(null=True, blank=True)
     time_spent_in_visit_location_in_mins = models.CharField(max_length=50, null=True, blank=True)
-    jointly_visited_emps = models.CharField(max_length=255, null=True, blank=True)
 
     loan_number = models.CharField(max_length=150, null=True, blank=True, db_index=True)
+    funder_loan_no = models.CharField(max_length=150, null=True, blank=True)
+    dpd_days = models.CharField(max_length=50, null=True, blank=True)
 
     type_of_visit = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
@@ -128,7 +130,11 @@ class Clu(models.Model):
 
     payment_mode = models.CharField(max_length=100, null=True, blank=True)
     payment_towards = models.CharField(max_length=255, null=True, blank=True)
-    amount_paid = models.CharField(max_length=100, null=True, blank=True)
+    charges = models.CharField(max_length=100, null=True, blank=True)
+    emi_paid = models.CharField(max_length=100, null=True, blank=True)
+    total_penalty_charges = models.CharField(max_length=100, null=True, blank=True)
+    total_amount_paid = models.CharField(max_length=100, null=True, blank=True)
+
     payment_date = models.CharField(max_length=100, null=True, blank=True)
     transaction_id = models.CharField(max_length=255, null=True, blank=True)
 
@@ -142,13 +148,6 @@ class Clu(models.Model):
     reason_for_vehicle_release = models.TextField(null=True, blank=True)
     days_bw_repossessed_and_released = models.CharField(max_length=50, null=True, blank=True)
 
-    product_name = models.CharField(max_length=255, null=True, blank=True)
-    application_no = models.CharField(max_length=255, null=True, blank=True)
-    rejection_reason = models.TextField(null=True, blank=True)
-    loan_date = models.CharField(max_length=100, null=True, blank=True)
-    loan_type = models.CharField(max_length=255, null=True, blank=True)
-
-    fi_address = models.TextField(null=True, blank=True)
     visited_on = models.CharField(max_length=100, null=True, blank=True)
     is_visit_done_at_customer_address = models.CharField(max_length=50, null=True, blank=True)
     dist_bw_cust_addr_visit_addr = models.CharField(max_length=50, null=True, blank=True)
@@ -168,6 +167,7 @@ class Clu(models.Model):
 
     time_difference_bw_prev_visit = models.CharField(max_length=100, null=True, blank=True)
 
+    unit = models.CharField(max_length=100, null=True, blank=True)
     remarks = models.TextField(null=True, blank=True)
 
     l2_manager_emp_id = models.CharField(max_length=100, null=True, blank=True)

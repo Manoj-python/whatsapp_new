@@ -1,0 +1,340 @@
+import io
+import time
+import logging
+from math import ceil
+
+import pandas as pd
+import requests
+from celery import shared_task
+from celery.utils.log import get_task_logger
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+from django.conf import settings
+from django.utils import timezone
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.db import transaction, close_old_connections
+from django.db.models import F
+
+from .models import SmsWhatsAppLog, BulkJob
+from .utils import (
+    upload_whatsapp_media,
+    build_payload,
+    format_mobile,
+    check_whatsapp_number,
+    send_second_message_for_mobile,
+    open_legal_pdf,
+)
+
+logger = get_task_logger(__name__)
+logger.setLevel(logging.INFO)
+
+# -------------------------------------------------
+# HTTP SESSION
+# -------------------------------------------------
+def make_session():
+    s = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=(429, 500, 502, 503, 504),
+    )
+    s.mount("https://", HTTPAdapter(max_retries=retries))
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+# ==================================================
+# UPLOAD LEGAL PDF TO WHATSAPP
+# ==================================================
+def upload_legal_pdf_to_whatsapp(pdf_filename):
+    f = open_legal_pdf(pdf_filename)
+
+    class WhatsAppFile:
+        name = pdf_filename
+        content_type = "application/pdf"
+
+        def read(self):
+            return f.read()
+
+        def seek(self, pos):
+            pass
+
+    return upload_whatsapp_media(WhatsAppFile())
+# ==================================================
+# MAIN BULK JOB (UPDATED – SAFE)
+# ==================================================
+@shared_task(bind=True)
+def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_size=50):
+    close_old_connections()
+
+    try:
+        job = BulkJob.objects.get(job_id=job_id)
+    except BulkJob.DoesNotExist:
+        logger.error("Job %s not found", job_id)
+        return
+
+    # 🔐 HARD GUARD (prevents restart resume)
+    if job.status not in ("Pending",):
+        logger.info("Job %s already started or finished. Skipping.", job_id)
+        return
+
+    # 🔒 LOCK JOB
+    job.status = "Running"
+    job.started_at = timezone.now()
+    job.save(update_fields=["status", "started_at"])
+
+    # --------------------------------------------------
+    # Read Excel
+    # --------------------------------------------------
+    try:
+        with default_storage.open(excel_s3_path, "rb") as f:
+            data = f.read()
+        df = pd.read_excel(io.BytesIO(data), dtype=str).fillna("")
+    except Exception as e:
+        logger.exception("Failed reading Excel for job %s: %s", job_id, e)
+        job.status = "Failed"
+        job.completed_at = timezone.now()
+        job.save(update_fields=["status", "completed_at"])
+        return
+
+    rows = df.to_dict("records")
+    total = len(rows)
+
+    # --------------------------------------------------
+    # Calculate total customers
+    # --------------------------------------------------
+    if template_choice == "17":
+        job.total_customers = len({
+            format_mobile(r.get("cust_mobile") or r.get("CustMobile"))
+            for r in rows
+            if r.get("cust_mobile") or r.get("CustMobile")
+        })
+    else:
+        job.total_customers = total
+
+    job.save(update_fields=["total_customers"])
+
+    # --------------------------------------------------
+    # No rows case
+    # --------------------------------------------------
+    if total == 0:
+        job.status = "Completed"
+        job.completed_at = timezone.now()
+        job.save(update_fields=["status", "completed_at"])
+        return
+
+    # --------------------------------------------------
+    # Create batch tasks
+    # --------------------------------------------------
+    for i in range(0, total, chunk_size):
+        start = i
+        end = min(i + chunk_size, total)
+
+        process_bulk_whatsapp_batch.apply_async(
+            args=(excel_s3_path, template_choice, job_id, start, end),
+            queue="whatsapp_main",
+        )
+
+    # --------------------------------------------------
+    # Schedule finalizer
+    # --------------------------------------------------
+    finalize_bulk_job.apply_async(
+        (job_id,),
+        countdown=15,
+        queue="whatsapp_main"
+    )
+    
+@shared_task(bind=True)
+def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, start, end):
+
+    logger.info("Batch job %s rows [%d:%d] STARTED", job_id, start, end)
+    close_old_connections()
+
+    try:
+        job = BulkJob.objects.get(job_id=job_id)
+    except BulkJob.DoesNotExist:
+        logger.warning("Job %s deleted. Stopping batch.", job_id)
+        return
+
+    if job.status != "Running":
+        logger.info("Job %s not running. Skipping batch.", job_id)
+        return
+
+    try:
+        with default_storage.open(excel_s3_path, "rb") as f:
+            data = f.read()
+        df = pd.read_excel(io.BytesIO(data), dtype=str).fillna("")
+        rows = df.to_dict("records")[start:end]
+        all_rows = df.to_dict("records")  # 🔥 FULL FILE (IMPORTANT FOR TEMPLATE 17)
+    except Exception as e:
+        logger.exception("Batch read error %s: %s", job_id, e)
+        return
+
+    local_success = 0
+    local_failed = 0
+
+    # ==================================================
+    # ✅ TEMPLATE 17 (FULLY FIXED)
+    # ==================================================
+    if template_choice == "17":
+
+        processed_mobiles = set()
+
+        for row in rows:
+            mobile = format_mobile(row.get("cust_mobile") or row.get("CustMobile"))
+
+            if not mobile or mobile in processed_mobiles:
+                continue
+
+            processed_mobiles.add(mobile)
+
+            try:
+                check = check_whatsapp_number(mobile)
+            except Exception as e:
+                logger.warning("Validation error %s: %s", mobile, e)
+                local_failed += 1
+                continue
+
+            if not check.get("valid", False):
+                local_failed += 1
+                continue
+
+            already_sent = SmsWhatsAppLog.objects.filter(
+                template_name="books_pending_second",
+                mobile=mobile,
+                status__in=["Sent", "Delivered"]
+            ).exists()
+
+            if already_sent:
+                continue
+
+            try:
+                # 🔥 IMPORTANT: USE FULL FILE DATA
+                send_second_message_for_mobile(all_rows, mobile)
+                local_success += 1
+            except Exception as e:
+                logger.warning("Template 17 send error: %s", e)
+                local_failed += 1
+
+            time.sleep(0.5)
+
+    # ==================================================
+    # NORMAL / LEGAL TEMPLATES
+    # ==================================================
+    else:
+        session = make_session()
+        session.headers.update({
+            "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"
+        })
+
+        post_url = f"https://graph.facebook.com/v17.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+
+        for row in rows:
+
+            name = row.get("customer_name") or row.get("CustomerName") or ""
+            mobile = format_mobile(row.get("cust_mobile") or row.get("CustMobile") or "")
+
+            try:
+                check = check_whatsapp_number(mobile)
+            except Exception:
+                local_failed += 1
+                continue
+
+            if not check.get("valid", False):
+                local_failed += 1
+                continue
+
+            try:
+                media = None
+                pdf_filename = None
+
+                if template_choice in ("19", "20"):
+                    pdf_filename = (
+                        row.get("guarantor_pdf_file")
+                        if template_choice == "20"
+                        else row.get("customer_pdf_file") or row.get("borrower_pdf_file")
+                    )
+                    if not pdf_filename:
+                        raise ValueError("PDF missing")
+
+                    media = upload_legal_pdf_to_whatsapp(pdf_filename)
+
+                    payload, rendered_text = build_payload(
+                        template_choice, row, media_id=media["id"]
+                    )
+                else:
+                    payload, rendered_text = build_payload(template_choice, row)
+
+                resp = session.post(post_url, json=payload, timeout=30)
+
+                if not resp.ok:
+                    raise ValueError(resp.text)
+
+                msg_id = resp.json()["messages"][0]["id"]
+
+                log = SmsWhatsAppLog.objects.create(
+                    customer_name=name,
+                    mobile=mobile,
+                    template_name=template_choice,
+                    sent_text_message=rendered_text,
+                    status="Delivered",
+                    message_id=msg_id,
+                    message_type="Sent",
+                    content_type="document" if template_choice in ("19", "20") else "text",
+                )
+
+                if template_choice in ("19", "20") and pdf_filename:
+                    with open_legal_pdf(pdf_filename) as f:
+                        log.media_file.save(pdf_filename, ContentFile(f.read()), save=True)
+
+                local_success += 1
+
+            except Exception as e:
+                logger.warning("Send failed: %s", e)
+                local_failed += 1
+
+            time.sleep(0.5)
+
+    # --------------------------------------------------
+    # UPDATE COUNTERS
+    # --------------------------------------------------
+    BulkJob.objects.filter(job_id=job_id).update(
+        sent_count=F("sent_count") + local_success + local_failed,
+        success_count=F("success_count") + local_success,
+        failed_count=F("failed_count") + local_failed,
+    )
+
+    logger.info("Batch job %s rows [%d:%d] DONE", job_id, start, end)
+# ==================================================
+# FINALIZER (FINAL SAFE VERSION)
+# ==================================================
+@shared_task(bind=True)
+def finalize_bulk_job(self, job_id):
+
+    try:
+        job = BulkJob.objects.get(job_id=job_id)
+    except BulkJob.DoesNotExist:
+        return
+
+    total = job.total_customers or 0
+    sent = job.sent_count or 0
+
+    # 🔐 If job was cancelled manually
+    if job.status == "Cancelled":
+        return
+
+    # --------------------------------------------------
+    # Close job properly
+    # --------------------------------------------------
+    if sent >= total:
+        job.status = "Completed"
+    else:
+        job.status = "Failed"
+
+    job.completed_at = timezone.now()
+    job.save(update_fields=["status", "completed_at"])
+
+    logger.info("FINALIZED job %s with status %s", job_id, job.status)
+

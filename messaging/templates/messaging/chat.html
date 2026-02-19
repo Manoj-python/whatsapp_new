@@ -172,6 +172,26 @@ body{background:#f3f4f6;color:#111}
   .chat-col{padding-left:12px}
   .bubble{max-width:70% !important;}
 }
+
+.doc-bubble {
+  background: #f1f3f4;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  display: inline-block;
+}
+
+.doc-bubble a {
+  text-decoration: none;
+  font-weight: 600;
+  color: #075E54;
+}
+
+.doc-text {
+  white-space: pre-wrap;
+  margin-top: 4px;
+}
+
 </style>
 
 </head>
@@ -296,7 +316,7 @@ body{background:#f3f4f6;color:#111}
       rq.onupgradeneeded = e=>{
         const db = e.target.result;
         if(!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts',{keyPath:'mobile'});
-        
+
       };
       rq.onsuccess = e=>resolve(e.target.result);
       rq.onerror = e=>reject(e.target.error);
@@ -519,26 +539,67 @@ body{background:#f3f4f6;color:#111}
       bubble.dataset.index = i;
 
       let content = '';
-      if (m.content_type === 'image'){
-        // add onclick to open modal
+
+      if (m.content_type === 'image') {
         const src = m.media_file || '';
-        content = `<img class="chat-image" src="${src}" onclick="(function(){ try{ openMediaModal('${src.replace(/'/g,"\\'")}','image'); } catch(e){} })()">`;
-      } else if (m.content_type === 'video'){
+        content = `
+          <img class="chat-image"
+              src="${src}"
+              onclick="(function(){
+                try{ openMediaModal('${src.replace(/'/g,"\\'")}','image'); }
+                catch(e){}
+              })()">
+        `;
+
+      } else if (m.content_type === 'video') {
         const src = m.media_file || '';
-        content = `<video class="chat-video" controls preload="metadata" onclick="(function(){ try{ openMediaModal('${src.replace(/'/g,"\\'")}','video'); } catch(e){} })()" src="${src}"></video>`;
-      } else if (m.content_type === 'audio'){
+        content = `
+          <video class="chat-video"
+                controls
+                preload="metadata"
+                src="${src}"
+                onclick="(function(){
+                  try{ openMediaModal('${src.replace(/'/g,"\\'")}','video'); }
+                  catch(e){}
+                })()">
+          </video>
+        `;
+
+      } else if (m.content_type === 'audio') {
         const src = m.media_file || '';
         content = `<audio class="chat-audio" controls src="${src}"></audio>`;
-      } else if (m.content_type === 'document'){
-        content = `<a href="${m.media_file}" target="_blank">📄 Document</a>`;
+
+      } else if (m.content_type === 'document' || m.content_type === 'template_document') {
+        const docPart = m.media_file
+          ? `
+            <div class="doc-bubble">
+              📄 <a href="${m.media_file}" target="_blank" rel="noopener">
+                ${m.media_file.split('/').pop()}
+              </a>
+            </div>
+          `
+          : `<div class="doc-bubble">📄 Document</div>`;
+
+        const textPart = (m.sent_text_message || '')
+          .replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;');
+
+        content = `
+          ${docPart}
+          ${textPart ? `<div class="doc-text mt-1">${textPart}</div>` : ''}
+        `;
+
       } else {
-        content = (m.sent_text_message||'')
+        content = (m.sent_text_message || '')
           .replace(/</g,'&lt;')
           .replace(/>/g,'&gt;');
       }
 
-      const timeStr = m.sent_at ? new Date(m.sent_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      const timeStr = m.sent_at
+        ? new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '';
 
+  
       let ticks = '';
       if (m.message_type === 'Sent'){
         ticks = `<span class="tick" data-tid="${m.message_id||m.id||''}"></span>`;
@@ -629,7 +690,7 @@ bubble.innerHTML = `
       setTimeout(()=> chatViewport.scrollTop = chatViewport.scrollHeight, 40);
     }
 
-   
+
 
     if (moveToTop){
       upsertContact({
@@ -684,7 +745,7 @@ bubble.innerHTML = `
 
       contactData.sort((a,b)=> new Date(b.last_time||0) - new Date(a.last_time||0));
       renderVirtualContacts();
-    
+
     }
 
     else if (d.type === 'messages.page'){
@@ -708,7 +769,7 @@ bubble.innerHTML = `
       }
 
       loadedPages.add(page);
-      
+
     }
 
     // ====== NEW MESSAGE ======
@@ -835,7 +896,7 @@ bubble.innerHTML = `
     loadedPages.clear();
     totalPages=1;
 
-    
+
     sendWS({type:'join', mobile:m});
     sendWS({type:'mark_read', mobile:m});
     sendWS({type:'get_messages', mobile:m, page:1, page_size:PAGE_SIZE});
@@ -980,3 +1041,4 @@ bubble.innerHTML = `
 </script>
 </body>
 </html>
+
