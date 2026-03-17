@@ -1,7 +1,6 @@
 from django.db import models
 from .utils import format_mobile
 
-
 class SmsWhatsAppLog(models.Model):
     MESSAGE_TYPE_CHOICES = (
         ("Sent", "Sent"),
@@ -17,8 +16,8 @@ class SmsWhatsAppLog(models.Model):
         ("interactive", "Interactive"),
         ("unknown", "Unknown"),
     )
+    
     job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
-
     customer_name = models.CharField(max_length=100, blank=True, null=True)
     mobile = models.CharField(max_length=30, db_index=True)
     template_name = models.CharField(max_length=50, blank=True, null=True)
@@ -27,8 +26,6 @@ class SmsWhatsAppLog(models.Model):
     sent_text_message = models.TextField(blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
     sent_at = models.DateTimeField(auto_now_add=True, db_index=True)
-
-    # ✅ New fields
     message_type = models.CharField(max_length=10, choices=MESSAGE_TYPE_CHOICES, default="Sent")
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default="text")
     media_file = models.FileField(upload_to="whatsapp_media/", blank=True, null=True)
@@ -38,11 +35,28 @@ class SmsWhatsAppLog(models.Model):
         if self.mobile:
             self.mobile = format_mobile(self.mobile)
         super().save(*args, **kwargs)
+
     class Meta:
         indexes = [
-            models.Index(fields=["mobile", "-sent_at"]),
+            # For contact list queries (mobile + latest message)
+            models.Index(fields=['mobile', '-sent_at'], name='idx_mobile_sent_at'),
+            
+            # For unread message counts
+            models.Index(fields=['message_type', 'status'], name='idx_type_status'),
+            
+            # For sorting by sent_at
+            models.Index(fields=['-sent_at'], name='idx_sent_at_desc'),
+            
+            # For webhook updates by message_id
+            models.Index(fields=['message_id'], name='idx_message_id'),
+            
+            # For job-related queries
+            models.Index(fields=['job_id', 'status'], name='idx_job_status'),
+            
+            # For searching messages
+            models.Index(fields=['mobile', 'message_type', 'sent_at'], 
+                        name='idx_mobile_type_sent'),
         ]
-
 
     def __str__(self):
         return f"{self.mobile} - {self.message_type} - {self.content_type}"
@@ -55,18 +69,18 @@ class BulkJob(models.Model):
     sent_count = models.IntegerField(default=0)
     success_count = models.IntegerField(default=0)
     failed_count = models.IntegerField(default=0)
-    status = models.CharField(
-        max_length=20,
-        default="Pending",  # Pending, Running, Completed, Failed
-    )
+    status = models.CharField(max_length=20, default="Pending")
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(blank=True, null=True)
     excel_file = models.FileField(upload_to="uploads/")
+    success_report = models.FileField(upload_to="reports/", blank=True, null=True, max_length=500)
+    failed_report = models.FileField(upload_to="reports/", blank=True, null=True, max_length=500)
 
-    # optional: store per-job report filenames (recommended)
-    success_report = models.FileField(upload_to="reports/", blank=True, null=True,max_length=500)
-    failed_report = models.FileField(upload_to="reports/", blank=True, null=True,max_length=500)
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', 'started_at'], name='idx_status_started'),
+            models.Index(fields=['job_id'], name='idx_job_id'),
+        ]
 
     def __str__(self):
         return f"{self.template_name} ({self.job_id})"
-

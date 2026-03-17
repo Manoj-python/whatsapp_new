@@ -14,7 +14,10 @@ TEMPLATE_CHOICES = [
     ("12", "noc_address_confirmation_v2 (English)"),
     ("13", "Customer Notice (English)"),
     ("14", "Guarantor Notice (English)"),
-    ("15", "Public Notice")
+    ("15", "Public Notice"),
+    ("16", "lok_adalat (English)"), 
+    ("17", "lok_adalat (Telugu)"),
+    ("18", "disposal (English)")
 
 ]
 

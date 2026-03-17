@@ -15,7 +15,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db import close_old_connections
 from django.db.models import F
-
+from django.core.files.base import ContentFile
 from .models import SmsWhatsAppLog, BulkJob
 from .utils import (
     upload_whatsapp_media,
@@ -122,7 +122,6 @@ def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_si
             queue="whatsapp_main",
         )
 
-
 # ==================================================
 # BATCH TASK
 # ==================================================
@@ -148,7 +147,49 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
     local_success = 0
     local_failed = 0
 
-    # 🔥 Prevent duplicate media uploads
+    # ==================================================
+    # 🚨 TEMPLATE 17 SPECIAL FLOW (NO DISTURB NORMAL FLOW)
+    # ==================================================
+    if template_choice == "17":
+
+        with default_storage.open(excel_s3_path, "rb") as f:
+            df_full = pd.read_excel(io.BytesIO(f.read()), dtype=str).fillna("")
+
+        all_rows = df_full.to_dict("records")
+
+        mobiles = {
+            format_mobile(r.get("cust_mobile") or r.get("CustMobile") or "")
+            for r in rows
+            if r.get("cust_mobile") or r.get("CustMobile")
+        }
+
+        for mobile in mobiles:
+            try:
+                send_second_message_for_mobile(all_rows, mobile)
+                local_success += 1
+            except Exception as e:
+                SmsWhatsAppLog.objects.create(
+                    job_id=job_id,
+                    mobile=mobile,
+                    template_name="17",
+                    status="Failed",
+                    message_type="Sent",
+                    error_message=str(e),
+                )
+                local_failed += 1
+
+        BulkJob.objects.filter(job_id=job_id).update(
+            sent_count=F("sent_count") + (local_success + local_failed),
+            success_count=F("success_count") + local_success,
+            failed_count=F("failed_count") + local_failed,
+        )
+
+        return
+
+    # ==================================================
+    # 🔽 NORMAL FLOW
+    # ==================================================
+
     media_cache = {}
 
     session = make_session()
@@ -163,9 +204,6 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
         name = row.get("customer_name") or row.get("CustomerName") or ""
         mobile = format_mobile(row.get("cust_mobile") or row.get("CustMobile") or "")
 
-        # ---------------------------
-        # Validate WhatsApp number
-        # ---------------------------
         try:
             check = check_whatsapp_number(mobile)
         except Exception as e:
@@ -194,26 +232,18 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             local_failed += 1
             continue
 
-        # ---------------------------
-        # Send Message
-        # ---------------------------
-       # ---------------------------
-# Send Message
-# ---------------------------
         try:
             media_id = None
 
-            # 🔥 Templates 19, 20 & 21 require PDF upload
-            if template_choice in ("19", "20", "21"):
+            if template_choice in ("19", "20", "21","25"):
 
-                # Determine correct PDF column
                 if template_choice == "21":
                     pdf_filename = row.get("welcome_pdf")
-
                 elif template_choice == "20":
                     pdf_filename = row.get("guarantor_pdf_file")
-
-                else:  # template 19
+                elif template_choice == "25":
+                    pdf_filename = row.get("lpc_pdf")
+                else:
                     pdf_filename = (
                         row.get("borrower_pdf_file")
                         or row.get("customer_pdf_file")
@@ -222,7 +252,6 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 if not pdf_filename:
                     raise ValueError("PDF filename missing in Excel row")
 
-                # ✅ Prevent duplicate uploads (cache)
                 if pdf_filename not in media_cache:
                     upload_response = upload_legal_pdf_to_whatsapp(pdf_filename)
                     media_cache[pdf_filename] = upload_response.get("id")
@@ -242,7 +271,35 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
             msg_id = resp.json()["messages"][0]["id"]
 
-            SmsWhatsAppLog.objects.create(
+            # ==================================================
+            # 🔥 SAVE TEMPLATE PDF INTO DASHBOARD CHAT (S3 SAFE)
+            # ==================================================
+            media_file_obj = None
+            content_type_val = "text"
+            pdf_source = None
+
+            if template_choice in ("19", "20", "21","25"):
+
+                content_type_val = "document"
+
+                if template_choice == "21":
+                    pdf_source = row.get("welcome_pdf")
+                elif template_choice == "20":
+                    pdf_source = row.get("guarantor_pdf_file")
+                elif template_choice == "25":
+                    pdf_source = row.get("lpc_pdf")
+                else:
+                    pdf_source = (
+                        row.get("borrower_pdf_file")
+                        or row.get("customer_pdf_file")
+                    )
+
+                try:
+                    media_file_obj = open_legal_pdf(pdf_source)
+                except Exception as e:
+                    logger.warning(f"Chat PDF open failed: {e}")
+
+            log = SmsWhatsAppLog.objects.create(
                 job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
@@ -251,7 +308,23 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 status="Delivered",
                 message_id=msg_id,
                 message_type="Sent",
+                content_type=content_type_val,
             )
+
+            # 🔥 FINAL FIX FOR AWS S3 STREAMINGBODY
+            if media_file_obj:
+                try:
+                    pdf_bytes = media_file_obj.read()
+                    file_buffer = io.BytesIO(pdf_bytes)
+
+                    log.media_file.save(
+                        pdf_source,
+                        ContentFile(file_buffer.getvalue())
+                    )
+                    log.save()
+
+                except Exception as e:
+                    logger.warning(f"Chat PDF save failed: {e}")
 
             local_success += 1
 
@@ -267,11 +340,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             )
             local_failed += 1
 
-        time.sleep(0.3)  # Rate limit safety
+        time.sleep(0.3)
 
-    # ==================================================
-    # SAFE ATOMIC COUNTER UPDATE (Race Condition Safe)
-    # ==================================================
     BulkJob.objects.filter(job_id=job_id).update(
         sent_count=F("sent_count") + (local_success + local_failed),
         success_count=F("success_count") + local_success,
@@ -280,16 +350,12 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
     job.refresh_from_db()
 
-    # If all processed → mark completed
     if job.sent_count >= job.total_customers:
         job.status = "Completed"
         job.completed_at = timezone.now()
         job.save(update_fields=["status", "completed_at"])
 
         finalize_bulk_job.delay(job_id)
-
-
-
 
 
 @shared_task(bind=True, queue="whatsapp_main")
@@ -354,4 +420,5 @@ def finalize_bulk_job(self, job_id):
     ])
 
     logger.info("Job %s COMPLETED and reports generated", job_id)
+
 

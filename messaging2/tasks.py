@@ -54,6 +54,11 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_s
         logger.error("Job2 %s not found", job_id)
         return
 
+    # Check if job already completed
+    if job.status == "Completed":
+        logger.info(f"Job2 {job_id} already completed, skipping")
+        return
+
     job.status = "Queued"
     job.started_at = timezone.now()
     job.save(update_fields=["status", "started_at"])
@@ -94,7 +99,7 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_s
     finalize_bulk_job2.apply_async((job_id,), countdown=10, queue="whatsapp_secondary")
 
 # ==================================================
-# BATCH WORKER (FINAL PRODUCTION VERSION)
+# BATCH WORKER (FINAL PRODUCTION VERSION WITH ANTI-DUPLICATE)
 # ==================================================
 @shared_task(bind=True)
 def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, start, end):
@@ -103,10 +108,23 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
     close_old_connections()
 
     # --------------------------------------------------
-    # HARD STOP IF JOB DELETED
+    # PREVENT RE-PROCESSING ON CELERY RESTART
+    # Check if this batch was already processed
     # --------------------------------------------------
     try:
         job = BulkJob2.objects.get(job_id=job_id)
+        
+        # If job is already Completed, don't process
+        if job.status == "Completed":
+            logger.info(f"Job2 {job_id} already completed, skipping batch {start}-{end}")
+            return
+            
+        # Check if this specific batch might have been processed
+        # by looking at sent_count vs expected
+        if job.sent_count >= end:
+            logger.info(f"Batch {start}-{end} for job {job_id} appears already processed, skipping")
+            return
+            
     except BulkJob2.DoesNotExist:
         logger.warning("Job2 %s deleted. Stopping batch [%d:%d]", job_id, start, end)
         return
@@ -151,7 +169,24 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
         name = row.get("customer_name") or row.get("CustomerName") or ""
         raw_mobile = row.get("cust_mobile") or row.get("CustMobile") or ""
         mobile = format_mobile2(raw_mobile)
-
+        
+        # Skip if no mobile
+        if not mobile:
+            reason = "No mobile number provided"
+            SmsWhatsAppLog2.objects.create(
+                customer_name=name,
+                mobile=mobile,
+                template_name=template_choice,
+                sent_text_message="",
+                status="Failed",
+                message_id="",
+                content_type="text",
+                error_message=reason,
+            )
+            failed_records.append([name, mobile, reason])
+            local_failed += 1
+            continue
+            
         # ----------------------------------------------
         # CHECK WHATSAPP NUMBER
         # ----------------------------------------------
@@ -243,10 +278,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
                     customer_name=name,
                     mobile=mobile,
                     template_name=template_choice,
-
-                    # TEMPLATE BODY TEXT (SHOWN IN CHAT)
                     sent_text_message=rendered_text,
-
                     status="Delivered",
                     message_id=msg_id,
                     content_type=content_type,
@@ -364,8 +396,9 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
         "Job2 batch %s rows [%d:%d] finished (success=%d failed=%d)",
         job_id, start, end, local_success, local_failed
     )
+
 # ==================================================
-# FINALIZER (FIXED – NO LOOP)
+# FINALIZER (FIXED WITH ANTI-DUPLICATE CHECK)
 # ==================================================
 @shared_task(bind=True)
 def finalize_bulk_job2(self, job_id):
@@ -375,10 +408,14 @@ def finalize_bulk_job2(self, job_id):
     except BulkJob2.DoesNotExist:
         return
 
+    # PREVENT RE-FINALIZING
+    if job.status == "Completed":
+        logger.info(f"Job2 {job_id} already completed, skipping finalize")
+        return
+
     total = job.total_customers or 0
     sent = job.sent_count or 0
 
-    # 🔥 FIX 2: DO NOT REQUEUE FINALIZER
     if sent < total:
         logger.info("Job2 %s still running (%s/%s)", job_id, sent, total)
         return
@@ -388,4 +425,3 @@ def finalize_bulk_job2(self, job_id):
     job.save(update_fields=["status", "completed_at"])
 
     logger.info("FINALIZED job2 %s", job_id)
-

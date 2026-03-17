@@ -323,6 +323,35 @@ def build_payload2(choice: str, row: dict) -> Tuple[dict, str]:
                     {"type": "text", "text": str(row.get("employee_name", ""))},    # {{2}}
                 ],
             ),
+              "16": (
+                "lok_adalat",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("loan_number", ""))},     # {{1}}
+                    {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{2}}
+                ],
+            ),
+
+            "17": (
+                "lok_adalat_notice",
+                "te",
+                [
+                    {"type": "text", "text": str(row.get("loan_number", ""))},     # {{1}}
+                    {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{2}}
+                ],
+            ),
+              "18": (
+                "disposal",
+                "en",
+                [
+                   {"type": "text", "text": str(row.get("customer_name", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("amount", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("vechile_number", ""))},  # {{1}}
+
+                ],
+            ),
+
+
 
 
     }

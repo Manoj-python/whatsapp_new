@@ -250,6 +250,10 @@ def render_template_text(template_body: str, parameters: list) -> str:
 # ---------------------------
 # Build payload (template)
 # ---------------------------
+
+# ---------------------------
+# Build payload (template)
+# ---------------------------
 def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tuple[dict, str]:
 
     """
@@ -396,7 +400,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 ],
             ),
 
-        
+
              "22": (
                 "public_notice",  # EXACT name from WhatsApp Manager
                 "en",
@@ -405,20 +409,44 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     {"type": "text", "text": str(row.get("employee_name", ""))},    # {{2}}
                 ],
             ),
+              "23": (
+                "lok_adalat_notice_one",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("loan_number", ""))},     # {{1}}
+                    {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{2}}
+                ],
+            ),
 
-
-
+            "24": (
+                "lok_adalat",
+                "te",
+                [
+                    {"type": "text", "text": str(row.get("loan_number", ""))},     # {{1}}
+                    {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{2}}
+                ],
+            ),
+             "25": (
+                "lpc",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("customer_name", ""))},  # {{1}}
+                    {"type": "text", "text": format_whatsapp_date(row.get("effective_date", ""))},  # {{2}}
+                ],
+            ),
 
 
     }
+  
 
     template_name, lang, parameters = templates.get(choice, templates["8"])
     mobile = format_mobile(row.get("cust_mobile", ""))
 
     # --------------------------------------------------
-    # TEMPLATES WITH DOCUMENT HEADER (19, 20, 21)
+    # TEMPLATES WITH DOCUMENT HEADER (19, 20, 21, 25)
+
     # --------------------------------------------------
-    if choice in ("19", "20", "21"):
+    if choice in ("19", "20", "21", "25"):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
@@ -429,6 +457,9 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
         elif choice == "20":
             pdf_source = row.get("guarantor_pdf_file")
+
+        elif choice == "25":
+            pdf_source = row.get("lpc_pdf")
 
         else:  # choice == "19"
             pdf_source = (
@@ -447,7 +478,10 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
             "type": "template",
             "template": {
                 "name": template_name,
-                "language": {"code": lang},
+                "language": {
+                    "policy": "deterministic",   # 🔥 prevents Telugu fallback
+                    "code": lang
+                },
                 "components": [
                     {
                         "type": "header",
@@ -456,8 +490,8 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                                 "type": "document",
                                 "document": {
                                     "id": media_id,
-                                    "filename": filename,  # prevents 'Untitled'
-                                },
+                                    "filename": filename  # prevents 'Untitled'
+                                }
                             }
                         ],
                     },
@@ -473,13 +507,17 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
     # NORMAL TEMPLATES (NO HEADER)
     # --------------------------------------------------
     else:
+
         payload = {
             "messaging_product": "whatsapp",
             "to": mobile,
             "type": "template",
             "template": {
                 "name": template_name,
-                "language": {"code": lang},
+                "language": {
+                    "policy": "deterministic",   # 🔥 prevents language switching
+                    "code": lang
+                },
                 "components": [
                     {
                         "type": "body",
@@ -493,22 +531,19 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
     # PREVIEW TEXT (SANITIZED)
     # --------------------------------------------------
     template_body = get_template_text_from_whatsapp(template_name)
+
     rendered_text = sanitize_template_text(
         render_template_text(template_body, parameters)
     )
 
     return payload, rendered_text
 
-
-
-
-
-# ==================================================
-# TEMPLATE 17 — GROUPED + JOINED + CHUNKED SEND
-# ==================================================
 def send_second_message_for_mobile(all_rows, mobile):
 
     from .models import SmsWhatsAppLog
+    import requests
+    from django.conf import settings
+    from .utils import sanitize_template_text, format_whatsapp_date, format_mobile
 
     lines = []
 
@@ -520,61 +555,68 @@ def send_second_message_for_mobile(all_rows, mobile):
         if row_mobile != mobile:
             continue
 
-        loan_no = row.get("Loan Number") or row.get("loan_number")
-        cust_name = row.get("Customer Name") or row.get("customer_name")
+        loan_no = str(row.get("Loan Number") or row.get("loan_number") or "").strip()
+        cust_name = str(row.get("Customer Name") or row.get("customer_name") or "").strip()
         loan_date = format_whatsapp_date(
             row.get("Loan Date") or row.get("loan_date")
         )
 
-        if loan_no and cust_name:
-            lines.append(
-                f"Loan Number: {loan_no} | "
-                f"Customer Name: {cust_name} | "
-                f"Loan Date: {loan_date}"
-            )
+        if not loan_no and not cust_name:
+            continue
+
+        # 🚨 SINGLE LINE FORMAT (NO \n, NO | )
+        lines.append(
+            f"Loan Number: {loan_no}, "
+            f"Customer Name: {cust_name}, "
+            f"Loan Date: {loan_date}|"
+        )
 
     if not lines:
-        raise ValueError(f"No matching rows found for mobile {mobile}")
+        raise ValueError(f"Template 17 empty for {mobile}")
 
-    final_text = sanitize_template_text(" || ".join(lines))
-    chunks = split_text_into_chunks(final_text)
+    # 🚨 JOIN INTO ONE SAFE PARAGRAPH
+    final_text = " ".join(lines)
+    final_text = sanitize_template_text(final_text)
 
-    for chunk in chunks:
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": mobile,
+        "type": "template",
+        "template": {
+            "name": "books_pending_second",
+            "language": {"code": "en"},
+            "components": [{
+                "type": "body",
+                "parameters": [{"type": "text", "text": final_text}],
+            }],
+        },
+    }
 
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": mobile,
-            "type": "template",
-            "template": {
-                "name": "books_pending_second",
-                "language": {"code": "en"},
-                "components": [{
-                    "type": "body",
-                    "parameters": [{"type": "text", "text": chunk}],
-                }],
-            },
-        }
+    resp = requests.post(
+        f"https://graph.facebook.com/v22.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages",
+        headers={
+            "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=30,
+    )
 
-        resp = requests.post(
-            f"https://graph.facebook.com/v22.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages",
-            headers={
-                "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=30,
-        )
+    if not resp.ok:
+        raise ValueError(resp.text)
 
-        if not resp.ok:
-            raise ValueError(resp.text)
+    SmsWhatsAppLog.objects.create(
+        customer_name="",
+        mobile=mobile,
+        template_name="books_pending_second",
+        sent_text_message=final_text,
+        status="Sent",
+        message_type="Sent",
+        content_type="text",
+    )
+  
 
-        SmsWhatsAppLog.objects.create(
-            customer_name="",
-            mobile=mobile,
-            template_name="books_pending_second",
-            sent_text_message=chunk,
-            status="Sent",
-            message_type="Sent",
-            content_type="template",
-        )
+
+
+
 

@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+*.sqlite3
+*.log
+*.sock
+static/
+uploads/
+uploads2/
+.env
+*.sql

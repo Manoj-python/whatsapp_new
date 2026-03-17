@@ -1,12 +1,19 @@
+
 # messaging/consumers.py
 import json
 import re
+import asyncio
+import traceback
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from asgiref.sync import sync_to_async
 from django.core.paginator import Paginator
 from django.conf import settings
+from django.db import close_old_connections
+from django.db.models import Q, Max, Count, OuterRef, Subquery
+from django.utils import timezone
 
 from .models import SmsWhatsAppLog
 from .utils import format_mobile
@@ -23,86 +30,132 @@ def digits_only(x: str) -> str:
         return ""
     return re.sub(r"\D", "", str(x))
 
-# WS-safe group name (digits only)
 def ws_group_name(mobile: str) -> str:
     return digits_only(mobile)
+
+# -------------------------
+# Database Queries - FIXED for MariaDB
+# -------------------------
 @sync_to_async
 def get_contacts_page(page=1, size=100, q=""):
-    from django.db.models import Max, Count, Q, Subquery, OuterRef
+    """
+    Get contacts with pagination and search - FIXED for MariaDB
+    """
+    # First, get distinct mobiles with their latest message time
+    mobile_list = SmsWhatsAppLog.objects.values('mobile').annotate(
+        last_time=Max('sent_at')
+    ).order_by('-last_time').values_list('mobile', flat=True)[:1000]
 
-    last_msg_qs = SmsWhatsAppLog.objects.filter(
-        mobile=OuterRef("mobile")
-    ).order_by("-sent_at")
+    # Then get the actual messages for these mobiles
+    contacts = []
+    for mobile in mobile_list:
+        # Get the latest message for this mobile
+        latest_msg = SmsWhatsAppLog.objects.filter(
+            mobile=mobile
+        ).order_by('-sent_at').first()
 
-    qs = (
-        SmsWhatsAppLog.objects.values("mobile")
-        .annotate(
-            last_time=Max("sent_at"),
-            last_msg=Subquery(last_msg_qs.values("sent_text_message")[:1]),
-            last_type=Subquery(last_msg_qs.values("message_type")[:1]),
-            last_status=Subquery(last_msg_qs.values("status")[:1]),
-            unread=Count("id", filter=Q(message_type="Received", status="Unread")),
-        )
-        .order_by("-last_time")
-    )
+        if latest_msg:
+            # Count unread messages
+            unread = SmsWhatsAppLog.objects.filter(
+                mobile=mobile,
+                message_type='Received',
+                status='Unread'
+            ).count()
 
-    # 🔥 GLOBAL SEARCH
+            last_msg = latest_msg.sent_text_message or ""
+            last_type = latest_msg.message_type or ""
+            last_status = latest_msg.status or ""
+
+            # Media preview
+            if latest_msg.content_type in ['image', 'video', 'audio']:
+                last_msg = f"[{latest_msg.content_type}]"
+            elif latest_msg.content_type == 'document':
+                last_msg = "[Document]"
+
+            contacts.append({
+                "mobile": format_mobile(mobile),
+                "last_time": latest_msg.sent_at.isoformat() if latest_msg.sent_at else "",
+                "last_msg": last_msg[:60],
+                "last_type": last_type,
+                "last_status": last_status,
+                "unread": unread,
+            })
+
+    # Apply search filter if needed
     if q:
         q = q.strip()
         digits = re.sub(r"\D", "", q)
-
         if digits:
-            qs = qs.filter(mobile__icontains=digits)
+            # Filter by mobile digits
+            contacts = [c for c in contacts if digits in digits_only(c["mobile"])]
         else:
-            mobiles = SmsWhatsAppLog.objects.filter(
-                sent_text_message__icontains=q
-            ).values_list("mobile", flat=True).distinct()
+            # Filter by message text
+            contacts = [c for c in contacts if q.lower() in c["last_msg"].lower()]
 
-            qs = qs.filter(mobile__in=list(mobiles))
-
-    paginator = Paginator(qs, size)
-    page_obj = paginator.page(page)
+    # Paginate
+    total = len(contacts)
+    start = (page - 1) * size
+    end = start + size
+    page_contacts = contacts[start:end]
 
     return {
-        "contacts": [{
-            "mobile": format_mobile(x["mobile"]),
-            "last_time": x["last_time"].isoformat() if x["last_time"] else "",
-            "last_msg": x["last_msg"] or "",
-            "last_type": x["last_type"] or "",
-            "last_status": x["last_status"] or "",
-            "unread": int(x["unread"]),
-        } for x in page_obj],
-        "total_pages": paginator.num_pages
+        "contacts": page_contacts,
+        "total_pages": (total + size - 1) // size
     }
+
 @sync_to_async
 def get_messages_page_from_db(mobile, page=1, size=30):
+    """
+    Get messages for a specific mobile with pagination
+    """
+    mobile_norm = format_mobile(mobile)
+
+    # Get total count for pagination
+    total = SmsWhatsAppLog.objects.filter(mobile=mobile_norm).count()
+
+    # Get paginated messages
     qs = SmsWhatsAppLog.objects.filter(
-        mobile=format_mobile(mobile)
-    ).order_by("-sent_at")   # newest first
+        mobile=mobile_norm
+    ).order_by('-sent_at').values(
+        'id', 'mobile', 'sent_text_message', 'message_type',
+        'sent_at', 'message_id', 'content_type', 'media_file',
+        'status', 'customer_name'
+    )[(page-1)*size:page*size]
 
-    paginator = Paginator(qs, size)
-    page_obj = paginator.page(page)
+    messages = list(qs)[::-1]  # Reverse to show oldest first
 
-    messages = list(page_obj)[::-1]  # reverse to normal order
+    result = []
+    for m in messages:
+        media_url = ""
+        if m.get('media_file'):
+            try:
+                media_url = default_storage.url(m['media_file'])
+            except:
+                pass
+
+        result.append({
+            "id": m['id'],
+            "mobile": m['mobile'],
+            "sent_text_message": m['sent_text_message'] or "",
+            "message_type": m['message_type'],
+            "sent_at": m['sent_at'].isoformat() if m['sent_at'] else "",
+            "message_id": m['message_id'] or "",
+            "content_type": m['content_type'] or "text",
+            "media_file": media_url,
+            "status": m['status'] or "",
+            "sender_name": m['customer_name'] or "",
+        })
 
     return {
-        "messages": [{
-            "id": m.id,
-            "mobile": m.mobile,
-            "sent_text_message": m.sent_text_message,
-            "message_type": m.message_type,
-            "sent_at": m.sent_at.isoformat(),
-            "message_id": m.message_id,
-            "content_type": m.content_type,
-            "media_file": m.media_file.url if m.media_file else "",
-            "status": m.status,
-            "sender_name": m.customer_name or "",
-        } for m in messages],
-        "total_pages": paginator.num_pages
+        "messages": result,
+        "total_pages": (total + size - 1) // size
     }
 
 @sync_to_async
 def create_outgoing_log(mobile: str, text: str, message_id: str, content_type: str="text", media_filename: Optional[str]=None):
+    """
+    Create a log for outgoing message
+    """
     log = SmsWhatsAppLog.objects.create(
         customer_name="",
         mobile=format_mobile(mobile),
@@ -113,15 +166,15 @@ def create_outgoing_log(mobile: str, text: str, message_id: str, content_type: s
         message_type="Sent",
         content_type=content_type,
     )
+
     if media_filename:
-        # if media_filename points to a temp file path in storage, try to attach (optional)
         try:
             with default_storage.open(media_filename, "rb") as f:
-                # save into model field
                 log.media_file.save(media_filename.split("/")[-1], ContentFile(f.read()))
                 log.save()
         except Exception:
             pass
+
     return {
         "id": log.id,
         "mobile": log.mobile,
@@ -136,146 +189,224 @@ def create_outgoing_log(mobile: str, text: str, message_id: str, content_type: s
 
 @sync_to_async
 def mark_messages_read_db(mobile: str):
-    SmsWhatsAppLog.objects.filter(mobile=format_mobile(mobile), message_type="Received", status="Unread").update(status="Read")
-
+    """
+    Mark all messages as read for a mobile
+    """
+    SmsWhatsAppLog.objects.filter(
+        mobile=format_mobile(mobile),
+        message_type="Received",
+        status="Unread"
+    ).update(status="Read")
 
 # -------------------------
-# WhatsApp Cloud helpers (sync, uses requests)
-# If you already have helpers in views.py you can import instead.
+# WhatsApp API Helpers
 # -------------------------
 def send_text_via_whatsapp(to_number: str, text_body: str) -> dict:
+    """Send text message via WhatsApp API"""
     url = f"https://graph.facebook.com/v17.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
-    headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    payload = {"messaging_product":"whatsapp","to": to_number,"type":"text","text":{"body": text_body}}
-    r = requests.post(url, headers=headers, json=payload, timeout=30)
-    r.raise_for_status()
-    return r.json()
-
-def upload_media_via_whatsapp(file_obj) -> dict:
-    access_token = settings.WHATSAPP_ACCESS_TOKEN
-    phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
-    url = f"https://graph.facebook.com/v17.0/{phone_number_id}/media"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    file_obj.seek(0)
-    files = {'file': (file_obj.name, file_obj.read(), file_obj.content_type)}
-    data = {'messaging_product': 'whatsapp'}
-    r = requests.post(url, headers=headers, files=files, data=data, timeout=60)
-    r.raise_for_status()
-    return r.json()
-
-def send_media_via_whatsapp(to_number: str, media_id: str, media_type: str, caption: str="") -> dict:
-    url = f"https://graph.facebook.com/v17.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
-    headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    payload = {"messaging_product":"whatsapp","to": to_number,"type": media_type, media_type: {"id": media_id}}
-    if caption and media_type in ("image","video"):
-        payload[media_type]["caption"] = caption
-    r = requests.post(url, headers=headers, json=payload, timeout=30)
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "text",
+        "text": {"body": text_body}
+    }
+    r = requests.post(url, headers=headers, json=payload, timeout=10)
     r.raise_for_status()
     return r.json()
 
 
 # -------------------------
-# The Consumer
+# MAIN CONSUMER
 # -------------------------
 class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
-        # Accept connection
-        await self.accept()
+        """Handle WebSocket connection"""
+        print("=" * 50)
+        print(f"WebSocket connection attempt at {timezone.now()}")
 
-        # Subscribe this socket to global groups:
-        await self.channel_layer.group_add("delivery_group", self.channel_name)
-        await self.channel_layer.group_add("contacts_group", self.channel_name)
-        await self.channel_layer.group_add("presence_group", self.channel_name)
+        # Initialize state
+        self.mobile = None
+        self.groups_joined = []
+        self.connection_active = True
+        self.connection_start_time = timezone.now()
 
-        # optional: if mobile provided in ws path (your routing can supply), auto-join that chat group:
-        path_mobile = self.scope.get("url_route", {}).get("kwargs", {}).get("mobile")
-        if path_mobile:
-            gm = ws_group_name(path_mobile)
-            if gm:
-                self.mobile = path_mobile
-                await self.channel_layer.group_add(f"chat_{gm}", self.channel_name)
+        try:
+            # Accept the connection
+            await self.accept()
+            print(f"WebSocket accepted - Channel: {self.channel_name}")
 
-        # send initial ready message
-        await self.send_json({"type":"connected", "message":"ws_connected"})
+            # Join global groups
+            await self._add_to_group("delivery_group")
+            await self._add_to_group("contacts_group")
+            await self._add_to_group("presence_group")
+            print("Joined global groups")
+
+            # Check for mobile in path
+            path_mobile = self.scope.get("url_route", {}).get("kwargs", {}).get("mobile")
+            if path_mobile:
+                gm = ws_group_name(path_mobile)
+                if gm:
+                    self.mobile = path_mobile
+                    await self._add_to_group(f"chat_{gm}")
+                    print(f"Joined chat group for {path_mobile}")
+
+            # Send connected confirmation
+            await self.send_json({
+                "type": "connected",
+                "message": "ws_connected",
+                "timestamp": str(timezone.now())
+            })
+
+            print(f"Connection successful - Duration: {timezone.now() - self.connection_start_time}")
+
+        except Exception as e:
+            print(f"ERROR in connect: {e}")
+            traceback.print_exc()
+
+    async def _add_to_group(self, group_name):
+        """Add to group with tracking"""
+        try:
+            await self.channel_layer.group_add(group_name, self.channel_name)
+            self.groups_joined.append(group_name)
+        except Exception as e:
+            print(f"Error adding to group {group_name}: {e}")
 
     async def disconnect(self, close_code):
-        # discard per-chat group if present
-        if hasattr(self, "mobile"):
-            gm = ws_group_name(self.mobile)
-            if gm:
-                await self.channel_layer.group_discard(f"chat_{gm}", self.channel_name)
+        """Clean up resources on disconnect"""
+        print(f"Disconnecting with code: {close_code} at {timezone.now()}")
+        self.connection_active = False
 
-        await self.channel_layer.group_discard("delivery_group", self.channel_name)
-        await self.channel_layer.group_discard("contacts_group", self.channel_name)
-        await self.channel_layer.group_discard("presence_group", self.channel_name)
+        # Leave all groups
+        for group_name in self.groups_joined[:]:
+            try:
+                await self.channel_layer.group_discard(group_name, self.channel_name)
+                print(f"Left group: {group_name}")
+            except Exception as e:
+                print(f"Error leaving group {group_name}: {e}")
 
-    # Receive JSON from client
+        self.groups_joined.clear()
+
+        # Close database connections
+        await sync_to_async(close_old_connections)()
+        print(f"Disconnect complete - Duration: {timezone.now() - self.connection_start_time}")
+
     async def receive_json(self, content, **kwargs):
-        t = content.get("type")
+        """Handle incoming JSON messages"""
+        if not self.connection_active:
+            print("Received message but connection inactive, ignoring")
+            return
 
-        # ---------- CONTACTS (first load + search) ----------
-       # ---------- CONTACTS + GLOBAL SEARCH ----------
-        if t in ("get_contacts", "search_contacts"):
+        t = content.get("type")
+        print(f"Received message type: {t}")
+
+        # Route to appropriate handler
+        handlers = {
+            "get_contacts": self._handle_get_contacts,
+            "search_contacts": self._handle_get_contacts,
+            "join": self._handle_join,
+            "get_messages": self._handle_get_messages,
+            "mark_read": self._handle_mark_read,
+            "typing": self._handle_typing,
+            "send_message": self._handle_send_message,
+        }
+
+        handler = handlers.get(t)
+        if handler:
+            await handler(content)
+        else:
+            if self.connection_active:
+                await self.send_json({"type": "error", "message": f"unknown type: {t}"})
+
+    async def _handle_get_contacts(self, content):
+        """Handle contacts request"""
+        try:
             page = int(content.get("page", 1))
             q = content.get("q", "") or ""
 
             res = await get_contacts_page(page=page, q=q)
 
-            await self.send_json({
-                "type": "contacts.page",
-                "contacts": res["contacts"],
-                "page": page,
-                "total_pages": res["total_pages"]
-            })
+            if self.connection_active:
+                await self.send_json({
+                    "type": "contacts.page",
+                    "contacts": res["contacts"],
+                    "page": page,
+                    "total_pages": res["total_pages"]
+                })
+        except Exception as e:
+            print(f"Error in _handle_get_contacts: {e}")
+            traceback.print_exc()
+            if self.connection_active:
+                await self.send_json({"type": "error", "message": str(e)})
 
-        # ---------- JOIN / SUBSCRIBE TO A CHAT ----------
-        elif t == "join":
+    async def _handle_join(self, content):
+        """Handle join chat request"""
+        try:
             mobile = content.get("mobile")
             if not mobile:
-                await self.send_json({"type":"error", "message":"mobile missing in join"})
                 return
 
             gm = ws_group_name(mobile)
             if gm:
-                self.mobile = mobile
-                await self.channel_layer.group_add(f"chat_{gm}", self.channel_name)
+                # Leave previous chat
+                if self.mobile:
+                    old_gm = ws_group_name(self.mobile)
+                    if old_gm and f"chat_{old_gm}" in self.groups_joined:
+                        await self.channel_layer.group_discard(f"chat_{old_gm}", self.channel_name)
+                        self.groups_joined.remove(f"chat_{old_gm}")
+                        print(f"Left previous chat: {old_gm}")
 
-                # notify presence
+                # Join new chat
+                self.mobile = mobile
+                await self._add_to_group(f"chat_{gm}")
+
+                # Notify presence
                 await self.channel_layer.group_send(
                     "presence_group",
-                    {"type":"presence.update", "mobile": mobile, "status":"online"}
+                    {"type": "presence.update", "mobile": mobile, "status": "online"}
                 )
 
-                await self.send_json({"type":"joined", "mobile": mobile})
+                if self.connection_active:
+                    await self.send_json({"type": "joined", "mobile": mobile})
+        except Exception as e:
+            print(f"Error in _handle_join: {e}")
+            traceback.print_exc()
 
-        # ---------- 🔥 GET MESSAGES (THIS WAS MISSING) ----------
-        # ---------- GET MESSAGES ----------
-        elif t == "get_messages":
+    async def _handle_get_messages(self, content):
+        """Handle get messages request"""
+        try:
             mobile = content.get("mobile")
             page = int(content.get("page", 1))
             size = int(content.get("page_size", 30))
 
             if not mobile:
-                await self.send_json({"type":"error","message":"mobile required"})
                 return
 
             res = await get_messages_page_from_db(mobile, page, size)
 
-            await self.send_json({
-                "type": "messages.page",
-                "mobile": mobile,
-                "messages": res["messages"],
-                "meta": {
-                    "page": page,
-                    "total_pages": res["total_pages"]
-                }
-            })
+            if self.connection_active:
+                await self.send_json({
+                    "type": "messages.page",
+                    "mobile": mobile,
+                    "messages": res["messages"],
+                    "meta": {
+                        "page": page,
+                        "total_pages": res["total_pages"]
+                    }
+                })
+        except Exception as e:
+            print(f"Error in _handle_get_messages: {e}")
+            traceback.print_exc()
 
-        # ---------- MARK READ ----------
-        elif t == "mark_read":
+    async def _handle_mark_read(self, content):
+        """Handle mark as read request"""
+        try:
             mobile = content.get("mobile")
-            if mobile:
+            if mobile and self.connection_active:
                 await mark_messages_read_db(mobile)
 
                 gm = ws_group_name(mobile)
@@ -283,43 +414,50 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     await self.channel_layer.group_send(
                         f"chat_{gm}",
                         {
-                            "type":"delivery.update",
-                            "message_id":"",
-                            "status":"Read",
+                            "type": "delivery.update",
+                            "message_id": "",
+                            "status": "Read",
                             "mobile": mobile
                         }
                     )
 
                 await self.channel_layer.group_send(
                     "contacts_group",
-                    {"type":"presence.update", "mobile": mobile, "status":"updated"}
+                    {"type": "presence.update", "mobile": mobile, "status": "updated"}
                 )
 
-                await self.send_json({"type":"marked_read", "mobile": mobile})
+                if self.connection_active:
+                    await self.send_json({"type": "marked_read", "mobile": mobile})
+        except Exception as e:
+            print(f"Error in _handle_mark_read: {e}")
+            traceback.print_exc()
 
-        # ---------- TYPING ----------
-        elif t == "typing":
+    async def _handle_typing(self, content):
+        """Handle typing indicator"""
+        try:
             mobile = content.get("mobile")
             state = content.get("state", False)
-            if mobile:
+            if mobile and self.connection_active:
                 gm = ws_group_name(mobile)
                 if gm:
                     await self.channel_layer.group_send(
                         f"chat_{gm}",
-                        {"type":"typing.event", "mobile": mobile, "state": state}
+                        {"type": "typing.event", "mobile": mobile, "state": state}
                     )
+        except Exception as e:
+            print(f"Error in _handle_typing: {e}")
 
-        # ---------- SEND MESSAGE ----------
-        elif t == "send_message":
+    async def _handle_send_message(self, content):
+        """Handle send message request"""
+        try:
             mobile = content.get("mobile")
             text = content.get("text", "")
             content_type = content.get("content_type", "text")
 
             if not mobile:
-                await self.send_json({"type":"error","message":"mobile required"})
                 return
 
-            # get logged-in user
+            # Get agent name
             agent_name = None
             try:
                 sid = self.scope["session"].get("messaging_user")
@@ -331,96 +469,114 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             except:
                 pass
 
-            # send to WhatsApp
-            try:
-                if content_type == "text":
-                    send_resp = await sync_to_async(send_text_via_whatsapp)(mobile, text)
-                else:
-                    media_id = content.get("media_id", "")
-                    media_type = content.get("media_type", "image")
-                    send_resp = {}
-
-                    if media_id:
-                        send_resp = await sync_to_async(send_media_via_whatsapp)(
-                            mobile, media_id, media_type, caption=text
-                        )
-
-                msg_id = ""
-                if isinstance(send_resp, dict) and "messages" in send_resp:
-                    msg_id = send_resp["messages"][0].get("id", "")
-
-            except Exception as e:
-                created = await create_outgoing_log(mobile, text, "", content_type)
-                created["sender_name"] = agent_name
-
-                gm = ws_group_name(mobile)
-                if gm:
-                    await self.channel_layer.group_send(
-                        f"chat_{gm}",
-                        {"type": "new_message", "message": created}
-                    )
-
-                await self.send_json({"type":"send_error","error": str(e)})
-                return
-
-            # save + broadcast
-            created = await create_outgoing_log(mobile, text, msg_id, content_type)
+            # Create optimistic log
+            created = await create_outgoing_log(mobile, text, "", content_type)
             created["sender_name"] = agent_name
 
+            # Show message immediately
             gm = ws_group_name(mobile)
-            if gm:
+            if gm and self.connection_active:
                 await self.channel_layer.group_send(
                     f"chat_{gm}",
                     {"type": "new_message", "message": created}
                 )
 
-            # ticks
-            await self.channel_layer.group_send(
-                "delivery_group",
-                {
-                    "type": "delivery.update",
-                    "message_id": msg_id,
-                    "status": "Sent",
-                    "mobile": mobile
-                }
+            # Send to WhatsApp in background
+            asyncio.create_task(
+                self._send_to_whatsapp_background(
+                    mobile, text, content_type, created["id"], agent_name
+                )
             )
 
-            await self.send_json({"type": "sent_ok", "message_id": msg_id})
+            if self.connection_active:
+                await self.send_json({"type": "sent_ok", "local_id": created["id"]})
 
-        # ---------- UNKNOWN ----------
-        else:
-            await self.send_json({"type":"error","message":"unknown type"})
-        # --------------------------
-    # Handlers for group_send events
-    # function names must match dotted message 'type' after replacing '.' with '_'
-    # --------------------------
+        except Exception as e:
+            print(f"Error in _handle_send_message: {e}")
+            traceback.print_exc()
+
+    async def _send_to_whatsapp_background(self, mobile, text, content_type, log_id, agent_name):
+        """Send message to WhatsApp in background"""
+        try:
+            if content_type == "text":
+                send_resp = await sync_to_async(send_text_via_whatsapp)(mobile, text)
+            else:
+                # For now, just handle text
+                send_resp = {"messages": [{"id": ""}]}
+
+            msg_id = ""
+            if isinstance(send_resp, dict) and "messages" in send_resp:
+                msg_id = send_resp["messages"][0].get("id", "")
+
+            # Update log with message_id
+            if msg_id:
+                await sync_to_async(
+                    lambda: SmsWhatsAppLog.objects.filter(id=log_id).update(message_id=msg_id)
+                )()
+
+                # Update ticks
+                await self.channel_layer.group_send(
+                    "delivery_group",
+                    {
+                        "type": "delivery.update",
+                        "message_id": msg_id,
+                        "status": "Sent",
+                        "mobile": mobile
+                    }
+                )
+
+        except Exception as e:
+            print(f"WhatsApp send error: {e}")
+            # Update log with error
+            await sync_to_async(
+                lambda: SmsWhatsAppLog.objects.filter(id=log_id).update(
+                    status="Failed",
+                    error_message=str(e)
+                )
+            )()
+
+            if self.connection_active:
+                await self.send_json({
+                    "type": "send_error",
+                    "error": str(e),
+                    "local_id": log_id
+                })
+
+    # -------------------------
+    # Group event handlers
+    # -------------------------
     async def new_message(self, event):
-        # forwarded from server-side when new message saved
-        await self.send_json({"type":"new.message", "message": event.get("message", {})})
+        """Handle new message event"""
+        if self.connection_active:
+            await self.send_json({
+                "type": "new.message",
+                "message": event.get("message", {})
+            })
 
     async def delivery_update(self, event):
-        # event: message_id, status, mobile, error
-        await self.send_json({
-            "type":"delivery.update",
-            "message_id": event.get("message_id"),
-            "status": event.get("status"),
-            "mobile": event.get("mobile",""),
-            "error": event.get("error","")
-        })
+        """Handle delivery update event"""
+        if self.connection_active:
+            await self.send_json({
+                "type": "delivery.update",
+                "message_id": event.get("message_id"),
+                "status": event.get("status"),
+                "mobile": event.get("mobile", ""),
+            })
 
     async def presence_update(self, event):
-        await self.send_json({"type":"presence.update","mobile": event.get("mobile"), "status": event.get("status")})
+        """Handle presence update event"""
+        if self.connection_active:
+            await self.send_json({
+                "type": "presence.update",
+                "mobile": event.get("mobile"),
+                "status": event.get("status")
+            })
 
     async def typing_event(self, event):
-        await self.send_json({"type":"typing","mobile": event.get("mobile"), "state": event.get("state", False)})
-
-    async def media_progress(self, event):
-        await self.send_json({
-            "type": "media.progress",
-            "mobile": event.get("mobile"),
-            "upload_id": event.get("upload_id"),
-            "progress": event.get("progress"),
-            "filename": event.get("filename",""),
-        })
-
-
+        """Handle typing event"""
+        if self.connection_active:
+            await self.send_json({
+                "type": "typing",
+                "mobile": event.get("mobile"),
+                "state": event.get("state", False)
+            })

@@ -21,7 +21,10 @@ TEMPLATE_CHOICES = [
     ("19", "legal_notice_customer (English)"),
     ("20", "Legal Notice to Guarantor (English)"),    
     ("21", "welcome_message_pdf"),
-    ("22", "public_notice")
+    ("22", "public_notice"),
+    ("23", "lok_adalat_notice_one (English)"),
+    ("24", "lok_adalat_notice_two (Telugu)"),
+    ("25", "lpc_notice (English)")
     
 
 ]

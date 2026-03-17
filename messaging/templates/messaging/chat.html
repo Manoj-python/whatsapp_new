@@ -360,7 +360,11 @@ body{background:#f3f4f6;color:#111}
     }catch(e){ return []; }
   }
 
-  // ==== WEBSOCKET ====
+  // ==== WEBSOCKET WITH PROPER CLEANUP ====
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_ATTEMPTS = 8;
+  const RECONNECT_DELAY = 1000;
+
   function sendWS(obj){
     if (ws && ws.readyState === WebSocket.OPEN){
       ws.send(JSON.stringify(obj));
@@ -368,26 +372,74 @@ body{background:#f3f4f6;color:#111}
   }
 
   function connectWS(){
-    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
+    // Don't create multiple connections
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+      return;
+    }
+
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(scheme + '://' + location.host + '/ws/chat/');
 
+    // Set connection timeout
+    const connectionTimeout = setTimeout(() => {
+      if (ws && ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    }, 5000);
 
-    ws.onopen = ()=>{
+    ws.onopen = () => {
+      clearTimeout(connectionTimeout);
       wsConnected = true;
-      sendWS({ type:'get_contacts', page: contactPage });
+      reconnectAttempts = 0;  // Reset on successful connection
+      console.log('WebSocket connected');
+      sendWS({ type: 'get_contacts', page: contactPage });
     };
 
-
-    ws.onmessage = e=>{
-      try{
+    ws.onmessage = (e) => {
+      try {
         handleWS(JSON.parse(e.data));
-      } catch(err){}
+      } catch (err) {
+        console.error('Error parsing WebSocket message:', err);
+      }
     };
 
-    ws.onclose = ()=>{ wsConnected = false; setTimeout(connectWS, 800); };
-    ws.onerror = ()=>{ wsConnected = false; };
+    ws.onclose = (event) => {
+      clearTimeout(connectionTimeout);
+      wsConnected = false;
+      console.log('WebSocket disconnected. Code:', event.code);
+
+      // Don't reconnect if this was a normal closure (1000)
+      if (event.code === 1000) {
+        console.log('Normal closure, not reconnecting');
+        return;
+      }
+
+      // Exponential backoff for reconnection
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        // Exponential backoff: 1s, 1.5s, 2.25s, 3.375s, 5.062s, 7.593s, 11.39s, 17.085s
+        const delay = RECONNECT_DELAY * Math.pow(1.5, reconnectAttempts - 1);
+        console.log(`Reconnecting in ${Math.round(delay/1000)}s (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        setTimeout(connectWS, delay);
+      } else {
+        console.log('Max reconnection attempts reached');
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
   }
+
+  // Clean up on page unload/navigation
+  window.addEventListener('beforeunload', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      // Use code 1000 for normal closure
+      ws.close(1000, 'Page unload');
+    }
+  });
+
+  // Start connection
   connectWS();
 
   // ==== CONTACT LIST ====
@@ -599,7 +651,7 @@ body{background:#f3f4f6;color:#111}
         ? new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
 
-  
+
       let ticks = '';
       if (m.message_type === 'Sent'){
         ticks = `<span class="tick" data-tid="${m.message_id||m.id||''}"></span>`;
@@ -1041,4 +1093,3 @@ bubble.innerHTML = `
 </script>
 </body>
 </html>
-
