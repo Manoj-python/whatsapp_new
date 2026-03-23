@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Legal Notice Generator</title>
+
+    <style>
+        body{
+            font-family: Arial, sans-serif;
+            margin:40px;
+        }
+
+        .box{
+            border:1px solid #ccc;
+            padding:25px;
+            width:500px;
+            border-radius:8px;
+        }
+
+        h2{
+            margin-bottom:20px;
+        }
+
+        h3{
+            margin-top:20px;
+            color:#444;
+        }
+
+        button{
+            padding:10px 18px;
+            font-size:16px;
+            cursor:pointer;
+        }
+
+        .message{
+            margin-top:20px;
+            font-weight:bold;
+            color:green;
+        }
+    </style>
+
+</head>
+
+<body>
+
+<h2>Legal Notice Generator</h2>
+
+<div class="box">
+
+<form method="post" enctype="multipart/form-data">
+
+{% csrf_token %}
+
+<!-- ========================= -->
+<!-- Borrower Notices -->
+<!-- ========================= -->
+
+<h3>Borrower Notices</h3>
+
+<label>
+<input type="radio" name="notice_type" value="sm_borrower" required>
+SM Square Borrower Notice
+</label>
+<br><br>
+
+<label>
+<input type="radio" name="notice_type" value="padmasai_borrower">
+Padmasai Borrower Notice
+</label>
+
+<!-- ========================= -->
+<!-- Guarantor Notices -->
+<!-- ========================= -->
+
+<h3>Guarantor Notices</h3>
+
+<label>
+<input type="radio" name="notice_type" value="sm_guarantor">
+SM Square Guarantor Notice
+</label>
+<br><br>
+
+<label>
+<input type="radio" name="notice_type" value="padmasai_guarantor">
+Padmasai Guarantor Notice
+</label>
+
+<!-- ========================= -->
+<!-- Co Borrower Notices -->
+<!-- ========================= -->
+
+<h3>Co-Borrower Notices</h3>
+
+<label>
+<input type="radio" name="notice_type" value="sm_co_borrower">
+SM Square Co-Borrower Notice
+</label>
+<br><br>
+
+<label>
+<input type="radio" name="notice_type" value="padmasai_co_borrower">
+Padmasai Co-Borrower Notice
+</label>
+
+<!-- ========================= -->
+<!-- Lok Adalat -->
+<!-- ========================= -->
+
+<h3>Lok Adalat</h3>
+
+<label>
+<input type="radio" name="notice_type" value="lok_adalat">
+Lok Adalat Notice
+</label>
+
+<!-- ========================= -->
+<!-- Loan Application -->
+<!-- ========================= -->
+
+<h3>Loan Application</h3>
+
+<label>
+<input type="radio" name="notice_type" value="loan_app">
+Loan APP
+</label>
+
+<!-- ========================= -->
+<!-- Ledger -->
+<!-- ========================= -->
+
+<h3>Ledger</h3>
+
+<label>
+<input type="radio" name="notice_type" value="ledger">
+Ledger Notice
+</label>
+
+<!-- ========================= -->
+<!-- Ledger Application -->
+<!-- ========================= -->
+
+<h3>Ledger Application</h3>
+
+<label>
+<input type="radio" name="notice_type" value="ledger_app">
+Ledger APP
+</label>
+
+<!-- ========================= -->
+<!-- Loss Notice -->
+<h3>Loss Notice</h3>
+
+<label>
+<input type="radio" name="notice_type" value="loss_notice">
+Loss Notice
+</label>    
+<br><br>
+
+<strong>Upload Excel File:</strong>
+<br><br>
+
+<input type="file" name="excel" accept=".xlsx,.xls" required>
+
+<br><br>
+
+<button type="submit">Generate PDFs</button>
+
+</form>
+
+{% if message %}
+
+<p class="message">
+{{ message }}
+</p>
+
+{% endif %}
+
+</div>
+
+</body>
+</html>
