@@ -363,7 +363,7 @@ def build_payload2(choice: str, row: dict) -> Tuple[dict, str]:
               "20": (
                 "loss_sale",
                 "en",
-                [  {"type": "text", "text": str(row.get("customer_name", ""))},
+                [  {"type": "text", "text": str(row.get("customer_name", ""))},   
                    {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
                    {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{1}}
                    {"type": "text", "text": str(row.get("amount", ""))},  # {{1}}
@@ -447,16 +447,8 @@ def build_payload2(choice: str, row: dict) -> Tuple[dict, str]:
 
                 ],
             ),
-            "28": (
-                "emp_lok_psf",
-                "en",
-                [  {"type": "text", "text": str(row.get("emp_name", ""))},  # {{1}}
-                   {"type": "text", "text": str(row.get("amount", ""))},  # {{1}}
-
-                ],
-            ),
     }
-
+        
     template_name, lang, parameters = templates.get(choice, templates["8"])
     mobile = format_mobile2(row.get("cust_mobile") or row.get("CustMobile"))
 
@@ -539,4 +531,3 @@ def build_payload2(choice: str, row: dict) -> Tuple[dict, str]:
     # =================================================
     return payload, rendered_text
 
-# Create your tests here.

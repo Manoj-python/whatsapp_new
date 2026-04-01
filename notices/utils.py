@@ -193,7 +193,9 @@ def generate_borrower_pdf(excel_path, borrower_tpl, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_borrower.pdf")
 
         doc.save(docx_path)
-        convert(docx_path, pdf_path, keep_active=True)
+        
+    convert(docx_path, pdf_path, keep_active=True)
+    
 
 # -----------------------------
 # Guarantor Notice
@@ -244,29 +246,31 @@ def generate_guarantor_pdf(excel_path, guarantor_tpl, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_guarantor.pdf")
 
         doc.save(docx_path)
-        convert(docx_path, pdf_path, keep_active=True)
+    
+    convert(docx_path, pdf_path, keep_active=True)
+
+
 # -----------------------------
 # Co-Borrower Notice
 # -----------------------------
 def generate_co_borrower_pdf(excel_path, template_path, output_dir):
 
     df = pd.read_excel(excel_path)
-    temp_dir = os.path.join(output_dir, "temp_co_borrower")
-    os.makedirs(temp_dir, exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
 
+    # ✅ Proper subfolders (same pattern as others)
+    docx_dir = os.path.join(output_dir, "generate_co_borrower_docx")
+    pdf_dir = os.path.join(output_dir, "generate_co_borrower_pdf")
 
-
+    os.makedirs(docx_dir, exist_ok=True)
+    os.makedirs(pdf_dir, exist_ok=True)
 
     for _, row in df.iterrows():
 
         dues_amount = safe_number(row.dues)
 
         context = {
-
             "code": row.get("code", ""),
             "company_name": row.get("company_name", ""),
-
             "notice_date": format_date(row["notice_date"]),
 
             "borrower_name": row["borrower_name"],
@@ -287,13 +291,15 @@ def generate_co_borrower_pdf(excel_path, template_path, output_dir):
 
         doc = DocxTemplate(template_path)
         doc.render(context)
-        docx_path = os.path.join(temp_dir, f"{loan_no}_co_borrower.docx")
-        pdf_path = os.path.join(output_dir, f"{loan_no}_co_borrower.pdf")
 
-
+        # ✅ Save inside structured folders
+        docx_path = os.path.join(docx_dir, f"{loan_no}_co_borrower.docx")
+        pdf_path = os.path.join(pdf_dir, f"{loan_no}_co_borrower.pdf")
 
         doc.save(docx_path)
-        convert(docx_path, pdf_path, keep_active=True)
+    
+    convert(docx_path, pdf_path, keep_active=True)
+        
 
 import pandas as pd
 from docxtpl import DocxTemplate
@@ -338,8 +344,9 @@ def generate_lokadalat_pdf(excel_path, template_path, output_dir):
         docx_path = os.path.join(docx_dir, f"{loan_no}_lokadalat.docx")
 
         doc.save(docx_path)
-
+    
     convert(docx_dir, pdf_dir)
+    
 
 
 # -----------------------------
@@ -374,8 +381,9 @@ def generate_loan_app_pdf(excel_path, template_path, output_dir):
         docx_path = os.path.join(docx_dir, f"{loan_no}_loan_app.docx")
 
         doc.save(docx_path)
-
+    
     convert(docx_dir, pdf_dir)
+    
 
 
 # -----------------------------
@@ -414,8 +422,9 @@ def generate_ledger_pdf(excel_path, template_path, output_dir):
         docx_path = os.path.join(docx_dir, f"{emp_id}_ledger.docx")
 
         doc.save(docx_path)
-
+    
     convert(docx_dir, pdf_dir)
+    
 
 
 # -----------------------------
@@ -452,6 +461,7 @@ def generate_ledger_app_pdf(excel_path, template_path, output_dir):
         doc.save(docx_path)
 
     convert(docx_dir, pdf_dir)
+    
 
 
 
@@ -509,3 +519,4 @@ def generate_loss_notice_pdf(excel_path, template_path, output_dir):
         doc.save(docx_path)
 
     convert(docx_dir, pdf_dir)
+    

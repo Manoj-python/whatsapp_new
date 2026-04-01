@@ -25,12 +25,9 @@ urlpatterns = [
     path('messaging2/',include('messaging2.urls')),
     path('adminpanel/', include('adminpanel.urls')),
     path('financehub/', include('financehub.urls')),
-<<<<<<< HEAD
-=======
     path('notice/', include('notices.urls')),
     
     
->>>>>>> c400b4e5 (initial commit)
 
 
 ]

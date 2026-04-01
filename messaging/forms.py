@@ -24,8 +24,10 @@ TEMPLATE_CHOICES = [
     ("22", "public_notice"),
     ("23", "lok_adalat_notice_one (English)"),
     ("24", "lok_adalat_notice_two (Telugu)"),
-    ("25", "lpc_notice (English)")
-    
+    ("25", "lpc_notice (English)"),
+    ("26", "kannada_lok (Kannada) Sree Mani Finance"),
+    ("27", "loss_sale (English)")
+            
 
 ]
 

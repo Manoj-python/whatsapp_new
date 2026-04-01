@@ -29,12 +29,33 @@
             padding:10px 18px;
             font-size:16px;
             cursor:pointer;
+            background:#007bff;
+            color:white;
+            border:none;
+            border-radius:5px;
         }
 
         .message{
             margin-top:20px;
             font-weight:bold;
+        }
+
+        .success{
             color:green;
+        }
+
+        .error{
+            color:red;
+        }
+
+        .download-btn{
+            display:inline-block;
+            margin-top:15px;
+            padding:10px 15px;
+            background:#28a745;
+            color:white;
+            text-decoration:none;
+            border-radius:5px;
         }
     </style>
 
@@ -147,12 +168,15 @@ Ledger APP
 
 <!-- ========================= -->
 <!-- Loss Notice -->
+<!-- ========================= -->
+
 <h3>Loss Notice</h3>
 
 <label>
 <input type="radio" name="notice_type" value="loss_notice">
 Loss Notice
 </label>    
+
 <br><br>
 
 <strong>Upload Excel File:</strong>
@@ -166,12 +190,24 @@ Loss Notice
 
 </form>
 
+<!-- ========================= -->
+<!-- MESSAGE -->
+<!-- ========================= -->
+
 {% if message %}
+    <p class="message {% if '❌' in message %}error{% else %}success{% endif %}">
+        {{ message }}
+    </p>
+{% endif %}
 
-<p class="message">
-{{ message }}
-</p>
+<!-- ========================= -->
+<!-- DOWNLOAD BUTTON -->
+<!-- ========================= -->
 
+{% if zip_url %}
+    <a href="{{ zip_url }}" target="_blank" class="download-btn">
+        📥 Download PDF Folder
+    </a>
 {% endif %}
 
 </div>

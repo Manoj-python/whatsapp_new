@@ -434,7 +434,29 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     {"type": "text", "text": format_whatsapp_date(row.get("effective_date", ""))},  # {{2}}
                 ],
             ),
-
+             "26": (
+                "kannada_lok",
+                "kn",
+                [
+                    {"type": "text", "text": str(row.get("loan_number", ""))},       # {{1}}
+                    {"type": "text", "text": str(row.get("vehicle_number", ""))},    # {{2}}
+                    {"type": "text", "text": format_whatsapp_date(row.get("hearing_date", ""))},  # {{3}}
+                ],
+            ),
+             "27": (
+                "loss_sale",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
+                    {"type": "text", "text": str(row.get("loan_number", ""))},     # {{2}}
+                    {"type": "text", "text": str(row.get("vehicle_number", ""))},  # {{3}}
+                    {
+                        "type": "text",
+                        "text": re.sub(r"[^\d]", "", str(row.get("amount", ""))),  # {{4}}
+                    },
+                ],
+            ),
+  
 
     }
   

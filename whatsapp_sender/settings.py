@@ -46,11 +46,8 @@ INSTALLED_APPS = [
     "messaging",
     "messaging2",
     "financehub",
-<<<<<<< HEAD
-=======
     "notices",
       
->>>>>>> c400b4e5 (initial commit)
 ]
 
 # -------------------------------------------------------

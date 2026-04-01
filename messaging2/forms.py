@@ -15,9 +15,21 @@ TEMPLATE_CHOICES = [
     ("13", "Customer Notice (English)"),
     ("14", "Guarantor Notice (English)"),
     ("15", "Public Notice"),
-    ("16", "lok_adalat (English)"), 
-    ("17", "lok_adalat (Telugu)"),
-    ("18", "disposal (English)")
+    ("16", "lok_adalat (Telugu)"),
+    ("17", "disposal (English)"),
+    ("18", "kannada_lok (Kannada) Sree Mani Finance"),
+    ("19", "lok_hr (english)"),
+    ("20", "sale_loss (English)"),
+    ("21", "smf_lok_doc_borrower (English)"),
+    ("22", "smf_lok_doc_guarantor (English)"),
+    ("23", "customer_psf_lok_doc (English)"),
+    ("24", "guarantor_psf_lok_doc (English)"),
+    ("25", "loss_sale_smf_borrower (English)"),
+    ("26", "loss_sale_smf_guarantor (English)"),
+    ("27", "loss_sale_psf_guarantor (English)"),
+    ("28", "emp_lok_psf (English)"),
+
+    
 
 ]
 
@@ -26,3 +38,4 @@ TEMPLATE_CHOICES = [
 class UploadForm(forms.Form):
     template_choice = forms.ChoiceField(choices=TEMPLATE_CHOICES, label="Select Template")
     excel_file = forms.FileField(label="Upload Excel File")
+

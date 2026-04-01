@@ -263,11 +263,19 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
                 content_type = "text"
                 media_filename = None
 
-                if template_choice in ("13", "14"):
+                if template_choice in ("13", "14", "21", "22", "23", "24"):
                     content_type = "document"
 
                     if template_choice == "14":
                         media_filename = row.get("guarantor_pdf_file")
+                    elif template_choice == "21":
+                        media_filename = row.get("smf_lok_doc_file")
+                    elif template_choice == "22":
+                        media_filename = row.get("smf_guarantor_pdf_file")
+                    elif template_choice == "23":
+                        media_filename = row.get("psf_customer_pdf_file")
+                    elif template_choice == "24":
+                        media_filename = row.get("psf_guarantor_pdf_file")
                     else:
                         media_filename = row.get("borrower_pdf_file") or row.get("customer_pdf_file")
 
