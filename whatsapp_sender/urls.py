@@ -26,6 +26,7 @@ urlpatterns = [
     path('adminpanel/', include('adminpanel.urls')),
     path('financehub/', include('financehub.urls')),
     path('notice/', include('notices.urls')),
+    path('splcases_app/', include('special_cases.urls')),
     
     
 

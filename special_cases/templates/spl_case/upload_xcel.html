@@ -1,0 +1,151 @@
+{% include 'spl_case/base.html' %}
+{% block content %}
+<style>
+    #progressBar {
+    transition: width 0.5s ease;
+}
+</style>
+
+<!-- 🚀 RESPONSIVE NAVBAR -->
+
+<div style="margin-top: 90px; display: flex; gap: 10px; flex-wrap: wrap;">
+
+    
+<div class="container mt-4">
+    <div class="card shadow-lg p-4">
+        <h3 class="text-center mb-3">📄 Upload CSV / Excel</h3>
+
+        {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+
+        {% if msg %}
+            <div class="alert alert-success">{{ msg }}</div>
+        {% endif %}
+
+        {% if upload_id %}
+            <div id="upload_id" data-id="{{ upload_id }}" style="display:none;"></div>
+        {% endif %}
+
+        <!-- Upload Form -->
+        <form id="uploadForm" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label"><strong>Select File Type</strong></label>
+                <select name="file_type" class="form-select" required>
+                    <option value="">-- Select File Type --</option>
+                    {% for val, label in file_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label"><strong>Select CSV or Excel File</strong></label>
+                <input type="file" name="file" class="form-control"
+                       accept=".csv,.xls,.xlsx" required>
+            </div>
+
+            <button type="submit" id="uploadBtn" class="btn btn-primary w-100">
+                Upload & Process
+            </button>
+        </form>
+
+        <!-- 🔄 Progress -->
+        <div id="progressWrapper" class="mt-4" style="display:none;">
+            <div class="mb-2"><strong>Processing Progress</strong></div>
+            <div class="progress">
+                <div id="progressBar" class="progress-bar bg-info" style="width:0%;">0%</div>
+            </div>
+            <div id="completeNote" class="text-success mt-2" style="display:none;">
+                ✅ Upload completed successfully. Refresh manually if needed.
+            </div>
+        </div>
+
+        <!-- ❌ Error -->
+        <div id="errorBox" class="alert alert-danger mt-3"
+             style="display:none; white-space:pre-wrap;"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+
+// ✅ DYNAMIC URL (NO HARD CODING)
+const progressUrlTemplate = "{% url 'upload_spl_progress' 0 %}";
+
+function pollProgress(upload_id) {
+    const url = progressUrlTemplate.replace("0", upload_id);
+    const bar = document.getElementById("progressBar");
+    const errorBox = document.getElementById("errorBox");
+    const completeNote = document.getElementById("completeNote");
+
+    const timer = setInterval(() => {
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                const percent = data.percent || 0;
+
+                // Update progress bar dynamically
+                bar.style.width = percent + "%";
+                bar.innerText = percent + "%";
+
+                if (data.status === "completed") {
+                    clearInterval(timer);
+                    bar.classList.replace("bg-info", "bg-success");
+                    bar.style.width = "100%";
+                    bar.innerText = "Completed 100%";
+                    completeNote.style.display = "block";
+                } else if (data.status === "error") {
+                    clearInterval(timer);
+                    bar.classList.replace("bg-info", "bg-danger");
+                    bar.innerText = "Failed";
+                    errorBox.style.display = "block";
+                    errorBox.innerText = data.error || "Unknown Error";
+                }
+            })
+            .catch(err => {
+                clearInterval(timer);
+                bar.classList.replace("bg-info", "bg-danger");
+                bar.innerText = "Error";
+                errorBox.style.display = "block";
+                errorBox.innerText = "Network or server error";
+            });
+    }, 1000); // poll every second for smoother updates
+}
+
+// ✅ FORM SUBMIT
+document.getElementById("uploadForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const fd = new FormData(form);
+    const uploadBtn = document.getElementById("uploadBtn");
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerText = "Uploading...";
+
+    fetch("", { method: "POST", body: fd })
+        .then(r => r.text())
+        .then(html => {
+            const doc = new DOMParser().parseFromString(html, "text/html");
+            const uploadElem = doc.getElementById("upload_id");
+
+            if (uploadElem && uploadElem.dataset.id) {
+                document.getElementById("progressWrapper").style.display = "block";
+                pollProgress(uploadElem.dataset.id);
+            } else {
+                location.reload();
+            }
+        })
+        .catch(err => {
+            alert("Upload failed: " + err);
+            uploadBtn.disabled = false;
+            uploadBtn.innerText = "Upload & Process";
+        });
+});
+</script>
+
+ {% endblock %}

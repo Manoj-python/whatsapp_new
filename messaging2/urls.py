@@ -17,9 +17,9 @@ urlpatterns = [
     path('api/messages/<str:mobile>/', views.chat_messages_api2, name='chat_messages_api2'),
     path('api/send-reply/', views.send_reply_api2, name='send_reply_api2'),
     path("api/contacts2/", views.contacts_api2, name="contacts_api2"),
-    path("api/mark-read/<str:mobile>/", views.mark_read),
     path("login/", views.messaging2_login, name="messaging2_login"),
     path("logout/", views.messaging2_logout, name="messaging2_logout"),
+    path("api/mark-read/<str:mobile>/", views.mark_read2, name="mark_read2"),
 
 
 

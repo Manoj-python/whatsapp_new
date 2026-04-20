@@ -1,0 +1,118 @@
+{% include 'spl_case/base.html' %}
+{% block content %}
+<style>
+    /* Table Wrapper */
+    .table-responsive-xl {
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    /* Sticky Table Header */
+    th {
+        position: sticky;
+        top: 0;
+        background: #212529;
+        color: white;
+        z-index: 10;
+    }
+
+    /* Freeze ID Column */
+    td:first-child,
+    th:first-child {
+        position: sticky;
+        left: 0;
+        background: #ffffff;
+        z-index: 9;
+    }
+
+    /* Font Adjustments */
+    table {
+        font-size: 12px;
+    }
+
+    @media (max-width: 768px) {
+        table {
+            font-size: 11px;
+        }
+    }
+</style>
+
+
+<div class="container-fluid mt-4">
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Ledger Full Data</h4>
+        </div>
+
+        <div class="card-body">
+
+            <!-- SEARCH BAR -->
+            <form method="GET" class="row g-2 mb-3">
+                <div class="col-12 col-md-6 col-lg-4">
+                    <input type="text" name="search" class="form-control" placeholder="dealer"
+                        value="{{ search|default:'' }}">
+                </div>
+
+                <div class="col-6 col-md-3 col-lg-2">
+                    <button class="btn btn-primary w-100">Search</button>
+                </div>
+
+                {% if search %}
+                <div class="col-6 col-md-3 col-lg-2">
+                    <a href="{% url 'dealer_details' %}" class="btn btn-secondary w-100">Reset</a>
+                </div>
+                {% endif %}
+            </form>
+
+            <!-- TABLE -->
+            <div class="table-responsive-xl">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="background-color: black; color: #e8eaec;">Company</th>
+                            <th>State</th>
+                            <th>Location</th>
+
+                            <th>Sales Manager</th>
+                            <th>Dealer</th>
+
+                            <th>Last TA Paid Date</th>
+                            <th>Latest TA Paid</th>
+
+                            <th>Last File Date</th>
+                            <th>Sanctioned TA</th>
+
+                            <th>TA Balance</th>
+                            <th>Balance Pending From</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in data %}
+                        <tr>
+<td>{{ row.company|default:"-" }}</td>
+    <td>{{ row.state|default:"-" }}</td>
+    <td>{{ row.location|default:"-" }}</td>
+
+    <td>{{ row.sales_manager|default:"-" }}</td>
+    <td>{{ row.dealer|default:"-" }}</td>
+
+    <td>{{ row.last_ta_paid_date|default:"-" }}</td>
+    <td>{{ row.latest_ta_paid|default:"0" }}</td>
+
+    <td>{{ row.last_file_date|default:"-" }}</td>
+    <td>{{ row.sanctioned_ta|default:"0" }}</td>
+
+    <td>{{ row.ta_balance|default_if_none:"-" }}</td>
+    <td>{{ row.balance_pending_from|default_if_none:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            </nav>
+
+
+            {% endblock %}

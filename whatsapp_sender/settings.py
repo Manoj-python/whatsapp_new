@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "messaging2",
     "financehub",
     "notices",
+    "special_cases",
       
 ]
 
@@ -157,6 +158,11 @@ WHATSAPP2_PHONE_NUMBER_ID = os.getenv("WHATSAPP2_PHONE_NUMBER_ID")
 WHATSAPP2_BUSINESS_ACCOUNT_ID = os.getenv("WHATSAPP2_BUSINESS_ACCOUNT_ID")
 WHATSAPP2_VERIFY_TOKEN = os.getenv("WHATSAPP2_VERIFY_TOKEN")
 
+
+WHATSAPP3_ACCESS_TOKEN = os.getenv("WHATSAPP3_ACCESS_TOKEN")
+WHATSAPP3_PHONE_NUMBER_ID = os.getenv("WHATSAPP3_PHONE_NUMBER_ID")
+WHATSAPP3_BUSINESS_ACCOUNT_ID = os.getenv("WHATSAPP3_BUSINESS_ACCOUNT_ID")
+WHATSAPP3_VERIFY_TOKEN = os.getenv("WHATSAPP3_VERIFY_TOKEN")
 # -------------------------------------------------------
 # AWS S3 STORAGE
 # -------------------------------------------------------
@@ -178,7 +184,8 @@ DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
 # LEGAL PDF LOCATION
 # -------------------------------------------------------
 LEGAL_PDF_DIR = BASE_DIR / "legal_pdfs"
-
+WELCOME_PDF_DIR = BASE_DIR / "welcome_pdfs"
+NOC_PDF_DIR = BASE_DIR / "noc_pdfs"
 # -------------------------------------------------------
 # CELERY + REDIS
 # -------------------------------------------------------
@@ -193,6 +200,7 @@ CELERY_TASK_ROUTES = {
     "messaging.tasks.*": {"queue": "whatsapp_main"},
     "messaging2.tasks.*": {"queue": "whatsapp_secondary"},
     "financehub.tasks.*": {"queue": "whatsapp_main"},
+    "special_cases.tasks.*": {"queue": "whatsapp_secondary"},
 }
 
 # -------------------------------------------------------
@@ -210,9 +218,11 @@ CSRF_TRUSTED_ORIGINS = [
 UPLOAD_DIR_1 = os.path.join(BASE_DIR, "uploads")
 UPLOAD_DIR_2 = os.path.join(BASE_DIR, "uploads2")
 
+UPLOAD_DIR_3 = os.path.join(BASE_DIR, "uploads3")
+
 os.makedirs(UPLOAD_DIR_1, exist_ok=True)
 os.makedirs(UPLOAD_DIR_2, exist_ok=True)
-
+os.makedirs(UPLOAD_DIR_3, exist_ok=True)
 # -------------------------------------------------------
 # CHANNELS
 # -------------------------------------------------------

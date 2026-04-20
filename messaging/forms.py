@@ -26,8 +26,15 @@ TEMPLATE_CHOICES = [
     ("24", "lok_adalat_notice_two (Telugu)"),
     ("25", "lpc_notice (English)"),
     ("26", "kannada_lok (Kannada) Sree Mani Finance"),
-    ("27", "loss_sale (English)")
-            
+    ("27", "loss_sale (English)"),
+    ("28", "write_off (English)"),
+    ("29", "guarantor_loss_sale (English)"),
+    ("30", "gur_telugu_registration_pdf"),
+    ("31", "cust_telugu_registration_pdf"),
+    ("32", "guarantor_registration_pdf_english"),
+    ("33", "registration_notice_borrower_pdf_english"),
+    ("34", "apologize english")
+
 
 ]
 

@@ -52,14 +52,64 @@
 
             <div class="d-flex align-items-center">
                 <span class="text-white me-3">👤 {{ request.user.username }}</span>
-                <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
+                <a href="{% url 'fh_logout' %}" class="btn btn-dark btn-sm">Logout</a>
             </div>
 
         </div>
     </div>
 </nav>
 
-<div style="margin-top: 90px;"></div>
+<div style="margin-top: 90px; display: flex; gap: 10px; flex-wrap: wrap;">
+
+    <form action="{% url 'lcc_delete' %}" method="post">
+        {% csrf_token %}
+        <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-lcc">LCC DELETE</button></a>
+    </form>
+
+    <form action="{% url 'paid_delete' %}" method="post">
+        {% csrf_token %}
+        <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-paid">Paid DELETE</button></a>
+    </form>
+
+    <form action="{% url 'repo_delete' %}" method="post">
+        {% csrf_token %}
+        <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-repo">Repo DELETE</button></a>
+    </form>
+
+    <form action="{% url 'closed_delete' %}" method="post">
+        {% csrf_token %}
+        <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-closed">Closed DELETE</button></a>
+    </form>
+
+    <form action="{% url 'ca_delete' %}" method="post">
+        {% csrf_token %}
+        <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-ca">CA DELETE</button></a>
+    </form>
+
+</div>
+
+<style>
+    .btn {
+        padding: 10px 16px;
+        border: none;
+        color: white;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: 0.3s ease;
+    }
+
+    .btn:hover {
+        opacity: 0.85;
+        transform: translateY(-2px);
+    }
+
+    .btn-lcc { background-color: maroon; }
+    .btn-paid { background-color: green; }
+    .btn-repo { background-color: rgb(211, 157, 40); }
+    .btn-closed { background-color: red; }
+    .btn-ca { background-color: blue; }
+</style>
 
 <div class="container mt-4">
     <div class="card shadow-lg p-4">

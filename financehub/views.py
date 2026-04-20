@@ -3,7 +3,7 @@ import os
 import tempfile
 import unicodedata
 import datetime
-
+import json
 from django.conf import settings
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -1199,6 +1199,9 @@ def executive_visit_schedule_list(request):
     centre_name = request.GET.get("centre_name", "").strip()
     visit_filter = request.GET.get("visit_filter", "").strip()
 
+    company = request.GET.get("company","").strip()
+    type_of_notice = request.GET.get("type_of_notice","").strip()
+
     login_empid = request.user.username
     today = datetime.date.today()
 
@@ -1224,6 +1227,10 @@ def executive_visit_schedule_list(request):
 
     if loanno:
         lcc_qs = lcc_qs.filter(loan_number__icontains=loanno)
+
+    if company:
+        lcc_qs = lcc_qs.filter(company = company)
+
 
     loan_numbers = list(lcc_qs.values_list("loan_number", flat=True))
 
@@ -1448,15 +1455,52 @@ def executive_visit_schedule_list(request):
     # =========================================================
     # DUE NOTICE (LATEST PER LOAN)
     # =========================================================
-    due_notice_map = {}
 
-    for n in (
-        DueNotice.objects
-        .filter(loan_number__in=loan_numbers)
-        .order_by("-notice_date", "-id")
-    ):
+    
+    
+
+    # for n in (
+    #     DueNotice.objects
+    #     .filter(loan_number__in=loan_numbers)
+    #     .order_by("-notice_date", "-id")
+    # ):
+    #     if n.loan_number not in due_notice_map:
+    #         due_notice_map[n.loan_number] = n
+
+    due_notice_qs = DueNotice.objects.filter(
+    loan_number__in=loan_numbers
+).order_by("-notice_date", "-id")
+
+    if type_of_notice and isinstance(type_of_notice, str):
+        due_notice_qs = due_notice_qs.filter(
+        type_of_notice__iexact=type_of_notice
+    )
+
+        filtered_loans = set(
+        due_notice_qs.values_list("loan_number", flat=True)
+    )
+
+        loan_numbers = [
+        ln for ln in loan_numbers if ln in filtered_loans
+    ]
+
+# ✅ REBUILD MAP (YOU MISSED THIS)
+    due_notice_map = {}
+    for n in due_notice_qs:
         if n.loan_number not in due_notice_map:
             due_notice_map[n.loan_number] = n
+    # ======================= for dropdown ===========================
+    notice_types = (
+    DueNotice.objects.exclude(type_of_notice__isnull=True)
+    .exclude(type_of_notice__exact="")
+    .values_list("type_of_notice", flat=True)
+    .distinct()
+    .order_by("type_of_notice")
+) 
+ 
+    print("Selected:", type_of_notice)
+    print("DB Values:", DueNotice.objects.values_list("type_of_notice", flat=True).distinct())
+    
 
 
     # =========================================================
@@ -1824,6 +1868,29 @@ def executive_visit_schedule_list(request):
     if request.GET.get("download") == "excel":
         return export_lcc_excel(final_data)
 
+    sort_field = request.GET.get("sort_field")
+    sort_order = request.GET.get("sort_order", "asc")
+
+    if sort_field:
+        def safe(val):
+            if val is None:
+                return ""
+
+            if hasattr(val, "timestamp"):
+                return val.timestamp()
+
+            try:
+                return float(val)
+            except:
+                return str(val).lower()
+
+        final_data.sort(
+        key=lambda x: safe(x.get(sort_field)),
+        reverse=(sort_order == "desc")
+    )
+
+        
+
 
     paginator = Paginator(final_data, 500)
     page_obj = paginator.get_page(request.GET.get("page"))
@@ -1852,11 +1919,12 @@ def executive_visit_schedule_list(request):
         "visit_filter": visit_filter,
         "blc_cases": blc_cases,
         "selected_blc_case": blc_case,
+        'type_of_notice':type_of_notice,
+        "notice_types":notice_types
     })
 
     cache.set(cache_key, response, 60)
     return response
-
 
 
 @financehub_required
@@ -2005,42 +2073,52 @@ def due_notice_list(request):
             Q(notice_status__icontains=query)
         )
 
-    # 🔄 UPDATE STATUS + DATE
+    # ✅ AJAX UPDATE
     if request.method == "POST":
-        notice_id = request.POST.get("notice_id")
-        status = request.POST.get("notice_status")
-        delivery_date = request.POST.get("delivery_date")
-        return_date = request.POST.get("return_date")
+        try:
+            data = json.loads(request.body)
 
-        if notice_id and status:
+            notice_id = data.get("notice_id")
+            status = data.get("notice_status")
+            delivery_date = data.get("delivery_date")
+            return_date = data.get("return_date")
+            return_reason = data.get("return_reason", "").strip()
+
+            if not notice_id or not status:
+                return JsonResponse({"success": False, "error": "Missing data"})
+
             update_data = {"notice_status": status}
 
             if status == DueNotice.NoticeStatus.DELIVERED:
                 if not delivery_date:
-                    return redirect(f"{request.path}?q={query}")
+                    return JsonResponse({"success": False, "error": "Delivery date required"})
                 update_data["delivery_date"] = delivery_date
                 update_data["return_date"] = None
+                update_data["return_reason"] = None
 
             elif status == DueNotice.NoticeStatus.RETURNED:
                 if not return_date:
-                    return redirect(f"{request.path}?q={query}")
+                    return JsonResponse({"success": False, "error": "Return date required"})
                 update_data["return_date"] = return_date
+                update_data["return_reason"] = return_reason
                 update_data["delivery_date"] = None
 
             else:  # IN TRANSIT
                 update_data["delivery_date"] = None
                 update_data["return_date"] = None
+                update_data["return_reason"] = None  # ✅ FIXED
 
             DueNotice.objects.filter(id=notice_id).update(**update_data)
 
-        return redirect(f"{request.path}?q={query}")
+            return JsonResponse({"success": True})
+
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)})
 
     # 📄 PAGINATION
-    paginator = Paginator(qs, 500)
+    paginator = Paginator(qs, 50)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-
-    STATUS_CHOICES = DueNotice.NoticeStatus.choices
 
     return render(
         request,
@@ -2048,6 +2126,43 @@ def due_notice_list(request):
         {
             "page_obj": page_obj,
             "query": query,
-            "status_choices": STATUS_CHOICES,
+            "status_choices": DueNotice.NoticeStatus.choices,
         },
     )
+
+     
+
+# ======================== DELETE OPTION FOR LCC, C ALLOCATION, REPO, PAID, CLOSED =========================
+
+@financehub_required
+def lcc_delete(request):
+    lcc = Lcc.objects.all()
+    lcc.delete()
+    return render(request,'financehub/upload.html')
+
+
+
+@financehub_required
+def repo_delete(request):
+    repo = Repo.objects.all()
+    repo.delete()
+    return render(request,'financehub/upload.html')
+
+@financehub_required
+def cA_delete(request):
+    ca = CollectionAllocations.objects.all()
+    ca.delete()
+    return render(request,'financehub/upload.html')
+
+@financehub_required
+def paid_delete(request):
+    paid = Paid.objects.all()
+    paid.delete()
+    return render(request,'financehub/upload.html')
+
+@financehub_required
+def closed_delete(request):
+    closed = Closed.objects.all()
+    closed.delete()
+    return render(request,'financehub/upload.html')
+

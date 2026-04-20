@@ -1,5 +1,4 @@
 from django.db import models
-
 from .utils import format_mobile2
 
 class SmsWhatsAppLog2(models.Model):
@@ -18,14 +17,17 @@ class SmsWhatsAppLog2(models.Model):
         ("unknown", "Unknown"),
     )
 
+    # ADDED: job_id field
+    job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    
     customer_name = models.CharField(max_length=100, blank=True, null=True)
     mobile = models.CharField(max_length=30, db_index=True)
     template_name = models.CharField(max_length=50, blank=True, null=True)
     status = models.CharField(max_length=50, blank=True, null=True)
-    message_id = models.CharField(max_length=200, blank=True, null=True)
+    message_id = models.CharField(max_length=200, blank=True, null=True, db_index=True)
     sent_text_message = models.TextField(blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
-    sent_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     message_type = models.CharField(max_length=10, choices=MESSAGE_TYPE_CHOICES, default="Sent")
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default="text")
@@ -38,8 +40,13 @@ class SmsWhatsAppLog2(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["mobile", "sent_at"]),
-            models.Index(fields=["message_type", "status"]),
+            models.Index(fields=["mobile", "-sent_at"], name="idx2_mobile_sent_at"),
+            models.Index(fields=["message_type", "status"], name="idx2_type_status"),
+            models.Index(fields=["message_id"], name="idx2_message_id"),
+            models.Index(fields=["-sent_at"], name="idx2_sent_at_desc"),
+            models.Index(fields=["mobile", "message_type", "status"], name="idx2_mobile_type_status"),
+            # ADDED: job_id index
+            models.Index(fields=["job_id", "status"], name="idx2_job_status"),
         ]
 
     def __str__(self):
@@ -62,8 +69,14 @@ class BulkJob2(models.Model):
     excel_file = models.FileField(upload_to="uploads2/")
 
     # Optional: store per-job report filenames
-    success_report = models.FileField(upload_to="reports2/", blank=True, null=True,max_length=500)
-    failed_report = models.FileField(upload_to="reports2/", blank=True, null=True,max_length=500)
+    success_report = models.FileField(upload_to="reports2/", blank=True, null=True, max_length=500)
+    failed_report = models.FileField(upload_to="reports2/", blank=True, null=True, max_length=500)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["job_id"], name="idx2_job_id"),
+            models.Index(fields=["status", "started_at"], name="idx2_status_started"),
+        ]
 
     def __str__(self):
         return f"{self.template_name} ({self.job_id})"

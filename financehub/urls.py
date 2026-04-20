@@ -13,6 +13,11 @@ urlpatterns = [
 
     # ---------------- LCC ----------------
     path("lcc-data/", views.lcc_list, name="lcc_list"),
+    path("lcc-delete/", views.lcc_delete, name="lcc_delete"),
+    path("ca-delete/", views.cA_delete, name="ca_delete"),
+    path("repo-delete/", views.repo_delete, name="repo_delete"),
+    path("closed-delete/", views.closed_delete, name="closed_delete"),
+    path("paid-delete/", views.paid_delete, name="paid_delete"),
 
     # ---------------- FEEDBACK ----------------
     path("feedback/", views.feedback_list, name="feedback_list"),

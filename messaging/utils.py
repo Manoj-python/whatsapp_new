@@ -138,18 +138,18 @@ from pathlib import Path
 from django.conf import settings
 import boto3
 from botocore.exceptions import ClientError
+from pathlib import Path
+from django.conf import settings
+import boto3
+from botocore.exceptions import ClientError
 
-def open_legal_pdf(filename):
+
+def open_legal_pdf(filename, folder):
     filename = Path(str(filename)).name.strip()
 
-    # ---------- LOCAL ----------
-    if settings.DEBUG:
-        file_path = Path(settings.LEGAL_PDF_DIR) / filename
-        if not file_path.exists():
-            raise FileNotFoundError(f"Legal PDF not found locally: {file_path}")
-        return open(file_path, "rb")
-
-    # ---------- S3 (BOTO3 - RELIABLE) ----------
+    # ==================================================
+    # 🔥 ALWAYS TRY S3 FIRST
+    # ==================================================
     s3 = boto3.client(
         "s3",
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
@@ -157,19 +157,53 @@ def open_legal_pdf(filename):
         region_name=settings.AWS_S3_REGION_NAME,
     )
 
-    key = f"legal_pdfs/{filename}"
+    key = f"{folder}/{filename}"
+
+    print("DEBUG S3 KEY:", key)
 
     try:
         obj = s3.get_object(
             Bucket=settings.AWS_STORAGE_BUCKET_NAME,
             Key=key,
         )
-        return obj["Body"]   # file-like object ✅
+        print("✅ Loaded from S3")
+        return obj["Body"]
+
     except ClientError as e:
+        print("⚠️ S3 fetch failed:", e)
+
+    # ==================================================
+    # 🔽 FALLBACK TO LOCAL (ONLY IF NEEDED)
+    # ==================================================
+    if settings.DEBUG:
+
+        if folder == "welcome_pdfs":
+            base_dir = Path(settings.WELCOME_PDF_DIR)
+
+        elif folder == "legal_pdfs":
+            base_dir = Path(settings.LEGAL_PDF_DIR)
+
+        else:
+            raise ValueError(f"Unknown folder: {folder}")
+
+        file_path = base_dir / filename
+
+        print("DEBUG LOCAL PATH:", file_path)
+
+        if file_path.exists():
+            print("✅ Loaded from LOCAL")
+            return open(file_path, "rb")
+
         raise FileNotFoundError(
-            f"Legal PDF not found in S3: {key} ({e})"
+            f"PDF not found in S3 AND locally: {key} | {file_path}"
         )
 
+    # ==================================================
+    # ❌ FINAL FAIL (production)
+    # ==================================================
+    raise FileNotFoundError(
+        f"PDF not found in S3: {key}"
+    )
 
 # ---------------------------
 # WhatsApp number pre-check
@@ -456,10 +490,71 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     },
                 ],
             ),
-  
+
+              "28": (
+                "write_off",
+                "en",
+                [  {"type": "text", "text": str(row.get("customer_name", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("vehicle_number", ""))},
+                   {"type": "text", "text": str(row.get("amount", ""))},  # {{1}}
+
+                ],
+            ),
+               "29": (
+                "guarantor_loss_sale",
+                "en",
+                [  {"type": "text", "text": str(row.get("guarantor_name", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("vehicle_number", ""))},
+                    {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
+                   {"type": "text", "text": str(row.get("amount", ""))},  # {{1}}
+
+                ],
+            ),
+             "30": (
+                "gur_telugu_registration_notice",
+                "te",
+                [  {"type": "text", "text": str(row.get("guarantor_name", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
+                    {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
+                    
+                ],
+             ),
+             "31": (
+                "cust_telugu_registration_notice",
+                "te",
+                [  {"type": "text", "text": str(row.get("customer_name", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
+                    
+                ],
+             ),
+            "32": (
+                "guarantor_registration_notice",
+                "en",
+                [  {"type": "text", "text": str(row.get("guarantor_name", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
+                       {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}      
+                ],
+             ),
+             "33": (
+                "registration_notice_borrower",
+                "en", [  {"type": "text", "text": str(row.get("customer_name", ""))},  # {{1}}
+                   {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
+                ],
+             ),
+               "34": (
+                "apologize",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
+                ],
+               ),
+                           
+
 
     }
-  
+
 
     template_name, lang, parameters = templates.get(choice, templates["8"])
     mobile = format_mobile(row.get("cust_mobile", ""))
@@ -468,7 +563,8 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
     # TEMPLATES WITH DOCUMENT HEADER (19, 20, 21, 25)
 
     # --------------------------------------------------
-    if choice in ("19", "20", "21", "25"):
+   # --------------------------------------------------
+    if choice in ("19", "20", "21", "25","30","31","32","33"):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
@@ -482,6 +578,14 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
         elif choice == "25":
             pdf_source = row.get("lpc_pdf")
+        elif choice == "30":
+            pdf_source = row.get("gur_telugu_registration_pdf")
+        elif choice == "31":
+            pdf_source = row.get("cust_telugu_registration_pdf")
+        elif choice == "32":
+            pdf_source = row.get("guarantor_registration_pdf")
+        elif choice == "33":
+            pdf_source = row.get("customer_registration_pdf")
 
         else:  # choice == "19"
             pdf_source = (
@@ -636,9 +740,6 @@ def send_second_message_for_mobile(all_rows, mobile):
         message_type="Sent",
         content_type="text",
     )
-  
-
-
 
 
 

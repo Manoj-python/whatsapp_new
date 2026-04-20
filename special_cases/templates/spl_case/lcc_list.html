@@ -1,0 +1,164 @@
+{% include 'spl_case/base.html' %}
+{% block content %}
+    <style>
+        /* Table Wrapper */
+        .table-responsive-xl { overflow-x: auto; white-space: nowrap; }
+
+        /* Sticky Table Header */
+        th {
+            position: sticky;
+            top: 0;
+            background: #212529;
+            color: white;
+            z-index: 10;
+        }
+
+        /* Freeze ID Column */
+        td:first-child, th:first-child {
+            position: sticky;
+            left: 0;
+            background: #ffffff;
+            z-index: 9;
+        }
+
+        /* Font Adjustments */
+        table { font-size: 12px; }
+        @media (max-width: 768px) {
+            table { font-size: 11px; }
+        }
+    </style>
+
+
+<div class="container-fluid mt-4">
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">LCC Full Data</h4>
+        </div>
+
+        <div class="card-body">
+
+            <!-- SEARCH BAR -->
+            <form method="GET" class="row g-2 mb-3">
+                <div class="col-12 col-md-6 col-lg-4">
+                    <input type="text"
+                           name="search"
+                           class="form-control"
+                           placeholder="Search Loan / Mobile / Customer / Vehicle"
+                           value="{{ search|default:'' }}">
+                </div>
+
+                <div class="col-6 col-md-3 col-lg-2">
+                    <button class="btn btn-primary w-100">Search</button>
+                </div>
+
+                {% if search %}
+                <div class="col-6 col-md-3 col-lg-2">
+                    <a href="{% url 'lcc_details' %}" class="btn btn-secondary w-100">Reset</a>
+                </div>
+                {% endif %}
+            </form>
+
+            <!-- TABLE -->
+            <div class="table-responsive-xl">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Mode</th>
+                            <th>Company</th>
+                            <th>Branch</th>
+                            <th>Centre</th>
+                            <th>Loan Number</th>
+                            <th>Division</th>
+                            <th>BLC</th>
+                            <th>Vehicle No</th>
+                            <th>Loan Date</th>
+                            <th>Customer Name</th>
+                            <th>Mobile</th>
+                            <th>Guarantor</th>
+                            <th>G Mobile</th>
+                            <th>Vehicle Type</th>
+                            <th>Class</th>
+                            <th>1st Due</th>
+                            <th>Last Due</th>
+                            <th>Install Date</th>
+                            <th>TBC</th>
+                            <th>Total Dues</th>
+                            <th>LPC</th>
+                            <th>VAS</th>
+                            <th>EMI1</th>
+                            <th>EMI2</th>
+                            <th>Running EMI</th>
+                            <th>Paid Inst</th>
+                            <th>Balance Inst</th>
+                            <th>Inst</th>
+                            <th>Last Rcvd</th>
+                            <th>Seize</th>
+                            <th>Address</th>
+                            <th>Executive</th>
+                            <th>Area</th>
+                            <th>Source</th>
+                            <th>Source Name</th>
+                            <th>Lead Owner</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in data %}
+                        <tr>
+                            <td>{{ row.id }}</td>
+                            <td>{{ row.mode_of_repayment }}</td>
+                            <td>{{ row.company }}</td>
+                            <td>{{ row.branch }}</td>
+                            <td>{{ row.centre_name }}</td>
+
+                            <td>{{ row.loan_number }}
+                                
+                            </td>
+
+                            <td>{{ row.division }}</td>
+                            <td>{{ row.blc_cases }}</td>
+                            <td>{{ row.vehicle_no }}</td>
+                            <td>{{ row.loan_date }}</td>
+                            <td>{{ row.customer_name }}</td>
+                            <td>{{ row.cust_mobile }}</td>
+                            <td>{{ row.guarantor }}</td>
+                            <td>{{ row.guarantor_mobile }}</td>
+                            <td>{{ row.vehicle_type }}</td>
+                            <td>{{ row.vehicle_class }}</td>
+                            <td>{{ row.first_due_date }}</td>
+                            <td>{{ row.last_due_date }}</td>
+                            <td>{{ row.installment_date }}</td>
+                            <td>{{ row.month_tbc }}</td>
+                            <td>{{ row.total_dues }}</td>
+                            <td>{{ row.lpc_dues }}</td>
+                            <td>{{ row.vas_hl }}</td>
+                            <td>{{ row.emi_due }}</td>
+                            <td>{{ row.emi_due_2 }}</td>
+                            <td>{{ row.running_emi }}</td>
+                            <td>{{ row.paid_inst }}</td>
+                            <td>{{ row.balance_inst }}</td>
+                            <td>{{ row.inst }}</td>
+                            <td>{{ row.last_rcvd_date }}</td>
+                            <td>{{ row.seize_date }}</td>
+                            <td>{{ row.customer_address }}</td>
+                            <td>{{ row.collection_executive }}</td>
+                            <td>{{ row.area }}</td>
+                            <td>{{ row.source }}</td>
+                            <td>{{ row.source_name }}</td>
+                            <td>{{ row.lead_owner }}</td>
+                            <td>{{ row.latest_status }}</td>
+                            <td>{{ row.created_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+</nav>
+
+
+{% endblock %}

@@ -45,11 +45,12 @@ def make_session():
     return s
 
 
+# ====
 # ==================================================
 # Upload Legal PDF
 # ==================================================
-def upload_legal_pdf_to_whatsapp(pdf_filename):
-    f = open_legal_pdf(pdf_filename)
+def upload_legal_pdf_to_whatsapp(pdf_filename, folder):
+    f = open_legal_pdf(pdf_filename, folder)
 
     class WhatsAppFile:
         name = pdf_filename
@@ -64,11 +65,13 @@ def upload_legal_pdf_to_whatsapp(pdf_filename):
     return upload_whatsapp_media(WhatsAppFile())
 
 
+
 # ==================================================
 # MAIN BULK TASK
 # ==================================================
 @shared_task(bind=True, queue="whatsapp_main")
 def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_size=50):
+    template_choice = str(template_choice)
     close_old_connections()
 
     try:
@@ -127,6 +130,7 @@ def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_si
 # ==================================================
 @shared_task(bind=True, queue="whatsapp_main")
 def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, start, end):
+    template_choice = str(template_choice)
 
     close_old_connections()
 
@@ -234,30 +238,71 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
         try:
             media_id = None
+            folder = None
+            pdf_filename = None   # ✅ IMPORTANT
 
-            if template_choice in ("19", "20", "21","25"):
+            # ==================================================
+            # 📁 SELECT PDF + FOLDER (FIXED LOGIC)
+            # ==================================================
 
-                if template_choice == "21":
-                    pdf_filename = row.get("welcome_pdf")
-                elif template_choice == "20":
-                    pdf_filename = row.get("guarantor_pdf_file")
-                elif template_choice == "25":
-                    pdf_filename = row.get("lpc_pdf")
-                else:
-                    pdf_filename = (
-                        row.get("borrower_pdf_file")
-                        or row.get("customer_pdf_file")
-                    )
+           
+            if template_choice == "21":
+                pdf_filename = row.get("welcome_pdf")
+                folder = "welcome_pdfs"
 
-                if not pdf_filename:
-                    raise ValueError("PDF filename missing in Excel row")
+            elif template_choice == "20":
+                pdf_filename = row.get("guarantor_pdf_file")
+                folder = "legal_pdfs"
+
+            elif template_choice == "25":
+                pdf_filename = row.get("lpc_pdf")
+                folder = "legal_pdfs"
+            elif template_choice == "30":
+                pdf_filename = row.get("gur_telugu_registration_pdf")
+                folder = "legal_pdfs"
+            elif template_choice == "31":
+                pdf_filename = row.get("cust_telugu_registration_pdf")
+                folder = "legal_pdfs"
+            elif template_choice == "32":
+                pdf_filename = row.get("guarantor_registration_pdf")
+                folder = "legal_pdfs"
+            elif template_choice == "33":
+                pdf_filename = row.get("customer_registration_pdf")
+                folder = "legal_pdfs"
+
+            elif template_choice == "19":
+                pdf_filename = (
+                    row.get("borrower_pdf_file")
+                    or row.get("customer_pdf_file")
+                )
+                folder = "legal_pdfs"
+
+            # ==================================================
+            # 📤 UPLOAD TO WHATSAPP (ONLY IF PDF EXISTS)
+            # ==================================================
+            if pdf_filename:
+
+                if not folder:
+                    raise ValueError(f"Folder not set for template {template_choice}")
+
+                # 🔍 DEBUG (remove later)
+                print("TEMPLATE:", template_choice)
+                print("FOLDER:", folder)
+                print("FILE:", pdf_filename)
 
                 if pdf_filename not in media_cache:
-                    upload_response = upload_legal_pdf_to_whatsapp(pdf_filename)
+                    upload_response = upload_legal_pdf_to_whatsapp(pdf_filename, folder)
+
+                    if not upload_response or "id" not in upload_response:
+                        raise ValueError(f"Media upload failed: {upload_response}")
+
                     media_cache[pdf_filename] = upload_response.get("id")
 
                 media_id = media_cache[pdf_filename]
 
+            # ==================================================
+            # 📦 BUILD PAYLOAD
+            # ==================================================
             payload, rendered_text = build_payload(
                 template_choice,
                 row,
@@ -272,33 +317,25 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             msg_id = resp.json()["messages"][0]["id"]
 
             # ==================================================
-            # 🔥 SAVE TEMPLATE PDF INTO DASHBOARD CHAT (S3 SAFE)
+            # 💾 SAVE PDF TO DASHBOARD
             # ==================================================
             media_file_obj = None
             content_type_val = "text"
             pdf_source = None
 
-            if template_choice in ("19", "20", "21","25"):
+            if pdf_filename:
 
                 content_type_val = "document"
-
-                if template_choice == "21":
-                    pdf_source = row.get("welcome_pdf")
-                elif template_choice == "20":
-                    pdf_source = row.get("guarantor_pdf_file")
-                elif template_choice == "25":
-                    pdf_source = row.get("lpc_pdf")
-                else:
-                    pdf_source = (
-                        row.get("borrower_pdf_file")
-                        or row.get("customer_pdf_file")
-                    )
+                pdf_source = pdf_filename
 
                 try:
-                    media_file_obj = open_legal_pdf(pdf_source)
+                    media_file_obj = open_legal_pdf(pdf_source, folder)
                 except Exception as e:
                     logger.warning(f"Chat PDF open failed: {e}")
 
+            # ==================================================
+            # 📝 SAVE LOG
+            # ==================================================
             log = SmsWhatsAppLog.objects.create(
                 job_id=job_id,
                 customer_name=name,
@@ -311,10 +348,14 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 content_type=content_type_val,
             )
 
-            # 🔥 FINAL FIX FOR AWS S3 STREAMINGBODY
+            # ==================================================
+            # 📎 ATTACH PDF FILE
+            # ==================================================
             if media_file_obj:
                 try:
+                    media_file_obj.seek(0)
                     pdf_bytes = media_file_obj.read()
+
                     file_buffer = io.BytesIO(pdf_bytes)
 
                     log.media_file.save(
@@ -341,7 +382,6 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             local_failed += 1
 
         time.sleep(0.3)
-
     BulkJob.objects.filter(job_id=job_id).update(
         sent_count=F("sent_count") + (local_success + local_failed),
         success_count=F("success_count") + local_success,
@@ -420,5 +460,4 @@ def finalize_bulk_job(self, job_id):
     ])
 
     logger.info("Job %s COMPLETED and reports generated", job_id)
-
 

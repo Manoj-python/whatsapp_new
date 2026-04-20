@@ -25,22 +25,6 @@ from .utils import build_payload2, format_mobile2, check_whatsapp_number2
 logger = get_task_logger(__name__)
 logger.setLevel(logging.INFO)
 
-# -------------------------------------------------
-# HTTP SESSION
-# -------------------------------------------------
-def make_session():
-    s = requests.Session()
-    retries = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=(429, 500, 502, 503, 504),
-    )
-    s.mount("https://", HTTPAdapter(max_retries=retries))
-    s.mount("http://", HTTPAdapter(max_retries=retries))
-    s.headers.update({"Content-Type": "application/json"})
-    return s
-
-
 # ==================================================
 # MAIN BULK JOB
 # ==================================================
@@ -98,8 +82,9 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_s
 
     finalize_bulk_job2.apply_async((job_id,), countdown=10, queue="whatsapp_secondary")
 
+
 # ==================================================
-# BATCH WORKER (FINAL PRODUCTION VERSION WITH ANTI-DUPLICATE)
+# BATCH WORKER (FIXED VERSION)
 # ==================================================
 @shared_task(bind=True)
 def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, start, end):
@@ -108,19 +93,15 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
     close_old_connections()
 
     # --------------------------------------------------
-    # PREVENT RE-PROCESSING ON CELERY RESTART
-    # Check if this batch was already processed
+    # PREVENT RE-PROCESSING
     # --------------------------------------------------
     try:
         job = BulkJob2.objects.get(job_id=job_id)
         
-        # If job is already Completed, don't process
         if job.status == "Completed":
             logger.info(f"Job2 {job_id} already completed, skipping batch {start}-{end}")
             return
             
-        # Check if this specific batch might have been processed
-        # by looking at sent_count vs expected
         if job.sent_count >= end:
             logger.info(f"Batch {start}-{end} for job {job_id} appears already processed, skipping")
             return
@@ -174,6 +155,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
         if not mobile:
             reason = "No mobile number provided"
             SmsWhatsAppLog2.objects.create(
+                job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
                 template_name=template_choice,
@@ -200,6 +182,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
             reason = check.get("reason") or "Invalid or blocked"
 
             SmsWhatsAppLog2.objects.create(
+                job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
                 template_name=template_choice,
@@ -218,6 +201,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
         # BUILD PAYLOAD + TEMPLATE TEXT
         # ----------------------------------------------
         try:
+            # ✅ Now build_payload2 handles PDF upload internally
             payload, rendered_text = build_payload2(template_choice, row)
         except Exception as e:
             reason = f"build_payload_error: {e}"
@@ -225,6 +209,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
             logger.exception("Payload build error job2 %s row %s: %s", job_id, idx, e)
 
             SmsWhatsAppLog2.objects.create(
+                job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
                 template_name=template_choice,
@@ -238,7 +223,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
             failed_records.append([name, mobile, reason])
             local_failed += 1
             continue
-
+        
         # ----------------------------------------------
         # SEND WHATSAPP MESSAGE
         # ----------------------------------------------
@@ -258,31 +243,49 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
                 msg_id = j["messages"][0].get("id", "")
 
                 # ----------------------------------------------
-                # DETERMINE CONTENT TYPE
+                # DETERMINE CONTENT TYPE & PDF FILENAME
                 # ----------------------------------------------
                 content_type = "text"
                 media_filename = None
+                folder = None
 
-                if template_choice in ("13", "14", "21", "22", "23", "24"):
+                # All document templates
+                if template_choice in ("13", "14", "21", "22", "23", "24", "31", "32", "33", "34", "35", "36", "37", "38", "39"):
                     content_type = "document"
 
                     if template_choice == "14":
                         media_filename = row.get("guarantor_pdf_file")
+                        folder = "legal_pdfs"
                     elif template_choice == "21":
                         media_filename = row.get("smf_lok_doc_file")
+                        folder = "legal_pdfs"
                     elif template_choice == "22":
                         media_filename = row.get("smf_guarantor_pdf_file")
+                        folder = "legal_pdfs"
                     elif template_choice == "23":
                         media_filename = row.get("psf_customer_pdf_file")
+                        folder = "legal_pdfs"
                     elif template_choice == "24":
                         media_filename = row.get("psf_guarantor_pdf_file")
+                        folder = "legal_pdfs"
+                    elif template_choice == "31":
+                        media_filename = row.get("doc_noc_pdf_file")
+                        folder = "noc_pdfs"
+                    elif template_choice in ("32", "33", "38"):
+                        media_filename = row.get("guarantor_pdf_file")
+                        folder = "legal_pdfs"
+                    elif template_choice in ("34", "35", "36", "37", "39"):
+                        media_filename = row.get("customer_pdf_file")
+                        folder = "legal_pdfs"
                     else:
-                        media_filename = row.get("borrower_pdf_file") or row.get("customer_pdf_file")
+                        media_filename = row.get("customer_pdf_file")
+                        folder = "legal_pdfs"
 
                 # ----------------------------------------------
-                # SAVE MESSAGE LOG (IMPORTANT)
+                # SAVE MESSAGE LOG
                 # ----------------------------------------------
                 log = SmsWhatsAppLog2.objects.create(
+                    job_id=job_id,
                     customer_name=name,
                     mobile=mobile,
                     template_name=template_choice,
@@ -296,14 +299,20 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
                 # ----------------------------------------------
                 # ATTACH LEGAL DOCUMENT TO LOG
                 # ----------------------------------------------
-                if content_type == "document" and media_filename:
+                if content_type == "document" and media_filename and folder:
                     try:
-                        with open_legal_pdf2(media_filename) as f:
+                        print("TEMPLATE:", template_choice)
+                        print("FOLDER:", folder)
+                        print("FILE:", media_filename)
+
+                        with open_legal_pdf2(media_filename, folder) as f:
                             log.media_file.save(
                                 media_filename,
                                 ContentFile(f.read()),
                                 save=True
                             )
+                        print("✅ PDF attached to log successfully")
+
                     except Exception as e:
                         logger.warning(
                             "Failed attaching legal PDF %s for mobile %s: %s",
@@ -323,6 +332,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
                 err_msg = f"{err.get('code')} - {err.get('message')}"
 
                 SmsWhatsAppLog2.objects.create(
+                    job_id=job_id,
                     customer_name=name,
                     mobile=mobile,
                     template_name=template_choice,
@@ -345,6 +355,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
             logger.exception("HTTP error job2 sending to %s: %s", mobile, e)
 
             SmsWhatsAppLog2.objects.create(
+                job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
                 template_name=template_choice,
@@ -362,7 +373,7 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
         # RATE LIMIT PROTECTION
         # ----------------------------------------------
         time.sleep(0.5)
-
+        
     # --------------------------------------------------
     # UPDATE JOB COUNTERS
     # --------------------------------------------------
@@ -405,10 +416,11 @@ def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, s
         job_id, start, end, local_success, local_failed
     )
 
+
 # ==================================================
-# FINALIZER (FIXED WITH ANTI-DUPLICATE CHECK)
+# FINALIZER
 # ==================================================
-@shared_task(bind=True)
+@shared_task(bind=True, queue="whatsapp_secondary")
 def finalize_bulk_job2(self, job_id):
 
     try:
@@ -416,20 +428,61 @@ def finalize_bulk_job2(self, job_id):
     except BulkJob2.DoesNotExist:
         return
 
-    # PREVENT RE-FINALIZING
-    if job.status == "Completed":
-        logger.info(f"Job2 {job_id} already completed, skipping finalize")
+    # Prevent double execution
+    if job.success_report and job.failed_report:
         return
 
-    total = job.total_customers or 0
-    sent = job.sent_count or 0
+    success_qs = SmsWhatsAppLog2.objects.filter(
+        job_id=job_id,
+        status__in=["Sent", "Delivered"]
+    )
 
-    if sent < total:
-        logger.info("Job2 %s still running (%s/%s)", job_id, sent, total)
-        return
+    failed_qs = SmsWhatsAppLog2.objects.filter(
+        job_id=job_id,
+        status="Failed"
+    )
 
+    success_df = pd.DataFrame(list(success_qs.values()))
+    failed_df = pd.DataFrame(list(failed_qs.values()))
+
+    # 🔥 REMOVE TIMEZONE FROM DATETIME COLUMNS
+    for df in [success_df, failed_df]:
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.tz_localize(None)
+
+    success_path = f"reports2/{job_id}_success.xlsx"
+    failed_path = f"reports2/{job_id}_failed.xlsx"
+
+    success_buffer = io.BytesIO()
+    failed_buffer = io.BytesIO()
+
+    if not success_df.empty:
+        success_df.to_excel(success_buffer, index=False)
+    if not failed_df.empty:
+        failed_df.to_excel(failed_buffer, index=False)
+
+    if default_storage.exists(success_path):
+        default_storage.delete(success_path)
+    if default_storage.exists(failed_path):
+        default_storage.delete(failed_path)
+
+    if not success_df.empty:
+        default_storage.save(success_path, ContentFile(success_buffer.getvalue()))
+        job.success_report = success_path
+    
+    if not failed_df.empty:
+        default_storage.save(failed_path, ContentFile(failed_buffer.getvalue()))
+        job.failed_report = failed_path
+    
     job.status = "Completed"
     job.completed_at = timezone.now()
-    job.save(update_fields=["status", "completed_at"])
 
-    logger.info("FINALIZED job2 %s", job_id)
+    job.save(update_fields=[
+        "success_report",
+        "failed_report",
+        "status",
+        "completed_at"
+    ])
+
+    logger.info("Job %s COMPLETED and reports generated", job_id)

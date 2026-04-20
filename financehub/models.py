@@ -98,6 +98,7 @@ class CollectionAllocations(models.Model):
 # financehub/models.py
 
 class Clu(models.Model):
+
     employee_id = models.CharField(max_length=100, null=True, blank=True)
     employee_name = models.CharField(max_length=255, null=True, blank=True)
     employee_status = models.CharField(max_length=255, null=True, blank=True)
@@ -118,6 +119,8 @@ class Clu(models.Model):
 
     reason_for_visit = models.TextField(null=True, blank=True)
     remarks_for_visit_away_from_cust = models.TextField(null=True, blank=True)
+
+    other_party_mobile_number = models.CharField(max_length=50, null=True, blank=True)
     time_spent_in_visit_location_in_mins = models.CharField(max_length=50, null=True, blank=True)
 
     loan_number = models.CharField(max_length=150, null=True, blank=True, db_index=True)
@@ -132,7 +135,6 @@ class Clu(models.Model):
     payment_towards = models.CharField(max_length=255, null=True, blank=True)
     charges = models.CharField(max_length=100, null=True, blank=True)
     emi_paid = models.CharField(max_length=100, null=True, blank=True)
-    total_penalty_charges = models.CharField(max_length=100, null=True, blank=True)
     total_amount_paid = models.CharField(max_length=100, null=True, blank=True)
 
     payment_date = models.CharField(max_length=100, null=True, blank=True)
@@ -160,6 +162,17 @@ class Clu(models.Model):
     due_date = models.CharField(max_length=100, null=True, blank=True)
 
     new_mobile_no = models.CharField(max_length=50, null=True, blank=True)
+
+    asset_condition = models.CharField(max_length=255, null=True, blank=True)
+    fir_registered = models.CharField(max_length=50, null=True, blank=True)
+    insurance_active = models.CharField(max_length=50, null=True, blank=True)
+    asset_located = models.CharField(max_length=50, null=True, blank=True)
+    trace_status = models.CharField(max_length=255, null=True, blank=True)
+    seizure_reason = models.TextField(null=True, blank=True)
+    deceased_type = models.CharField(max_length=255, null=True, blank=True)
+    reason_for_service = models.TextField(null=True, blank=True)
+    workshop_outstanding_amt = models.CharField(max_length=100, null=True, blank=True)
+
     visit_allocated = models.CharField(max_length=50, null=True, blank=True)
 
     visit_latitude_longitude = models.CharField(max_length=255, null=True, blank=True)
@@ -176,7 +189,6 @@ class Clu(models.Model):
     l3_manager_emp_name = models.CharField(max_length=255, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-
     class Meta:
         db_table = "clu"
 
@@ -463,6 +475,7 @@ class DueNotice(models.Model):
     return_date = models.DateField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    return_reason = models.TextField(null=True,blank=True)
 
     class Meta:
         db_table = "duenotice"

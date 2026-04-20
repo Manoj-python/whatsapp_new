@@ -45,6 +45,35 @@
         }
 
         .badge { font-size: 11px; }
+        .sortable {
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.arrows {
+    font-size: 10px;
+    margin-left: 6px;
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 8px;
+}
+
+.arrow-up,
+.arrow-down {
+    color: #bbb;   /* default grey */
+}
+
+/* ASC → highlight UP only */
+.sortable.active-asc .arrow-up {
+    color: green;
+}
+
+/* DESC → highlight DOWN only */
+.sortable.active-desc .arrow-down {
+    color: red;
+}
     </style>
 </head>
 
@@ -71,7 +100,12 @@
         <span class="badge bg-success">PAID {{ status_counts.PAID|default:0 }}</span>
         <span class="badge bg-warning text-dark">PARTLY {{ status_counts.PARTLY_PAID|default:0 }}</span>
         <span class="badge bg-danger">NOT PAID {{ status_counts.NOT_PAID|default:0 }}</span>
+
+          
+ 
+
     </div>
+
 
     <!-- FILTER FORM (ONLY ONE) -->
     <form method="get" class="filter-card mb-2">
@@ -96,6 +130,11 @@
                     <div class="col-lg-2 col-md-3 col-sm-6">
                         <label>Visit Emp ID</label>
                         <input type="text" name="empid" class="form-control" value="{{ empid }}">
+                    </div>
+
+                     <div class="col-lg-2 col-md-3 col-sm-6">
+                        <label>Company</label>
+                        <input type="text" name="company" class="form-control" value="{{ company }}">
                     </div>
 
                     <div class="col-lg-2 col-md-3 col-sm-6">
@@ -123,6 +162,8 @@
                         <input type="text" name="search_empid" class="form-control form-control-sm"
                                value="{{ search_empid }}">
                     </div>
+
+                    
 
                     <div class="col-lg-2 col-md-3 col-sm-6">
                         <label>Loan Status</label>
@@ -154,6 +195,16 @@
                             <option value="">All</option>
                             {% for c in centres %}
                                 <option value="{{ c }}" {% if c == centre_name %}selected{% endif %}>{{ c }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6">
+                        <label>Type Of Notices</label>
+                        <select name="type_of_notice" class="form-select">
+                            <option value="">All</option>
+                            {% for t in notice_types %}
+                                <option value="{{ t }}" {% if c == type_of_notice %}selected{% endif %}>{{ t }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -260,69 +311,69 @@
         <table class="table table-bordered table-hover table-sm mb-0">
              <thead>
                 <tr class="text-center">
-                    <th>ID</th>
-                    <th>Loan No</th>
-                    <th>Customer</th>
-                    <th>Vehicle</th>
-                    <th>CM</th>
-                    <th>TL</th>
-                    <th>Exec</th>
-                    <th>Company</th>
-                    <th>Division</th>
-                    <th>BLC Case</th>
-                    <th>EMI</th>
-                    <th>Loan Status</th>
-                    <th>FD Desc</th>
-                    <th>FD Status</th>
-                    <th>FD Group</th>
-                    <th>FD Time</th>
+                    <th class="sortable" data-field="id">ID</th>
+<th class="sortable" data-field="loan_number">Loan No</th>
+<th class="sortable" data-field="customer_name">Customer</th>
+<th class="sortable" data-field="vehicle_no">Vehicle</th>
+<th class="sortable" data-field="cm">CM</th>
+<th class="sortable" data-field="tl">TL</th>
+<th class="sortable" data-field="exec">Exec</th>
+<th class="sortable" data-field="company">Company</th>
+<th class="sortable" data-field="division">Division</th>
+<th class="sortable" data-field="blc_case">BLC Case</th>
+<th class="sortable" data-field="emi_due_2">EMI</th>
+<th class="sortable" data-field="loan_status">Loan Status</th>
+<th class="sortable" data-field="Freshdesk_Description">FD Desc</th>
+<th class="sortable" data-field="Freshdesk_Status">FD Status</th>
+<th class="sortable" data-field="Freshdesk_Group">FD Group</th>
+<th class="sortable" data-field="Freshdesk_Createdtime">FD Time</th>
 
-                    <th>PTP</th>
-                    <th>PTP Date</th>
-                    <th>PTP Remarks</th>
+                    <th class="sortable" data-field="Dialer_PTP">PTP</th>
+                    <th class="sortable" data-field="Dialer_PTP_Date">PTP Date</th>
+                    <th class="sortable" data-field="Dialer_PTP_Remarks">PTP Remarks</th>
 
-                    <th>RTP</th>
-                    <th>RTP Date</th>
-                    <th>RTP Remarks</th>
+                    <th class="sortable" data-field="Dialer_PTP">RTP</th>
+                    <th class="sortable" data-field="Dialer_PTP">RTP Date</th>
+                    <th class="sortable" data-field="Dialer_PTP">RTP Remarks</th>
 
-                    <th>Third Party</th>
-                    <th>TP Date</th>
-                    <th>TP Remarks</th>
+                    <th class="sortable" data-field="Dialer_Thirdparty">Third Party</th>
+                    <th class="sortable" data-field="Dialer_Thirdparty_Date">TP Date</th>
+                    <th class="sortable" data-field="Dialer_Thirdparty_Remarks">TP Remarks</th>
 
-                    <th>Other</th>
-                    <th>Other Date</th>
-                    <th>Other Remarks</th>
+                    <th class="sortable" data-field="Dialer_other">Other</th>
+                    <th class="sortable" data-field="Dialer_other_Date">Other Date</th>
+                    <th class="sortable" data-field="Dialer_other_Remarks">Other Remarks</th>
 
-                    <th>Send To</th>
-                    <th>Bar No</th>
-                    <th>Notice Date</th>
-                    <th>Notice Type</th>
-                    <th>Notice Status</th>
-                    <th>Delivery Date</th>
-                    <th>Return Date</th>
-                    <th>Visitor Purpose</th>
+                    <th class="sortable" data-field="notice_send_to">Send To</th>
+                    <th class="sortable" data-field="notice_bar_number">Bar No</th>
+                    <th class="sortable" data-field="notice_date">Notice Date</th>
+                    <th class="sortable" data-field="notice_type">Notice Type</th>
+                    <th class="sortable" data-field="notice_status">Notice Status</th>
+                    <th class="sortable" data-field="notice_delivery_date">Delivery Date</th>
+                    <th class="sortable" data-field="notice_return_date">Return Date</th>
+                    <th class="sortable" data-field="visitor_purpose">Visitor Purpose</th>
                     <th>Visitor Remark</th>
 
 
 
 
                     <!-- ✅ NEW PAYMENT COLUMNS -->
-                    <th>Payment Source</th>
-                    <th>Payment Status</th>
-                    <th>Payment Date</th>
-                    <th>Payment Amount</th>
+                    <th class="sortable" data-field="payment_source">Payment Source</th>
+                    <th class="sortable" data-field="payment_status">Payment Status</th>
+                    <th class="sortable" data-field="payment_date">Payment Date</th>
+                    <th class="sortable" data-field="payment_amount">Payment Amount</th>
 
-                    <th>Received</th>
-                    <th>Emp</th>
-                    <th>Visit</th>
-                    <th>Latest CLU</th>
-                    <th>Status</th>
+                    <th class="sortable" data-field="received_date">Received</th>
+                    <th class="sortable" data-field="empid">Emp</th>
+                    <th class="sortable" data-field="latest_visited_on">Visit</th>
+                    <th class="sortable" data-field="visit_status">Latest CLU</th>
+                    <th class="sortable" data-field="has_schedule">Status</th>
                     <th>Action</th>
                 </tr>
             </thead>
 
 
-            <tbody>
+            <tbody id="tableBody">
             {% for r in data %}
             <tr class="{% if r.has_schedule %}row-scheduled{% endif %}">
                 <td class="text-center">{% if r.obj %}{{ r.obj.id }}{% else %}-{% endif %}</td>
@@ -546,6 +597,60 @@
         {% endif %}
     </ul>
 </nav>
+<script>
+    document.querySelectorAll('.sortable').forEach(th => {
+    th.innerHTML += `
+       <span class="arrows">
+    <span class="arrow-up">▲</span>
+    <span class="arrow-down">▼</span>
+</span>
+    `;
+
+    th.addEventListener('click', () => {
+        sortTable(th.dataset.field, th);
+    });
+});
+
+let currentSort = {
+    field: null,
+    order: "asc"
+};
+
+function fetchData() {
+    const url = new URL(window.location.href);
+
+    url.searchParams.set("sort_field", currentSort.field);
+    url.searchParams.set("sort_order", currentSort.order);
+
+    fetch(url)
+        .then(res => res.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+
+            const newTable = doc.querySelector("#tableBody");
+            document.querySelector("#tableBody").innerHTML = newTable.innerHTML;
+        });
+}
+
+function sortTable(field, th) {
+
+    if (currentSort.field === field) {
+        currentSort.order = currentSort.order === "asc" ? "desc" : "asc";
+    } else {
+        currentSort.field = field;
+        currentSort.order = "asc";
+    }
+
+    document.querySelectorAll('.sortable').forEach(el => {
+        el.classList.remove('active-asc', 'active-desc');
+    });
+
+    th.classList.add(currentSort.order === "asc" ? "active-asc" : "active-desc");
+
+    fetchData();
+}
+</script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
