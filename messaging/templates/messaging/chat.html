@@ -289,7 +289,8 @@ body{background:#f3f4f6;color:#111}
   let loadedPages = new Set();
   let totalPages = 1;
   let contactPage = 1;
-
+  let lastMessageId = null;
+let hasMoreMessages = true;
   // virtualization
   let messageHeights = [];
   let messageOffsets = [];
@@ -801,29 +802,31 @@ bubble.innerHTML = `
     }
 
     else if (d.type === 'messages.page'){
-      if (d.mobile !== selectedMobile) return;
+  if (d.mobile !== selectedMobile) return;
 
-      const page = d.meta?.page || 1;
-      totalPages = d.meta?.total_pages || totalPages;
+  const list = d.messages || [];
+  hasMoreMessages = d.has_more;
 
-      const list = d.messages || [];
-      if (page === 1){
-        messages = list.slice();
-        msgMap.clear();
+  if (!lastMessageId){
+    messages = list;
+    msgMap.clear();
 
-        for (const m of messages) msgMap.set(getMsgKey(m), true);
-        messageHeights = new Array(messages.length).fill(null);
-
-        renderVisibleMessages();
-        setTimeout(()=> chatViewport.scrollTop = chatViewport.scrollHeight, 30);
-      } else {
-        prependMessages(list.sort((a,b)=> new Date(a.sent_at) - new Date(b.sent_at)));
-      }
-
-      loadedPages.add(page);
-
+    for (const m of messages){
+      msgMap.set(getMsgKey(m), true);
     }
 
+    messageHeights = new Array(messages.length).fill(null);
+
+    renderVisibleMessages();
+
+    setTimeout(() => {
+      chatViewport.scrollTop = chatViewport.scrollHeight;
+    }, 30);
+
+  } else {
+    prependMessages(list);
+  }
+}
     // ====== NEW MESSAGE ======
     else if (d.type === 'new.message'){
       const m = d.message;
@@ -917,6 +920,9 @@ bubble.innerHTML = `
             `Uploading ${d.filename}: ${d.progress}%`;
       }
     }
+    else if (d.type === 'contact.update') {
+    upsertContact(d.contact, true);
+}
   }
 
   // ==== CONTACT SELECT ====
@@ -951,25 +957,21 @@ bubble.innerHTML = `
 
     sendWS({type:'join', mobile:m});
     sendWS({type:'mark_read', mobile:m});
-    sendWS({type:'get_messages', mobile:m, page:1, page_size:PAGE_SIZE});
+    sendWS({type:'get_messages', mobile:m, last_id: null});
   }
 
   // ==== SCROLL FOR PAGINATION ====
-  chatViewport.addEventListener('scroll', ()=>{
-    renderVisibleMessages();
+  chatViewport.addEventListener("scroll", () => {
+  if (chatViewport.scrollTop === 0 && hasMoreMessages && messages.length) {
+    lastMessageId = messages[0].id;
 
-    if (chatViewport.scrollTop < estimatedHeight*6 && selectedMobile){
-      let nextPage = loadedPages.size ? Math.max(...loadedPages)+1 : 2;
-      if (nextPage > totalPages) return;
-
-      sendWS({
-        type:'get_messages',
-        mobile:selectedMobile,
-        page: nextPage,
-        page_size: PAGE_SIZE
-      });
-    }
-  });
+    sendWS({
+      type: "get_messages",
+      mobile: selectedMobile,
+      last_id: lastMessageId
+    });
+  }
+});
 
 
   // ==== CONTACT SEARCH ====

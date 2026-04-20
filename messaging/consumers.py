@@ -36,119 +36,65 @@ def ws_group_name(mobile: str) -> str:
 # -------------------------
 # Database Queries - FIXED for MariaDB
 # -------------------------
+from django.core.cache import cache
+from .models import ChatContact
+import re
+
 @sync_to_async
-def get_contacts_page(page=1, size=100, q=""):
-    """
-    Get contacts with pagination and search - FIXED for MariaDB
-    """
-    # First, get distinct mobiles with their latest message time
-    mobile_list = SmsWhatsAppLog.objects.values('mobile').annotate(
-        last_time=Max('sent_at')
-    ).order_by('-last_time').values_list('mobile', flat=True)[:1000]
+def get_contacts_page(page=1, size=30, q=""):
+    cache_key = f"contacts:{page}:{q}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
 
-    # Then get the actual messages for these mobiles
-    contacts = []
-    for mobile in mobile_list:
-        # Get the latest message for this mobile
-        latest_msg = SmsWhatsAppLog.objects.filter(
-            mobile=mobile
-        ).order_by('-sent_at').first()
+    qs = ChatContact.objects.all().order_by("-last_time")
 
-        if latest_msg:
-            # Count unread messages
-            unread = SmsWhatsAppLog.objects.filter(
-                mobile=mobile,
-                message_type='Received',
-                status='Unread'
-            ).count()
-
-            last_msg = latest_msg.sent_text_message or ""
-            last_type = latest_msg.message_type or ""
-            last_status = latest_msg.status or ""
-
-            # Media preview
-            if latest_msg.content_type in ['image', 'video', 'audio']:
-                last_msg = f"[{latest_msg.content_type}]"
-            elif latest_msg.content_type == 'document':
-                last_msg = "[Document]"
-
-            contacts.append({
-                "mobile": format_mobile(mobile),
-                "last_time": latest_msg.sent_at.isoformat() if latest_msg.sent_at else "",
-                "last_msg": last_msg[:60],
-                "last_type": last_type,
-                "last_status": last_status,
-                "unread": unread,
-            })
-
-    # Apply search filter if needed
     if q:
-        q = q.strip()
         digits = re.sub(r"\D", "", q)
         if digits:
-            # Filter by mobile digits
-            contacts = [c for c in contacts if digits in digits_only(c["mobile"])]
+            qs = qs.filter(mobile__startswith=digits)
         else:
-            # Filter by message text
-            contacts = [c for c in contacts if q.lower() in c["last_msg"].lower()]
+            qs = qs.filter(last_msg__icontains=q)
 
-    # Paginate
-    total = len(contacts)
-    start = (page - 1) * size
-    end = start + size
-    page_contacts = contacts[start:end]
+    total = qs.count()
+    qs = qs[(page-1)*size:page*size]
 
-    return {
-        "contacts": page_contacts,
-        "total_pages": (total + size - 1) // size
+    data = {
+        "contacts": list(qs.values()),
+        "total_pages": (total + size - 1)//size
     }
 
+    cache.set(cache_key, data, 20)
+    return data
+
+
+
 @sync_to_async
-def get_messages_page_from_db(mobile, page=1, size=30):
-    """
-    Get messages for a specific mobile with pagination
-    """
-    mobile_norm = format_mobile(mobile)
+def get_messages_page_from_db(mobile, last_id=None, size=30):
+    mobile = format_mobile(mobile)
 
-    # Get total count for pagination
-    total = SmsWhatsAppLog.objects.filter(mobile=mobile_norm).count()
+    qs = SmsWhatsAppLog.objects.filter(mobile=mobile)
 
-    # Get paginated messages
-    qs = SmsWhatsAppLog.objects.filter(
-        mobile=mobile_norm
-    ).order_by('-sent_at').values(
-        'id', 'mobile', 'sent_text_message', 'message_type',
-        'sent_at', 'message_id', 'content_type', 'media_file',
-        'status', 'customer_name'
-    )[(page-1)*size:page*size]
+    if last_id:
+        qs = qs.filter(id__lt=last_id)
 
-    messages = list(qs)[::-1]  # Reverse to show oldest first
+    qs = qs.order_by('-id')[:size]
 
-    result = []
-    for m in messages:
-        media_url = ""
-        if m.get('media_file'):
-            try:
-                media_url = default_storage.url(m['media_file'])
-            except:
-                pass
-
-        result.append({
-            "id": m['id'],
-            "mobile": m['mobile'],
-            "sent_text_message": m['sent_text_message'] or "",
-            "message_type": m['message_type'],
-            "sent_at": m['sent_at'].isoformat() if m['sent_at'] else "",
-            "message_id": m['message_id'] or "",
-            "content_type": m['content_type'] or "text",
-            "media_file": media_url,
-            "status": m['status'] or "",
-            "sender_name": m['customer_name'] or "",
-        })
+    messages = list(qs)[::-1]
 
     return {
-        "messages": result,
-        "total_pages": (total + size - 1) // size
+        "messages": [{
+            "id": m.id,
+            "mobile": m.mobile,
+            "sent_text_message": m.sent_text_message or "",
+            "message_type": m.message_type,
+            "sent_at": m.sent_at.isoformat(),
+            "message_id": m.message_id or "",
+            "content_type": m.content_type,
+            "media_file": m.media_file.url if m.media_file else "",
+            "status": m.status or "",
+        } for m in messages],
+        "has_more": len(messages) == size
     }
 
 @sync_to_async
@@ -380,13 +326,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         """Handle get messages request"""
         try:
             mobile = content.get("mobile")
-            page = int(content.get("page", 1))
-            size = int(content.get("page_size", 30))
-
+            # page = int(content.get("page", 1))
+            # size = int(content.get("page_size", 30))
+            last_id = content.get("last_id")
             if not mobile:
                 return
 
-            res = await get_messages_page_from_db(mobile, page, size)
+            res = await get_messages_page_from_db(mobile, last_id)
 
             if self.connection_active:
                 await self.send_json({
@@ -457,7 +403,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             if not mobile:
                 return
 
-            # Get agent name
+        # ===== GET AGENT NAME =====
             agent_name = None
             try:
                 sid = self.scope["session"].get("messaging_user")
@@ -469,27 +415,61 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             except:
                 pass
 
-            # Create optimistic log
+        # ===== CREATE MESSAGE (ONLY ONCE) =====
             created = await create_outgoing_log(mobile, text, "", content_type)
             created["sender_name"] = agent_name
 
-            # Show message immediately
+        # ===== 🔥 UPDATE CONTACT TABLE =====
+            from django.utils import timezone
+            from .models import ChatContact
+
+            await sync_to_async(ChatContact.objects.update_or_create)(
+                mobile=mobile,
+                defaults={
+                "last_time": timezone.now(),
+                "last_msg": text or "",
+                "last_type": "Sent",
+                "last_status": "Sent",
+            }
+        )
+
+        # ===== 🔥 REAL-TIME CONTACT UPDATE =====
+            await self.channel_layer.group_send(
+                "contacts_group",
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": mobile,
+                    "last_msg": text or "",
+                    "last_time": str(timezone.now()),
+                    "last_type": "Sent",
+                    "last_status": "Sent",
+                    "unread": 0
+                }
+            }
+        )
+
+        # ===== SHOW MESSAGE IN CHAT =====
             gm = ws_group_name(mobile)
             if gm and self.connection_active:
                 await self.channel_layer.group_send(
-                    f"chat_{gm}",
-                    {"type": "new_message", "message": created}
-                )
-
-            # Send to WhatsApp in background
-            asyncio.create_task(
-                self._send_to_whatsapp_background(
-                    mobile, text, content_type, created["id"], agent_name
-                )
+                f"chat_{gm}",
+                {"type": "new_message", "message": created}
             )
 
+        # ===== SEND TO WHATSAPP (BACKGROUND) =====
+            asyncio.create_task(
+                self._send_to_whatsapp_background(
+                mobile, text, content_type, created["id"], agent_name
+            )
+        )
+
+        # ===== ACK =====
             if self.connection_active:
-                await self.send_json({"type": "sent_ok", "local_id": created["id"]})
+                await self.send_json({
+                "type": "sent_ok",
+                "local_id": created["id"]
+            })
 
         except Exception as e:
             print(f"Error in _handle_send_message: {e}")
@@ -580,3 +560,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "mobile": event.get("mobile"),
                 "state": event.get("state", False)
             })
+    async def contact_update(self, event):
+        if self.connection_active:
+            await self.send_json({
+            "type": "contact.update",
+            "contact": event["contact"]
+        })

@@ -469,6 +469,15 @@ def send_reply_api(request):
 # -----------------------------------------------------
 @csrf_exempt
 def whatsapp_webhook(request):
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    from django.utils import timezone
+    from django.db import transaction
+    from django.db.models import F
+    from .models import SmsWhatsAppLog, ChatContact
+    from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
+    import json
+
     channel_layer = get_channel_layer()
 
     # ---------- VERIFY TOKEN (GET) ----------
@@ -492,9 +501,6 @@ def whatsapp_webhook(request):
                 for change in entry.get("changes", []):
                     value = change.get("value", {})
 
-                    # ======================================
-                    #          1. INCOMING MESSAGES
-                    # ======================================
                     messages = value.get("messages", []) or []
                     contacts = value.get("contacts", []) or []
 
@@ -505,13 +511,6 @@ def whatsapp_webhook(request):
 
                         # ---- Deduplicate ----
                         if msg_id and SmsWhatsAppLog.objects.filter(message_id=msg_id).exists():
-                            # Only update presence
-                            gm = ws_group(mobile)
-                            if gm:
-                                async_to_sync(channel_layer.group_send)(
-                                    f"chat_{gm}",
-                                    {"type": "presence.update", "mobile": mobile, "status": "online"}
-                                )
                             continue
 
                         msg_type = msg.get("type", "text")
@@ -522,9 +521,8 @@ def whatsapp_webhook(request):
                         # ---- TEXT ----
                         if msg_type == "text":
                             text_body = msg["text"].get("body", "")
-                            content_type = "text"
 
-                        # ---- INTERACTIVE (button / list) ----
+                        # ---- INTERACTIVE ----
                         elif msg_type == "interactive":
                             interactive = msg.get("interactive", {})
                             content_type = "interactive"
@@ -534,19 +532,16 @@ def whatsapp_webhook(request):
                             elif interactive.get("type") == "list_reply":
                                 text_body = interactive["list_reply"].get("title", "")
 
-                        # ---- MEDIA (image / video / audio / doc) ----
+                        # ---- MEDIA ----
                         elif msg_type in ("image", "video", "audio", "document"):
                             media_id = msg[msg_type].get("id")
                             content_type = msg_type
-                            text_body = f"[{msg_type.title()}]"  # placeholder
-
-                            # Download actual media
+                            text_body = f"[{msg_type.title()}]"
                             media_file = download_whatsapp_media(media_id)
 
                         # ======================================
-                        #       SAVE MESSAGE TO DATABASE
+                        # SAVE MESSAGE
                         # ======================================
-                        from django.db import transaction
                         with transaction.atomic():
                             log = SmsWhatsAppLog.objects.create(
                                 customer_name=(contacts[0].get("profile", {}).get("name") if contacts else ""),
@@ -565,7 +560,48 @@ def whatsapp_webhook(request):
                                 log.save()
 
                         # ======================================
-                        #       BROADCAST REAL-TIME NEW MESSAGE
+                        # 🔥 UPDATE CONTACT TABLE (SAFE)
+                        # ======================================
+                        obj, created = ChatContact.objects.get_or_create(
+                            mobile=mobile,
+                            defaults={
+                                "last_time": timezone.now(),
+                                "last_msg": text_body or "",
+                                "last_type": "Received",
+                                "last_status": "Unread",
+                                "unread": 1,
+                            }
+                        )
+
+                        if not created:
+                            ChatContact.objects.filter(mobile=mobile).update(
+                                last_time=timezone.now(),
+                                last_msg=text_body or "",
+                                last_type="Received",
+                                last_status="Unread",
+                                unread=F("unread") + 1
+                            )
+
+                        # ======================================
+                        # 🔥 REAL-TIME CONTACT UPDATE
+                        # ======================================
+                        async_to_sync(channel_layer.group_send)(
+                            "contacts_group",
+                            {
+                                "type": "contact.update",
+                                "contact": {
+                                    "mobile": mobile,
+                                    "last_msg": text_body or "",
+                                    "last_time": timezone.now().isoformat(),
+                                    "last_type": "Received",
+                                    "last_status": "Unread",
+                                    "unread": obj.unread + 1 if not created else 1
+                                }
+                            }
+                        )
+
+                        # ======================================
+                        # REAL-TIME CHAT MESSAGE
                         # ======================================
                         gm = ws_group(mobile)
                         if gm:
@@ -587,63 +623,11 @@ def whatsapp_webhook(request):
                                 }
                             )
 
-                        # Update presence + contacts
+                        # Presence update
                         async_to_sync(channel_layer.group_send)(
                             "presence_group",
                             {"type": "presence.update", "mobile": mobile, "status": "online"}
                         )
-                        async_to_sync(channel_layer.group_send)(
-                            "contacts_group",
-                            {"type": "presence.update", "mobile": mobile, "status": "updated"}
-                        )
-
-                    # ======================================
-                    #          2. DELIVERY RECEIPTS
-                    # ======================================
-                    statuses = value.get("statuses", []) or []
-
-                    for st in statuses:
-
-                        mid = st.get("id")
-                        raw_status = (st.get("status") or "").lower()
-
-                        # Normalize WA ticks
-                        if raw_status == "sent":
-                            norm = "Sent"
-                        elif raw_status == "delivered":
-                            norm = "Delivered"
-                        elif raw_status == "read":
-                            norm = "Read"
-                        else:
-                            norm = "Failed"
-
-                        recipient = st.get("recipient_id") or st.get("recipient") or ""
-                        mobile = format_mobile(recipient) if recipient else ""
-
-                        # ---- Update DB ----
-                        if mid:
-                            SmsWhatsAppLog.objects.filter(message_id=mid).update(status=norm)
-
-                        # ---- Broadcast REAL-TIME tick update ----
-                        broadcast_delivery(mobile, mid, norm)
-
-                        # ---- Handle errors ----
-                        errors = st.get("errors", []) or []
-                        if errors:
-                            err = errors[0]
-                            err_msg = f"{err.get('code')} - {err.get('title')}: {err.get('message')}"
-                            SmsWhatsAppLog.objects.filter(message_id=mid).update(error_message=err_msg)
-
-                            async_to_sync(channel_layer.group_send)(
-                                "delivery_group",
-                                {
-                                    "type": "delivery.update",
-                                    "message_id": mid,
-                                    "status": "Failed",
-                                    "mobile": mobile,
-                                    "error": err_msg
-                                }
-                            )
 
             return JsonResponse({"status": "received"})
 
@@ -729,8 +713,7 @@ def contacts_api(request):
 def mark_read(request, mobile):
     try:
         mobile_norm = format_mobile(mobile)
-        SmsWhatsAppLog.objects.filter(mobile=mobile_norm, message_type="Received", status="Unread").update(status="Read")
-
+        ChatContact.objects.filter(mobile=mobile).update(unread=0)
         channel_layer = get_channel_layer()
         gm = ws_group(mobile_norm)
         if gm:

@@ -39,7 +39,7 @@ class SmsWhatsAppLog(models.Model):
     class Meta:
         indexes = [
             # For contact list queries (mobile + latest message)
-            models.Index(fields=['mobile', '-sent_at'], name='idx_mobile_sent_at'),
+            models.Index(fields=['mobile', '-sent_at', '-id'], name='idx_mobile_sent_at'),
             
             # For unread message counts
             models.Index(fields=['message_type', 'status'], name='idx_type_status'),
@@ -84,3 +84,15 @@ class BulkJob(models.Model):
 
     def __str__(self):
         return f"{self.template_name} ({self.job_id})"
+
+class ChatContact(models.Model):
+    mobile = models.CharField(max_length=30, unique=True, db_index=True)
+    last_time = models.DateTimeField(db_index=True)
+    last_msg = models.TextField(blank=True, null=True)
+    last_type = models.CharField(max_length=10, blank=True, null=True)
+    last_status = models.CharField(max_length=50, blank=True, null=True)
+    unread = models.IntegerField(default=0)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['-last_time']),]
