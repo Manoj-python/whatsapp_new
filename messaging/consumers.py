@@ -382,7 +382,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     "mobile": mobile,
                     "messages": res["messages"],
                     "has_more": res["has_more"],
-                    "is_search": res["is_search"] 
+                    # "is_search": res["is_search"] 
                 })
         except Exception as e:
             print(f"Error in _handle_get_messages: {e}")

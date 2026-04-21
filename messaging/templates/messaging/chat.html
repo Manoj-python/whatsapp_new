@@ -1046,29 +1046,32 @@ bubble.innerHTML = `
     }
 
     else if (d.type === 'messages.page'){
-      if (d.mobile !== selectedMobile) return;
+  if (d.mobile !== selectedMobile) return;
 
-      const page = d.meta?.page || 1;
-      totalPages = d.meta?.total_pages || totalPages;
+  const list = d.messages || [];
 
-      const list = d.messages || [];
-      if (page === 1){
-        messages = list.slice();
-        msgMap.clear();
+  if (!messages.length){
+    // first load
+    messages = list;
+    msgMap.clear();
 
-        for (const m of messages) msgMap.set(getMsgKey(m), true);
-        messageHeights = new Array(messages.length).fill(null);
-
-        renderVisibleMessages();
-        setTimeout(()=> chatViewport.scrollTop = chatViewport.scrollHeight, 30);
-      } else {
-        prependMessages(list.sort((a,b)=> new Date(a.sent_at) - new Date(b.sent_at)));
-      }
-
-      loadedPages.add(page);
-
+    for (const m of messages){
+      msgMap.set(getMsgKey(m), true);
     }
 
+    messageHeights = new Array(messages.length).fill(null);
+
+    renderVisibleMessages();
+
+    setTimeout(()=>{
+      chatViewport.scrollTop = chatViewport.scrollHeight;
+    }, 50);
+
+  } else {
+    // load older messages
+    prependMessages(list);
+  }
+}
     // ====== NEW MESSAGE ======
     else if (d.type === 'new.message'){
       const m = d.message;
@@ -1197,7 +1200,7 @@ bubble.innerHTML = `
 
     sendWS({type:'join', mobile:m});
     sendWS({type:'mark_read', mobile:m});
-    sendWS({type:'get_messages', mobile:m, page:1, page_size:PAGE_SIZE});
+    sendWS({type:'get_messages', mobile:m, page:1,});
   }
 
   // ==== SCROLL FOR PAGINATION ====
