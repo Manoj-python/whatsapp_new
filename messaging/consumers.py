@@ -37,37 +37,78 @@ def ws_group_name(mobile: str) -> str:
 # Database Queries - FIXED for MariaDB
 # -------------------------
 from django.core.cache import cache
-from .models import ChatContact
 import re
+from asgiref.sync import sync_to_async
 
 @sync_to_async
 def get_contacts_page(page=1, size=30, q=""):
-    cache_key = f"contacts:{page}:{q}"
-    cached = cache.get(cache_key)
-    if cached:
-        return cached
+    q = (q or "").strip()
 
-    qs = ChatContact.objects.all().order_by("-last_time")
+    # 🚫 DO NOT CACHE SEARCH
+    use_cache = not q
+    cache_key = f"contacts:{page}"
 
+    if use_cache:
+        data = cache.get(cache_key)
+        if data:
+            return data
+
+    qs = ChatContact.objects.only(
+        "mobile","last_msg","last_time","last_type","last_status","unread"
+    ).order_by("-last_time")
+
+    # 🔍 SEARCH LOGIC
     if q:
+        import re
         digits = re.sub(r"\D", "", q)
+
         if digits:
-            qs = qs.filter(mobile__startswith=digits)
+            qs = qs.filter(mobile__icontains=digits)   # 🔥 FIXED
         else:
             qs = qs.filter(last_msg__icontains=q)
 
+        qs = qs[:50]   # ⚡ fast search (no pagination)
+
+        data = {
+            "contacts": [
+                {
+                    "mobile": c.mobile,
+                    "last_msg": c.last_msg or "",
+                    "last_type": c.last_type,
+                    "last_status": c.last_status,
+                    "unread": c.unread,
+                    "last_time": c.last_time.isoformat() if c.last_time else None,
+                }
+                for c in qs
+            ],
+            "total_pages": 1
+        }
+
+        return data   # 🚫 no cache
+
+    # ===== NORMAL CONTACT LIST =====
     total = qs.count()
     qs = qs[(page-1)*size:page*size]
 
     data = {
-        "contacts": list(qs.values()),
-        "total_pages": (total + size - 1)//size
+        "contacts":[
+            {
+                "mobile":c.mobile,
+                "last_msg":c.last_msg or "",
+                "last_type":c.last_type,
+                "last_status":c.last_status,
+                "unread":c.unread,
+                "last_time":c.last_time.isoformat() if c.last_time else None,
+            }
+            for c in qs
+        ],
+        "total_pages":(total+size-1)//size
     }
 
-    cache.set(cache_key, data, 20)
+    if use_cache:
+        cache.set(cache_key, data, 20)
+
     return data
-
-
 
 @sync_to_async
 def get_messages_page_from_db(mobile, last_id=None, size=30):
@@ -168,6 +209,7 @@ def send_text_via_whatsapp(to_number: str, text_body: str) -> dict:
 # -------------------------
 # MAIN CONSUMER
 # -------------------------
+from .models import *
 class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
@@ -188,7 +230,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
             # Join global groups
             await self._add_to_group("delivery_group")
-            await self._add_to_group("contacts_group")
+            await self._add_to_group("global_contacts")
             await self._add_to_group("presence_group")
             print("Joined global groups")
 
@@ -205,7 +247,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({
                 "type": "connected",
                 "message": "ws_connected",
-                "timestamp": str(timezone.now())
+                "timestamp": timezone.now().isoformat()
             })
 
             print(f"Connection successful - Duration: {timezone.now() - self.connection_start_time}")
@@ -281,7 +323,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     "type": "contacts.page",
                     "contacts": res["contacts"],
                     "page": page,
-                    "total_pages": res["total_pages"]
+                    "has_more": page < res["total_pages"] ,
                 })
         except Exception as e:
             print(f"Error in _handle_get_contacts: {e}")
@@ -339,10 +381,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     "type": "messages.page",
                     "mobile": mobile,
                     "messages": res["messages"],
-                    "meta": {
-                        "page": page,
-                        "total_pages": res["total_pages"]
-                    }
+                    "has_more": res["has_more"],
+                    "is_search": res["is_search"] 
                 })
         except Exception as e:
             print(f"Error in _handle_get_messages: {e}")
@@ -352,28 +392,61 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         """Handle mark as read request"""
         try:
             mobile = content.get("mobile")
-            if mobile and self.connection_active:
-                await mark_messages_read_db(mobile)
+            if not mobile or not self.connection_active:
+                return
 
-                gm = ws_group_name(mobile)
-                if gm:
-                    await self.channel_layer.group_send(
-                        f"chat_{gm}",
-                        {
-                            "type": "delivery.update",
-                            "message_id": "",
-                            "status": "Read",
-                            "mobile": mobile
-                        }
-                    )
+        # ===== 1️⃣ MARK MESSAGES READ =====
+            await mark_messages_read_db(mobile)
 
+        # ===== 2️⃣ UPDATE CONTACT TABLE =====
+            from django.utils import timezone
+            from django.core.cache import cache
+            from .models import ChatContact
+
+            await sync_to_async(ChatContact.objects.filter(mobile=mobile).update)(
+            unread=0,
+            last_status="Read",
+            last_time=timezone.now()
+        )
+
+        # 🔥 CLEAR CACHE (IMPORTANT)
+            cache.clear()
+
+            gm = ws_group_name(mobile)
+
+        # ===== 3️⃣ UPDATE CHAT TICKS =====
+            if gm:
                 await self.channel_layer.group_send(
-                    "contacts_group",
-                    {"type": "presence.update", "mobile": mobile, "status": "updated"}
-                )
+                    f"chat_{gm}",
+                {
+                    "type": "delivery.update",
+                    "message_id": "",   # means all messages
+                    "status": "Read",
+                    "mobile": mobile
+                }
+            )
 
-                if self.connection_active:
-                    await self.send_json({"type": "marked_read", "mobile": mobile})
+        # ===== 4️⃣ 🔥 UPDATE CONTACT LIST (FIXED) =====
+            await self.channel_layer.group_send(
+                "global_contacts",
+            {
+                "type": "contact.update",   # ✅ FIXED (NOT presence.update)
+                "contact": {
+                    "mobile": mobile,
+                    "unread": 0,
+                    "last_status": "Read",
+                    "last_time": timezone.now().isoformat()
+                }
+            }
+        )
+
+        # ===== 5️⃣ ACK =====
+            if self.connection_active:
+                await self.send_json({
+                "type": "marked_read",
+                "mobile": mobile
+            })
+
         except Exception as e:
             print(f"Error in _handle_mark_read: {e}")
             traceback.print_exc()
@@ -431,17 +504,19 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "last_type": "Sent",
                 "last_status": "Sent",
             }
-        )
+        )   
+             # ===== 🔥 CLEAR CACHE (IMPORTANT) =====
+            cache.clear()
 
         # ===== 🔥 REAL-TIME CONTACT UPDATE =====
             await self.channel_layer.group_send(
-                "contacts_group",
+                "global_contacts",
             {
                 "type": "contact.update",
                 "contact": {
                     "mobile": mobile,
                     "last_msg": text or "",
-                    "last_time": str(timezone.now()),
+                    "last_time": timezone.now().isoformat(),
                     "last_type": "Sent",
                     "last_status": "Sent",
                     "unread": 0

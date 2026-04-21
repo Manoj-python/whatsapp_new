@@ -95,4 +95,6 @@ class ChatContact(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['-last_time']),]
+            models.Index(fields=['-last_time']),
+            models.Index(fields=['mobile']),
+            ]

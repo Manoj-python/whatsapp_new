@@ -74,12 +74,13 @@ def serialize_log(m):
 
 
 def broadcast_delivery(mobile, message_id, status):
-    """
-    Normalize WhatsApp delivery statuses and broadcast via WebSocket in real-time.
-    """
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    from django.utils import timezone
+    from .models import ChatContact
+
     channel_layer = get_channel_layer()
 
-    # normalize to WhatsApp-style tick words
     status = (status or "").lower()
 
     if status == "sent":
@@ -91,7 +92,15 @@ def broadcast_delivery(mobile, message_id, status):
     else:
         norm = "Failed"
 
+    # 🔥 UPDATE CONTACT TABLE (VERY IMPORTANT)
+    ChatContact.objects.filter(mobile=mobile).update(
+        last_status=norm,
+        last_time=timezone.now()
+    )
+
     gm = ws_group(mobile)
+
+    # ===== CHAT TICKS =====
     if gm:
         async_to_sync(channel_layer.group_send)(
             f"chat_{gm}",
@@ -103,7 +112,7 @@ def broadcast_delivery(mobile, message_id, status):
             }
         )
 
-    # notify all dashboard clients
+    # ===== GLOBAL TICKS (ALL USERS) =====
     async_to_sync(channel_layer.group_send)(
         "delivery_group",
         {
@@ -114,6 +123,18 @@ def broadcast_delivery(mobile, message_id, status):
         }
     )
 
+    # ===== 🔥 CONTACT UPDATE =====
+    async_to_sync(channel_layer.group_send)(
+        "global_contacts",
+        {
+            "type": "contact.update",
+            "contact": {
+                "mobile": mobile,
+                "last_status": norm,
+                "last_time": timezone.now().isoformat()
+            }
+        }
+    )
 
 # -------------------
 # Helper: ws_group
@@ -446,7 +467,7 @@ def send_reply_api(request):
         broadcast_delivery(mobile, msg_id, "Sent")
 
         async_to_sync(channel_layer.group_send)(
-            "contacts_group",
+            "global_contacts",
             {"type": "presence.update", "mobile": mobile, "status": "updated"}
         )
 
@@ -586,16 +607,17 @@ def whatsapp_webhook(request):
                         # 🔥 REAL-TIME CONTACT UPDATE
                         # ======================================
                         async_to_sync(channel_layer.group_send)(
-                            "contacts_group",
+                            "global_contacts",
                             {
                                 "type": "contact.update",
                                 "contact": {
                                     "mobile": mobile,
                                     "last_msg": text_body or "",
-                                    "last_time": timezone.now().isoformat(),
-                                    "last_type": "Received",
+                                    
+                                    # "last_type": "Received",
                                     "last_status": "Unread",
-                                    "unread": obj.unread + 1 if not created else 1
+                                    "unread": obj.unread + 1 if not created else 1,
+                                    "last_time": timezone.now().isoformat(),
                                 }
                             }
                         )
@@ -730,7 +752,7 @@ def mark_read(request, mobile):
 
         # notify contacts to refresh unread count
         async_to_sync(channel_layer.group_send)(
-            "contacts_group",
+            "global_contacts",
             {"type": "presence.update", "mobile": mobile_norm, "status": "updated"}
         )
 

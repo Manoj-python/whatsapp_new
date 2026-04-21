@@ -17,7 +17,7 @@ load_dotenv(BASE_DIR / ".env")
 # -------------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = [
     "padmasai.info",
@@ -228,11 +228,28 @@ os.makedirs(UPLOAD_DIR_3, exist_ok=True)
 # -------------------------------------------------------
 ASGI_APPLICATION = "whatsapp_sender.asgi.application"
 
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [("127.0.0.1", 6379, 1)],
+#         },
+#     },
+# }
+# 🔥 Redis Cache
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+    }
+}
+
+# 🔥 Channels (Pub/Sub)
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379, 1)],
+            "hosts": [("127.0.0.1", 6379)],
         },
     },
 }

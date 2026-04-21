@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>SM SQUARE CREDIT SERVICES PRIVATE LIMITED</title>
+  <title>Special Cases</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -57,17 +57,19 @@ body{background:#f3f4f6;color:#111}
   height: calc(100vh - 180px) !important;
   overflow-y:auto;
   overflow-x:hidden !important;
-  padding:20px;
+  /* padding:20px; */
   position:relative;
   box-sizing:border-box;
+  
+  padding:20px 60px;
 
   /* NEW FIX — balance layout */
-  padding-left:60px !important;
-  padding-right:60px !important;
+  
 }
 
 /* Ensure wrappers never overflow horizontally */
 #messagesVirtual > div{
+  will-change: transform;
   max-width:100% !important;
   overflow-x:hidden !important;
   box-sizing:border-box;
@@ -75,65 +77,94 @@ body{background:#f3f4f6;color:#111}
 
 .msg-row{
   display:flex;
-  margin-bottom:14px
+  width:100%;
+  margin-bottom:14px;
 }
+
+.msg-row.sent{
+  justify-content:flex-end;
+}
+
 .msg-row.recv{
   justify-content:flex-start;
 }
 
-/* FIX: outgoing move more left */
-.msg-row.sent{
-  justify-content:flex-end;
-  padding-right:80px !important;
-}
-
-/* FIXED BUBBLE SIZE */
+/* FIXED Mesaage box align */   
 .bubble{
-  display:inline-block;
-  padding:10px 12px;
-  border-radius:12px;
-  max-width:45% !important;   /* REDUCED SIZE */
-  font-size:14px;
-  line-height:1.3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 
-  word-wrap:break-word;
-  overflow-wrap:break-word;
-  white-space:pre-wrap;
-  box-sizing:border-box;
+  background: #dcf8c6;
+  padding: 8px 10px;
+  border-radius: 10px;
+
+  max-width: 320px;   /* FIXED WIDTH = NO SHAKE */
+  width: fit-content;
+  margin-right: 60px;
+  font-size: 13px;
+  line-height: 1.4;
+
+  word-break: break-word;
+
+  contain: layout paint;   /* 🔥 STOPS SHAKING */
 }
 
+
+@media(max-width:768px){
+  .bubble{
+    max-width:85%;
+    font-size:14px;
+    margin-right: 10px;
+  }
+}
+/* SENT */
 .bubble.sent{
+  margin-left:auto;
   background:#dcf8c6;
-  border-top-right-radius:4px
-}
-.bubble.recv{
-  background:#fff;
-  border:1px solid #f1f1f1;
-  border-top-left-radius:4px
 }
 
+.bubble.recv{
+  margin-right:auto;
+  background:#fff;
+}
+
+/* META (time + ticks) */
 .bubble .meta{
   display:flex;
-  align-items:center;
   justify-content:flex-end;
-  gap:6px;
-  margin-top:6px;
+  font-size:11px;
+  color:#667781;
+  margin-top:2px;
+}
+.tick{
   font-size:12px;
-  color:var(--muted)
+  margin-left:2px;
+  vertical-align:baseline;
 }
-
-.tick{font-size:13px;vertical-align:middle}
-
 /* FIX MEDIA SIZE */
-.chat-image, .chat-video, .chat-audio{
-  max-width:160px !important;  /* SMALLER */
-  width:auto !important;
-  height:auto !important;
-  border-radius:8px;
-  display:block;
-  cursor:zoom-in;
+.chat-image,
+.chat-video{
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 3 / 4;   /* 🔥 FIX HEIGHT BEFORE LOAD */
+  object-fit: cover;
+
+  border-radius: 10px;
+  display: block;
 }
 
+.chat-video video{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+audio{
+  width: 250px;
+  height: 36px;
+  display: block;
+}
 /* composer */
 .composer-wrap{
   display:flex;
@@ -192,6 +223,164 @@ body{background:#f3f4f6;color:#111}
   margin-top: 4px;
 }
 
+/* mobile responsive */
+/* MOBILE FULL SCREEN MODE */
+/* ===== WHATSAPP MOBILE + TABLET ===== */
+/* ===== SAFE MOBILE FIX ===== */
+@media (max-width: 1024px){
+
+  html, body{
+    height:100%;
+    overflow:auto;
+  }
+
+  /* Sidebar default visible */
+  .col-3{
+    width:100% !important;
+    height:100dvh;
+    display:block !important;
+  }
+
+  /* Chat hidden initially */
+  .chat-col{
+    display:none;
+    width:100%;
+    height:100dvh;
+    flex-direction:column;
+  }
+
+  /* When chat active */
+  body.chat-active .col-3{
+    display:none !important;
+  }
+
+  body.chat-active .chat-col{
+    display:flex !important;
+  }
+
+  .chat-window{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .chat-viewport{
+    padding:10px !important;
+  }
+
+  .msg-row.recv{
+    justify-content:flex-start !important;
+  }
+
+  .bubble.recv{
+    margin-left:0 !important;
+  }
+
+
+  .composer-wrap{
+    position:sticky;
+    bottom:0;
+    background:#fff;
+    z-index:10;
+  }
+ 
+}
+#backBtn{
+  display:none;
+}
+
+@media (max-width:1024px){
+  #backBtn{
+    display:inline-block;
+  }
+}
+
+.chat-video,
+.chat-image,
+audio {
+  display: block;
+  max-width: 200px;
+  border-radius: 10px;
+  background: #000;
+}
+
+.chat-bubble {
+  contain: content;   /* 🔥 stops layout shaking */
+}
+#mediaModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  overflow: auto;   /* 🔥 scroll enable */
+  z-index: 9999;
+}
+
+#mediaModal.show {
+  display: flex;
+}
+
+#mediaInner img {
+  max-width: none;   /* 🔥 allow zoom */
+  width: auto;
+  height: auto;
+}
+.video-wrapper{
+  position: relative;
+  width: 260px;
+  aspect-ratio: 3/4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+}
+
+.video-wrapper video{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Play button */
+.play-btn{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  font-size: 20px;
+  backdrop-filter: blur(6px);
+}
+.audio-wrapper{
+  background: #f1f3f4;
+  padding: 6px 10px;
+  border-radius: 10px;
+  width: 260px;
+}
+
+.audio-wrapper audio{
+  width: 100%;
+}
+mark {
+  background: #ffe58a;
+  padding: 0 2px;
+  border-radius: 3px;
+}
 </style>
 
 </head>
@@ -199,7 +388,7 @@ body{background:#f3f4f6;color:#111}
   <div class="container-fluid">
     <div class="row">
       <div class="col text-center">
-        <h3>SM SQUARE CREDIT SERVICES PRIVATE LIMITED - Chat Dashboard</h3>
+        <h3>SMSQUARE CREDIT SERVICES PRIVATE LIMITED - Chat Dashboard</h3>
       </div>
     </div>
   <div class="container-fluid">
@@ -229,6 +418,7 @@ body{background:#f3f4f6;color:#111}
       <!-- CHAT -->
       <div class="col-9 chat-col">
         <div id="chatHeader">
+              <button id="backBtn" class="icon-btn">⬅</button>
           <div class="avatar" id="headerAvatar"><img id="headerAvatarImg" src="" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover"></div>
           <div class="meta"><div class="name" id="headerName"><strong>Select a contact</strong></div><div class="status" id="headerStatus"></div></div>
           <div class="actions" style="display:flex;gap:8px">
@@ -289,8 +479,8 @@ body{background:#f3f4f6;color:#111}
   let loadedPages = new Set();
   let totalPages = 1;
   let contactPage = 1;
-  let lastMessageId = null;
-let hasMoreMessages = true;
+  let currentSearch = "";
+
   // virtualization
   let messageHeights = [];
   let messageOffsets = [];
@@ -360,7 +550,15 @@ let hasMoreMessages = true;
       });
     }catch(e){ return []; }
   }
+ function openChatMobile(){
+  if (window.innerWidth <= 1024){
+    document.body.classList.add("chat-active");
+  }
+}
 
+function closeChatMobile(){
+  document.body.classList.remove("chat-active");
+}
   // ==== WEBSOCKET WITH PROPER CLEANUP ====
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 8;
@@ -457,6 +655,14 @@ let hasMoreMessages = true;
     }
     return msg;
   }
+  function highlightText(text, search){
+  if (!search || !text) return text;
+
+  const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${safe})`, "ig");
+
+  return text.replace(regex, '<mark>$1</mark>');
+}
 
   function renderVirtualContacts(){
     const scrollTop = contactWrapper.scrollTop;
@@ -473,12 +679,19 @@ let hasMoreMessages = true;
       row.className = 'contact-item';
       row.dataset.mobile = c.mobile;
       row.style.cssText = `position:absolute; top:${i * CONTACT_ROW_HEIGHT}px; left:0; right:0; height:${CONTACT_ROW_HEIGHT}px; padding:8px 10px;`;
+      const name = currentSearch
+  ? highlightText(c.mobile, currentSearch)
+  : c.mobile;
+
+const lastMsg = currentSearch
+  ? highlightText(formatLastMessage(c), currentSearch)
+  : formatLastMessage(c);
 
       row.innerHTML = `
         <div class="contact-avatar">${(c.mobile||'NA').slice(-2)}</div>
         <div class="contact-main">
-          <div class="contact-name">${c.mobile}</div>
-          <div class="contact-last">${formatLastMessage(c)}</div>
+          <div class="contact-name">${name}</div>
+          <div class="contact-last">${lastMsg}</div>
         </div>
         ${c.unread ? `<div><span class="unread-badge">${c.unread}</span></div>` : ''}
       `;
@@ -504,13 +717,16 @@ let hasMoreMessages = true;
   }
 
   async function loadContactsFromIdb(){
+    // Always fetch fresh from server first
+    sendWS({ type: 'get_contacts', page: 1 });
+    
+    // Optionally use cache as fallback only
     const all = await idbGetAll('contacts');
-    if (all.length){
-      all.sort((a,b)=> new Date(b.last_time||0) - new Date(a.last_time||0));
-      contactData = all;
-      renderVirtualContacts();
+    if (all.length && contactData.length === 0){
+        contactData = all;
+        renderVirtualContacts();
     }
-  }
+}
 
   function upsertContact(c, moveToTop=false){
     const idx = contactData.findIndex(x=>x.mobile === c.mobile);
@@ -591,38 +807,54 @@ let hasMoreMessages = true;
       bubble.dataset.id = dataId;
       bubble.dataset.index = i;
 
+      const src = m.media_file 
+  ? m.media_file   // ✅ permanent file
+  : `/splcases_app/api/stream-media/?media_id=${m.media_id}`; // fallback
+
       let content = '';
 
-      if (m.content_type === 'image') {
-        const src = m.media_file || '';
-        content = `
-          <img class="chat-image"
-              src="${src}"
-              onclick="(function(){
-                try{ openMediaModal('${src.replace(/'/g,"\\'")}','image'); }
-                catch(e){}
-              })()">
-        `;
+    if (m.content_type === 'image') {
 
-      } else if (m.content_type === 'video') {
-        const src = m.media_file || '';
-        content = `
-          <video class="chat-video"
-                controls
-                preload="metadata"
-                src="${src}"
-                onclick="(function(){
-                  try{ openMediaModal('${src.replace(/'/g,"\\'")}','video'); }
-                  catch(e){}
-                })()">
-          </video>
-        `;
+  if (!m.media_id && !m.media_file) {
+    content = `<div>⚠ Image not available</div>`;
+  } else {
+    content = `
+      <img class="chat-image"
+           loading="lazy"
+           src="${src}"
+           onclick="openMedia('${src}','image')">
+    `;
+  }
+}
+else if (m.content_type === 'video') {
 
-      } else if (m.content_type === 'audio') {
-        const src = m.media_file || '';
-        content = `<audio class="chat-audio" controls src="${src}"></audio>`;
+  if (!m.media_id && !m.media_file) {
+    content = `<div>⚠ Video not available</div>`;
+  } else {
+    content = `
+  <div class="video-wrapper" onclick="openMedia('${src}','video')">
+    <video preload="metadata" muted>
+      <source src="${src}" type="video/mp4">
+    </video>
+    <div class="play-btn">▶</div>
+  </div>
+`;
+  }
+}
+else if (m.content_type === 'audio') {
 
-      } else if (m.content_type === 'document' || m.content_type === 'template_document') {
+  if (!m.media_id && !m.media_file) {
+    content = `<div>⚠ Audio not available</div>`;
+  } else {
+    content = `
+  <div class="audio-wrapper">
+    <audio controls preload="metadata">
+      <source src="${src}">
+    </audio>
+  </div>
+`;
+  }
+} else if (m.content_type === 'document' || m.content_type === 'template_document') {
         const docPart = m.media_file
           ? `
             <div class="doc-bubble">
@@ -642,14 +874,22 @@ let hasMoreMessages = true;
           ${textPart ? `<div class="doc-text mt-1">${textPart}</div>` : ''}
         `;
 
-      } else {
+      }
+      else if (m.sent_text_message.includes("Video note")) {
+  content = `
+    <div style="background:#f1f3f4;padding:8px;border-radius:8px;">
+      🎥 Video note (not supported)
+    </div>
+  `;
+}
+       else {
         content = (m.sent_text_message || '')
           .replace(/</g,'&lt;')
           .replace(/>/g,'&gt;');
       }
 
       const timeStr = m.sent_at
-        ? new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        ? new Date(m.sent_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
         : '';
 
 
@@ -682,7 +922,7 @@ bubble.innerHTML = `
       for (const node of nodes){
         const idx = parseInt(node.dataset.index);
         const rect = node.getBoundingClientRect();
-        if (!messageHeights[idx] || Math.abs(messageHeights[idx]-rect.height)>3){
+        if (!messageHeights[idx]){
           messageHeights[idx] = rect.height;
           updated = true;
         }
@@ -786,6 +1026,10 @@ bubble.innerHTML = `
         return;
     }
 
+    if (d.type === "contact.update") {
+    upsertContact(d.contact, true);  // move to top instantly
+}
+
 
     if (!d || !d.type) return;
 
@@ -802,31 +1046,29 @@ bubble.innerHTML = `
     }
 
     else if (d.type === 'messages.page'){
-  if (d.mobile !== selectedMobile) return;
+      if (d.mobile !== selectedMobile) return;
 
-  const list = d.messages || [];
-  hasMoreMessages = d.has_more;
+      const page = d.meta?.page || 1;
+      totalPages = d.meta?.total_pages || totalPages;
 
-  if (!lastMessageId){
-    messages = list;
-    msgMap.clear();
+      const list = d.messages || [];
+      if (page === 1){
+        messages = list.slice();
+        msgMap.clear();
 
-    for (const m of messages){
-      msgMap.set(getMsgKey(m), true);
+        for (const m of messages) msgMap.set(getMsgKey(m), true);
+        messageHeights = new Array(messages.length).fill(null);
+
+        renderVisibleMessages();
+        setTimeout(()=> chatViewport.scrollTop = chatViewport.scrollHeight, 30);
+      } else {
+        prependMessages(list.sort((a,b)=> new Date(a.sent_at) - new Date(b.sent_at)));
+      }
+
+      loadedPages.add(page);
+
     }
 
-    messageHeights = new Array(messages.length).fill(null);
-
-    renderVisibleMessages();
-
-    setTimeout(() => {
-      chatViewport.scrollTop = chatViewport.scrollHeight;
-    }, 30);
-
-  } else {
-    prependMessages(list);
-  }
-}
     // ====== NEW MESSAGE ======
     else if (d.type === 'new.message'){
       const m = d.message;
@@ -920,9 +1162,6 @@ bubble.innerHTML = `
             `Uploading ${d.filename}: ${d.progress}%`;
       }
     }
-    else if (d.type === 'contact.update') {
-    upsertContact(d.contact, true);
-}
   }
 
   // ==== CONTACT SELECT ====
@@ -939,6 +1178,7 @@ bubble.innerHTML = `
 
   async function onSelectContact(m){
     selectedMobile = m;
+     openChatMobile();
 
     Array.from(contactVirtual.children).forEach(x=>{
       x.style.background = x.dataset.mobile===m ? '#eefaf1' : '';
@@ -957,36 +1197,50 @@ bubble.innerHTML = `
 
     sendWS({type:'join', mobile:m});
     sendWS({type:'mark_read', mobile:m});
-    sendWS({type:'get_messages', mobile:m, last_id: null});
+    sendWS({type:'get_messages', mobile:m, page:1, page_size:PAGE_SIZE});
   }
 
   // ==== SCROLL FOR PAGINATION ====
-  chatViewport.addEventListener("scroll", () => {
-  if (chatViewport.scrollTop === 0 && hasMoreMessages && messages.length) {
-    lastMessageId = messages[0].id;
+  chatViewport.addEventListener('scroll', ()=>{
+    renderVisibleMessages();
 
-    sendWS({
-      type: "get_messages",
-      mobile: selectedMobile,
-      last_id: lastMessageId
-    });
-  }
-});
+    if (chatViewport.scrollTop < estimatedHeight*6 && selectedMobile){
+      let nextPage = loadedPages.size ? Math.max(...loadedPages)+1 : 2;
+      if (nextPage > totalPages) return;
 
-
-  // ==== CONTACT SEARCH ====
-  document.getElementById("contactSearch").addEventListener("input", e=>{
-    const q = e.target.value.trim();
-
-    if (q === "") {
-      contactPage = 1;
-      sendWS({ type:"get_contacts", page: 1 });
-    } else {
-      sendWS({ type:"search_contacts", q });
+      sendWS({
+        type:'get_messages',
+        mobile:selectedMobile,
+        page: nextPage,
+        page_size: PAGE_SIZE
+      });
     }
   });
 
 
+  // ==== CONTACT SEARCH ====
+  let timer = null;   // 🔥 ADD THIS
+
+document.getElementById("contactSearch").addEventListener("input", e => {
+  const q = e.target.value.trim();
+
+  currentSearch = q;
+
+  clearTimeout(timer);
+
+  timer = setTimeout(() => {
+
+    if (q === ""){
+      weekOffset = 0;
+      sendWS({ type: "get_contacts", page:1 });
+    } else {
+      sendWS({ type: "search_contacts", q: q });
+    }
+
+  }, 300);
+});
+
+  
   // ==== SEND MESSAGE ====
   document.getElementById('sendBtn').addEventListener('click', ()=>{
     if (!selectedMobile) return alert('Select a contact');
@@ -1087,11 +1341,77 @@ bubble.innerHTML = `
   document.addEventListener('keydown', e=>{ if (e.key==='Escape') closeMediaModal(); });
 
   // ==== INIT ====
+  document.getElementById("backBtn").onclick = function(){
+  closeChatMobile();
+};
   (async function init(){
     try{ await loadContactsFromIdb(); }catch(e){}
   })();
 
 })();
+
+// 🔥 AUTO SCROLL WHEN INPUT FOCUS
+const chatViewport = document.getElementById("chatViewport");
+const messageInput = document.getElementById("messageInput");
+
+messageInput.addEventListener("focus", () => {
+  setTimeout(() => {
+    chatViewport.scrollTop = chatViewport.scrollHeight;
+  }, 300);
+});
+
+function openMedia(src, type){
+  const modal = document.getElementById('mediaModal');
+  const inner = document.getElementById('mediaInner');
+
+  inner.innerHTML = '';
+
+  if (type === 'video'){
+    inner.innerHTML = `
+      <video src="${src}" controls autoplay style="max-width:100%; border-radius:10px;"></video>
+    `;
+  }
+
+  if (type === 'image'){
+    inner.innerHTML = `
+      <div style="overflow:auto; max-height:90vh;">
+        <img src="${src}" style="width:100%; cursor:zoom-in;"
+             onclick="this.style.width = this.style.width === '200%' ? '100%' : '200%'">
+      </div>
+    `;
+  }
+
+  modal.classList.add('show');
+}
+
+function playAudio(btn, src, media_id){
+  const audio = btn.nextElementSibling;
+
+  if (!src){
+    refreshAndPlay(media_id, 'audio', audio, btn);
+    return;
+  }
+
+  if (audio.paused){
+    audio.play();
+    btn.innerText = "⏸";
+  } else {
+    audio.pause();
+    btn.innerText = "▶";
+  }
+}
+function refreshAndPlay(media_id, type){
+  if (!media_id){
+    console.log("❌ media_id missing");
+    return;
+  }
+
+  fetch(`/splcases_app/api/refresh-media/?media_id=${media_id}`)
+    .then(res => res.json())
+    .then(data => {
+      openMedia(data.url, type, media_id);
+    });
+}
 </script>
 </body>
 </html>
