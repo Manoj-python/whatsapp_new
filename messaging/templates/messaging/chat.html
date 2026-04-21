@@ -942,18 +942,32 @@ bubble.innerHTML = `
   }
 
   function updateMessageStatus(msgId, status){
-    const el = messagesVirtual.querySelector(`.tick[data-tid="${msgId}"]`);
-    if (el){ renderTickElem(el, status); return; }
 
-    for (let i=messages.length-1;i>=0;i--){
-      const m = messages[i];
-      if (m && m.message_id === msgId){
+  // 🔥 HANDLE BULK UPDATE (mark_read)
+  if (!msgId){
+    messages.forEach(m => {
+      if (m.message_type === "Sent"){
         m.status = status;
-        renderVisibleMessages();
-        break;
       }
+    });
+    renderVisibleMessages();
+    return;
+  }
+
+  const el = messagesVirtual.querySelector(`.tick[data-tid="${msgId}"]`);
+  if (el){
+    renderTickElem(el, status);
+    return;
+  }
+
+  for (let i=messages.length-1;i>=0;i--){
+    if (messages[i].message_id === msgId){
+      messages[i].status = status;
+      renderVisibleMessages();
+      break;
     }
   }
+}
 
   function renderAllTicks(){
     const nodes = messagesVirtual.querySelectorAll('.tick');
