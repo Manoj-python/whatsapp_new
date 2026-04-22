@@ -27,6 +27,7 @@ urlpatterns = [
     path('financehub/', include('financehub.urls')),
     path('notice/', include('notices.urls')),
     path('splcases_app/', include('special_cases.urls')),
+    # path('sms_app/', include('sms_app.urls')),
     
     
 

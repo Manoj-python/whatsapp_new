@@ -651,30 +651,40 @@ def whatsapp_webhook(request):
                             {"type": "presence.update", "mobile": mobile, "status": "online"}
                         )
 
-            statuses = value.get("statuses", []) or []
-            for status in statuses:
-                msg_id = status.get("id")
-                status_type = status.get("status")   # sent / delivered / read
-                mobile = format_mobile(status.get("recipient_id"))
-                if not msg_id:
-                    continue
-                # ===== UPDATE DB =====
-                SmsWhatsAppLog.objects.filter(message_id=msg_id).update(status=status_type.capitalize())
-                # ===== UPDATE CONTACT TABLE =====
-                ChatContact.objects.filter(mobile=mobile).update(
-                          last_status=status_type.capitalize(),
-                          last_time=timezone.now()
-                )
-                 # ===== 🔥 REALTIME TICK UPDATE =====
-                async_to_sync(channel_layer.group_send)(
-                        "delivery_group",
-                    {
-                    "type": "delivery.update",
-                    "message_id": msg_id,
-                    "status": status_type.capitalize(),
-                    "mobile": mobile
-        }
+                    statuses = value.get("statuses", []) or []
+                    for status in statuses:
+                        msg_id = status.get("id")
+                        status_type = (status.get("status") or "").lower()   # sent / delivered / read
+                        mobile = format_mobile(status.get("recipient_id"))
+                        if not msg_id:
+                            continue
+                        if status_type == "sent":
+                            norm = "Sent"
+                        elif status_type == "delivered":
+                            norm = "Delivered"
+                        elif status_type == "read":
+                            norm = "Read"
+                        else:
+                            continue
+                        print("🔥 STATUS EVENT:", norm, msg_id)
+                        # ===== UPDATE DB =====
+                        SmsWhatsAppLog.objects.filter(message_id=msg_id).update(status=norm)
+                        # ===== UPDATE CONTACT TABLE =====
+                        ChatContact.objects.filter(mobile=mobile).update(
+                                  last_status=norm,
+                                  last_time=timezone.now()
     )
+                        # ===== 🔥 REALTIME TICK UPDATE =====
+                        async_to_sync(channel_layer.group_send)(
+                                "delivery_group",
+                            {
+                                "type": "delivery.update",
+                                "message_id": msg_id,
+                                "status": norm,
+                                "mobile": mobile
+                             }
+                              )
+                        print("WEBHOOK STATUS:", status_type, msg_id)
                                                                            
 
 

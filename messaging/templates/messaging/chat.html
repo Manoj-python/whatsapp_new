@@ -894,9 +894,16 @@ else if (m.content_type === 'audio') {
 
 
       let ticks = '';
-      if (m.message_type === 'Sent'){
-        ticks = `<span class="tick" data-tid="${m.message_id||m.id||''}"></span>`;
-      }
+
+if (m.message_type === 'Sent') {
+  const tid = m.message_id || m.id;
+
+  if (tid) {
+    ticks = `<span class="tick" data-tid="${tid}"></span>`;
+  } else {
+    console.warn("⚠️ Missing message ID", m);
+  }
+}
 
       let nameTag = "";
 if (m.message_type === "Sent") {
@@ -941,12 +948,11 @@ bubble.innerHTML = `
     span.textContent='';
   }
 
-  function updateMessageStatus(msgId, status){
+  function updateMessageStatus(msgId, status) {
 
-  // 🔥 HANDLE BULK UPDATE (mark_read)
-  if (!msgId){
+  if (!msgId) {
     messages.forEach(m => {
-      if (m.message_type === "Sent"){
+      if (m.message_type === "Sent") {
         m.status = status;
       }
     });
@@ -954,20 +960,30 @@ bubble.innerHTML = `
     return;
   }
 
-  const el = messagesVirtual.querySelector(`.tick[data-tid="${msgId}"]`);
-  if (el){
+  const el = messagesVirtual.querySelector(
+    `.tick[data-tid="${msgId}"]`
+  );
+
+  if (el) {
     renderTickElem(el, status);
     return;
   }
 
-  for (let i=messages.length-1;i>=0;i--){
-    if (messages[i].message_id === msgId){
+  // fallback search
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (
+      messages[i].message_id === msgId ||
+      messages[i].id === msgId
+    ) {
       messages[i].status = status;
       renderVisibleMessages();
       break;
     }
   }
 }
+
+ 
+
 
   function renderAllTicks(){
     const nodes = messagesVirtual.querySelectorAll('.tick');
@@ -1087,43 +1103,44 @@ bubble.innerHTML = `
   }
 }
     // ====== NEW MESSAGE ======
-    else if (d.type === 'new.message') {
+   else if (d.type === 'new.message') {
   const m = d.message;
   if (!m) return;
 
-  // ===== OUTGOING (SENT) =====
+  // ===== SENT MESSAGE =====
   if (m.message_type === "Sent") {
 
-    // 🔥 Update sidebar immediately
-    upsertContact(
-      {
-        mobile: m.mobile,
-        last_time: m.sent_at,
-        last_msg: m.sent_text_message,
-        last_type: m.message_type,
-        last_status: m.status || "Sent"
-      },
-      true
-    );
+    upsertContact({
+      mobile: m.mobile,
+      last_time: m.sent_at,
+      last_msg: m.sent_text_message,
+      last_type: m.message_type,
+      last_status: m.status || "Sent"
+    }, true);
 
-    // 🔥 Replace optimistic message with server message
+    // Replace optimistic message
     for (let i = messages.length - 1; i >= 0; i--) {
       const it = messages[i];
 
       if (
         it &&
         it.message_type === 'Sent' &&
-        (!it.message_id || it.message_id === "") &&
         it.sent_text_message === m.sent_text_message
       ) {
-        messages[i] = { ...it, ...m };
+        messages[i] = {
+          ...it,
+          ...m,
+          message_id: m.message_id || it.message_id || m.id
+        };
 
-        // 🔥 First render
         renderVisibleMessages();
 
-        // 🔥 THEN update tick (CRITICAL FIX)
+        // 🔥 ensure tick
         setTimeout(() => {
-          updateMessageStatus(m.message_id || m.id, m.status || "Sent");
+          updateMessageStatus(
+            m.message_id || m.id,
+            m.status || "Sent"
+          );
         }, 50);
 
         break;
@@ -1133,18 +1150,15 @@ bubble.innerHTML = `
     return;
   }
 
-  // ===== INCOMING =====
-  upsertContact(
-    {
-      mobile: m.mobile,
-      last_time: m.sent_at,
-      last_msg: m.sent_text_message,
-      last_type: m.message_type,
-      last_status: m.status,
-      unread: 1
-    },
-    true
-  );
+  // ===== RECEIVED =====
+  upsertContact({
+    mobile: m.mobile,
+    last_time: m.sent_at,
+    last_msg: m.sent_text_message,
+    last_type: m.message_type,
+    last_status: m.status,
+    unread: 1
+  }, true);
 
   if (selectedMobile === m.mobile) {
     appendMessage(m, false);
@@ -1153,35 +1167,36 @@ bubble.innerHTML = `
     // ====== TICK UPDATES ======
    else if (d.type === 'delivery.update') {
 
-  // 🔥 BULK READ (all messages)
-  if (!d.message_id) {
+  const msgId = d.message_id;
+
+  if (!msgId) {
+    // bulk read
     messages.forEach(m => {
       if (m.message_type === "Sent") {
         m.status = d.status;
       }
     });
   } else {
-    // 🔥 Single message update
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i] && messages[i].message_id === d.message_id) {
-        messages[i].status = d.status;
-        break;
+    messages.forEach(m => {
+      if (
+        m.message_id === msgId ||
+        m.id === msgId   // 🔥 fallback match
+      ) {
+        m.status = d.status;
       }
-    }
+    });
   }
 
-  // 🔥 Update only visible tick (NO FULL RENDER)
-  updateMessageStatus(d.message_id, d.status);
+  // 🔥 update UI
+  setTimeout(() => {
+    updateMessageStatus(msgId, d.status);
+  }, 50);
 
-  // 🔥 Update sidebar
-  upsertContact(
-    {
-      mobile: d.mobile,
-      last_status: d.status,
-      last_time: new Date().toISOString()
-    },
-    false
-  );
+  upsertContact({
+    mobile: d.mobile,
+    last_status: d.status,
+    last_time: new Date().toISOString()
+  }, false);
 }
     else if (d.type === 'typing'){
       if (d.mobile === selectedMobile){

@@ -137,19 +137,20 @@ def get_messages_page_from_db(mobile, last_id=None, size=30):
         } for m in messages],
         "has_more": len(messages) == size
     }
-
+import uuid
 @sync_to_async
 def create_outgoing_log(mobile: str, text: str, message_id: str, content_type: str="text", media_filename: Optional[str]=None):
     """
     Create a log for outgoing message
     """
+    temp_id = message_id or str(uuid.uuid4())
     log = SmsWhatsAppLog.objects.create(
         customer_name="",
         mobile=format_mobile(mobile),
         template_name="manual",
         sent_text_message=text or "",
         status="Sent",
-        message_id=message_id or "",
+        message_id=temp_id,
         message_type="Sent",
         content_type=content_type,
     )
