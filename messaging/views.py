@@ -434,6 +434,16 @@ def send_reply_api(request):
             message_type="Sent",
             content_type=content_type,
         )
+        ChatContact.objects.update_or_create(
+            mobile=mobile,
+            defaults={
+        "last_msg": text or "[Media]",
+        "last_time": timezone.now(),
+        "last_type": "Sent",
+        "last_status": "Sent",
+        "unread": 0
+    }
+)
 
         if media_file:
             log.media_file.save(media_file.name, media_file)
@@ -574,6 +584,18 @@ def whatsapp_webhook(request):
                                 message_id=msg_id,
                                 content_type=content_type,
                             )
+                            ChatContact.objects.update_or_create(
+                                mobile=mobile,
+                                defaults={
+                                    "last_msg": text_body,
+                                    "last_time": timezone.now(),
+                                    "last_type": "Received",
+                                    "last_status": "Unread",
+                                }
+                                 )
+                            ChatContact.objects.filter(mobile=mobile).update(unread=F("unread") + 1)
+    
+
 
                             if media_file:
                                 filename, content = media_file
@@ -614,7 +636,7 @@ def whatsapp_webhook(request):
                                     "mobile": mobile,
                                     "last_msg": text_body or "",
                                     
-                                    # "last_type": "Received",
+                                    "last_type": "Received",
                                     "last_status": "Unread",
                                     "unread": obj.unread + 1 if not created else 1,
                                     "last_time": timezone.now().isoformat(),

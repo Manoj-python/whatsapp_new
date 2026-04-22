@@ -16,7 +16,7 @@ from django.core.files.base import ContentFile
 from django.db import close_old_connections
 from django.db.models import F
 from django.core.files.base import ContentFile
-from .models import SmsWhatsAppLog, BulkJob
+from .models import *
 from .utils import (
     upload_whatsapp_media,
     build_payload,
@@ -128,8 +128,13 @@ def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_si
 # ==================================================
 # BATCH TASK
 # ==================================================
+
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 @shared_task(bind=True, queue="whatsapp_main")
 def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, start, end):
+    from django.db import close_old_connections
+    close_old_connections()
     template_choice = str(template_choice)
 
     close_old_connections()
@@ -347,6 +352,31 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 message_type="Sent",
                 content_type=content_type_val,
             )
+            ChatContact.objects.update_or_create(
+                mobile=mobile,
+                defaults={
+                    "last_msg": rendered_text or "[Media]",
+                    "last_time": timezone.now(),
+                    "last_type": "Sent",
+                    "last_status": "Delivered",
+                    "unread": 0 
+                }
+               )
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                "global_contacts",
+            {
+                "type": "contact.update",
+                "contact": {
+            "mobile": mobile,
+            "last_msg": rendered_text or "[Media]",
+            "last_time": timezone.now().isoformat(),
+            "last_type": "Sent",
+            "last_status": "Delivered",
+            "unread": 0
+        }
+    }
+)
 
             # ==================================================
             # 📎 ATTACH PDF FILE

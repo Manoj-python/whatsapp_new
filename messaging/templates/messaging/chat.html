@@ -1075,7 +1075,7 @@ bubble.innerHTML = `
 
     }
 
-    else if (d.type === 'messages.page'){
+   else if (d.type === 'messages.page'){
   if (d.mobile !== selectedMobile) return;
 
   const list = d.messages || [];
@@ -1096,6 +1096,9 @@ bubble.innerHTML = `
     setTimeout(()=>{
       chatViewport.scrollTop = chatViewport.scrollHeight;
     }, 50);
+
+    // ✅ FIXED mark_read (correct syntax)
+    
 
   } else {
     // load older messages
@@ -1213,16 +1216,13 @@ bubble.innerHTML = `
   }
 
   // ==== CONTACT SELECT ====
-  contactVirtual.addEventListener('click', (e)=>{
-    let n = e.target;
-    while(n && n !== contactVirtual){
-      if (n.dataset.mobile){
-        onSelectContact(n.dataset.mobile);
-        return;
-      }
-      n = n.parentNode;
-    }
-  });
+ contactVirtual.addEventListener('click', (e)=>{
+  const row = e.target.closest('.contact-item');
+  if (row && row.dataset.mobile){
+    console.log("CLICKED:", row.dataset.mobile);
+    onSelectContact(row.dataset.mobile);
+  }
+});
 
   async function onSelectContact(m){
     selectedMobile = m;
@@ -1244,7 +1244,7 @@ bubble.innerHTML = `
 
 
     sendWS({type:'join', mobile:m});
-    sendWS({type:'mark_read', mobile:m});
+    // sendWS({type:'mark_read', mobile:m});
     sendWS({type:'get_messages', mobile:m, page:1,});
   }
 

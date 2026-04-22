@@ -39,6 +39,7 @@ def ws_group_name(mobile: str) -> str:
 from django.core.cache import cache
 import re
 from asgiref.sync import sync_to_async
+from django.db.models import Case, When, IntegerField
 
 @sync_to_async
 def get_contacts_page(page=1, size=30, q=""):
@@ -54,8 +55,14 @@ def get_contacts_page(page=1, size=30, q=""):
             return data
 
     qs = ChatContact.objects.only(
-        "mobile","last_msg","last_time","last_type","last_status","unread"
-    ).order_by("-last_time")
+    "mobile","last_msg","last_time","last_type","last_status","unread"
+).annotate(
+    unread_priority=Case(
+        When(unread__gt=0, then=0),
+        default=1,
+        output_field=IntegerField()
+    )
+).order_by("unread_priority", "-last_time")
 
     # 🔍 SEARCH LOGIC
     if q:
