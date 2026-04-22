@@ -64,7 +64,7 @@ body{background:#f3f4f6;color:#111}
   padding:20px 60px;
 
   /* NEW FIX — balance layout */
-  
+ overflow-anchor: none;
 }
 
 /* Ensure wrappers never overflow horizontally */
@@ -107,7 +107,8 @@ body{background:#f3f4f6;color:#111}
 
   word-break: break-word;
 
-  contain: layout paint;   /* 🔥 STOPS SHAKING */
+  min-height: 40px;        /* ✅ NEW */
+  contain: content;
 }
 
 
@@ -916,6 +917,19 @@ bubble.innerHTML = `
         ${timeStr} ${ticks}${nameTag}
     </div>
 `;
+// ✅ FIX: Recalculate height after media load
+const mediaEls = bubble.querySelectorAll("img, video");
+
+mediaEls.forEach(el => {
+  el.onload = el.onloadeddata = () => {
+    const idx = parseInt(bubble.dataset.index);
+    if (!isNaN(idx)) {
+      messageHeights[idx] = bubble.offsetHeight;
+      recomputeOffsets();
+      renderVisibleMessages();
+    }
+  };
+});
 
       row.appendChild(bubble);
       wrap.appendChild(row);
@@ -1070,7 +1084,6 @@ bubble.innerHTML = `
         contactData = contactData.concat(d.contacts || []);
       }
 
-      contactData.sort((a,b)=> new Date(b.last_time||0) - new Date(a.last_time||0));
       renderVirtualContacts();
 
     }
