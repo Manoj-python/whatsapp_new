@@ -1087,66 +1087,73 @@ bubble.innerHTML = `
   }
 }
     // ====== NEW MESSAGE ======
-    else if (d.type === 'new.message'){
-      const m = d.message;
-      if (!m) return;
+    else if (d.type === 'new.message') {
+  const m = d.message;
+  if (!m) return;
 
-      // === OUTGOING SENT MESSAGE ===
-      if (m.message_type === "Sent"){
+  // ===== OUTGOING (SENT) =====
+  if (m.message_type === "Sent") {
 
-        // Update ticks inside chat
-        updateMessageStatus(m.message_id, m.status);
+    // 🔥 Update sidebar immediately
+    upsertContact(
+      {
+        mobile: m.mobile,
+        last_time: m.sent_at,
+        last_msg: m.sent_text_message,
+        last_type: m.message_type,
+        last_status: m.status || "Sent"
+      },
+      true
+    );
 
-        // Update sidebar (IMPORTANT)
-        upsertContact(
-          {
-            mobile: m.mobile,
-            last_time: m.sent_at,
-            last_msg: m.sent_text_message,
-            last_type: m.message_type,
-            last_status: m.status
-          },
-          true
-        );
+    // 🔥 Replace optimistic message with server message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const it = messages[i];
 
-        // Replace optimistic bubble with server bubble
-        for (let i=messages.length-1;i>=0;i--){
-          const it = messages[i];
-          if (it &&
-              it.message_type==='Sent' &&
-              (!it.message_id || it.message_id==="") &&
-              it.sent_text_message === m.sent_text_message)
-          {
-            messages[i] = { ...it, ...m };
-            renderVisibleMessages();
-            break;
-          }
-        }
-        return;
-      }
+      if (
+        it &&
+        it.message_type === 'Sent' &&
+        (!it.message_id || it.message_id === "") &&
+        it.sent_text_message === m.sent_text_message
+      ) {
+        messages[i] = { ...it, ...m };
 
-      // === INCOMING MESSAGE ===
-      upsertContact(
-        {
-          mobile:m.mobile,
-          last_time:m.sent_at,
-          last_msg:m.sent_text_message,
-          last_type:m.message_type,
-          last_status:m.status,
-          unread:1
-        },
-        true
-      );
+        // 🔥 First render
+        renderVisibleMessages();
 
-      if (selectedMobile === m.mobile){
-        appendMessage(m, false);
+        // 🔥 THEN update tick (CRITICAL FIX)
+        setTimeout(() => {
+          updateMessageStatus(m.message_id || m.id, m.status || "Sent");
+        }, 50);
+
+        break;
       }
     }
 
+    return;
+  }
+
+  // ===== INCOMING =====
+  upsertContact(
+    {
+      mobile: m.mobile,
+      last_time: m.sent_at,
+      last_msg: m.sent_text_message,
+      last_type: m.message_type,
+      last_status: m.status,
+      unread: 1
+    },
+    true
+  );
+
+  if (selectedMobile === m.mobile) {
+    appendMessage(m, false);
+  }
+}
     // ====== TICK UPDATES ======
    else if (d.type === 'delivery.update') {
 
-  // 🔥 HANDLE BULK READ (IMPORTANT)
+  // 🔥 BULK READ (all messages)
   if (!d.message_id) {
     messages.forEach(m => {
       if (m.message_type === "Sent") {
@@ -1154,6 +1161,7 @@ bubble.innerHTML = `
       }
     });
   } else {
+    // 🔥 Single message update
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i] && messages[i].message_id === d.message_id) {
         messages[i].status = d.status;
@@ -1162,10 +1170,10 @@ bubble.innerHTML = `
     }
   }
 
-  // ✅ Update only visible tick
+  // 🔥 Update only visible tick (NO FULL RENDER)
   updateMessageStatus(d.message_id, d.status);
 
-  // ✅ Update sidebar
+  // 🔥 Update sidebar
   upsertContact(
     {
       mobile: d.mobile,
@@ -1174,10 +1182,7 @@ bubble.innerHTML = `
     },
     false
   );
-
-  // ❌ DO NOT re-render full list
 }
-
     else if (d.type === 'typing'){
       if (d.mobile === selectedMobile){
         document.getElementById('typingStatus').textContent = d.state ? 'Typing…' : '';
