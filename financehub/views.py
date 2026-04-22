@@ -35,6 +35,17 @@ from financehub.tasks import (
     process_universal_file,
 )
 
+
+from io import BytesIO
+import pandas as pd
+import datetime
+from django.http import HttpResponse
+from openpyxl import load_workbook
+from openpyxl.styles import Font
+
+from .models import EmployeeMaster, Clu
+
+
 # Decorator for session protection
 from django.contrib.auth.decorators import login_required
 
@@ -2165,4 +2176,213 @@ def closed_delete(request):
     closed = Closed.objects.all()
     closed.delete()
     return render(request,'financehub/upload.html')
+
+
+
+
+
+
+
+@financehub_required
+def download_employee_report(request):
+
+    # -------------------------
+    # STEP 1: LOAD EMPLOYEES
+    # -------------------------
+    master_qs = EmployeeMaster.objects.all().values(
+        "employee_number",
+        "employee_name",
+        "joined_on",
+        "curr_designation",
+        "curr_department",
+        "curr_location",
+        "phone",
+        "reporting_to_collections",
+        "status",
+        "lwd"
+    )
+
+    master_df = pd.DataFrame(list(master_qs))
+
+    if master_df.empty:
+        return HttpResponse("No data found")
+
+    master_df['status'] = master_df['status'].astype(str).str.strip().str.upper()
+
+    master_df['joined_on'] = pd.to_datetime(
+        master_df['joined_on'],
+        format='%d %b %Y',
+        errors='coerce'
+    )
+
+    master_df['lwd'] = pd.to_datetime(
+        master_df['lwd'],
+        format='%d %b %Y',
+        errors='coerce'
+    )
+
+    master_df['phone'] = master_df['phone'].astype(str).str.split('.').str[0]
+
+    active_employees = master_df[
+        (master_df['status'] != 'LEFT') &
+        (master_df['curr_department'].str.upper().isin(['COLLECTION', 'SALES/COLLECTION']))
+    ]
+
+    active_employees = active_employees[
+        active_employees['curr_location'].str.upper() != 'HEAD OFFICE - RANIGUNJ'
+    ]
+
+    # -------------------------
+    # STEP 2: CLU
+    # -------------------------
+    clu_qs = Clu.objects.values(
+        "employee_id",
+        "employee_name",
+        "visited_on"
+    )
+
+    clu_df = pd.DataFrame(list(clu_qs))
+
+    if not clu_df.empty:
+        clu_df = clu_df[clu_df['employee_id'].notnull()]
+        clu_df["visit_datetime"] = pd.to_datetime(
+            clu_df["visited_on"],
+            format="%b %d,%Y, %I:%M:%S %p",
+            errors='coerce'
+        )
+        clu_df["visit_date"] = clu_df["visit_datetime"].dt.normalize()
+        max_date = clu_df["visit_date"].max()
+    else:
+        max_date = datetime.date.today()
+
+    last5days = [pd.Timestamp(max_date - datetime.timedelta(days=i)) for i in range(5)]
+
+    if not clu_df.empty:
+        clu_df = clu_df.sort_values(by=["visit_datetime"])
+        clu_df = clu_df.groupby(["employee_id", "visit_date"], as_index=False).first()
+
+    employees = active_employees[['employee_number', 'employee_name', 'joined_on']].drop_duplicates()
+
+    all_days = pd.DataFrame(
+        [(eid, ename, join_date, day) for eid, ename, join_date in employees.values for day in last5days],
+        columns=["employee_id", "employee_name", "joined_on", "visit_date"]
+    )
+
+    if not clu_df.empty:
+        merged = pd.merge(
+            all_days,
+            clu_df[['employee_id', 'visit_date', 'visit_datetime']],
+            on=['employee_id', 'visit_date'],
+            how='left'
+        )
+    else:
+        merged = all_days.copy()
+        merged['visit_datetime'] = None
+
+    day_df = merged.pivot(
+        index=['employee_id', 'employee_name', 'joined_on'],
+        columns='visit_date',
+        values='visit_datetime'
+    ).reset_index()
+
+    day_df = day_df[['employee_id', 'employee_name', 'joined_on'] + last5days]
+
+    # -------------------------
+    # SAME LOGIC
+    # -------------------------
+    for day in last5days:
+        day_df[day] = day_df.apply(
+            lambda row: (
+                'Not Yet Joined'
+                if pd.notna(row['joined_on']) and row['joined_on'] > day
+                else (None if pd.isna(row[day]) else row[day])
+            ),
+            axis=1
+        )
+
+    final_df = pd.merge(
+        active_employees,
+        day_df,
+        left_on=['employee_number', 'employee_name', 'joined_on'],
+        right_on=['employee_id', 'employee_name', 'joined_on'],
+        how='left'
+    )
+
+    cols = list(active_employees.columns) + last5days
+    final_df = final_df[cols]
+
+    final_df['joined_on'] = final_df['joined_on'].dt.strftime('%Y-%m-%d')
+
+    # ✅ Fix NULL → NONE
+    final_df['status'] = final_df['status'].replace(['NULL', None, ''], 'NONE')
+
+        # ✅ Clean column names (remove time)
+    new_columns = []
+
+    for col in final_df.columns:
+        if isinstance(col, pd.Timestamp):
+            new_columns.append(col.strftime("%Y-%m-%d"))  # same as old
+        else:
+            new_columns.append(col)
+
+    final_df.columns = new_columns
+
+    # -------------------------
+    # STEP 3: EXCEL
+    # -------------------------
+    output = BytesIO()
+    final_df.to_excel(output, index=False)
+    output.seek(0)
+
+    wb = load_workbook(output)
+    ws = wb.active
+
+    day_to_col_index = {day: 11 + idx for idx, day in enumerate(last5days)}
+
+    for row_idx in range(2, ws.max_row + 1):
+        for day_date, col_idx in day_to_col_index.items():
+            cell = ws.cell(row=row_idx, column=col_idx)
+
+            if cell.value == 'Not Yet Joined':
+                cell.font = Font(color="000000")
+
+            elif cell.value == 'Sunday':
+                cell.font = Font(color="0000FF")
+
+            elif cell.value == 'Absent':
+                cell.font = Font(color="000000")
+
+            elif isinstance(cell.value, datetime.datetime):
+                if cell.value.time() > datetime.time(7, 0):
+                    cell.font = Font(color="FF0000")
+                else:
+                    cell.font = Font(color="000000")
+
+                # ✅ MATCH OLD FORMAT EXACTLY
+                cell.number_format = 'MMM DD,YYYY, hh:mm:ss AM/PM'
+
+            elif cell.value is None:
+                if day_date.weekday() == 6:
+                    cell.value = 'Sunday'
+                    cell.font = Font(color="0000FF")
+                else:
+                    cell.value = 'Absent'
+                    cell.font = Font(color="000000")
+
+    final_output = BytesIO()
+    wb.save(final_output)
+    final_output.seek(0)
+
+    response = HttpResponse(
+        final_output,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response['Content-Disposition'] = 'attachment; filename="Employee_Report.xlsx"'
+
+    return response
+    
+@financehub_required
+def employee_report_page(request):
+    return render(request, "financehub/employee_report.html")
+
 

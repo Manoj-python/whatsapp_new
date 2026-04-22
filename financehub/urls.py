@@ -48,8 +48,8 @@ urlpatterns = [
     ),
 
     path("due-notices/", views.due_notice_list, name="due_notice_list"),
-      
-      
+    
+    path("employee-report/", views.download_employee_report, name="employee_report"),      
 
 
 ]
