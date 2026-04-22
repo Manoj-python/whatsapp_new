@@ -135,6 +135,7 @@ class Clu(models.Model):
     payment_towards = models.CharField(max_length=255, null=True, blank=True)
     charges = models.CharField(max_length=100, null=True, blank=True)
     emi_paid = models.CharField(max_length=100, null=True, blank=True)
+    lpp_charges = models.CharField(max_length=100, null=True, blank=True)
     total_amount_paid = models.CharField(max_length=100, null=True, blank=True)
 
     payment_date = models.CharField(max_length=100, null=True, blank=True)
