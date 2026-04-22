@@ -500,6 +500,8 @@ def send_reply_api(request):
 # -----------------------------------------------------
 @csrf_exempt
 def whatsapp_webhook(request):
+    print("🔥 WEBHOOK HIT")
+    print("FULL WEBHOOK:", request.body)
     from channels.layers import get_channel_layer
     from asgiref.sync import async_to_sync
     from django.utils import timezone
@@ -584,16 +586,16 @@ def whatsapp_webhook(request):
                                 message_id=msg_id,
                                 content_type=content_type,
                             )
-                            ChatContact.objects.update_or_create(
-                                mobile=mobile,
-                                defaults={
-                                    "last_msg": text_body,
-                                    "last_time": timezone.now(),
-                                    "last_type": "Received",
-                                    "last_status": "Unread",
-                                }
-                                 )
-                            ChatContact.objects.filter(mobile=mobile).update(unread=F("unread") + 1)
+                            # ChatContact.objects.update_or_create(
+                            #     mobile=mobile,
+                            #     defaults={
+                            #         "last_msg": text_body,
+                            #         "last_time": timezone.now(),
+                            #         "last_type": "Received",
+                            #         "last_status": "Unread",
+                            #     }
+                            #      )
+                            # ChatContact.objects.filter(mobile=mobile).update(unread=F("unread") + 1)
     
 
 
@@ -638,7 +640,7 @@ def whatsapp_webhook(request):
                                     
                                     "last_type": "Received",
                                     "last_status": "Unread",
-                                    "unread": obj.unread + 1 if not created else 1,
+                                    "unread": obj.unread if created else obj.unread + 1,
                                     "last_time": timezone.now().isoformat(),
                                 }
                             }
@@ -677,9 +679,14 @@ def whatsapp_webhook(request):
                     for status in statuses:
                         msg_id = status.get("id")
                         status_type = (status.get("status") or "").lower()   # sent / delivered / read
-                        mobile = format_mobile(status.get("recipient_id"))
+                        # mobile = format_mobile(status.get("recipient_id"))
+                        obj = SmsWhatsAppLog.objects.filter(message_id=msg_id).first()
+                        if not obj:
+                            print("❌ NO DB MATCH FOR:", msg_id)
+                            continue
                         if not msg_id:
                             continue
+                        mobile = obj.mobile
                         if status_type == "sent":
                             norm = "Sent"
                         elif status_type == "delivered":
@@ -695,10 +702,12 @@ def whatsapp_webhook(request):
                         ChatContact.objects.filter(mobile=mobile).update(
                                   last_status=norm,
                                   last_time=timezone.now()
-    )
+    )       
                         # ===== 🔥 REALTIME TICK UPDATE =====
-                        async_to_sync(channel_layer.group_send)(
-                                "delivery_group",
+                        gm = ws_group(mobile)
+                        if gm:
+                            async_to_sync(channel_layer.group_send)(
+                                f"chat_{gm}",
                             {
                                 "type": "delivery.update",
                                 "message_id": msg_id,

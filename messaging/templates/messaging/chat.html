@@ -1183,17 +1183,23 @@ bubble.innerHTML = `
     messages.forEach(m => {
       if (
         m.message_id === msgId ||
-        m.id === msgId   // 🔥 fallback match
-      ) {
+        m.id === msgId   || 
+        (m.message_id && msgId && m.message_id.includes(msgId)) ||
+        (msgId && m.message_id && msgId.includes(m.message_id))
+        
+
+      )
+      console.log("Incoming:", msgId);
+console.log("Messages:", messages);
+ {
         m.status = d.status;
       }
     });
   }
 
   // 🔥 update UI
-  setTimeout(() => {
-    updateMessageStatus(msgId, d.status);
-  }, 50);
+  renderVisibleMessages();
+   
 
   upsertContact({
     mobile: d.mobile,
@@ -1247,7 +1253,7 @@ bubble.innerHTML = `
     // sendWS({type:'mark_read', mobile:m});
     sendWS({
   type: "clear_unread",
-  mobile: mobile
+  mobile: m,
 });
     sendWS({type:'get_messages', mobile:m, page:1,});
   }

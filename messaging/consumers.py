@@ -607,10 +607,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 await sync_to_async(
                     lambda: SmsWhatsAppLog.objects.filter(id=log_id).update(message_id=msg_id)
                 )()
-
-                # Update ticks
-                await self.channel_layer.group_send(
-                    "delivery_group",
+                gm = ws_group_name(mobile)
+                if gm:            # Update ticks
+                    await self.channel_layer.group_send(
+                        f"chat_{gm}",
                     {
                         "type": "delivery.update",
                         "message_id": msg_id,
@@ -618,6 +618,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                         "mobile": mobile
                     }
                 )
+                print("WHATSAPP MSG ID:", msg_id)
 
         except Exception as e:
             print(f"WhatsApp send error: {e}")
