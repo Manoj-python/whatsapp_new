@@ -1144,28 +1144,39 @@ bubble.innerHTML = `
     }
 
     // ====== TICK UPDATES ======
-    else if (d.type === 'delivery.update'){
-      updateMessageStatus(d.message_id, d.status);
+   else if (d.type === 'delivery.update') {
 
-      for (let i=messages.length-1;i>=0;i--){
-        if (messages[i] && messages[i].message_id===d.message_id){
-          messages[i].status = d.status;
-          break;
-        }
+  // 🔥 HANDLE BULK READ (IMPORTANT)
+  if (!d.message_id) {
+    messages.forEach(m => {
+      if (m.message_type === "Sent") {
+        m.status = d.status;
       }
-
-      // Update contact list ticks
-      upsertContact(
-        {
-          mobile:d.mobile,
-          last_status:d.status,
-          last_time:new Date().toISOString()
-        },
-        false
-      );
-
-      renderVisibleMessages();
+    });
+  } else {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i] && messages[i].message_id === d.message_id) {
+        messages[i].status = d.status;
+        break;
+      }
     }
+  }
+
+  // ✅ Update only visible tick
+  updateMessageStatus(d.message_id, d.status);
+
+  // ✅ Update sidebar
+  upsertContact(
+    {
+      mobile: d.mobile,
+      last_status: d.status,
+      last_time: new Date().toISOString()
+    },
+    false
+  );
+
+  // ❌ DO NOT re-render full list
+}
 
     else if (d.type === 'typing'){
       if (d.mobile === selectedMobile){
