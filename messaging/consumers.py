@@ -309,6 +309,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "mark_read": self._handle_mark_read,
             "typing": self._handle_typing,
             "send_message": self._handle_send_message,
+            "clear_unread": self._handle_clear_unread,
         }
 
         handler = handlers.get(t)
@@ -317,6 +318,36 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         else:
             if self.connection_active:
                 await self.send_json({"type": "error", "message": f"unknown type: {t}"})
+
+
+    async def _handle_clear_unread(self, content):
+        mobile = content.get("mobile")
+        if not mobile:
+            return
+
+        from .models import ChatContact
+        from django.utils import timezone
+        from django.core.cache import cache
+
+        await sync_to_async(ChatContact.objects.filter(mobile=mobile).update)(
+        unread=0,
+        last_time=timezone.now()
+    )
+
+        cache.clear()
+
+    # 🔥 update UI
+        await self.channel_layer.group_send(
+            "global_contacts",
+        {
+            "type": "contact.update",
+            "contact": {
+                "mobile": mobile,
+                "unread": 0,
+                "last_time": timezone.now().isoformat()
+            }
+        }
+    )
 
     async def _handle_get_contacts(self, content):
         """Handle contacts request"""

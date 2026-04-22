@@ -1022,7 +1022,7 @@ bubble.innerHTML = `
         last_msg:m.sent_text_message,
         last_type:m.message_type,
         last_status:m.status,
-        unread: m.message_type==='Received'?1:0
+       
       }, true);
     }
   }
@@ -1245,6 +1245,10 @@ bubble.innerHTML = `
 
     sendWS({type:'join', mobile:m});
     // sendWS({type:'mark_read', mobile:m});
+    sendWS({
+  type: "clear_unread",
+  mobile: mobile
+});
     sendWS({type:'get_messages', mobile:m, page:1,});
   }
 
