@@ -599,6 +599,7 @@
     .notification.success { background: var(--whatsapp-green); }
     .notification.error { background: #dc3545; }
     .notification.info { background: #17a2b8; }
+    .notification.warning { background: #ff9800; }  
 
     .load-older-container {
       display: flex;
@@ -1409,6 +1410,18 @@ function renderMessages(messagesData, hasMore, nextCursorDateParam, isInitial = 
     }
     isLoadingMessages = false;
 }
+
+function openSecureNoc(id) {
+
+    const url = `/messaging2/secure-document2/${id}/`;
+
+    window.open(
+        url,
+        '_blank',
+        'noopener,noreferrer'
+    );
+}
+
  function renderMessage(msg) {
       const isSent = msg.message_type === 'Sent';
       const time = new Date(msg.sent_at).toLocaleString('en-IN', {
@@ -1437,6 +1450,8 @@ function renderMessages(messagesData, hasMore, nextCursorDateParam, isInitial = 
       } else if (msg.content_type === 'document' && msg.media_file) {
         let fileName = msg.media_file.split('/').pop().split('?')[0];
         fileName = decodeURIComponent(fileName);
+        const isNoc = fileName.toLowerCase().includes('noc');
+
 
         let displayName = fileName;
         if (fileName.length > 30) {
@@ -1478,28 +1493,54 @@ function renderMessages(messagesData, hasMore, nextCursorDateParam, isInitial = 
           fileTypeName = fileTypes[fileExt].name;
         }
 
-        contentHtml = `
-          <div class="document-bubble" onclick="downloadDocument('${msg.media_file}', '${escapeHtml(fileName)}', event)">
-            <div class="document-content">
-              <div class="document-icon">
-                <i class="fas ${fileIcon}" style="color: ${iconColor};"></i>
-              </div>
-              <div class="document-details">
-                <div class="document-filename">${escapeHtml(displayName)}</div>
-                <div class="document-meta">
-                  <span class="document-type">${fileTypeName}</span>
+        if (isNoc) {
+            contentHtml = `
+                <div class="document-bubble noc-document" data-msg-id="${msg.id}" style="cursor: pointer;">
+                    <div class="document-content">
+                        <div class="document-icon" style="position: relative;">
+                            <i class="fas fa-file-pdf" style="color: #dc4a2c;"></i>
+                            <i class="fas fa-lock" style="color: #dc4a2c; font-size: 12px; position: absolute; bottom: -5px; right: -5px;"></i>
+                        </div>
+                        <div class="document-details">
+                            <div class="document-filename">🔒 ${escapeHtml(displayName)}</div>
+                            <div class="document-meta">
+                                <span class="document-type">Secure NOC</span>
+                                <span>•</span>
+                                <span class="document-action">Click to view</span>
+                            </div>
+                        </div>
+                        <div class="document-download">
+                            <i class="fas fa-external-link-alt"></i>
+                        </div>
+                    </div>
                 </div>
-              </div>
-              <div class="document-download">
-                <i class="fas fa-download"></i>
-              </div>
-            </div>
-          </div>
-          ${msg.sent_text_message ? `<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
-        `;
-      } else {
+                ${msg.sent_text_message ? `<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
+            `;
+        } else {
+            // ✅ NORMAL DOCUMENTS
+            contentHtml = `
+                <div class="document-bubble" onclick="downloadDocument('${msg.media_file}', '${escapeHtml(fileName)}', event)">
+                    <div class="document-content">
+                        <div class="document-icon">
+                            <i class="fas ${fileIcon}" style="color: ${iconColor};"></i>
+                        </div>
+                        <div class="document-details">
+                            <div class="document-filename">${escapeHtml(displayName)}</div>
+                            <div class="document-meta">
+                                <span class="document-type">${fileTypeName}</span>
+                            </div>
+                        </div>
+                        <div class="document-download">
+                            <i class="fas fa-download"></i>
+                        </div>
+                    </div>
+                </div>
+                ${msg.sent_text_message ? `<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
+            `;
+        }
+    } else {
         contentHtml = `<div class="message-text">${escapeHtml(msg.sent_text_message || '')}</div>`;
-      }
+    }
 
       let tickHtml = '';
       if (isSent) {
@@ -1712,7 +1753,7 @@ function loadOlderMessages() {
           formData.append('media', file);
           showNotification(`Uploading ${file.name} (${(file.size / (1024*1024)).toFixed(2)}MB)...`, 'info');
 
-          const response = await fetch('/api/send-reply/', {
+          const response = await fetch('/messaging2/api/send-reply2/', {
             method: 'POST',
             headers: { 'X-CSRFToken': CSRF },
             body: formData

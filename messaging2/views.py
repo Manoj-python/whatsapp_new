@@ -619,6 +619,7 @@ def send_reply_api2(request):
             if media_file:
                 # Determine media type
                 file_name = media_file.name.lower()
+                original_filename = media_file.name
                 if file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
                     WHATSAPP2_media_type = "image"
                     content_type_val = "image"
@@ -646,7 +647,8 @@ def send_reply_api2(request):
                         to_number=mobile,
                         media_id=media_id,
                         media_type=WHATSAPP2_media_type,
-                        caption=text if text else ""
+                        caption=text if text else "",
+                        filename=original_filename
                     )
                     msg_id = send_resp.get("messages", [{}])[0].get("id", "")
 
@@ -1115,3 +1117,32 @@ def get_contact_messages2(request):
         } for m in messages]
     }
     return JsonResponse(data)
+
+from django.http import StreamingHttpResponse, HttpResponseForbidden, Http404
+from django.shortcuts import get_object_or_404
+
+def view_secure_document2(request, log_id):
+    """
+    View secure NOC documents - only accessible to logged-in users
+    """
+    log = get_object_or_404(SmsWhatsAppLog2, id=log_id)
+
+    filename = (log.media_file.name or "").lower()
+
+    # Security check: Only allow NOC documents that were sent
+    if (
+        log.content_type != "document"
+        or log.message_type != "Sent"
+        or "noc" not in filename
+    ):
+        return HttpResponseForbidden("Not allowed")
+
+    file_obj = default_storage.open(log.media_file.name, "rb")
+
+    response = StreamingHttpResponse(file_obj, content_type="application/pdf")
+    response["Content-Disposition"] = "inline; filename=NOC.pdf"
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response["Pragma"] = "no-cache"
+    response["X-Content-Type-Options"] = "nosniff"
+
+    return response
