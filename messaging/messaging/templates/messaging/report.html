@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    table { border-collapse: collapse; width: 100%; max-width: 900px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
+    th { background:#f4f4f4; }
+  </style>
+</head>
+<body>
+  <h2>✅ Message Sending Report</h2>
+  <table>
+    <tr><th>Name</th><th>Mobile</th><th>Status</th></tr>
+    {% for name, mobile, status in results %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ mobile }}</td>
+      <td>{{ status }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p><a href="{% url 'upload_and_send' %}">← Send more messages</a></p>
+</body>
+</html>

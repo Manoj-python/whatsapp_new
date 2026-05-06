@@ -15,22 +15,23 @@ urlpatterns = [
     # Chat dashboard and APIs
     path('chat/', views.chat_dashboard2, name='chat_dashboard2'),
     path('api/messages/<str:mobile>/', views.chat_messages_api2, name='chat_messages_api2'),
-    path('api/send-reply/', views.send_reply_api2, name='send_reply_api2'),
+    path('api/send-reply2/', views.send_reply_api2, name='send_reply_api2'),
     path("api/contacts2/", views.contacts_api2, name="contacts_api2"),
     path("login/", views.messaging2_login, name="messaging2_login"),
     path("logout/", views.messaging2_logout, name="messaging2_logout"),
     path("api/mark-read/<str:mobile>/", views.mark_read2, name="mark_read2"),
+    path('api/contact-messages2/', views.get_contact_messages2, name='get_contact_messages2'),
+
 
 
 
     # Webhook and exports
     path('webhook/', views.whatsapp_webhook2, name='whatsapp_webhook2'),
-    path('export/received/', views.export_received_messages_to_excel2, name='export_received2'),
-    path(
-    "secure-document2/<int:log_id>/",
-    views.view_secure_document2,
-    name="secure_document2"
-),
+    #path('export/received/', views.export_received_messages_to_excel2, name='export_received2'),
+
+
+
+
 
      # -----------------------------
     # Real-time Chat Features (App2)

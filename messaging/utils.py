@@ -10,41 +10,146 @@ PAYMENT_LINK = "https://smsquare.co.in/pay2"
 # -----------------------------------------------------
 # Upload media to WhatsApp Cloud (same behaviour)
 # -----------------------------------------------------
+# def send_text_via_whatsapp(to_number: str, text_body: str) -> dict:
+#     """Send text message via WhatsApp API"""
+#     url = f"https://graph.facebook.com/v17.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+#     headers = {
+#         "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+#         "Content-Type": "application/json"
+#     }
+#     payload = {
+#         "messaging_product": "whatsapp",
+#         "to": to_number,
+#         "type": "text",
+#         "text": {"body": text_body}
+#     }
+#     r = requests.post(url, headers=headers, json=payload, timeout=10)
+#     r.raise_for_status()
+#     return r.json()
+
+
+# messaging/utils.py - Add/Update these functions
+
+import requests
+import mimetypes
+from django.core.files.uploadedfile import UploadedFile
+from django.conf import settings
+
 def upload_whatsapp_media(file_obj):
+    """
+    Upload media to WhatsApp Cloud API
+    Returns media ID
+    """
     access_token = settings.WHATSAPP_ACCESS_TOKEN
     phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
     url = f"https://graph.facebook.com/v22.0/{phone_number_id}/media"
     headers = {"Authorization": f"Bearer {access_token}"}
-
-    file_obj.seek(0)
-    files = {'file': (file_obj.name, file_obj.read(), file_obj.content_type)}
+    
+    # Reset file pointer to beginning
+    if hasattr(file_obj, 'seek'):
+        file_obj.seek(0)
+    
+    # Get file name and content type
+    if hasattr(file_obj, 'name'):
+        filename = file_obj.name
+    else:
+        filename = "media_file"
+    
+    content_type = getattr(file_obj, 'content_type', None)
+    if not content_type:
+        content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    
+    files = {
+        'file': (filename, file_obj.read(), content_type)
+    }
     data = {'messaging_product': 'whatsapp'}
+    
+    try:
+        resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+        resp.raise_for_status()
+        result = resp.json()
+        print(f"Media uploaded successfully. ID: {result.get('id')}")
+        return result
+    except Exception as e:
+        print(f"Media upload error: {e}")
+        print(f"Response: {resp.text if 'resp' in locals() else 'No response'}")
+        raise
 
-    resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
-
-
-# -----------------------------------------------------
-# Send media (image/video/audio/document)
-# -----------------------------------------------------
 def send_whatsapp_media(to_number, media_id, media_type, caption=""):
+    """
+    Send media message using WhatsApp Cloud API
+    media_type: image, video, audio, document
+    """
     url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
-    headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-               "Content-Type": "application/json"}
-
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    # Build payload based on media type
     payload = {
         "messaging_product": "whatsapp",
         "to": to_number,
         "type": media_type,
-        media_type: {"id": media_id},
+        media_type: {"id": media_id}
     }
+    
+    # Add caption for image and video
     if caption and media_type in ("image", "video"):
         payload[media_type]["caption"] = caption
+    
+    # For audio, no caption is allowed
+    if media_type == "audio":
+        payload["audio"] = {"id": media_id}
+    
+    print(f"Sending {media_type} to {to_number}")
+    print(f"Payload: {payload}")
+    
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        resp.raise_for_status()
+        result = resp.json()
+        print(f"Media sent successfully. Message ID: {result.get('messages', [{}])[0].get('id')}")
+        return result
+    except Exception as e:
+        print(f"Send media error: {e}")
+        print(f"Response: {resp.text if 'resp' in locals() else 'No response'}")
+        raise
 
-    resp = requests.post(url, headers=headers, json=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+# messaging/utils.py - Verify this function exists
+
+# Add to utils.py if not present
+
+def send_whatsapp_text(to_number, text_body):
+    """Send text message via WhatsApp API"""
+    url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    text_body = text_body[:4096]
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "text",
+        "text": {"body": text_body}
+    }
+    
+    print(f"Sending text to {to_number}: {text_body[:50]}...")
+    
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        resp.raise_for_status()
+        result = resp.json()
+        print(f"Text sent successfully. Message ID: {result.get('messages', [{}])[0].get('id')}")
+        return result
+    except Exception as e:
+        print(f"Send text error: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"Response: {e.response.text}")
+        raise
 # --------------------------------------------------
 # WhatsApp template text sanitizer (CRITICAL)
 # --------------------------------------------------
@@ -134,6 +239,7 @@ def format_whatsapp_date(value) -> str:
 #         raise FileNotFoundError(f"Legal PDF not found: {file_path}")
 
 #     return open(file_path, "rb")
+
 from pathlib import Path
 from django.conf import settings
 import boto3
@@ -145,6 +251,11 @@ from botocore.exceptions import ClientError
 
 
 def open_legal_pdf(filename, folder):
+    from pathlib import Path
+    import boto3
+    from botocore.exceptions import ClientError
+    from django.conf import settings
+
     filename = Path(str(filename)).name.strip()
 
     # ==================================================
@@ -158,7 +269,6 @@ def open_legal_pdf(filename, folder):
     )
 
     key = f"{folder}/{filename}"
-
     print("DEBUG S3 KEY:", key)
 
     try:
@@ -166,14 +276,22 @@ def open_legal_pdf(filename, folder):
             Bucket=settings.AWS_STORAGE_BUCKET_NAME,
             Key=key,
         )
+
         print("✅ Loaded from S3")
-        return obj["Body"]
+
+        # 🔥 IMPORTANT FIX: RETURN BYTES (NOT STREAM)
+        file_bytes = obj["Body"].read()
+
+        if not file_bytes:
+            raise ValueError("S3 file is empty")
+
+        return file_bytes
 
     except ClientError as e:
         print("⚠️ S3 fetch failed:", e)
 
     # ==================================================
-    # 🔽 FALLBACK TO LOCAL (ONLY IF NEEDED)
+    # 🔽 FALLBACK TO LOCAL (ONLY IN DEBUG)
     # ==================================================
     if settings.DEBUG:
 
@@ -187,23 +305,28 @@ def open_legal_pdf(filename, folder):
             raise ValueError(f"Unknown folder: {folder}")
 
         file_path = base_dir / filename
-
         print("DEBUG LOCAL PATH:", file_path)
 
         if file_path.exists():
             print("✅ Loaded from LOCAL")
-            return open(file_path, "rb")
+
+            # 🔥 IMPORTANT FIX: RETURN BYTES HERE ALSO
+            with open(file_path, "rb") as f:
+                file_bytes = f.read()
+
+            if not file_bytes:
+                raise ValueError("Local file is empty")
+
+            return file_bytes
 
         raise FileNotFoundError(
             f"PDF not found in S3 AND locally: {key} | {file_path}"
         )
 
     # ==================================================
-    # ❌ FINAL FAIL (production)
+    # ❌ FINAL FAIL (PRODUCTION)
     # ==================================================
-    raise FileNotFoundError(
-        f"PDF not found in S3: {key}"
-    )
+    raise FileNotFoundError(f"PDF not found in S3: {key}")
 
 # ---------------------------
 # WhatsApp number pre-check

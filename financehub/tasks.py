@@ -2,13 +2,11 @@ from celery import shared_task
 import openpyxl
 import pandas as pd
 import os
-from datetime import date
 
 from django.db import transaction
 from django.apps import apps
 
 from .utils import clean_header
-
 from .models import UploadHistory
 
 BULK_BATCH_SIZE = 2000
@@ -16,25 +14,25 @@ PANDAS_CHUNK_SIZE = 5000
 
 
 # ---------------------------------------------------------
-# SAFE DATE PARSER (FIXES Excel 00:00:00 ISSUE)
+# SAFE DATE PARSER
 # ---------------------------------------------------------
-def parse_date_safe(value):
-    """
-    Converts Excel / CSV / string / datetime into Python date.
-    Handles:
-    - Excel date cells
-    - '2025-01-15'
-    - '2025-01-15 00:00:00'
-    - empty / NaN
-    """
+def parse_datetime_safe(value):
     if value in (None, "", "nan", "NaT"):
         return None
 
     try:
+        if isinstance(value, str) and (("AM" in value.upper()) or ("PM" in value.upper())):
+            try:
+                return pd.to_datetime(value, format="%b %d,%Y, %I:%M:%S %p").to_pydatetime()
+            except:
+                pass
+
         dt = pd.to_datetime(value, errors="coerce")
         if pd.isna(dt):
             return None
-        return dt.date()
+
+        return dt.to_pydatetime()
+
     except Exception:
         return None
 
@@ -61,7 +59,6 @@ def get_model_by_type(file_type: str):
         "smsquare": "Smsquare",
         "upi": "Upi",
         "executive_visit_scheduling": "ExecutiveVisitScheduling",
-
     }
 
     model_name = mapping.get(file_type.lower())
@@ -70,8 +67,9 @@ def get_model_by_type(file_type: str):
 
     return apps.get_model("financehub", model_name)
 
+
 # ---------------------------------------------------------
-# UNIVERSAL FILE PROCESSOR (FINAL FIXED VERSION)
+# UNIVERSAL PROCESSOR
 # ---------------------------------------------------------
 @shared_task(bind=True)
 def process_universal_file(self, upload_id, tmp_path, ext, file_type):
@@ -79,38 +77,27 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
     upload = UploadHistory.objects.get(id=upload_id)
 
     try:
-        if upload.status == "completed":
-            return
-
         upload.status = "processing"
         upload.save(update_fields=["status"])
 
         Model = get_model_by_type(file_type)
         if not Model:
             upload.status = "error"
-            upload.error_message = f"Invalid file_type: {file_type}"
+            upload.error_message = "Invalid file type"
             upload.save()
             return
 
         model_fields = {f.name for f in Model._meta.fields}
         processed_rows = 0
 
-        # =====================================================
-        # 🔥 MODEL-SPECIFIC UNIQUE LOGIC (FIXED)
-        # =====================================================
+        # ================= UNIQUE LOGIC =================
         unique_field = None
 
-        if Model.__name__ == "Lcc":
+        if Model.__name__ in ["Lcc", "CollectionAllocations"]:
             unique_field = "loan_number"
 
-        elif Model.__name__ == "CollectionAllocations":
-            unique_field = "loan_number"
-
-        elif Model.__name__ == "DueNotice":
-            unique_field = None   # ✅ allow duplicates
-
-        elif Model.__name__ == "Dialer":
-            unique_field = None   # ✅ allow duplicates
+        elif Model.__name__ in ["Clu", "Dialer", "DueNotice", "EmployeeMaster"]:
+            unique_field = None   # ✅ allow all rows
 
         else:
             for field in ["loan_number", "agreement_number", "employee_number", "ticket_id"]:
@@ -118,9 +105,6 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
                     unique_field = field
                     break
 
-        # =====================================================
-        # 🔥 EXISTING VALUES (ONLY FOR UNIQUE MODELS)
-        # =====================================================
         existing_values = set()
         if unique_field:
             existing_values = set(
@@ -154,71 +138,57 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
                         field = Model._meta.get_field(col)
 
                         if isinstance(val, str):
-                            val = val.replace('\xa0', ' ')
-                            val = val.encode("latin-1", "ignore").decode("latin-1")
-                            val = val.strip()
+                            val = val.replace('\xa0', ' ').strip()
 
-                        if field.get_internal_type() == "DateField":
-                            cleaned[col] = parse_date_safe(val)
+                        field_type = field.get_internal_type()
+
+                        # 🔥 visited_on special
+                        if col == "visited_on":
+                            dt = parse_datetime_safe(val)
+                            cleaned[col] = dt if dt else None
+
+                        elif field_type in ["DateField", "DateTimeField"]:
+                            cleaned[col] = parse_datetime_safe(val)
+
+                        elif field_type == "IntegerField":
+                            try:
+                                cleaned[col] = int(val) if val else None
+                            except:
+                                cleaned[col] = None
+
+                        elif field_type == "DecimalField":
+                            try:
+                                cleaned[col] = float(val) if val else None
+                            except:
+                                cleaned[col] = None
+
                         else:
                             cleaned[col] = val if val is not None else ""
 
-                    # ✅ DUPLICATE CHECK (ONLY FOR LCC ETC)
+                    # DUPLICATE CHECK
                     if unique_field:
-                        val = cleaned.get(unique_field)
-
-                        if not val or val in existing_values:
+                        key = cleaned.get(unique_field)
+                        if not key or key in existing_values:
                             continue
-
-                        existing_values.add(val)
+                        existing_values.add(key)
 
                     batch.append(Model(**cleaned))
                     processed_rows += 1
 
                     if len(batch) >= BULK_BATCH_SIZE:
-                        with transaction.atomic():
-                            Model.objects.bulk_create(
-                                batch,
-                                ignore_conflicts=True
-                            )
+                        Model.objects.bulk_create(batch, ignore_conflicts=True)
                         batch = []
 
                 if batch:
-                    with transaction.atomic():
-                        Model.objects.bulk_create(
-                            batch,
-                            ignore_conflicts=True
-                        )
+                    Model.objects.bulk_create(batch, ignore_conflicts=True)
 
                 upload.processed_rows = processed_rows
                 upload.save(update_fields=["processed_rows"])
 
-            try:
-                reader = pd.read_csv(
-                    tmp_path,
-                    dtype=str,
-                    keep_default_na=False,
-                    chunksize=PANDAS_CHUNK_SIZE,
-                    encoding="utf-8",
-                    engine="python",
-                )
+            reader = pd.read_csv(tmp_path, dtype=str, chunksize=PANDAS_CHUNK_SIZE)
 
-                for chunk in reader:
-                    process_chunk(chunk)
-
-            except UnicodeDecodeError:
-
-                reader = pd.read_csv(
-                    tmp_path,
-                    dtype=str,
-                    keep_default_na=False,
-                    chunksize=PANDAS_CHUNK_SIZE,
-                    encoding="latin-1",
-                    engine="python",
-                )
-
-                for chunk in reader:
-                    process_chunk(chunk)
+            for chunk in reader:
+                process_chunk(chunk)
 
         # =====================================================
         # ==================== EXCEL ===========================
@@ -252,43 +222,52 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
 
                     field = Model._meta.get_field(col)
 
-                    if field.get_internal_type() == "DateField":
-                        cleaned[col] = parse_date_safe(val)
+                    if isinstance(val, str):
+                        val = val.strip()
+
+                    field_type = field.get_internal_type()
+
+                    if col == "visited_on":
+                        cleaned[col] = val.strip() if val else None
+
+                    elif field_type in ["DateField", "DateTimeField"]:
+                        cleaned[col] = parse_datetime_safe(val)
+
+                    elif field_type == "IntegerField":
+                        try:
+                            cleaned[col] = int(val) if val else None
+                        except:
+                            cleaned[col] = None
+
+                    elif field_type == "DecimalField":
+                        try:
+                            cleaned[col] = float(val) if val else None
+                        except:
+                            cleaned[col] = None
+
                     else:
-                        cleaned[col] = "" if val is None else str(val)
+                        cleaned[col] = val if val is not None else ""
 
-                # ✅ DUPLICATE CHECK (ONLY FOR LCC ETC)
                 if unique_field:
-                    val = cleaned.get(unique_field)
-
-                    if not val or val in existing_values:
+                    key = cleaned.get(unique_field)
+                    if not key or key in existing_values:
                         continue
-
-                    existing_values.add(val)
+                    existing_values.add(key)
 
                 batch.append(Model(**cleaned))
                 processed_rows += 1
 
                 if len(batch) >= BULK_BATCH_SIZE:
-                    with transaction.atomic():
-                        Model.objects.bulk_create(
-                            batch,
-                            ignore_conflicts=True
-                        )
+                    Model.objects.bulk_create(batch, ignore_conflicts=True)
                     batch = []
 
             if batch:
-                with transaction.atomic():
-                    Model.objects.bulk_create(
-                        batch,
-                        ignore_conflicts=True
-                    )
+                Model.objects.bulk_create(batch, ignore_conflicts=True)
 
-            upload.processed_rows = processed_rows
-            upload.save(update_fields=["processed_rows"])
-
+        # FINAL UPDATE
+        upload.processed_rows = processed_rows
         upload.status = "completed"
-        upload.save(update_fields=["status"])
+        upload.save()
 
     except Exception as e:
         upload.status = "error"
@@ -298,5 +277,5 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
     finally:
         try:
             os.remove(tmp_path)
-        except Exception:
+        except:
             pass

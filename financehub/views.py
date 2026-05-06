@@ -1,4 +1,3 @@
-
 import os
 import tempfile
 import unicodedata
@@ -226,23 +225,137 @@ def normalize_excel_text(text):
     return "".join(cleaned).strip()
 
 
+
+import boto3
+from django.conf import settings
+from django.db.models import Q
+from django.core.paginator import Paginator
+from django.shortcuts import render
+from django.core.cache import cache
+
+
+# -----------------------------------------------------
+# ✅ S3 CLIENT
+# -----------------------------------------------------
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+    region_name=settings.AWS_S3_REGION_NAME,
+)
+
+
+# -----------------------------------------------------
+# ✅ FETCH ALL NOTICE FILES (WITH PAGINATION + FIXES)
+# -----------------------------------------------------
+def get_all_notice_files():
+
+    file_map = {}
+    continuation_token = None
+
+    try:
+        while True:
+            params = {
+                "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                "Prefix": "notices/"
+            }
+
+            if continuation_token:
+                params["ContinuationToken"] = continuation_token
+
+            response = s3.list_objects_v2(**params)
+
+            for obj in response.get("Contents", []):
+                key = obj["Key"]
+
+                # filename extraction
+                filename = key.split("/")[-1].lower().strip()
+
+                # normalize filename
+                filename = filename.replace(" ", "_")
+
+                if "_" not in filename:
+                    continue
+
+                # safe parsing
+                parts = filename.split("_", 1)
+                loan_number = parts[0].upper()
+                file_type = parts[1].replace(".pdf", "")
+
+                # init map
+                if loan_number not in file_map:
+                    file_map[loan_number] = {
+                        "borrower": None,
+                        "guarantor": None,
+                        "co_borrower": None
+                    }
+
+                # 🔐 secure URL (IMPORTANT)
+                url = s3.generate_presigned_url(
+                    "get_object",
+                    Params={
+                        "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                        "Key": key
+                    },
+                    ExpiresIn=3600
+                )
+
+                # exact matching (no partial bugs)
+                if file_type == "co_borrower":
+                    file_map[loan_number]["co_borrower"] = url
+
+                elif file_type == "guarantor":
+                    file_map[loan_number]["guarantor"] = url
+
+                elif file_type == "borrower":
+                    file_map[loan_number]["borrower"] = url
+
+            # pagination check
+            if response.get("IsTruncated"):
+                continuation_token = response.get("NextContinuationToken")
+            else:
+                break
+
+    except Exception as e:
+        print("S3 ERROR:", e)
+        return {}
+
+    return file_map
+
+
+# -----------------------------------------------------
+# ✅ CACHE WRAPPER (VERY IMPORTANT 🚀)
+# -----------------------------------------------------
+def get_all_notice_files_cached():
+    data = cache.get("notice_files")
+
+    if not data:
+        data = get_all_notice_files()
+        cache.set("notice_files", data, timeout=300)  # 5 minutes
+
+    return data
+
+
+# -----------------------------------------------------
+# ✅ MAIN VIEW
+# -----------------------------------------------------
 @financehub_required
 def lcc_list(request):
 
     search_raw = request.GET.get("search", "")
-    search_clean = normalize_excel_text(search_raw)
+    search_clean = normalize_excel_text(search_raw).strip()
 
     base_qs = Lcc.objects.all()
 
     # -----------------------------------------------------
-    # ✅ CASE 1: NO SEARCH → SHOW FULL DATA FROM ID 1
+    # ✅ NO SEARCH
     # -----------------------------------------------------
     if not search_clean:
         qs = base_qs.order_by("id")
 
     else:
         # -----------------------------------------------------
-        # ✅ STEP 1: FIND EXACT MATCH (LOAN / MOBILE / GUARANTOR / VEHICLE)
+        # ✅ EXACT MATCH
         # -----------------------------------------------------
         primary = base_qs.filter(
             Q(loan_number__iexact=search_clean) |
@@ -251,19 +364,8 @@ def lcc_list(request):
             Q(vehicle_no__iexact=search_clean)
         )
 
-        # -----------------------------------------------------
-        # ✅ STEP 2: IF NOTHING EXACT → FALLBACK TO NAME SEARCH
-        # -----------------------------------------------------
-        if not primary.exists():
-            qs = base_qs.filter(
-                Q(customer_name__icontains=search_clean) |
-                Q(guarantor__icontains=search_clean)
-            ).order_by("id")
+        if primary.exists():
 
-        else:
-            # -----------------------------------------------------
-            # ✅ STEP 3: CLEAN EMPTY / ZERO VALUES BEFORE EXPANSION
-            # -----------------------------------------------------
             mobile_set = set(
                 x for x in primary.values_list("cust_mobile", flat=True)
                 if x not in ["", None, "0"]
@@ -277,9 +379,6 @@ def lcc_list(request):
                 if x not in ["", None]
             )
 
-            # -----------------------------------------------------
-            # ✅ STEP 4: EXPAND ONLY WITH CLEAN VALUES
-            # -----------------------------------------------------
             qs = base_qs.filter(
                 Q(cust_mobile__in=mobile_set) |
                 Q(guarantor_mobile__in=mobile_set) |
@@ -287,13 +386,42 @@ def lcc_list(request):
                 Q(id__in=primary.values("id"))
             ).distinct().order_by("id")
 
+        else:
+            # -----------------------------------------------------
+            # ✅ NAME SEARCH
+            # -----------------------------------------------------
+            qs = base_qs.filter(
+                Q(customer_name__icontains=search_clean) |
+                Q(guarantor__icontains=search_clean)
+            ).order_by("id")
+
     # -----------------------------------------------------
-    # ✅ PAGINATION (STABLE & CLEAN)
+    # ✅ PAGINATION
     # -----------------------------------------------------
     paginator = Paginator(qs, 50)
     page = request.GET.get("page")
     page_obj = paginator.get_page(page)
 
+    # -----------------------------------------------------
+    # ✅ LOAD S3 FILES (CACHED 🚀)
+    # -----------------------------------------------------
+    file_map = get_all_notice_files_cached()
+
+    # -----------------------------------------------------
+    # ✅ ATTACH PDF LINKS
+    # -----------------------------------------------------
+    for obj in page_obj:
+        loan_number = (obj.loan_number or "").strip().upper()
+
+        files = file_map.get(loan_number, {})
+
+        obj.borrower_pdf = files.get("borrower")
+        obj.guarantor_pdf = files.get("guarantor")
+        obj.co_borrower_pdf = files.get("co_borrower")
+
+    # -----------------------------------------------------
+    # ✅ QUERY STRING
+    # -----------------------------------------------------
     params = request.GET.copy()
     params.pop("page", None)
     params["search"] = search_clean
@@ -303,7 +431,6 @@ def lcc_list(request):
         "search": search_clean,
         "query_string": params.urlencode(),
     })
-
 
 
 def build_latest_payment_map(loan_numbers):
@@ -2182,9 +2309,16 @@ def closed_delete(request):
 
 
 
-
 @financehub_required
 def download_employee_report(request):
+
+    import calendar
+    import datetime
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from openpyxl import load_workbook
+    from openpyxl.styles import Font
 
     # -------------------------
     # STEP 1: LOAD EMPLOYEES
@@ -2211,7 +2345,7 @@ def download_employee_report(request):
 
     master_df['joined_on'] = pd.to_datetime(
         master_df['joined_on'],
-        format='%d %b %Y',
+        format='%d-%b-%y',
         errors='coerce'
     )
 
@@ -2245,29 +2379,50 @@ def download_employee_report(request):
 
     if not clu_df.empty:
         clu_df = clu_df[clu_df['employee_id'].notnull()]
+
         clu_df["visit_datetime"] = pd.to_datetime(
             clu_df["visited_on"],
             format="%b %d,%Y, %I:%M:%S %p",
             errors='coerce'
         )
+
         clu_df["visit_date"] = clu_df["visit_datetime"].dt.normalize()
+
         max_date = clu_df["visit_date"].max()
     else:
-        max_date = datetime.date.today()
+        max_date = pd.Timestamp(datetime.date.today())
 
-    last5days = [pd.Timestamp(max_date - datetime.timedelta(days=i)) for i in range(5)]
+    # -------------------------
+    # ✅ FULL MONTH LOGIC
+    # -------------------------
+    year = max_date.year
+    month = max_date.month
 
+    start_date = datetime.date(year, month, 1)
+    end_date = datetime.date(year, month, calendar.monthrange(year, month)[1])
+
+    all_days_list = pd.date_range(start=start_date, end=end_date)
+
+    # -------------------------
+    # CLEAN CLU DATA
+    # -------------------------
     if not clu_df.empty:
         clu_df = clu_df.sort_values(by=["visit_datetime"])
         clu_df = clu_df.groupby(["employee_id", "visit_date"], as_index=False).first()
 
+    # -------------------------
+    # CREATE ALL COMBINATIONS
+    # -------------------------
     employees = active_employees[['employee_number', 'employee_name', 'joined_on']].drop_duplicates()
 
     all_days = pd.DataFrame(
-        [(eid, ename, join_date, day) for eid, ename, join_date in employees.values for day in last5days],
+        [(eid, ename, join_date, day) for eid, ename, join_date in employees.values for day in all_days_list],
         columns=["employee_id", "employee_name", "joined_on", "visit_date"]
     )
 
+    # -------------------------
+    # MERGE
+    # -------------------------
     if not clu_df.empty:
         merged = pd.merge(
             all_days,
@@ -2279,18 +2434,21 @@ def download_employee_report(request):
         merged = all_days.copy()
         merged['visit_datetime'] = None
 
+    # -------------------------
+    # PIVOT
+    # -------------------------
     day_df = merged.pivot(
         index=['employee_id', 'employee_name', 'joined_on'],
         columns='visit_date',
         values='visit_datetime'
     ).reset_index()
 
-    day_df = day_df[['employee_id', 'employee_name', 'joined_on'] + last5days]
+    day_df = day_df[['employee_id', 'employee_name', 'joined_on'] + list(all_days_list)]
 
     # -------------------------
-    # SAME LOGIC
+    # APPLY BUSINESS LOGIC
     # -------------------------
-    for day in last5days:
+    for day in all_days_list:
         day_df[day] = day_df.apply(
             lambda row: (
                 'Not Yet Joined'
@@ -2300,6 +2458,9 @@ def download_employee_report(request):
             axis=1
         )
 
+    # -------------------------
+    # FINAL MERGE
+    # -------------------------
     final_df = pd.merge(
         active_employees,
         day_df,
@@ -2308,27 +2469,26 @@ def download_employee_report(request):
         how='left'
     )
 
-    cols = list(active_employees.columns) + last5days
+    cols = list(active_employees.columns) + list(all_days_list)
     final_df = final_df[cols]
 
     final_df['joined_on'] = final_df['joined_on'].dt.strftime('%Y-%m-%d')
-
-    # ✅ Fix NULL → NONE
     final_df['status'] = final_df['status'].replace(['NULL', None, ''], 'NONE')
 
-        # ✅ Clean column names (remove time)
+    # -------------------------
+    # CLEAN COLUMN NAMES
+    # -------------------------
     new_columns = []
-
     for col in final_df.columns:
         if isinstance(col, pd.Timestamp):
-            new_columns.append(col.strftime("%Y-%m-%d"))  # same as old
+            new_columns.append(col.strftime("%d-%b (%a)"))  # 🔥 upgraded
         else:
             new_columns.append(col)
 
     final_df.columns = new_columns
 
     # -------------------------
-    # STEP 3: EXCEL
+    # EXCEL
     # -------------------------
     output = BytesIO()
     final_df.to_excel(output, index=False)
@@ -2337,7 +2497,7 @@ def download_employee_report(request):
     wb = load_workbook(output)
     ws = wb.active
 
-    day_to_col_index = {day: 11 + idx for idx, day in enumerate(last5days)}
+    day_to_col_index = {day: 11 + idx for idx, day in enumerate(all_days_list)}
 
     for row_idx in range(2, ws.max_row + 1):
         for day_date, col_idx in day_to_col_index.items():
@@ -2358,7 +2518,6 @@ def download_employee_report(request):
                 else:
                     cell.font = Font(color="000000")
 
-                # ✅ MATCH OLD FORMAT EXACTLY
                 cell.number_format = 'MMM DD,YYYY, hh:mm:ss AM/PM'
 
             elif cell.value is None:
@@ -2377,12 +2536,10 @@ def download_employee_report(request):
         final_output,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    response['Content-Disposition'] = 'attachment; filename="Employee_Report.xlsx"'
+    response['Content-Disposition'] = 'attachment; filename="Employee_Report_Month.xlsx"'
 
     return response
-    
+
 @financehub_required
 def employee_report_page(request):
     return render(request, "financehub/employee_report.html")
-
-

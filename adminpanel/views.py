@@ -86,3 +86,113 @@ def user_delete(request, user_id):
     get_object_or_404(User, id=user_id).delete()
     messages.success(request, "User deleted")
     return redirect('admin_user_list')
+
+
+
+
+
+
+
+
+
+from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from django.http import HttpResponse
+from django.utils.timezone import localtime
+import csv
+
+
+# ✅ COMMON QUERY FUNCTION (FAST FILTER)
+def get_filtered_qs(model, request):
+    qs = model.objects.filter(status="Failed").only(
+        "mobile", "template_name", "status", "error_message", "sent_at"
+    ).order_by('-sent_at')
+
+    search = request.GET.get("search")
+    if search:
+        qs = qs.filter(mobile__icontains=search)
+
+    template = request.GET.get("template")
+    if template:
+        qs = qs.filter(template_name=template)
+
+    return qs
+
+
+# ✅ FAST CSV EXPORT (NO MEMORY ISSUE)
+def export_csv(qs, filename):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["Mobile", "Template", "Status", "Error", "Sent At"])
+
+    for row in qs.iterator(chunk_size=2000):  # 🔥 VERY FAST
+        sent_at = localtime(row.sent_at).replace(tzinfo=None) if row.sent_at else ""
+
+        writer.writerow([
+            row.mobile,
+            row.template_name,
+            row.status,
+            row.error_message,
+            sent_at
+        ])
+
+    return response
+
+
+# ===========================
+# 🔹 VIEW 1
+# ===========================
+from messaging.models import SmsWhatsAppLog
+
+@login_required
+def failed_messages(request):
+    qs = get_filtered_qs(SmsWhatsAppLog, request)
+
+    # 🚀 EXPORT
+    if request.GET.get("export") == "1":
+        return export_csv(qs, "failed_logs")
+
+    # 📄 PAGINATION
+    paginator = Paginator(qs, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    templates = SmsWhatsAppLog.objects.values_list(
+        "template_name", flat=True
+    ).distinct()
+
+    return render(request, 'adminpanel/failed_messages.html', {
+        'page_obj': page_obj,
+        'templates': templates
+    })
+
+
+# ===========================
+# 🔹 VIEW 2
+# ===========================
+from messaging2.models import SmsWhatsAppLog2
+
+@login_required
+def failed_messages2(request):
+    qs = get_filtered_qs(SmsWhatsAppLog2, request)
+
+    # 🚀 EXPORT
+    if request.GET.get("export") == "1":
+        return export_csv(qs, "failed_logs2")
+
+    # 📄 PAGINATION
+    paginator = Paginator(qs, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    templates = SmsWhatsAppLog2.objects.values_list(
+        "template_name", flat=True
+    ).distinct()
+
+    return render(request, 'adminpanel/failed_messages2.html', {
+        'page_obj': page_obj,
+        'templates': templates
+    })

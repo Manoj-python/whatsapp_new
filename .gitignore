@@ -9,3 +9,6 @@ uploads/
 uploads2/
 .env
 *.sql
+# Elasticsearch
+elasticsearch-8.13.4/
+*.tar.gz

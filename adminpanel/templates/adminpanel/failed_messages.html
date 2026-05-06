@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Failed Logs</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- 🔥 NAVBAR -->
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand">Messaging Dashboard</a>
+        <a href="{% url 'chat_dashboard2' %}" class="btn btn-light">Chat</a>
+    </div>
+</nav>
+
+<div class="container mt-4">
+
+    <h3 class="text-danger">Failed Messages (System 1)</h3>
+
+    <!-- 🔥 FILTERS -->
+    <form method="GET" class="row g-2 mb-3">
+
+        <!-- 🔍 SEARCH -->
+        <div class="col-md-4">
+            <input type="text" name="search"
+                   value="{{ request.GET.search }}"
+                   class="form-control"
+                   placeholder="Search mobile number">
+        </div>
+
+        <!-- 🎯 TEMPLATE -->
+        <div class="col-md-3">
+            <select name="template" class="form-select">
+                <option value="">All Templates</option>
+                {% for t in templates %}
+                <option value="{{ t }}" {% if request.GET.template == t %}selected{% endif %}>
+                    {{ t }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- 🔘 BUTTONS -->
+        <div class="col-md-5 d-flex gap-2">
+            <button class="btn btn-primary">Filter</button>
+            <a href="?" class="btn btn-secondary">Reset</a>
+
+            <!-- 🔥 EXPORT FIX -->
+            <a href="?export=1&search={{ request.GET.search }}&template={{ request.GET.template }}"
+               class="btn btn-success"
+               onclick="this.innerText='Downloading...';">
+               Export CSV
+            </a>
+        </div>
+
+    </form>
+
+    <!-- 📊 TABLE -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Mobile</th>
+                    <th>Template</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for msg in page_obj %}
+                <tr>
+                    <td>{{ msg.id }}</td>
+                    <td class="fw-bold text-primary">{{ msg.mobile }}</td>
+                    <td>{{ msg.template_name }}</td>
+                    <td><span class="badge bg-danger">{{ msg.status }}</span></td>
+                    <td class="text-danger">{{ msg.error_message }}</td>
+                    <td>{{ msg.sent_at|date:"Y-m-d H:i:s" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">
+                        No failed messages found
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+
+    <!-- 🔢 PAGINATION -->
+    <nav>
+        <ul class="pagination justify-content-center">
+
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link"
+                   href="?page={{ page_obj.previous_page_number }}&search={{ request.GET.search }}&template={{ request.GET.template }}">
+                    Previous
+                </a>
+            </li>
+            {% endif %}
+
+            <li class="page-item active">
+                <span class="page-link">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                </span>
+            </li>
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link"
+                   href="?page={{ page_obj.next_page_number }}&search={{ request.GET.search }}&template={{ request.GET.template }}">
+                    Next
+                </a>
+            </li>
+            {% endif %}
+
+        </ul>
+    </nav>
+
+</div>
+
+</body>
+</html>

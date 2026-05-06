@@ -50,21 +50,16 @@ def make_session():
 # Upload Legal PDF
 # ==================================================
 def upload_legal_pdf_to_whatsapp(pdf_filename, folder):
-    f = open_legal_pdf(pdf_filename, folder)
+    file_bytes = open_legal_pdf(pdf_filename, folder)
 
     class WhatsAppFile:
         name = pdf_filename
         content_type = "application/pdf"
 
         def read(self):
-            return f.read()
-
-        def seek(self, pos):
-            pass
+            return file_bytes   # ✅ FIX
 
     return upload_whatsapp_media(WhatsAppFile())
-
-
 
 # ==================================================
 # MAIN BULK TASK
@@ -305,7 +300,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
                 media_id = media_cache[pdf_filename]
 
-            # ==================================================
+          # ==================================================
             # 📦 BUILD PAYLOAD
             # ==================================================
             payload, rendered_text = build_payload(
@@ -322,24 +317,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             msg_id = resp.json()["messages"][0]["id"]
 
             # ==================================================
-            # 💾 SAVE PDF TO DASHBOARD
-            # ==================================================
-            media_file_obj = None
-            content_type_val = "text"
-            pdf_source = None
-
-            if pdf_filename:
-
-                content_type_val = "document"
-                pdf_source = pdf_filename
-
-                try:
-                    media_file_obj = open_legal_pdf(pdf_source, folder)
-                except Exception as e:
-                    logger.warning(f"Chat PDF open failed: {e}")
-
-            # ==================================================
-            # 📝 SAVE LOG
+            # 📝 SAVE LOG (FIXED CONTENT TYPE)
             # ==================================================
             log = SmsWhatsAppLog.objects.create(
                 job_id=job_id,
@@ -350,8 +328,44 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 status="Delivered",
                 message_id=msg_id,
                 message_type="Sent",
-                content_type=content_type_val,
+                content_type="document" if pdf_filename else "text",
             )
+
+            # ==================================================
+            # 🔥 SAVE PDF TO DATABASE (FINAL FIX)
+            # ==================================================
+            if pdf_filename:
+                try:
+                    print("PDF NAME:", pdf_filename)
+                    print("FOLDER:", folder)
+
+                    # 🔥 returns BYTES directly
+                    pdf_bytes = open_legal_pdf(pdf_filename, folder)
+
+                    print("PDF SIZE:", len(pdf_bytes))
+
+                    if not pdf_bytes:
+                        raise ValueError("Empty PDF")
+
+                    saved_path = default_storage.save(
+                        f"chat_media/{pdf_filename}",
+                        ContentFile(pdf_bytes)
+                    )
+
+                    # update same log
+                    SmsWhatsAppLog.objects.filter(id=log.id).update(
+                        media_file=saved_path,
+                        content_type="document"
+                    )
+
+                    print("✅ PDF SAVED:", saved_path)
+
+                except Exception as e:
+                    print("❌ PDF SAVE FAILED:", e)
+
+            # ==================================================
+            # 👤 UPDATE CONTACT
+            # ==================================================
             ChatContact.objects.update_or_create(
                 mobile=mobile,
                 defaults={
@@ -359,43 +373,25 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     "last_time": timezone.now(),
                     "last_type": "Sent",
                     "last_status": "Delivered",
-                    "unread": 0 
+                    "unread": 0
                 }
-               )
+            )
+
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 "global_contacts",
-            {
-                "type": "contact.update",
-                "contact": {
-            "mobile": mobile,
-            "last_msg": rendered_text or "[Media]",
-            "last_time": timezone.now().isoformat(),
-            "last_type": "Sent",
-            "last_status": "Delivered",
-            "unread": 0
-        }
-    }
-)
-
-            # ==================================================
-            # 📎 ATTACH PDF FILE
-            # ==================================================
-            if media_file_obj:
-                try:
-                    media_file_obj.seek(0)
-                    pdf_bytes = media_file_obj.read()
-
-                    file_buffer = io.BytesIO(pdf_bytes)
-
-                    log.media_file.save(
-                        pdf_source,
-                        ContentFile(file_buffer.getvalue())
-                    )
-                    log.save()
-
-                except Exception as e:
-                    logger.warning(f"Chat PDF save failed: {e}")
+                {
+                    "type": "contact.update",
+                    "contact": {
+                        "mobile": mobile,
+                        "last_msg": rendered_text or "[Media]",
+                        "last_time": timezone.now().isoformat(),
+                        "last_type": "Sent",
+                        "last_status": "Delivered",
+                        "unread": 0
+                    }
+                }
+            )
 
             local_success += 1
 
@@ -490,4 +486,5 @@ def finalize_bulk_job(self, job_id):
     ])
 
     logger.info("Job %s COMPLETED and reports generated", job_id)
+
 

@@ -19,8 +19,8 @@ from django.core.files.base import ContentFile
 from django.db import transaction, close_old_connections
 from django.db.models import F
 
-from .models import SmsWhatsAppLog2, BulkJob2
-from .utils import build_payload2, format_mobile2, check_whatsapp_number2
+from .models import *
+from .utils import *
 
 logger = get_task_logger(__name__)
 logger.setLevel(logging.INFO)
@@ -28,39 +28,77 @@ logger.setLevel(logging.INFO)
 # ==================================================
 # MAIN BULK JOB
 # ==================================================
-@shared_task(bind=True)
-def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_size=50):
 
+def make_session():
+    s = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=(429, 500, 502, 503, 504),
+    )
+    s.mount("https://", HTTPAdapter(max_retries=retries))
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+def upload_legal_pdf_to_whatsapp2(pdf_filename, folder):
+    """Upload PDF to WhatsApp - handles bytes correctly"""
+    from io import BytesIO
+    
+    # Get PDF bytes from S3 or local
+    pdf_bytes = open_legal_pdf2(pdf_filename, folder)
+    
+    if not pdf_bytes:
+        raise ValueError(f"Empty PDF: {pdf_filename}")
+    
+    # Create a BytesIO object that mimics a file
+    file_obj = BytesIO(pdf_bytes)
+    file_obj.name = pdf_filename
+    file_obj.content_type = "application/pdf"
+    
+    return upload_whatsapp_media2(file_obj)
+    
+
+@shared_task(bind=True, queue="whatsapp_secondary")
+def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_size=50):
+    template_choice = str(template_choice)
     close_old_connections()
+
     try:
         job = BulkJob2.objects.get(job_id=job_id)
     except BulkJob2.DoesNotExist:
-        logger.error("Job2 %s not found", job_id)
         return
 
-    # Check if job already completed
-    if job.status == "Completed":
-        logger.info(f"Job2 {job_id} already completed, skipping")
+    if job.status != "Pending":
         return
 
-    job.status = "Queued"
+    job.status = "Running"
     job.started_at = timezone.now()
     job.save(update_fields=["status", "started_at"])
 
+    # Read Excel
     try:
         with default_storage.open(excel_s3_path, "rb") as f:
-            bytes_data = f.read()
-        df = pd.read_excel(io.BytesIO(bytes_data), dtype=str).fillna("")
-    except Exception as e:
-        logger.exception("Failed to read Excel for job2 %s: %s", job_id, e)
+            data = f.read()
+        df = pd.read_excel(io.BytesIO(data), dtype=str).fillna("")
+    except Exception:
         job.status = "Failed"
-        job.save(update_fields=["status"])
+        job.completed_at = timezone.now()
+        job.save(update_fields=["status", "completed_at"])
         return
 
     rows = df.to_dict("records")
     total = len(rows)
 
-    job.total_customers = total
+    # Total customers
+    # if template_choice == "17":
+    #     job.total_customers = len({
+    #         format_mobile(r.get("cust_mobile") or r.get("CustMobile"))
+    #         for r in rows
+    #         if r.get("cust_mobile") or r.get("CustMobile")
+    #     })
+    # else:
+    #     job.total_customers = total
+
     job.save(update_fields=["total_customers"])
 
     if total == 0:
@@ -69,353 +107,338 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_s
         job.save(update_fields=["status", "completed_at"])
         return
 
+    # Create batches
     for i in range(0, total, chunk_size):
-        start = i
-        end = min(i + chunk_size, total)
-        process_bulk_whatsapp2_batch.apply_async(
-            args=(excel_s3_path, template_choice, job_id, start, end),
+        process_bulk_whatsapp_batch2.apply_async(
+            args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total)),
             queue="whatsapp_secondary",
         )
-
-    job.status = "Running"
-    job.save(update_fields=["status"])
-
-    finalize_bulk_job2.apply_async((job_id,), countdown=10, queue="whatsapp_secondary")
 
 
 # ==================================================
 # BATCH WORKER (FIXED VERSION)
 # ==================================================
-@shared_task(bind=True)
-def process_bulk_whatsapp2_batch(self, excel_s3_path, template_choice, job_id, start, end):
-
-    logger.info("Job2 batch %s rows [%d:%d] started", job_id, start, end)
+@shared_task(bind=True, queue="whatsapp_secondary")
+def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, start, end):
+    from django.db import close_old_connections
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+    from django.db.models import F
+    from django.utils import timezone
+    import io
+    import pandas as pd
+    import time
+    import re
+    
     close_old_connections()
+    template_choice = str(template_choice)
 
-    # --------------------------------------------------
-    # PREVENT RE-PROCESSING
-    # --------------------------------------------------
     try:
         job = BulkJob2.objects.get(job_id=job_id)
-        
-        if job.status == "Completed":
-            logger.info(f"Job2 {job_id} already completed, skipping batch {start}-{end}")
-            return
-            
-        if job.sent_count >= end:
-            logger.info(f"Batch {start}-{end} for job {job_id} appears already processed, skipping")
-            return
-            
     except BulkJob2.DoesNotExist:
-        logger.warning("Job2 %s deleted. Stopping batch [%d:%d]", job_id, start, end)
         return
 
-    # --------------------------------------------------
-    # READ EXCEL
-    # --------------------------------------------------
-    try:
-        with default_storage.open(excel_s3_path, "rb") as f:
-            bytes_data = f.read()
-
-        df = pd.read_excel(io.BytesIO(bytes_data), dtype=str).fillna("")
-        rows = df.to_dict("records")[start:end]
-
-    except Exception as e:
-        logger.exception("Batch read error job2 %s: %s", job_id, e)
+    if job.status != "Running":
         return
 
-    # --------------------------------------------------
-    # WHATSAPP SESSION
-    # --------------------------------------------------
-    session = requests.Session()
+    # Read Excel chunk
+    with default_storage.open(excel_s3_path, "rb") as f:
+        df = pd.read_excel(io.BytesIO(f.read()), dtype=str).fillna("")
+
+    rows = df.to_dict("records")[start:end]
+    success_records = []
+    failed_records = []
+    local_success = 0
+    local_failed = 0
+
+    # ==================================================
+    # 🔽 NORMAL FLOW
+    # ==================================================
+
+    media_cache = {}
+
+    session = make_session()
     session.headers.update({
         "Authorization": f"Bearer {settings.WHATSAPP2_ACCESS_TOKEN}"
     })
 
     post_url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP2_PHONE_NUMBER_ID}/messages"
 
-    success_records = []
-    failed_records = []
-    local_success = 0
-    local_failed = 0
-
-    # --------------------------------------------------
-    # PROCESS EACH ROW
-    # --------------------------------------------------
-    for idx, row in enumerate(rows, start=start):
-
-        if idx % 20 == 0:
-            close_old_connections()
-
+    for row in rows:
         name = row.get("customer_name") or row.get("CustomerName") or ""
-        raw_mobile = row.get("cust_mobile") or row.get("CustMobile") or ""
-        mobile = format_mobile2(raw_mobile)
-        
-        # Skip if no mobile
-        if not mobile:
-            reason = "No mobile number provided"
-            SmsWhatsAppLog2.objects.create(
-                job_id=job_id,
-                customer_name=name,
-                mobile=mobile,
-                template_name=template_choice,
-                sent_text_message="",
-                status="Failed",
-                message_id="",
-                content_type="text",
-                error_message=reason,
-            )
-            failed_records.append([name, mobile, reason])
-            local_failed += 1
-            continue
-            
-        # ----------------------------------------------
-        # CHECK WHATSAPP NUMBER
-        # ----------------------------------------------
+        mobile = format_mobile2(row.get("cust_mobile") or row.get("CustMobile") or "")
+
         try:
             check = check_whatsapp_number2(mobile)
         except Exception as e:
-            logger.exception("check_whatsapp_number2 error for %s: %s", mobile, e)
-            check = {"valid": False, "reason": "check error"}
+            SmsWhatsAppLog2.objects.create(
+                job_id=job_id,
+                customer_name=name,
+                mobile=mobile,
+                template_name=template_choice,
+                status="Failed",
+                message_type="Sent",
+                error_message=f"Validation error: {str(e)}",
+            )
+            failed_records.append([name, mobile, str(e)])
+            local_failed += 1
+            continue
 
         if not check.get("valid", False):
-            reason = check.get("reason") or "Invalid or blocked"
-
+            reason = check.get("reason", "Invalid WhatsApp number")
             SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
                 template_name=template_choice,
-                sent_text_message="",
                 status="Failed",
-                message_id="",
-                content_type="text",
+                message_type="Sent",
                 error_message=reason,
             )
-
             failed_records.append([name, mobile, reason])
             local_failed += 1
             continue
 
-        # ----------------------------------------------
-        # BUILD PAYLOAD + TEMPLATE TEXT
-        # ----------------------------------------------
         try:
-            # ✅ Now build_payload2 handles PDF upload internally
-            payload, rendered_text = build_payload2(template_choice, row)
-        except Exception as e:
-            reason = f"build_payload_error: {e}"
+            media_id = None
+            folder = None
+            pdf_filename = None
+            is_document = False  # ✅ Track if this is a document
 
-            logger.exception("Payload build error job2 %s row %s: %s", job_id, idx, e)
+            # ==================================================
+            # 📁 SELECT PDF + FOLDER (FIXED)
+            # ==================================================
+            if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40"):
+                is_document = True
+                
+                if template_choice == "14":
+                    pdf_filename = row.get("guarantor_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice == "21":
+                    pdf_filename = row.get("smf_lok_doc_file")
+                    folder = "legal_pdfs"
+                elif template_choice == "22":
+                    pdf_filename = row.get("smf_guarantor_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice == "23":
+                    pdf_filename = row.get("psf_customer_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice == "24":
+                    pdf_filename = row.get("psf_guarantor_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice == "31":
+                    pdf_filename = row.get("doc_noc_pdf_file")
+                    folder = "noc_pdfs"
+                elif template_choice in ("32", "33", "38"):
+                    pdf_filename = row.get("guarantor_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice in ("34", "35", "36", "37", "39"):
+                    pdf_filename = row.get("customer_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice == "30":
+                    pdf_filename = row.get("writeoff_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice == "40":
+                    pdf_filename = row.get("writeoff_pdf_file")
+                    folder = "legal_pdfs"
+                else:
+                    pdf_filename = row.get("customer_pdf_file")
+                    folder = "legal_pdfs"
 
-            SmsWhatsAppLog2.objects.create(
-                job_id=job_id,
-                customer_name=name,
-                mobile=mobile,
-                template_name=template_choice,
-                sent_text_message="",
-                status="Failed",
-                message_id="",
-                content_type="text",
-                error_message=reason,
+            # ==================================================
+            # 📤 UPLOAD TO WHATSAPP (ONLY IF PDF EXISTS)
+            # ==================================================
+            if pdf_filename:
+                if not folder:
+                    raise ValueError(f"Folder not set for template {template_choice}")
+
+                print("TEMPLATE:", template_choice)
+                print("FOLDER:", folder)
+                print("FILE:", pdf_filename)
+
+                if pdf_filename not in media_cache:
+                    upload_response = upload_legal_pdf_to_whatsapp2(pdf_filename, folder)
+
+                    if not upload_response or "id" not in upload_response:
+                        raise ValueError(f"Media upload failed: {upload_response}")
+
+                    media_cache[pdf_filename] = upload_response.get("id")
+
+                media_id = media_cache[pdf_filename]
+
+            # ==================================================
+            # 📦 BUILD PAYLOAD
+            # ==================================================
+            payload, rendered_text = build_payload2(
+                template_choice,
+                row,
+                media_id
             )
 
-            failed_records.append([name, mobile, reason])
-            local_failed += 1
-            continue
-        
-        # ----------------------------------------------
-        # SEND WHATSAPP MESSAGE
-        # ----------------------------------------------
-        try:
             resp = session.post(post_url, json=payload, timeout=30)
 
-            try:
-                j = resp.json()
-            except Exception:
-                j = {"error": {"message": resp.text, "code": resp.status_code}}
+            if not resp.ok:
+                raise ValueError(f"API Error: {resp.text}")
 
-            # =====================================================
-            # SUCCESS — MESSAGE SENT
-            # =====================================================
-            if resp.ok and isinstance(j, dict) and j.get("messages"):
+            msg_id = resp.json()["messages"][0]["id"]
 
-                msg_id = j["messages"][0].get("id", "")
-
-                # ----------------------------------------------
-                # DETERMINE CONTENT TYPE & PDF FILENAME
-                # ----------------------------------------------
-                content_type = "text"
-                media_filename = None
-                folder = None
-
-                # All document templates
-                if template_choice in ("13", "14", "21", "22", "23", "24", "31", "32", "33", "34", "35", "36", "37", "38", "39"):
-                    content_type = "document"
-
-                    if template_choice == "14":
-                        media_filename = row.get("guarantor_pdf_file")
-                        folder = "legal_pdfs"
-                    elif template_choice == "21":
-                        media_filename = row.get("smf_lok_doc_file")
-                        folder = "legal_pdfs"
-                    elif template_choice == "22":
-                        media_filename = row.get("smf_guarantor_pdf_file")
-                        folder = "legal_pdfs"
-                    elif template_choice == "23":
-                        media_filename = row.get("psf_customer_pdf_file")
-                        folder = "legal_pdfs"
-                    elif template_choice == "24":
-                        media_filename = row.get("psf_guarantor_pdf_file")
-                        folder = "legal_pdfs"
-                    elif template_choice == "31":
-                        media_filename = row.get("doc_noc_pdf_file")
-                        folder = "noc_pdfs"
-                    elif template_choice in ("32", "33", "38"):
-                        media_filename = row.get("guarantor_pdf_file")
-                        folder = "legal_pdfs"
-                    elif template_choice in ("34", "35", "36", "37", "39"):
-                        media_filename = row.get("customer_pdf_file")
-                        folder = "legal_pdfs"
-                    else:
-                        media_filename = row.get("customer_pdf_file")
-                        folder = "legal_pdfs"
-
-                # ----------------------------------------------
-                # SAVE MESSAGE LOG
-                # ----------------------------------------------
-                log = SmsWhatsAppLog2.objects.create(
-                    job_id=job_id,
-                    customer_name=name,
-                    mobile=mobile,
-                    template_name=template_choice,
-                    sent_text_message=rendered_text,
-                    status="Delivered",
-                    message_id=msg_id,
-                    content_type=content_type,
-                    error_message="",
-                )
-
-                # ----------------------------------------------
-                # ATTACH LEGAL DOCUMENT TO LOG
-                # ----------------------------------------------
-                if content_type == "document" and media_filename and folder:
-                    try:
-                        print("TEMPLATE:", template_choice)
-                        print("FOLDER:", folder)
-                        print("FILE:", media_filename)
-
-                        with open_legal_pdf2(media_filename, folder) as f:
-                            log.media_file.save(
-                                media_filename,
-                                ContentFile(f.read()),
-                                save=True
-                            )
-                        print("✅ PDF attached to log successfully")
-
-                    except Exception as e:
-                        logger.warning(
-                            "Failed attaching legal PDF %s for mobile %s: %s",
-                            media_filename,
-                            mobile,
-                            e
-                        )
-
-                success_records.append([name, mobile, msg_id])
-                local_success += 1
-
-            # =====================================================
-            # WHATSAPP ERROR RESPONSE
-            # =====================================================
-            else:
-                err = j.get("error", {})
-                err_msg = f"{err.get('code')} - {err.get('message')}"
-
-                SmsWhatsAppLog2.objects.create(
-                    job_id=job_id,
-                    customer_name=name,
-                    mobile=mobile,
-                    template_name=template_choice,
-                    sent_text_message=rendered_text,
-                    status="Failed",
-                    message_id="",
-                    content_type="text",
-                    error_message=err_msg,
-                )
-
-                failed_records.append([name, mobile, err_msg])
-                local_failed += 1
-
-        # =====================================================
-        # NETWORK ERROR
-        # =====================================================
-        except requests.RequestException as e:
-            err_msg = str(e)
-
-            logger.exception("HTTP error job2 sending to %s: %s", mobile, e)
-
-            SmsWhatsAppLog2.objects.create(
+            # ==================================================
+            # 📝 CREATE LOG (FIXED CONTENT TYPE)
+            # ==================================================
+            log_content_type = "document" if is_document and pdf_filename else "text"
+            
+            log = SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
                 template_name=template_choice,
                 sent_text_message=rendered_text,
-                status="Failed",
-                message_id="",
-                content_type="text",
-                error_message=err_msg,
+                status="Sent",
+                message_id=msg_id,
+                message_type="Sent",
+                content_type=log_content_type,  # ✅ Correct content type
             )
 
+            # ==================================================
+            # 💾 SAVE PDF TO DASHBOARD (IF EXISTS)
+            # ==================================================
+            if pdf_filename:
+                try:
+                    print("PDF NAME:", pdf_filename)
+                    print("FOLDER:", folder)
+                    
+                    # Get PDF bytes
+                    pdf_bytes = open_legal_pdf2(pdf_filename, folder)
+                    
+                    if not pdf_bytes:
+                        raise ValueError("Empty PDF")
+                    
+                    # Validate it's bytes
+                    if not isinstance(pdf_bytes, bytes):
+                        pdf_bytes = bytes(pdf_bytes)
+                    
+                    print(f"✅ PDF bytes received, size: {len(pdf_bytes)} bytes")
+                    
+                    # Save to storage
+                    saved_path = default_storage.save(
+                        f"chat_media2/{pdf_filename}",
+                        ContentFile(pdf_bytes)
+                    )
+                    
+                    # Update log with media file
+                    SmsWhatsAppLog2.objects.filter(id=log.id).update(
+                        media_file=saved_path,
+                        content_type="document"
+                    )
+                    log.refresh_from_db()
+                    print("✅ PDF SAVED:", saved_path)
+                    
+                except Exception as e:
+                    print(f"❌ PDF SAVE FAILED: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Don't fail the entire message if PDF save fails
+
+            # ==================================================
+            # 📝 UPDATE CONTACT
+            # ==================================================
+            ChatContact2.objects.update_or_create(
+                mobile=mobile,
+                defaults={
+                    "last_msg": rendered_text or "[Media]",
+                    "last_time": timezone.now(),
+                    "last_type": "Sent",
+                    "last_status": "Sent",
+                    "unread": 0 
+                }
+            )
+
+            # ==================================================
+            # 🔄 WEBSOCKET BROADCAST
+            # ==================================================
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            gm = re.sub(r"\D", "", mobile)
+            
+            if gm:
+                async_to_sync(channel_layer.group_send)(
+                    f"chat2_{gm}",
+                    {
+                        "type": "new_message",
+                        "message": {
+                            "id": log.id,
+                            "mobile": mobile,
+                            "sent_text_message": rendered_text,
+                            "content_type": log_content_type,
+                            "media_file": log.media_file.url if log.media_file else "",
+                            "sent_at": log.sent_at.isoformat(),
+                            "message_type": "Sent",
+                            "message_id": msg_id,
+                            "status": "Sent",
+                            "sender_name": name,
+                        }
+                    }
+                )
+            
+            # Update global contacts
+            async_to_sync(channel_layer.group_send)(
+                "global_contacts2",
+                {
+                    "type": "contact.update",
+                    "contact": {
+                        "mobile": mobile,
+                        "last_msg": rendered_text or "[Media]",
+                        "last_time": timezone.now().isoformat(),
+                        "last_type": "Sent",
+                        "last_status": "Sent",
+                        "unread": 0
+                    }
+                }
+            )
+            
+            success_records.append([name, mobile, msg_id])
+            local_success += 1
+            print(f"✅ Successfully sent to {mobile} - Message ID: {msg_id}")
+
+        except Exception as e:
+            err_msg = str(e)
+            print(f"❌ Failed to send to {mobile}: {err_msg}")
+            import traceback
+            traceback.print_exc()
+            
+            SmsWhatsAppLog2.objects.create(
+                job_id=job_id,
+                customer_name=name,
+                mobile=mobile,
+                template_name=template_choice,
+                status="Failed",
+                message_type="Sent",
+                error_message=err_msg,
+                content_type="text",
+            )
             failed_records.append([name, mobile, err_msg])
             local_failed += 1
 
-        # ----------------------------------------------
-        # RATE LIMIT PROTECTION
-        # ----------------------------------------------
-        time.sleep(0.5)
-        
-    # --------------------------------------------------
-    # UPDATE JOB COUNTERS
-    # --------------------------------------------------
-    try:
-        with transaction.atomic():
-            BulkJob2.objects.filter(job_id=job_id).update(
-                sent_count=F("sent_count") + (local_success + local_failed),
-                success_count=F("success_count") + local_success,
-                failed_count=F("failed_count") + local_failed,
-            )
-    except Exception:
-        logger.exception("Failed updating counters for job2 %s", job_id)
+        time.sleep(0.3)
 
-    # --------------------------------------------------
-    # SAVE REPORT FILES
-    # --------------------------------------------------
-    try:
-        if success_records:
-            buf = io.BytesIO()
-            pd.DataFrame(success_records, columns=["Name", "Mobile", "MessageID"]).to_excel(buf, index=False)
-            buf.seek(0)
-            default_storage.save(
-                f"reports2/success_{job_id}_{start}_{end}.xlsx",
-                ContentFile(buf.read()),
-            )
-
-        if failed_records:
-            buf = io.BytesIO()
-            pd.DataFrame(failed_records, columns=["Name", "Mobile", "Reason"]).to_excel(buf, index=False)
-            buf.seek(0)
-            default_storage.save(
-                f"reports2/failed_{job_id}_{start}_{end}.xlsx",
-                ContentFile(buf.read()),
-            )
-    except Exception:
-        logger.exception("Failed saving batch reports for job2 %s [%d:%d]", job_id, start, end)
-
-    logger.info(
-        "Job2 batch %s rows [%d:%d] finished (success=%d failed=%d)",
-        job_id, start, end, local_success, local_failed
+    # ==================================================
+    # 📊 UPDATE JOB PROGRESS
+    # ==================================================
+    BulkJob2.objects.filter(job_id=job_id).update(
+        sent_count=F("sent_count") + (local_success + local_failed),
+        success_count=F("success_count") + local_success,
+        failed_count=F("failed_count") + local_failed,
     )
 
+    job.refresh_from_db()
+
+    if job.sent_count >= job.total_customers:
+        job.status = "Completed"
+        job.completed_at = timezone.now()
+        job.save(update_fields=["status", "completed_at"])
+        finalize_bulk_job2.delay(job_id)
 
 # ==================================================
 # FINALIZER
@@ -486,3 +509,44 @@ def finalize_bulk_job2(self, job_id):
     ])
 
     logger.info("Job %s COMPLETED and reports generated", job_id)
+
+@shared_task
+def process_pending_webhook_updates():
+    """Process any status updates that arrived before the message was saved"""
+    from django.core.cache import cache
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    keys = cache.keys("pending_wa_status_*")
+    
+    for key in keys:
+        data = cache.get(key)
+        if not data:
+            continue
+        
+        msg_id = key.replace("pending_wa_status_", "")
+        status_type = data.get('status')
+        
+        # Try to find the message now
+        obj = SmsWhatsAppLog2.objects.filter(message_id=msg_id).first()
+        
+        if obj:
+            if status_type == "sent":
+                norm = "Sent"
+            elif status_type == "delivered":
+                norm = "Delivered"
+            elif status_type == "read":
+                norm = "Read"
+            else:
+                continue
+            
+            SmsWhatsAppLog2.objects.filter(id=obj.id).update(status=norm)
+            print(f"✅ Processed pending status for {msg_id} -> {norm}")
+            cache.delete(key)
+        else:
+            # If older than 60 seconds, remove
+            timestamp = data.get('timestamp')
+            if timestamp:
+                from dateutil import parser
+                if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
+                    cache.delete(key)

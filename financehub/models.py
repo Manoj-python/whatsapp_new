@@ -41,6 +41,16 @@ class Lcc(models.Model):
     latest_status = models.CharField(max_length=255, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=['loan_number']),  # Already exists
+            models.Index(fields=['division']),
+            models.Index(fields=['branch']),
+            models.Index(fields=['company']),
+            models.Index(fields=['blc_cases']),
+            models.Index(fields=['emi_due_2']),
+            models.Index(fields=['centre_name']),
+        ]
 
     def __str__(self):
         return f"{self.loan_number} - {self.customer_name}"
@@ -87,7 +97,14 @@ class CollectionAllocations(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "Collection_Allocations"   # DO NOT CHANGE
+        db_table = "Collection_Allocations"
+        indexes = [
+            models.Index(fields=['loan_number']),
+            models.Index(fields=['manager_employee_id']),
+            models.Index(fields=['tl_employee_id']),
+            models.Index(fields=['employee_id']),
+            models.Index(fields=['company']),
+        ]  # DO NOT CHANGE
 
     def __str__(self):
         return f"{self.loan_number}"
@@ -97,104 +114,92 @@ class CollectionAllocations(models.Model):
 
 # financehub/models.py
 
+
+
 class Clu(models.Model):
-
-    employee_id = models.CharField(max_length=100, null=True, blank=True)
-    employee_name = models.CharField(max_length=255, null=True, blank=True)
-    employee_status = models.CharField(max_length=255, null=True, blank=True)
-    designation = models.CharField(max_length=255, null=True, blank=True)
-    area = models.CharField(max_length=255, null=True, blank=True)
-    branch_name = models.CharField(max_length=255, null=True, blank=True)
-    state = models.CharField(max_length=255, null=True, blank=True)
-    visit_under_manager = models.CharField(max_length=255, null=True, blank=True)
-    employee_mobile_number = models.CharField(max_length=50, null=True, blank=True)
-
-    customer_name = models.CharField(max_length=255, null=True, blank=True)
-    customer_contact_number = models.CharField(max_length=50, null=True, blank=True)
-
-    address_type = models.CharField(max_length=255, null=True, blank=True)
+    employee_id = models.CharField(max_length=50, null=True, blank=True)
+    employee_name = models.CharField(max_length=100, null=True, blank=True)
+    employee_status = models.CharField(max_length=50, null=True, blank=True)
+    designation = models.CharField(max_length=100, null=True, blank=True)
+    area = models.CharField(max_length=100, null=True, blank=True)
+    branch_name = models.CharField(max_length=100, null=True, blank=True)
+    state = models.CharField(max_length=100, null=True, blank=True)
+    visit_under_manager = models.CharField(max_length=100, null=True, blank=True)
+    employee_mobile_number = models.CharField(max_length=20, null=True, blank=True)
+    customer_name = models.CharField(max_length=100, null=True, blank=True)
+    customer_contact_number = models.CharField(max_length=20, null=True, blank=True)
+    address_type = models.CharField(max_length=50, null=True, blank=True)
     visit_address = models.TextField(null=True, blank=True)
-    is_cust_address_changed = models.CharField(max_length=50, null=True, blank=True)
+    is_cust_address_changed = models.CharField(max_length=10, null=True, blank=True)
     new_address = models.TextField(null=True, blank=True)
-
     reason_for_visit = models.TextField(null=True, blank=True)
-    remarks_for_visit_away_from_cust = models.TextField(null=True, blank=True)
-
-    other_party_mobile_number = models.CharField(max_length=50, null=True, blank=True)
-    time_spent_in_visit_location_in_mins = models.CharField(max_length=50, null=True, blank=True)
-
-    loan_number = models.CharField(max_length=150, null=True, blank=True, db_index=True)
-    funder_loan_no = models.CharField(max_length=150, null=True, blank=True)
-    dpd_days = models.CharField(max_length=50, null=True, blank=True)
-
-    type_of_visit = models.CharField(max_length=255, null=True, blank=True)
-    status = models.CharField(max_length=255, null=True, blank=True)
-    sub_status = models.CharField(max_length=255, null=True, blank=True)
-
-    payment_mode = models.CharField(max_length=100, null=True, blank=True)
-    payment_towards = models.CharField(max_length=255, null=True, blank=True)
-    charges = models.CharField(max_length=100, null=True, blank=True)
-    emi_paid = models.CharField(max_length=100, null=True, blank=True)
-    lpp_charges = models.CharField(max_length=100, null=True, blank=True)
-    total_amount_paid = models.CharField(max_length=100, null=True, blank=True)
-
-    payment_date = models.CharField(max_length=100, null=True, blank=True)
-    transaction_id = models.CharField(max_length=255, null=True, blank=True)
-
-    promised_payment_date = models.CharField(max_length=100, null=True, blank=True)
-    promised_time_slot = models.CharField(max_length=255, null=True, blank=True)
-    ptp_amount = models.CharField(max_length=100, null=True, blank=True)
-
-    is_vehicle_released = models.CharField(max_length=50, null=True, blank=True)
-    amount_paid_for_vehicle_release = models.CharField(max_length=100, null=True, blank=True)
+    remarks_for_visit = models.TextField(null=True, blank=True)
+    other_party_contact_number = models.CharField(max_length=20, null=True, blank=True)
+    time_spent_in_visit_location = models.CharField(max_length=20, null=True, blank=True)
+    loan_number = models.CharField(max_length=50, null=True, blank=True)
+    funder_loan_no = models.CharField(max_length=50, null=True, blank=True)
+    dpd_days = models.CharField(max_length=20, null=True, blank=True)
+    type_of_visit = models.CharField(max_length=50, null=True, blank=True)
+    status = models.CharField(max_length=50, null=True, blank=True)
+    sub_status = models.CharField(max_length=50, null=True, blank=True)
+    payment_mode = models.CharField(max_length=50, null=True, blank=True)
+    payment_towards = models.CharField(max_length=50, null=True, blank=True)
+    charges = models.CharField(max_length=50, null=True, blank=True)
+    emi_paid = models.CharField(max_length=50, null=True, blank=True)
+    lpp_charges = models.CharField(max_length=50, null=True, blank=True)
+    total_amount_paid = models.CharField(max_length=50, null=True, blank=True)
+    payment_date = models.CharField(max_length=50, null=True, blank=True)
+    transaction_id = models.CharField(max_length=100, null=True, blank=True)
+    promised_payment_date = models.CharField(max_length=50, null=True, blank=True)
+    promised_time_slot = models.CharField(max_length=50, null=True, blank=True)
+    ptp_amount = models.CharField(max_length=50, null=True, blank=True)
+    is_vehicle_released = models.CharField(max_length=10, null=True, blank=True)
+    amount_paid_for_vehicle_release = models.CharField(max_length=50, null=True, blank=True)
     vehicle_released_date_time = models.CharField(max_length=100, null=True, blank=True)
     reason_for_vehicle_release = models.TextField(null=True, blank=True)
-    days_bw_repossessed_and_released = models.CharField(max_length=50, null=True, blank=True)
-
+    days_bw_repossessed_released = models.CharField(max_length=50, null=True, blank=True)
     visited_on = models.CharField(max_length=100, null=True, blank=True)
-    is_visit_done_at_customer_address = models.CharField(max_length=50, null=True, blank=True)
+    is_visit_done_at_customer_address = models.CharField(max_length=10, null=True, blank=True)
     dist_bw_cust_addr_visit_addr = models.CharField(max_length=50, null=True, blank=True)
-
-    last_paid = models.CharField(max_length=100, null=True, blank=True)
-    cp_name = models.CharField(max_length=255, null=True, blank=True)
-    ag_date = models.CharField(max_length=100, null=True, blank=True)
-
-    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
-    due_date = models.CharField(max_length=100, null=True, blank=True)
-
-    new_mobile_no = models.CharField(max_length=50, null=True, blank=True)
-
-    asset_condition = models.CharField(max_length=255, null=True, blank=True)
-    fir_registered = models.CharField(max_length=50, null=True, blank=True)
-    insurance_active = models.CharField(max_length=50, null=True, blank=True)
-    asset_located = models.CharField(max_length=50, null=True, blank=True)
-    trace_status = models.CharField(max_length=255, null=True, blank=True)
+    last_paid = models.CharField(max_length=50, null=True, blank=True)
+    cp_name = models.CharField(max_length=100, null=True, blank=True)
+    ag_date = models.CharField(max_length=50, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=50, null=True, blank=True)
+    due_date = models.CharField(max_length=50, null=True, blank=True)
+    new_mobile_no = models.CharField(max_length=20, null=True, blank=True)
+    asset_condition = models.CharField(max_length=100, null=True, blank=True)
+    fir_registered = models.CharField(max_length=10, null=True, blank=True)
+    insurance_active = models.CharField(max_length=10, null=True, blank=True)
+    asset_located = models.CharField(max_length=10, null=True, blank=True)
+    trace_status = models.CharField(max_length=100, null=True, blank=True)
     seizure_reason = models.TextField(null=True, blank=True)
-    deceased_type = models.CharField(max_length=255, null=True, blank=True)
+    deceased_type = models.CharField(max_length=100, null=True, blank=True)
     reason_for_service = models.TextField(null=True, blank=True)
-    workshop_outstanding_amt = models.CharField(max_length=100, null=True, blank=True)
-
+    workshop_outstanding_amt = models.CharField(max_length=50, null=True, blank=True)
     visit_allocated = models.CharField(max_length=50, null=True, blank=True)
-
-    visit_latitude_longitude = models.CharField(max_length=255, null=True, blank=True)
-    customer_latitude_longitude = models.CharField(max_length=255, null=True, blank=True)
-
-    time_difference_bw_prev_visit = models.CharField(max_length=100, null=True, blank=True)
-
-    unit = models.CharField(max_length=100, null=True, blank=True)
+    visit_lat_long = models.CharField(max_length=100, null=True, blank=True)
+    customer_lat_long = models.CharField(max_length=100, null=True, blank=True)
+    time_diff_bw_prev_visit = models.CharField(max_length=50, null=True, blank=True)
+    unit = models.CharField(max_length=50, null=True, blank=True)
     remarks = models.TextField(null=True, blank=True)
-
-    l2_manager_emp_id = models.CharField(max_length=100, null=True, blank=True)
-    l2_manager_emp_name = models.CharField(max_length=255, null=True, blank=True)
-    l3_manager_emp_id = models.CharField(max_length=100, null=True, blank=True)
-    l3_manager_emp_name = models.CharField(max_length=255, null=True, blank=True)
+    l2_manager_emp_id = models.CharField(max_length=50, null=True, blank=True)
+    l2_manager_emp_name = models.CharField(max_length=100, null=True, blank=True)
+    l3_manager_emp_id = models.CharField(max_length=50, null=True, blank=True)
+    l3_manager_emp_name = models.CharField(max_length=100, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
-        db_table = "clu"
+        indexes = [
+            models.Index(fields=['loan_number']),
+            models.Index(fields=['visited_on']),
+        ]
 
     def __str__(self):
-        return f"{self.loan_number} - {self.employee_id}"
+        return f"{self.employee_name} - {self.customer_name}"
+
+
+
+
 
 
 
@@ -288,6 +293,10 @@ class Paid(models.Model):
 
     class Meta:
         db_table = "paid"
+        indexes = [
+            models.Index(fields=['loan_number']),
+            models.Index(fields=['received_date']),  # For sorting
+        ]
 
     def __str__(self):
         return f"{self.loan_number} - {self.received_amount}"
@@ -481,13 +490,12 @@ class DueNotice(models.Model):
     class Meta:
         db_table = "duenotice"
         indexes = [
-            models.Index(fields=["loan_number", "bar_number", "vehicle_no"])
+            models.Index(fields=['loan_number']),
+            models.Index(fields=['type_of_notice']),
+            models.Index(fields=['notice_date']),
         ]
-
     def __str__(self):
         return f"{self.loan_number} - {self.notice_status}"
-
-
 
 
 

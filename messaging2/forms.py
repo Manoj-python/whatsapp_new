@@ -30,7 +30,7 @@ TEMPLATE_CHOICES = [
     ("27", "Loss Sale PSF Guarantor (English)"),
     ("28", "Employee Lok PSF (English)"),
     ("29", "SMF Write Off (English)"),
-    ("30", "PSF Write Off (English)"),
+    ("30", "PSF Write Off Notice (English)"),
     ("31", "DOC NOC PSF (English)"),
 
     # -------- REGISTRATION (ENGLISH) --------
@@ -44,10 +44,11 @@ TEMPLATE_CHOICES = [
     ("37", "Customer SMF Registration Notice (Telugu)"),
     ("38", "Guarantor PSF Registration Notice (Telugu)"),
     ("39", "Customer SMF Registration Notice (Telugu)"),
+    ("40", "Guarantor PSF Write Off Notice (English)"),
 ]
 
 
-class UploadForm(forms.Form):
+class UploadForm2(forms.Form):
     template_choice = forms.ChoiceField(
         choices=TEMPLATE_CHOICES,
         label="Select Template"

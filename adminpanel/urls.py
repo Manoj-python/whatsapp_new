@@ -11,5 +11,7 @@ urlpatterns = [
     path('users/create/', views.user_create, name='admin_user_create'),
     path('users/edit/<int:user_id>/', views.user_edit, name='admin_user_edit'),
     path('users/delete/<int:user_id>/', views.user_delete, name='admin_user_delete'),
+    path('failed-messages/', views.failed_messages, name='failed_messages'),
+    path('failed-messages2/', views.failed_messages2, name='failed_messages2'),
 ]
 

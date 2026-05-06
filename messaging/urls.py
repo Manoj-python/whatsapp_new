@@ -21,6 +21,8 @@ urlpatterns = [
     path("api/contacts/", views.contacts_api, name="contacts_api"),
     path("webhook/", views.whatsapp_webhook, name="whatsapp_webhook"),
     path("api/mark-read/<str:mobile>/", views.mark_read, name="mark_read"),
+    path('api/contact-messages/', views.get_contact_messages, name='get_contact_messages'),
+
     
 
    

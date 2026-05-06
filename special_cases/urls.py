@@ -20,18 +20,19 @@ urlpatterns = [
     path('download-failed2/<str:job_id>/', download_failed_report3, name='download_failed_report3'),
 
     path("chat3/", chat_dashboard3, name="chat_dashboard3"),
-    path("api/messages3/<str:mobile>/", chat3_messages_api3, name="chat_messages_api3"),
+    path("api/messages3/<str:mobile>/", chat_messages_api3, name="chat_messages_api3"),
     path("api/send-reply3/", send_reply_api3, name="send_reply_api3"),
     path("api/mark-read3/<str:mobile>/", mark_read3),
-    path("login3/", splcase_login, name="splcase_login"),
-    path("logout3/", splcase_logout, name="splcase_logout"),
+    path("login3/", messaging3_login, name="splcase_login"),
+    path("logout3/", messaging3_logout, name="splcase_logout"),
 
     path("api/contacts3/", contacts_api3, name="contacts_api3"),
     # path("api/refresh-media/", refresh_media, name="refresh-media"),
     # path("api/stream-media/", stream_media),
     path("webhook/", whatsapp_webhook3, name="whatsapp_webhook3"),
     path("api/mark-read3/<str:mobile>/", mark_read3, name="mark_read3"),
-
+   
+    path('api/contact-messages3/', get_contact_messages3, name='get_contact_messages3'),
 
 
 
