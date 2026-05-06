@@ -797,7 +797,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
         if not pdf_filename:
             raise ValueError(f"PDF filename missing for template {choice}")
 
-        filename = Path(pdf_filename).name
+        original_filename = Path(pdf_filename).name
         
         # ==================================================
         # 📤 UPLOAD PDF TO WHATSAPP (CRITICAL FIX)
@@ -807,13 +807,13 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             raise ValueError(f"Empty PDF: {pdf_filename}")
 
         file_obj = BytesIO(pdf_bytes)
-        file_obj.name = filename
+        file_obj.name = original_filename
         file_obj.content_type = "application/pdf"
 
         upload_result = upload_whatsapp_media2(file_obj)
         media_id = upload_result.get("id")
         
-        print(f"✅ PDF uploaded to WhatsApp with ID: {media_id}")
+        print(f"✅ PDF uploaded to WhatsApp with ID: {media_id}, Filename: {original_filename}")
 
         payload = {
             "messaging_product": "whatsapp",
@@ -833,7 +833,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                                 "type": "document",
                                 "document": {
                                     "id": media_id,
-                                    "filename": filename
+                                    "filename": original_filename
                                 }
                             }
                         ],
@@ -888,7 +888,7 @@ def send_second_message_for_mobile2(all_rows, mobile):
     lines = []
 
     for row in all_rows:
-        row_mobile = format_mobile(
+        row_mobile = format_mobile2(
             row.get("cust_mobile") or row.get("CustMobile") or ""
         )
 

@@ -318,10 +318,11 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                         pdf_bytes = bytes(pdf_bytes)
                     
                     print(f"✅ PDF bytes received, size: {len(pdf_bytes)} bytes")
+                    original_filename = Path(pdf_filename).name
                     
                     # Save to storage
                     saved_path = default_storage.save(
-                        f"chat_media2/{pdf_filename}",
+                        f"chat_media2/{original_filename}",
                         ContentFile(pdf_bytes)
                     )
                     
@@ -331,7 +332,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                         content_type="document"
                     )
                     log.refresh_from_db()
-                    print("✅ PDF SAVED:", saved_path)
+                    print("✅ PDF SAVED:", original_filename)
                     
                 except Exception as e:
                     print(f"❌ PDF SAVE FAILED: {e}")

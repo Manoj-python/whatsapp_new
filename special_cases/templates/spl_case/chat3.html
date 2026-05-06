@@ -1712,7 +1712,7 @@ function loadOlderMessages() {
           formData.append('media', file);
           showNotification(`Uploading ${file.name} (${(file.size / (1024*1024)).toFixed(2)}MB)...`, 'info');
 
-          const response = await fetch('/api/send-reply/', {
+          const response = await fetch('/splcases_app/api/send-reply3/', {
             method: 'POST',
             headers: { 'X-CSRFToken': CSRF },
             body: formData
