@@ -888,7 +888,7 @@ def send_second_message_for_mobile2(all_rows, mobile):
     lines = []
 
     for row in all_rows:
-        row_mobile = format_mobile(
+        row_mobile = format_mobile2(
             row.get("cust_mobile") or row.get("CustMobile") or ""
         )
 
