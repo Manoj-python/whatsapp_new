@@ -41,7 +41,7 @@ INSTALLED_APPS = [
 
     "channels",
     "storages",
-    "django_elasticsearch_dsl",
+    
     "adminpanel",
     "messaging",
     "messaging2",
@@ -50,11 +50,7 @@ INSTALLED_APPS = [
     "special_cases",
       
 ]
-ELASTICSEARCH_DSL = {
-    "default": {
-        "hosts": "http://localhost:9200"
-    }
-}
+
 
 #ELASTICSEARCH_DSL_AUTOSYNC = True
 #ELASTICSEARCH_DSL_AUTO_REFRESH = True
