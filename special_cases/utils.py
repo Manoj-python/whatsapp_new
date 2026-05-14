@@ -925,7 +925,12 @@ def build_payload3(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
     }
 
     template_name, lang, parameters = templates.get(choice, templates["8"])
-    mobile = format_mobile3(row.get("cust_mobile", ""))
+    mobile = format_mobile2(
+    row.get("cust_mobile") or row.get("CustMobile") or ""
+)
+
+    if not mobile:
+        raise ValueError("Mobile number missing")
 
     # --------------------------------------------------
     # TEMPLATES WITH DOCUMENT HEADER (FIXED - UPLOADS PDF HERE)

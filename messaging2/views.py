@@ -71,7 +71,7 @@ def broadcast_delivery2(mobile, message_id, status):
     from channels.layers import get_channel_layer
     from asgiref.sync import async_to_sync
     from django.utils import timezone
-   
+
 
     channel_layer = get_channel_layer()
 
@@ -936,17 +936,40 @@ def whatsapp_webhook2(request):
 
 
                         mobile = obj.mobile
+                        errors = status.get("errors",[])
                         if status_type == "sent":
                             norm = "Sent"
                         elif status_type == "delivered":
                             norm = "Delivered"
                         elif status_type == "read":
                             norm = "Read"
+                        elif status_type == "failed":
+                            norm = "Failed"
+                            if errors:
+                                err = errors[0]
+                                code = int(err.get("code",0))
+                                # handel reengagement
+                                if code == 131047:
+                                    norm = "Re-engagement Required"
+                                elif code in [131026, 131051, 131011]:
+                                    norm = "Blocked"
+                                elif code in [131009, 131045]:
+                                    norm = "Invalid"
+                                elif code in [132000, 132001, 131008]:
+                                    norm = "Template Failed"
+                                elif code in [130429, 80007]:
+                                    norm = "Rate Limited"
+                                elif code in [10, 190, 200]:
+                                    norm = "Auth Failed"
+                                else:
+                                    norm = f"Failed ({code})"
+
                         else:
                             continue
 
                         # Update database
-                        SmsWhatsAppLog2.objects.filter(message_id=msg_id).update(status=norm)
+                        SmsWhatsAppLog2.objects.filter(message_id=msg_id).update(status=norm,
+                              error_message=json.dumps(errors) if errors else "")
                         ChatContact2.objects.filter(mobile=mobile).update(last_status=norm)
 
                         # WebSocket update
@@ -961,20 +984,28 @@ def whatsapp_webhook2(request):
                                     "mobile": mobile
                                 }
                             )
+
+                            async_to_sync(channel_layer.group_send)(
+                                "global_contacts2",
+                            {
+                                "type":"contact.update",
+                                "contact":{
+                                    "mobile":mobile,
+                                    "last_status":norm
+                                }
+                            }
+                        )
+
                         print(f"✅ Updated {msg_id} to {norm}")
                         total_unread = ChatContact2.objects.filter(unread__gt=0).count()
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts2",
                             {
-                                "type": "contact.update",
-                                "contact": {
-                                    "mobile": mobile,
-                                    "last_status": norm,
-                                    #"last_time": timezone.now().isoformat(),
+                                
                                     "type": "unread.update",
                                     "unread_count": total_unread
                                 }
-                            }
+                            
                         )
 
                         # print(f"✅ Updated {msg_id} to {norm}")

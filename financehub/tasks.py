@@ -2,9 +2,17 @@ from celery import shared_task
 import openpyxl
 import pandas as pd
 import os
+from django.apps import apps
+from django.core.cache import cache  # ✅ ADD THIS
+
+from .utils import clean_header
+from .models import UploadHistory
+from .models import LoanStatusCache  # ✅ ADD THIS
 
 from django.db import transaction
 from django.apps import apps
+from .models import *
+from django.core.cache import cache
 
 from .utils import clean_header
 from .models import UploadHistory
@@ -96,7 +104,7 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
         if Model.__name__ in ["Lcc", "CollectionAllocations"]:
             unique_field = "loan_number"
 
-        elif Model.__name__ in ["Clu", "Dialer", "DueNotice", "EmployeeMaster"]:
+        elif Model.__name__ in ["Clu", "Dialer", "DueNotice", "EmployeeMaster","Paid"]:
             unique_field = None   # ✅ allow all rows
 
         else:
@@ -268,6 +276,14 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
         upload.processed_rows = processed_rows
         upload.status = "completed"
         upload.save()
+
+        if Model.__name__ == "Lcc":
+            from django.core.cache import cache
+            from .models import LoanStatusCache
+            
+            cache.delete('dropdowns_final_v3')
+            deleted_count = LoanStatusCache.objects.all().delete()
+            print(f"Cleared LoanStatusCache after LCC upload")
 
     except Exception as e:
         upload.status = "error"

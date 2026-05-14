@@ -22,6 +22,7 @@ urlpatterns = [
     path("webhook/", views.whatsapp_webhook, name="whatsapp_webhook"),
     path("api/mark-read/<str:mobile>/", views.mark_read, name="mark_read"),
     path('api/contact-messages/', views.get_contact_messages, name='get_contact_messages'),
+    path('secure-document/<int:log_id>/', views.view_secure_document, name='secure_document'),
 
     
 

@@ -855,10 +855,25 @@ class Feedback(models.Model):
         return f"{self.LoanNO} - {self.EmpID}"
 
 
+class LoanStatusCache(models.Model):
+    loan_number = models.CharField(max_length=150, unique=True, db_index=True)
+    status = models.CharField(max_length=50, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'loan_status_cache'
+        constraints = []
 
 
 
 
-
-
+class StatusCountCache(models.Model):
+    """Cache for filtered status counts"""
+    filter_hash = models.CharField(max_length=100, unique=True, db_index=True)
+    total_count = models.IntegerField(default=0)
+    status_counts = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'status_count_cache'
 

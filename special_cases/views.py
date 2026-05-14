@@ -376,8 +376,8 @@ def ledger_list(request):
             Q(employee_id__iexact=search_clean) |
             Q(mobile_no__iexact=search_clean) |
             Q(reporting_manager__icontains=search_clean) |
-            Q(company__iexact=search_clean) 
-           
+            Q(company__iexact=search_clean)
+
         )
 
         # ================= NAME SEARCH =================
@@ -392,10 +392,10 @@ def ledger_list(request):
                     Value("\t"),
                     Value("")
                 ),
-                
+
             ).filter(
-                Q(clean_customer__icontains=search_name) 
-                
+                Q(clean_customer__icontains=search_name)
+
             ).order_by("id")
 
         # ================= RELATED RECORDS =================
@@ -403,11 +403,11 @@ def ledger_list(request):
             mobile_set = set(
                 x for x in primary.values_list("mobile_no", flat=True)
                 if x not in ["", None, "0"]
-            ) 
+            )
 
             qs = base_qs.filter(
                 Q(mobile_no__in=mobile_set) |
-                
+
                 Q(id__in=primary.values("id"))
             ).distinct().order_by("id")
 
@@ -524,8 +524,8 @@ def dealer_list(request):
         # ================= PRIMARY EXACT MATCH =================
         primary = base_qs.filter(
             Q(sales_manager__iexact=search_clean) |
-            Q(dealer__iexact=search_clean) 
-           
+            Q(dealer__iexact=search_clean)
+
         )
 
         # ================= NAME SEARCH =================
@@ -540,10 +540,10 @@ def dealer_list(request):
                     Value("\t"),
                     Value("")
                 ),
-                
+
             ).filter(
-                Q(clean_customer__icontains=search_name) 
-                
+                Q(clean_customer__icontains=search_name)
+
             ).order_by("id")
 
         # ================= RELATED RECORDS =================
@@ -551,11 +551,11 @@ def dealer_list(request):
             dealer_set = set(
                 x for x in primary.values_list("dealer", flat=True)
                 if x not in ["", None, "0"]
-            ) 
+            )
 
             qs = base_qs.filter(
                 Q(dealer__in=dealer_set) |
-                
+
                 Q(id__in=primary.values("id"))
             ).distinct().order_by("id")
 
@@ -618,7 +618,7 @@ def broadcast_delivery3(mobile, message_id, status):
     from channels.layers import get_channel_layer
     from asgiref.sync import async_to_sync
     from django.utils import timezone
-   
+
 
     channel_layer = get_channel_layer()
 
@@ -1481,17 +1481,39 @@ def whatsapp_webhook3(request):
 
 
                         mobile = obj.mobile
+                        errors = status.get("errors",[])
                         if status_type == "sent":
                             norm = "Sent"
                         elif status_type == "delivered":
                             norm = "Delivered"
                         elif status_type == "read":
                             norm = "Read"
+                        elif status_type == "failed":
+                            norm = "Failed"
+                            if errors:
+                                err = errors[0]
+                                code = int(err.get("code",0))
+                                # handel reengagement
+                                if code == 131047:
+                                    norm = "Re-engagement Required"
+                                elif code in [131026, 131051, 131011]:
+                                    norm = "Blocked"
+                                elif code in [131009, 131045]:
+                                    norm = "Invalid"
+                                elif code in [132000, 132001, 131008]:
+                                    norm = "Template Failed"
+                                elif code in [130429, 80007]:
+                                    norm = "Rate Limited"
+                                elif code in [10, 190, 200]:
+                                    norm = "Auth Failed"
+                                else:
+                                    norm = f"Failed ({code})"
+
                         else:
                             continue
 
                         # Update database
-                        SmsWhatsAppLog3.objects.filter(message_id=msg_id).update(status=norm)
+                        SmsWhatsAppLog3.objects.filter(message_id=msg_id).update(status=norm,error_message=json.dumps(errors) if errors else "")
                         ChatContact3.objects.filter(mobile=mobile).update(last_status=norm)
 
                         # WebSocket update
@@ -1506,19 +1528,26 @@ def whatsapp_webhook3(request):
                                     "mobile": mobile
                                 }
                             )
+
+                        async_to_sync(channel_layer.group_send)(
+                                "global_contacts3",
+                            {
+                                "type":"contact.update",
+                                "contact":{
+                                    "mobile":mobile,
+                                    "last_status":norm
+                                }
+                            }
+                        )
                         print(f"✅ Updated {msg_id} to {norm}")
                         total_unread = ChatContact3.objects.filter(unread__gt=0).count()
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts3",
                             {
-                                "type": "contact.update",
-                                "contact": {
-                                    "mobile": mobile,
-                                    "last_status": norm,
-                                    #"last_time": timezone.now().isoformat(),
-                                    "type": "unread.update",
-                                    "unread_count": total_unread
-                                }
+                                
+                                "type": "unread.update",
+                                "unread_count": total_unread
+                                
                             }
                         )
 
@@ -1662,3 +1691,32 @@ def get_contact_messages3(request):
         } for m in messages]
     }
     return JsonResponse(data)
+
+from django.http import StreamingHttpResponse, HttpResponseForbidden, Http404
+from django.shortcuts import get_object_or_404
+
+def view_secure_document3(request, log_id):
+    """
+    View secure NOC documents - only accessible to logged-in users
+    """
+    log = get_object_or_404(SmsWhatsAppLog3, id=log_id)
+
+    filename = (log.media_file.name or "").lower()
+
+    # Security check: Only allow NOC documents that were sent
+    if (
+        log.content_type != "document"
+        or log.message_type != "Sent"
+        or "noc" not in filename
+    ):
+        return HttpResponseForbidden("Not allowed")
+
+    file_obj = default_storage.open(log.media_file.name, "rb")
+
+    response = StreamingHttpResponse(file_obj, content_type="application/pdf")
+    response["Content-Disposition"] = "inline; filename=NOC.pdf"
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response["Pragma"] = "no-cache"
+    response["X-Content-Type-Options"] = "nosniff"
+
+    return response

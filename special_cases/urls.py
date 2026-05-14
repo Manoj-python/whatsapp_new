@@ -33,6 +33,8 @@ urlpatterns = [
     path("api/mark-read3/<str:mobile>/", mark_read3, name="mark_read3"),
    
     path('api/contact-messages3/', get_contact_messages3, name='get_contact_messages3'),
+    path('secure-document3/<int:log_id>/', view_secure_document3, name='secure_document3'),
+
 
 
 

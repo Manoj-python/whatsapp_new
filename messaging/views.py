@@ -17,9 +17,9 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.utils import timezone
 
-from .models import SmsWhatsAppLog, BulkJob, ChatContact
-from .utils import format_mobile, upload_whatsapp_media, send_whatsapp_media
-from .tasks import process_bulk_whatsapp
+from .models import *
+from .utils import *
+from .tasks import *
 from .forms import UploadForm
 from django.contrib.auth import authenticate
 from django.contrib import messages
@@ -27,7 +27,6 @@ from django.core.paginator import Paginator
 from .consumers import *
 
 import pytz
-from .utils import format_mobile
 
 
 def serialize_log(m):
@@ -72,7 +71,7 @@ def broadcast_delivery(mobile, message_id, status):
     from channels.layers import get_channel_layer
     from asgiref.sync import async_to_sync
     from django.utils import timezone
-    from .models import ChatContact
+
 
     channel_layer = get_channel_layer()
 
@@ -195,7 +194,7 @@ def upload_and_send(request):
                 status="Pending",
             )
 
-            # 🔥 FORCE TASK INTO whatsapp_main QUEUE
+            # 🔥 FORCE TASK INTO WHATSAPP2_main QUEUE
             process_bulk_whatsapp.apply_async(
                 args=(s3_key, choice, job_id),
                 queue="whatsapp_main"
@@ -272,7 +271,7 @@ def chat_dashboard(request):
 # -----------------------------------------------------
 # Get Messages for Mobile (returns public S3 URLs)
 # -----------------------------------------------------
-# in messaging/views.py (chat_messages_api)
+# in messagingviews.py (chat2_messages_api)
 from django.core.paginator import Paginator
 
 
@@ -324,7 +323,7 @@ def chat_messages_api(request, mobile):
 
 
 
-# messaging/views.py - COMPLETE FIXED VERSION
+# messagingviews.py - COMPLETE FIXED VERSION
 
 import pandas as pd
 import io
@@ -345,13 +344,8 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.utils import timezone
 
-from .models import SmsWhatsAppLog, BulkJob, ChatContact
-from .utils import format_mobile, upload_whatsapp_media, send_whatsapp_media
-from .tasks import process_bulk_whatsapp
-from .forms import UploadForm
-from django.contrib.auth import authenticate
-from django.contrib import messages
-from django.core.paginator import Paginator
+
+
 
 
 
@@ -360,7 +354,7 @@ from django.core.paginator import Paginator
 # =============================================
 # SEND REPLY API - FIXED WITH SAVE FIRST PATTERN
 # =============================================
-# messaging/views.py - COMPLETE WORKING VERSION (NO DUPLICATES)
+# messagingviews.py - COMPLETE WORKING VERSION (NO DUPLICATES)
 
 import pandas as pd
 import io
@@ -381,10 +375,6 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.utils import timezone
 
-from .models import SmsWhatsAppLog, BulkJob, ChatContact
-from .utils import format_mobile, upload_whatsapp_media, send_whatsapp_media
-from .tasks import process_bulk_whatsapp
-from .forms import UploadForm
 from django.contrib.auth import authenticate
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -436,7 +426,7 @@ def download_whatsapp_media(media_id):
         file_resp = requests.get(file_url, headers=headers, timeout=30)
         file_resp.raise_for_status()
 
-        filename = f"whatsapp_{media_id}.{ext}"
+        filename = f"WHATSAPP_{media_id}.{ext}"
         return filename, file_resp.content
 
     except Exception as e:
@@ -444,124 +434,11 @@ def download_whatsapp_media(media_id):
         return None
 
 
-def messaging_required(view_func):
-    def wrapper(request, *args, **kwargs):
-        if not request.session.get("messaging_user"):
-            return redirect("/login/")
-        return view_func(request, *args, **kwargs)
-    return wrapper
-
-
-# =============================================
-# AUTHENTICATION
-# =============================================
-def messaging_login(request):
-    if request.method == "POST":
-        username = request.POST.get("username")
-        password = request.POST.get("password")
-        user = authenticate(username=username, password=password)
-        if user:
-            request.session["messaging_user"] = user.id
-            return redirect("upload_and_send")
-        else:
-            messages.error(request, "Invalid username or password")
-    return render(request, "messaging/login.html")
-
-
-def messaging_logout(request):
-    request.session.pop("messaging_user", None)
-    return redirect("/login/")
-
-
-# =============================================
-# BULK UPLOAD & JOB STATUS
-# =============================================
-@messaging_required
-def upload_and_send(request):
-    if request.method == "POST":
-        form = UploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            choice = form.cleaned_data["template_choice"]
-            excel_file = request.FILES["excel_file"]
-
-            unique_name = f"{uuid.uuid4().hex}_{excel_file.name}"
-            s3_key = f"uploads/{unique_name}"
-            default_storage.save(s3_key, excel_file)
-
-            with default_storage.open(s3_key, "rb") as f:
-                data = f.read()
-
-            df = pd.read_excel(io.BytesIO(data), dtype=str).fillna("")
-            job_id = str(uuid.uuid4())
-
-            BulkJob.objects.create(
-                job_id=job_id,
-                template_name=choice,
-                total_customers=len(df),
-                excel_file=s3_key,
-                status="Pending",
-            )
-
-            process_bulk_whatsapp.apply_async(
-                args=(s3_key, choice, job_id),
-                queue="whatsapp_main"
-            )
-
-            return redirect("job_status", job_id=job_id)
-    else:
-        form = UploadForm()
-
-    return render(request, "messaging/index.html", {"form": form})
-
-
-def job_status(request, job_id):
-    job = get_object_or_404(BulkJob, job_id=job_id)
-    progress = 0
-    if job.total_customers > 0:
-        progress = round((job.sent_count / job.total_customers) * 100, 2)
-    return render(request, "messaging/job_status.html", {"job": job, "progress": progress})
-
-
-def download_success_report(request, job_id):
-    job = get_object_or_404(BulkJob, job_id=job_id)
-    if job.success_report:
-        return redirect(default_storage.url(job.success_report.name))
-    raise Http404("Success report not found.")
-
-
-def download_failed_report(request, job_id):
-    job = get_object_or_404(BulkJob, job_id=job_id)
-    if job.failed_report:
-        return redirect(default_storage.url(job.failed_report.name))
-    raise Http404("Failed report not found.")
-
 
 # =============================================
 # CHAT DASHBOARD & MESSAGES API
 # =============================================
-@messaging_required
-def chat_dashboard(request):
-    mobiles = (
-        SmsWhatsAppLog.objects
-        .values("mobile")
-        .annotate(last_sent=Max("sent_at"))
-        .order_by("-last_sent")
-    )
 
-    seen = set()
-    mobile_list = []
-
-    for m in mobiles:
-        normalized = format_mobile(str(m["mobile"]))
-        if normalized not in seen:
-            seen.add(normalized)
-            mobile_list.append({"mobile": normalized})
-
-    return render(request, "messaging/chat.html", {
-        "mobile_list": mobile_list,
-        "user_name": request.user.username,
-        "MEDIA_URL": settings.MEDIA_URL,
-    })
 
 
 def chat_messages_api(request, mobile):
@@ -659,7 +536,7 @@ def mark_read(request, mobile):
 # =============================================
 # SEND REPLY API - FIXED (NO RACE CONDITION)
 # =============================================
-# messaging/views.py - COMPLETE WORKING VERSION
+# messagingviews.py - COMPLETE WORKING VERSION
 
 @csrf_exempt
 def send_reply_api(request):
@@ -742,23 +619,24 @@ def send_reply_api(request):
             if media_file:
                 # Determine media type
                 file_name = media_file.name.lower()
+                original_filename = media_file.name
                 if file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
-                    whatsapp_media_type = "image"
+                    WHATSAPP2_media_type = "image"
                     content_type_val = "image"
                 elif file_name.endswith(('.mp4', '.mov', '.avi', '.mkv')):
-                    whatsapp_media_type = "video"
+                    WHATSAPP2_media_type = "video"
                     content_type_val = "video"
                 elif file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a')):
-                    whatsapp_media_type = "audio"
+                    WHATSAPP2_media_type = "audio"
                     content_type_val = "audio"
                 else:
-                    whatsapp_media_type = "document"
+                    WHATSAPP2_media_type = "document"
                     content_type_val = "document"
 
                 # Update content type in database
                 SmsWhatsAppLog.objects.filter(id=log.id).update(content_type=content_type_val)
 
-                # print(f"📤 Uploading {whatsapp_media_type}...")
+                # print(f"📤 Uploading {WHATSAPP2_media_type}...")
 
                 # Upload to WhatsApp
                 upload_resp = upload_whatsapp_media(media_file)
@@ -768,8 +646,9 @@ def send_reply_api(request):
                     send_resp = send_whatsapp_media(
                         to_number=mobile,
                         media_id=media_id,
-                        media_type=whatsapp_media_type,
-                        caption=text if text else ""
+                        media_type=WHATSAPP2_media_type,
+                        caption=text if text else "",
+                        filename=original_filename
                     )
                     msg_id = send_resp.get("messages", [{}])[0].get("id", "")
 
@@ -1057,17 +936,42 @@ def whatsapp_webhook(request):
 
 
                         mobile = obj.mobile
+                        #error handling 
+                        errors = status.get("errors",[])
                         if status_type == "sent":
                             norm = "Sent"
                         elif status_type == "delivered":
                             norm = "Delivered"
                         elif status_type == "read":
                             norm = "Read"
+                        elif status_type == "failed":
+                            norm = "Failed"
+                            if errors:
+                                err = errors[0]
+                                code = int(err.get("code",0))
+                                # handel reengagement
+                                if code == 131047:
+                                    norm = "Re-engagement Required"
+                                elif code in [131026, 131051, 131011]:
+                                    norm = "Blocked"
+                                elif code in [131009, 131045]:
+                                    norm = "Invalid"
+                                elif code in [132000, 132001, 131008]:
+                                    norm = "Template Failed"
+                                elif code in [130429, 80007]:
+                                    norm = "Rate Limited"
+                                elif code in [10, 190, 200]:
+                                    norm = "Auth Failed"
+                                else:
+                                    norm = f"Failed ({code})"
+                        
                         else:
                             continue
 
                         # Update database
-                        SmsWhatsAppLog.objects.filter(message_id=msg_id).update(status=norm)
+                        SmsWhatsAppLog.objects.filter(message_id=msg_id).update(
+                            status=norm,
+                            error_message=json.dumps(errors) if errors else "")
                         ChatContact.objects.filter(mobile=mobile).update(last_status=norm)
 
                         # WebSocket update
@@ -1082,20 +986,27 @@ def whatsapp_webhook(request):
                                     "mobile": mobile
                                 }
                             )
+                        async_to_sync(channel_layer.group_send)(
+                            "global_contacts",
+                            {
+                                "type":"contact.update",
+                                "contact":{
+                                    "mobile":mobile,
+                                    "last_status":norm
+                                }
+                            }
+                        )
+
                         print(f"✅ Updated {msg_id} to {norm}")
                         total_unread = ChatContact.objects.filter(unread__gt=0).count()
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts",
                             {
-                                "type": "contact.update",
-                                "contact": {
-                                    "mobile": mobile,
-                                    "last_status": norm,
-                                    #"last_time": timezone.now().isoformat(),
-                                    "type": "unread.update",
-                                    "unread_count": total_unread
+                                "type": "unread.update",
+                                
+                                "unread_count": total_unread
                                 }
-                            }
+                            
                         )
 
                         # print(f"✅ Updated {msg_id} to {norm}")
@@ -1131,7 +1042,7 @@ def download_whatsapp_media(media_id):
         file_resp = requests.get(file_url, headers=headers, timeout=30)
         file_resp.raise_for_status()
 
-        filename = f"whatsapp_{media_id}.{ext}"
+        filename = f"WHATSAPP_{media_id}.{ext}"
         return filename, file_resp.content
 
     except Exception as e:
@@ -1238,3 +1149,32 @@ def get_contact_messages(request):
         } for m in messages]
     }
     return JsonResponse(data)
+
+from django.http import StreamingHttpResponse, HttpResponseForbidden, Http404
+from django.shortcuts import get_object_or_404
+
+def view_secure_document(request, log_id):
+    """
+    View secure NOC documents - only accessible to logged-in users
+    """
+    log = get_object_or_404(SmsWhatsAppLog, id=log_id)
+
+    filename = (log.media_file.name or "").lower()
+
+    # Security check: Only allow NOC documents that were sent
+    if (
+        log.content_type != "document"
+        or log.message_type != "Sent"
+        or "noc" not in filename
+    ):
+        return HttpResponseForbidden("Not allowed")
+
+    file_obj = default_storage.open(log.media_file.name, "rb")
+
+    response = StreamingHttpResponse(file_obj, content_type="application/pdf")
+    response["Content-Disposition"] = "inline; filename=NOC.pdf"
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response["Pragma"] = "no-cache"
+    response["X-Content-Type-Options"] = "nosniff"
+
+    return response

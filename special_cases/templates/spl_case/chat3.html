@@ -862,6 +862,20 @@
 .notification.error { background: #dc3545; }
 .notification.info { background: #17a2b8; }
 .notification.warning { background: #ff9800; }  /* Used by the right-click warning */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+.message-tick.failed {
+  display: inline-block;
+  animation: shake 0.3s ease-in-out;
+}
+
+.message-tick.failed:hover {
+  animation: none;
+}
   </style>
 </head>
 <body>
@@ -1501,26 +1515,33 @@ function renderMessages(messagesData, hasMore, nextCursorDateParam, isInitial = 
         contentHtml = `<div class="message-text">${escapeHtml(msg.sent_text_message || '')}</div>`;
       }
 
-      let tickHtml = '';
-      if (isSent) {
-        if (msg.status === 'Read') tickHtml = '<span class="message-tick read">✓✓</span>';
-        else if (msg.status === 'Delivered') tickHtml = '<span class="message-tick delivered">✓✓</span>';
-        else tickHtml = '<span class="message-tick sent">✓</span>';
-      }
+ let tickHtml = '';
+  const messageId = msg.message_id || msg.id;
 
-      return `
-        <div class="message-row ${isSent ? 'sent' : 'received'}">
-          <div class="message-bubble ${isSent ? 'sent' : 'received'}">
-            ${contentHtml}
-            <div class="message-meta">
-              <span class="message-time">${time}</span>
-              ${tickHtml}
-            </div>
-          </div>
+  if (isSent) {
+    if (msg.status === 'Read') 
+      tickHtml = `<span class="message-tick read" data-msg-id="${messageId}">✓✓</span>`;
+    else if (msg.status === 'Delivered') 
+      tickHtml = `<span class="message-tick delivered" data-msg-id="${messageId}">✓✓</span>`;
+    else if (msg.status === 'Failed' || msg.status === 'Blocked' || msg.status === 'Invalid' || 
+             msg.status === 'Re-engagement Required') 
+      tickHtml = `<span class="message-tick failed" data-msg-id="${messageId}" title="${msg.status}">❌</span>`;
+    else 
+      tickHtml = `<span class="message-tick sent" data-msg-id="${messageId}">✓</span>`;
+  }
+
+  return `
+    <div class="message-row ${isSent ? 'sent' : 'received'}" data-msg-id="${messageId}">
+      <div class="message-bubble ${isSent ? 'sent' : 'received'}">
+        ${contentHtml}
+        <div class="message-meta">
+          <span class="message-time">${time}</span>
+          ${tickHtml}
         </div>
-      `;
-    }
-
+      </div>
+    </div>
+  `;
+}
     function appendMessage(msg) {
       const wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
 
@@ -1556,60 +1577,269 @@ function renderMessages(messagesData, hasMore, nextCursorDateParam, isInitial = 
       }
     }
 
-    function updateMessageTickImproved(messageId, status) {
-      console.log(`🔄 Updating tick for ${messageId} to ${status}`);
 
-      for (let i = 0; i < messages.length; i++) {
-        if (messages[i].message_id === messageId || messages[i].id == messageId) {
-          messages[i].status = status;
-          console.log(`✅ Updated message at index ${i} to status ${status}`);
+function updateMessageTickImproved(messageId, status) {
+  console.log(`🔄 Updating tick for messageId: ${messageId}, status: ${status}`);
+  
+  // ============================================
+  // FOR FAILED/BLOCKED/INVALID STATUSES
+  // ============================================
+  if (status === 'Failed' || status === 'Blocked' || status === 'Invalid' || 
+      status === 'Template Required' || status === 'Template Failed' || 
+      status === 'Re-engagement Required' || status === 'Rate Limited' || 
+      status === 'Auth Failed') {
+    
+    console.log('⚠️ Failed status detected - will update most recent sent message');
+    
+    let updatedMessageIndex = -1;
+    
+    // Update in messages array (find the most recent sent message without a final status)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].message_type === 'Sent' && 
+          (messages[i].status === 'Sent' || messages[i].status === 'Pending' || 
+           messages[i].status === 'Sending' || messages[i].status === 'Delivered' || 
+           messages[i].status === 'Read')) {
+        // Skip if already has a final status (Delivered, Read, or Failed)
+        if (messages[i].status === 'Delivered' || messages[i].status === 'Read') {
+          continue;
+        }
+        messages[i].status = status;
+        if (messageId && messageId !== '') {
+          messages[i].message_id = messageId;
+        }
+        updatedMessageIndex = i;
+        console.log(`✅ Updated message at index ${i} to ${status}`);
+        break;
+      }
+    }
+    
+    // Find the newest sent message in DOM that can be marked as failed
+    const sentMessages = document.querySelectorAll('.message-row.sent');
+    let updated = false;
+    
+    for (let i = sentMessages.length - 1; i >= 0; i--) {
+      const tick = sentMessages[i].querySelector('.message-tick');
+      // Only update if it doesn't already have a final status
+      if (tick && !tick.classList.contains('delivered') && 
+          !tick.classList.contains('read') && 
+          !tick.classList.contains('failed')) {
+        
+        // Update this one - it's the failed message
+        tick.innerHTML = '❌';
+        tick.className = 'message-tick failed';
+        tick.style.color = '#dc3545';
+        tick.style.fontSize = '12px';
+        tick.style.fontWeight = 'bold';
+        tick.title = status;
+        
+        // Add shake animation
+        tick.style.animation = 'none';
+        tick.offsetHeight;
+        tick.style.animation = 'shake 0.3s ease-in-out';
+        
+        // Store the message ID if we have it
+        if (messageId && messageId !== '') {
+          tick.setAttribute('data-msg-id', messageId);
+          const parentRow = tick.closest('.message-row');
+          if (parentRow) {
+            parentRow.setAttribute('data-msg-id', messageId);
+          }
+        }
+        
+        console.log('✅ Updated most recent message to FAILED');
+        updated = true;
+        break;
+      }
+    }
+    
+    if (!updated) {
+      console.warn('⚠️ Could not find any sent message to mark as failed');
+      const lastMessageRow = document.querySelector('.message-row.sent:last-child');
+      if (lastMessageRow) {
+        const tick = lastMessageRow.querySelector('.message-tick');
+        if (tick && !tick.classList.contains('failed')) {
+          tick.innerHTML = '❌';
+          tick.className = 'message-tick failed';
+          tick.style.color = '#dc3545';
+          tick.title = status;
+          console.log('✅ Updated last message as fallback');
+        }
+      }
+    }
+    
+    // Show notification for failed message
+    showNotification(`Message ${status.toLowerCase()}`, 'error');
+    return;
+  }
+  
+  // ============================================
+  // FOR SENT, DELIVERED, READ STATUSES
+  // ============================================
+  
+  // First, try to find the message by message_id in the array
+  let messageFound = false;
+  let targetIndex = -1;
+  
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i].message_id === messageId) {
+      messages[i].status = status;
+      messageFound = true;
+      targetIndex = i;
+      console.log(`✅ Updated message at index ${i} to status ${status} (by message_id match)`);
+      break;
+    }
+  }
+  
+  // If not found, look for the message by position (most recent without final status)
+  if (!messageFound && messageId && messageId !== '') {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].message_type === 'Sent' && 
+          messages[i].status !== 'Read' && 
+          messages[i].status !== 'Delivered' &&
+          !messages[i].status.includes('Failed') &&
+          !messages[i].status.includes('Re-engagement')) {
+        // This is likely the message we're updating
+        messages[i].message_id = messageId;
+        messages[i].status = status;
+        messageFound = true;
+        targetIndex = i;
+        console.log(`✅ Assigned message_id ${messageId} to message at index ${i} and set status to ${status}`);
+        break;
+      }
+    }
+  }
+  
+  // Find the tick span in DOM
+  let tickSpan = null;
+  
+  // Method 1: By data attribute
+  if (messageId && messageId !== '') {
+    tickSpan = document.querySelector(`.message-tick[data-msg-id="${messageId}"]`);
+  }
+  
+  // Method 2: By parent row data attribute
+  if (!tickSpan && messageId && messageId !== '') {
+    const messageRow = document.querySelector(`.message-row[data-msg-id="${messageId}"]`);
+    if (messageRow) {
+      tickSpan = messageRow.querySelector('.message-tick');
+      if (tickSpan) {
+        console.log('✅ Found tick span by message row data attribute');
+      }
+    }
+  }
+  
+  // Method 3: Search by HTML content (only if we have a messageId)
+  if (!tickSpan && messageId && messageId !== '') {
+    const allRows = document.querySelectorAll('.message-row');
+    for (const row of allRows) {
+      if (row.innerHTML.includes(messageId)) {
+        tickSpan = row.querySelector('.message-tick');
+        if (tickSpan) {
+          tickSpan.setAttribute('data-msg-id', messageId);
+          row.setAttribute('data-msg-id', messageId);
+          console.log('✅ Found tick span by searching HTML content');
           break;
         }
       }
-
-      let tickSpan = document.querySelector(`.message-tick[data-msg-id="${messageId}"]`);
-
-      if (!tickSpan) {
-        const allRows = document.querySelectorAll('.message-row');
-        for (const row of allRows) {
-          const tick = row.querySelector('.message-tick');
-          if (tick && row.innerHTML.includes(messageId)) {
+    }
+  }
+  
+  // Method 4: If we have a target index from the array, find that message in DOM
+  if (!tickSpan && targetIndex !== -1) {
+    const allSentRows = document.querySelectorAll('.message-row.sent');
+    // Messages array and DOM should be in same order
+    if (targetIndex < allSentRows.length) {
+      tickSpan = allSentRows[targetIndex].querySelector('.message-tick');
+      if (tickSpan) {
+        console.log(`✅ Found tick span by array index ${targetIndex}`);
+        if (messageId && messageId !== '') {
+          tickSpan.setAttribute('data-msg-id', messageId);
+          allSentRows[targetIndex].setAttribute('data-msg-id', messageId);
+        }
+      }
+    }
+  }
+  
+  // Method 5: Fallback - use the most recent sent message that matches the expected status
+  if (!tickSpan) {
+    const sentRows = document.querySelectorAll('.message-row.sent');
+    if (sentRows.length > 0) {
+      // For READ status, find the message that was Delivered or Sent
+      if (status === 'Read') {
+        for (let i = sentRows.length - 1; i >= 0; i--) {
+          const tick = sentRows[i].querySelector('.message-tick');
+          if (tick && (tick.classList.contains('delivered') || tick.classList.contains('sent'))) {
             tickSpan = tick;
+            console.log('⚠️ Using delivered/sent message for READ update');
             break;
           }
         }
       }
-
-      if (!tickSpan && status !== 'Sent') {
-        const sentRows = document.querySelectorAll('.message-row.sent');
-        if (sentRows.length > 0) {
-          tickSpan = sentRows[sentRows.length - 1].querySelector('.message-tick');
-          console.log('Using newest sent message as fallback');
+      // For DELIVERED status, find the message that was Sent
+      else if (status === 'Delivered') {
+        for (let i = sentRows.length - 1; i >= 0; i--) {
+          const tick = sentRows[i].querySelector('.message-tick');
+          if (tick && tick.classList.contains('sent') && !tick.classList.contains('delivered')) {
+            tickSpan = tick;
+            console.log('⚠️ Using sent message for DELIVERED update');
+            break;
+          }
         }
       }
-
-      if (tickSpan) {
-        if (status === 'Read') {
-          tickSpan.textContent = '✓✓';
-          tickSpan.className = 'message-tick read';
-          tickSpan.style.color = '#34B7F1';
-          console.log('✅ Updated tick to READ (blue double tick)');
-        } else if (status === 'Delivered') {
-          tickSpan.textContent = '✓✓';
-          tickSpan.className = 'message-tick delivered';
-          tickSpan.style.color = '#25D366';
-          console.log('✅ Updated tick to DELIVERED (green double tick)');
-        } else if (status === 'Sent') {
-          tickSpan.textContent = '✓';
-          tickSpan.className = 'message-tick sent';
-          tickSpan.style.color = '#8696a0';
-          console.log('✅ Updated tick to SENT (single tick)');
-        }
-        tickSpan.setAttribute('data-msg-id', messageId);
-      } else {
-        console.warn(`⚠️ Could not find tick span for message ${messageId}`);
+      
+      // Ultimate fallback
+      if (!tickSpan) {
+        tickSpan = sentRows[sentRows.length - 1].querySelector('.message-tick');
+        console.log('⚠️ Using newest sent message as final fallback');
       }
     }
+  }
+  
+  // Update the tick if found
+  if (tickSpan) {
+    // Don't update if it's already failed (prevent overwriting)
+    if (tickSpan.classList.contains('failed')) {
+      console.log('⚠️ Skipping update - message already marked as failed');
+      return;
+    }
+    
+    // Clear existing classes
+    tickSpan.className = 'message-tick';
+    
+    if (status === 'Read') {
+      tickSpan.textContent = '✓✓';
+      tickSpan.classList.add('read');
+      tickSpan.style.color = '#34B7F1';
+      tickSpan.style.fontWeight = 'bold';
+      console.log('✅ Updated tick to READ (blue double tick)');
+    } 
+    else if (status === 'Delivered') {
+      tickSpan.textContent = '✓✓';
+      tickSpan.classList.add('delivered');
+      tickSpan.style.color = '#25D366';
+      tickSpan.style.fontWeight = 'bold';
+      console.log('✅ Updated tick to DELIVERED (green double tick)');
+    } 
+    else if (status === 'Sent') {
+      tickSpan.textContent = '✓';
+      tickSpan.classList.add('sent');
+      tickSpan.style.color = '#8696a0';
+      tickSpan.style.fontWeight = 'normal';
+      console.log('✅ Updated tick to SENT (single tick)');
+    }
+    
+    // Store the message ID for future updates
+    if (messageId && messageId !== '') {
+      tickSpan.setAttribute('data-msg-id', messageId);
+      const parentRow = tickSpan.closest('.message-row');
+      if (parentRow) {
+        parentRow.setAttribute('data-msg-id', messageId);
+      }
+    }
+  } else {
+    console.error(`❌ Could not find tick span for message ${messageId}`);
+  }
+}
 
 function addLoadOlderButton() {
     removeLoadOlderButton();

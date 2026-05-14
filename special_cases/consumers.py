@@ -791,3 +791,22 @@ class ChatConsumer3(AsyncJsonWebsocketConsumer):
                 "type": "unread.update",
                 "unread_count": unread_count
         })
+    async def unread_update(self, event):
+        """Handle unread count updates"""
+        if self.connection_active:
+            unread_count = event.get("unread_count", 0)
+            print(f"📊 Unread update received: {unread_count}")
+            await self.send_json({
+                "type": "unread.update",
+                "unread_count": unread_count
+            })
+    
+    # ⭐ ADD THIS FOR SAFETY ⭐
+    async def presence_update(self, event):
+        """Handle presence updates"""
+        if self.connection_active:
+            await self.send_json({
+                "type": "presence.update",
+                "mobile": event.get("mobile"),
+                "status": event.get("status")
+            })

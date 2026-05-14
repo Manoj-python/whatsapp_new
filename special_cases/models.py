@@ -338,7 +338,7 @@ class ChatContact3(models.Model):
     last_msg = models.TextField(blank=True, default='')
     last_time = models.DateTimeField(default=timezone.now, db_index=True)
     last_type = models.CharField(max_length=20, blank=True, default='')
-    last_status = models.CharField(max_length=20, blank=True, default='')
+    last_status = models.CharField(max_length=225, blank=True, default='')
     unread = models.IntegerField(default=0, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     

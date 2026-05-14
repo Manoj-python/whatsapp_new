@@ -14,8 +14,8 @@ from django.db.models import Q, F
 from django.utils import timezone
 from django.core.cache import cache
 
-from .models import SmsWhatsAppLog, ChatContact
-from .utils import format_mobile
+from .models import *
+from .utils import *
 
 import requests
 
@@ -39,7 +39,6 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all"):
     Get contacts with pagination and filtering
     filter_type: 'all', 'unread', 'groups'
     """
-    from .models import SmsWhatsAppLog
 
     qs = ChatContact.objects.all()
 
@@ -792,3 +791,22 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "type": "unread.update",
                 "unread_count": unread_count
         })
+    async def unread_update(self, event):
+        """Handle unread count updates"""
+        if self.connection_active:
+            unread_count = event.get("unread_count", 0)
+            print(f"📊 Unread update received: {unread_count}")
+            await self.send_json({
+                "type": "unread.update",
+                "unread_count": unread_count
+            })
+    
+    # ⭐ ADD THIS FOR SAFETY ⭐
+    async def presence_update(self, event):
+        """Handle presence updates"""
+        if self.connection_active:
+            await self.send_json({
+                "type": "presence.update",
+                "mobile": event.get("mobile"),
+                "status": event.get("status")
+            })
