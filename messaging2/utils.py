@@ -1,4 +1,3 @@
-# messaging2/utils.py
 import re
 import requests
 from datetime import datetime
@@ -9,6 +8,7 @@ import requests
 import mimetypes
 from django.core.files.uploadedfile import UploadedFile
 from django.conf import settings
+from .models import *
 
 PAYMENT_LINK2 = "https://smsquare.co.in/pay2"
 
@@ -24,26 +24,26 @@ PAYMENT_LINK2 = "https://smsquare.co.in/pay2"
 #     phone_number_id = settings.WHATSAPP2_PHONE_NUMBER_ID
 #     url = f"https://graph.facebook.com/v22.0/{phone_number_id}/media"
 #     headers = {"Authorization": f"Bearer {access_token}"}
-    
+
 #     # Reset file pointer to beginning
 #     if hasattr(file_obj, 'seek'):
 #         file_obj.seek(0)
-    
+
 #     # Get file name and content type
 #     if hasattr(file_obj, 'name'):
 #         filename = file_obj.name
 #     else:
 #         filename = "media_file"
-    
+
 #     content_type = getattr(file_obj, 'content_type', None)
 #     if not content_type:
 #         content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-    
+
 #     files = {
 #         'file': (filename, file_obj.read(), content_type)
 #     }
 #     data = {'messaging_product': 'whatsapp'}
-    
+
 #     try:
 #         resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
 #         resp.raise_for_status()
@@ -61,40 +61,40 @@ def upload_whatsapp_media2(file_obj):
     Returns media ID
     """
     import mimetypes
-    
+
     access_token = settings.WHATSAPP2_ACCESS_TOKEN
     phone_number_id = settings.WHATSAPP2_PHONE_NUMBER_ID
     url = f"https://graph.facebook.com/v22.0/{phone_number_id}/media"
     headers = {"Authorization": f"Bearer {access_token}"}
-    
+
     # ✅ Handle bytes input
     if isinstance(file_obj, bytes):
         from io import BytesIO
         file_obj = BytesIO(file_obj)
         file_obj.name = "document.pdf"
-    
+
     # Reset file pointer to beginning
     if hasattr(file_obj, 'seek'):
         file_obj.seek(0)
-    
+
     # Get file name and content type
     if hasattr(file_obj, 'name'):
         filename = file_obj.name
     else:
         filename = "media_file"
-    
+
     content_type = getattr(file_obj, 'content_type', None)
     if not content_type:
         content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-    
+
     # ✅ Read content properly
     content = file_obj.read() if hasattr(file_obj, 'read') else file_obj
-    
+
     files = {
         'file': (filename, content, content_type)
     }
     data = {'messaging_product': 'whatsapp'}
-    
+
     try:
         resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
         resp.raise_for_status()
@@ -169,18 +169,18 @@ def send_whatsapp_text2(to_number, text_body):
         "Authorization": f"Bearer {settings.WHATSAPP2_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
-    
+
     text_body = text_body[:4096]
-    
+
     payload = {
         "messaging_product": "whatsapp",
         "to": to_number,
         "type": "text",
         "text": {"body": text_body}
     }
-    
+
     print(f"Sending text to {to_number}: {text_body[:50]}...")
-    
+
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
         resp.raise_for_status()
@@ -271,7 +271,7 @@ def open_legal_pdf2(filename, folder):
     # ==================================================
     import boto3
     from botocore.exceptions import ClientError
-    
+
     s3 = boto3.client(
         "s3",
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
@@ -736,7 +736,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
         ),
         "39": (
             "cust_registration_notice_smf",
-            "en",
+            "te",
             [
                 {"type": "text", "text": str(row.get("guarantor_name", ""))},
                 {"type": "text", "text": str(row.get("loan_number", ""))},
@@ -774,7 +774,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
         # ==================================================
         pdf_filename = None
         folder = "legal_pdfs"
-        
+
         if choice == "13":
             pdf_filename = row.get("customer_pdf_file")
         elif choice == "14":
@@ -803,7 +803,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             raise ValueError(f"PDF filename missing for template {choice}")
 
         original_filename = Path(pdf_filename).name
-        
+
         # ==================================================
         # 📤 UPLOAD PDF TO WHATSAPP (CRITICAL FIX)
         # ==================================================
@@ -817,7 +817,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
 
         upload_result = upload_whatsapp_media2(file_obj)
         media_id = upload_result.get("id")
-        
+
         print(f"✅ PDF uploaded to WhatsApp with ID: {media_id}, Filename: {original_filename}")
 
         payload = {
@@ -902,7 +902,7 @@ def send_second_message_for_mobile2(all_rows, mobile):
 
         loan_no = str(row.get("Loan Number") or row.get("loan_number") or "").strip()
         cust_name = str(row.get("Customer Name") or row.get("customer_name") or "").strip()
-        loan_date = format_whatsapp_date(
+        loan_date = format_whatsapp_date2(
             row.get("Loan Date") or row.get("loan_date")
         )
 

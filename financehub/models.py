@@ -777,23 +777,28 @@ class ExecutiveVisitScheduling(models.Model):
 
 class UploadHistory(models.Model):
     filename = models.CharField(max_length=255)
-    file_type = models.CharField(max_length=100, blank=True, null=True)  # NEW
+    file_type = models.CharField(max_length=100, blank=True, null=True)
     uploaded_by = models.CharField(max_length=150, blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    total_rows = models.IntegerField(default=0)        # NEW
-    processed_rows = models.IntegerField(default=0)    # NEW
-    status = models.CharField(max_length=50, default="pending")  # NEW
-    error_message = models.TextField(blank=True, null=True)       # NEW
+    total_rows = models.IntegerField(default=0)
+    processed_rows = models.IntegerField(default=0)
+    status = models.CharField(max_length=50, default="pending")
+    error_message = models.TextField(blank=True, null=True)
+    finance_uploads = models.FileField(upload_to='finance_uploads/', null=True, blank=True)
 
     def progress_percentage(self):
         if self.total_rows == 0:
             return 0
         return int((self.processed_rows / self.total_rows) * 100)
+    
+    def get_file_url(self):
+        """Get S3 URL of uploaded file"""
+        if self.finance_uploads:
+            return self.finance_uploads.url
+        return None
 
     def __str__(self):
         return f"{self.filename} - {self.file_type} ({self.status})"
-
 
 
 

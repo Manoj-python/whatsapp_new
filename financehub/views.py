@@ -28,7 +28,7 @@ from .models import (
 
 # Forms
 from .forms import FeedbackForm
-
+from django.conf import settings
 # Celery tasks
 from financehub.tasks import (
     process_universal_file,
@@ -121,6 +121,8 @@ FILE_TYPES = [
 
 
 ]
+
+
 @financehub_required
 def upload_loan_data(request):
 
@@ -145,25 +147,41 @@ def upload_loan_data(request):
             return render(request, "financehub/upload.html",
                           {"error": "Only CSV / XLS / XLSX allowed.", "file_types": FILE_TYPES})
 
-        # save temp file
-        tmp_dir = getattr(settings, "DATA_UPLOAD_TEMP_DIR", tempfile.gettempdir())
-        tmp_path = os.path.join(tmp_dir, f"upload_{file.name}")
-
-        with open(tmp_path, "wb+") as f:
-            for chunk in file.chunks():
-                f.write(chunk)
-
-        # create upload history entry
+        # ✅ Create upload record with file saved to S3 (using finance_uploads field)
         upload = UploadHistory.objects.create(
             filename=file.name,
             uploaded_by=request.user.username,
             file_type=file_type,
+            finance_uploads=file,  # This saves to S3 in 'finance_uploads/' folder
             status="processing",
             total_rows=0,
             processed_rows=0
         )
 
-        # launch celery
+        # ✅ Download the file from S3 to temp location for Celery processing
+        import boto3
+        import tempfile
+        import os
+        
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_S3_REGION_NAME,
+        )
+        
+        # Create temp file path
+        tmp_dir = tempfile.gettempdir()
+        tmp_path = os.path.join(tmp_dir, f"upload_{file.name}")
+        
+        # Download from S3 to temp location
+        s3.download_file(
+            settings.AWS_STORAGE_BUCKET_NAME,
+            upload.finance_uploads.name,  # S3 path (finance_uploads/filename)
+            tmp_path
+        )
+
+        # Launch celery task
         process_universal_file.delay(upload.id, tmp_path, ext, file_type)
 
         msg = f"Upload started! Upload ID = {upload.id}"
@@ -175,9 +193,9 @@ def upload_loan_data(request):
         })
 
     return render(request, "financehub/upload.html", {
-        "file_types": FILE_TYPES
+        "file_types": FILE_TYPES,
+        "ADMIN_USER":settings.ADMIN_USER
     })
-
 
 
 
@@ -1250,51 +1268,6 @@ def clean_payment_value(val):
 # PAYMENT STATUS LOGIC (MINIMAL SAFE FIX)
 # ------------------------------------------------------------------
 
-TOLERANCE = 500
-
-def get_loan_status(lcc, paid_amount, repo_set, closed_set):
-    loan_no = lcc.loan_number
-
-    # 1️⃣ CLOSED
-    if loan_no in closed_set:
-        return "CLOSED"
-
-    # 2️⃣ REPO
-    if loan_no in repo_set:
-        return "REPO"
-
-    # 3️⃣ EMI = 0 / SEZ / NONE (unchanged logic, only interpretation)
-    if str(lcc.emi_due_2).strip().lower() in ("0", "", "none", "sez"):
-        return "PAID" if paid_amount and paid_amount > 0 else "NOT PAID"
-
-    # 4️⃣ Parse values
-    try:
-        received = float(paid_amount or 0)
-        month_tbc = float(lcc.month_tbc or 0)
-        total_dues = float(lcc.total_dues or 0)
-        emi_due_2 = float(lcc.emi_due_2)
-    except Exception:
-        return "NOT PAID"
-
-    # 5️⃣ Calculate revised month TBC (UNCHANGED)
-    if month_tbc == 0:
-        revised_month_tbc = total_dues / emi_due_2 if emi_due_2 else 0
-    else:
-        revised_month_tbc = month_tbc
-
-    # ✅ 6️⃣ FINAL DECISION (ONLY SMALL ADDITION: received > 0)
-    if received > 0 and (
-        received >= revised_month_tbc or
-        (revised_month_tbc - received) <= TOLERANCE
-    ):
-        return "PAID"
-    elif received > 0:
-        return "PARTLY PAID"
-    else:
-        return "NOT PAID"
-
-
-
 
 
 
@@ -1347,7 +1320,12 @@ from .models import Lcc, LoanStatusCache, ExecutiveVisitScheduling, CollectionAl
 
 @financehub_required
 def executive_visit_schedule_list(request):
-
+    from django.db.models import Q, Exists, OuterRef
+    from django.core.paginator import Paginator
+    from collections import defaultdict
+    from django.db.models import Sum
+    import time
+    
     # ==========================================================
     # GET PARAMS
     # ==========================================================
@@ -1377,12 +1355,10 @@ def executive_visit_schedule_list(request):
         return v and v not in ["undefined", "null", "None", ""]
 
     # ==========================================================
-    # GET DROPDOWNS (Cached with refresh option)
+    # GET DROPDOWNS (Cached)
     # ==========================================================
-    force_refresh = request.GET.get('refresh') == '1'
     dropdowns = cache.get('dropdowns_final_v3')
-    
-    if not dropdowns or force_refresh:
+    if not dropdowns:
         dropdowns = {
             'branches': list(Lcc.objects.filter(branch__isnull=False).exclude(branch='').values_list('branch', flat=True).distinct().order_by('branch')[:200]),
             'centres': list(Lcc.objects.filter(centre_name__isnull=False).exclude(centre_name='').values_list('centre_name', flat=True).distinct().order_by('centre_name')[:200]),
@@ -1393,7 +1369,7 @@ def executive_visit_schedule_list(request):
         cache.set('dropdowns_final_v3', dropdowns, 3600)
 
     # ==========================================================
-    # BUILD QUERYSET WITH FILTERS
+    # BUILD QUERYSET
     # ==========================================================
     qs = Lcc.objects.all()
 
@@ -1411,20 +1387,25 @@ def executive_visit_schedule_list(request):
     if valid_filter(blc_case):
         qs = qs.filter(blc_cases=blc_case)
 
-    # EMI Bucket
+    # EMI Bucket - Optimized without regex
     if valid_filter(emi_bucket):
+        from django.db.models import FloatField
+        from django.db.models.functions import Cast
+        
+        qs = qs.annotate(emi_float=Cast('emi_due_2', FloatField()))
+        
         if emi_bucket == "0_0":
-            qs = qs.filter(emi_due_2__in=["0", "0.0"])
+            qs = qs.filter(emi_float=0)
         elif emi_bucket == "1_5":
-            qs = qs.filter(emi_due_2__regex=r'^[1-5]$|^[1-5]\.')
+            qs = qs.filter(emi_float__gte=1, emi_float__lte=5)
         elif emi_bucket == "6_10":
-            qs = qs.filter(emi_due_2__regex=r'^[6-9]$|^10$|^[6-9]\.')
+            qs = qs.filter(emi_float__gte=6, emi_float__lte=10)
         elif emi_bucket == "11_20":
-            qs = qs.filter(emi_due_2__regex=r'^1[1-9]$|^20$')
+            qs = qs.filter(emi_float__gte=11, emi_float__lte=20)
         elif emi_bucket == "21_50":
-            qs = qs.filter(emi_due_2__regex=r'^2[1-9]$|^[3-4][0-9]$|^50$')
+            qs = qs.filter(emi_float__gte=21, emi_float__lte=50)
         elif emi_bucket == "50_plus":
-            qs = qs.exclude(emi_due_2__regex=r'^[0-9]|^[1-4][0-9]$|^50$')
+            qs = qs.filter(emi_float__gt=50)
 
     if remove_zeros:
         qs = qs.exclude(emi_due_2__in=["0", "0.0"])
@@ -1543,7 +1524,7 @@ def executive_visit_schedule_list(request):
         ))
 
     # ==========================================================
-    # GET FILTERED LOAN NUMBERS
+    # GET TOTAL COUNT AND STATUS COUNTS
     # ==========================================================
     filtered_loan_numbers = list(qs.values_list('loan_number', flat=True))
     total_count = len(filtered_loan_numbers)
@@ -1554,95 +1535,48 @@ def executive_visit_schedule_list(request):
                   **dropdowns}
         return render(request, "financehub/executive_visit_schedule_list.html", context)
 
-    # ==========================================================
-    # GET STATUS COUNTS - WITH PARTLY PAID LOGIC
-    # COUNT ALL RECORDS, COMPARE WITH LCC TABLE
-    # ==========================================================
-    status_counts = {'CLOSED': 0, 'REPO': 0, 'PAID': 0, 'PARTLY_PAID': 0, 'NOT_PAID': 0}
+    # Get status counts efficiently
+    from collections import defaultdict
+    closed_set = set(
+        Closed.objects.filter(loan_number__in=filtered_loan_numbers)
+        .values_list('loan_number', flat=True)
+    )
+
+    repo_set = set(
+        Repo.objects.filter(agreement_number__in=filtered_loan_numbers)
+        .values_list('agreement_number', flat=True)
+    )
+
+    # Get total paid amount per loan (aggregated in database)
+    paid_aggregate = dict(
+        Paid.objects.filter(loan_number__in=filtered_loan_numbers)
+        .values('loan_number')
+        .annotate(total=Sum('received_amount'))
+        .values_list('loan_number', 'total')
+    )
+
+    paid_amount_per_loan = {
+        loan: float(amount) if amount else 0
+        for loan, amount in paid_aggregate.items()
+    }
+
+    # Pre-fetch LCC data in one query
+    lcc_data = {
+        lcc.loan_number: lcc
+        for lcc in Lcc.objects.filter(loan_number__in=filtered_loan_numbers)
+        .only('loan_number', 'emi_due_2', 'month_tbc', 'total_dues')
+        .iterator()
+    }
     
-    if filtered_loan_numbers:
-        # Get LCC loan numbers as set for comparison
-        lcc_loan_set = set(filtered_loan_numbers)
-        
-        # 1️⃣ CLOSED - ALL records from Closed table that exist in LCC
-        closed_records = Closed.objects.filter(loan_number__in=lcc_loan_set)
-        status_counts['CLOSED'] = closed_records.count()
-        closed_loan_set = set(closed_records.values_list('loan_number', flat=True))
-        
-        # 2️⃣ REPO - ALL records from Repo table that exist in LCC
-        repo_records = Repo.objects.filter(agreement_number__in=lcc_loan_set)
-        status_counts['REPO'] = repo_records.count()
-        repo_loan_set = set(repo_records.values_list('agreement_number', flat=True))
-        
-        # 3️⃣ PAID & PARTLY PAID - Calculate based on payment amounts
-        # Get all paid records that exist in LCC
-        paid_records = Paid.objects.filter(loan_number__in=lcc_loan_set)
-        
-        # Group payments by loan
-        from collections import defaultdict
-        loan_payments = defaultdict(list)
-        
-        for paid in paid_records:
-            loan_payments[paid.loan_number].append(paid)
-        
-        # Calculate PAID and PARTLY PAID
-        TOLERANCE = 500
-        paid_count = 0
-        partly_paid_count = 0
-        
-        for loan_no, payments in loan_payments.items():
-            try:
-                lcc = Lcc.objects.get(loan_number=loan_no)
-                
-                # Calculate total payment amount
-                total_paid = 0
-                for p in payments:
-                    try:
-                        amt = float(p.received_amount) if p.received_amount else 0
-                        total_paid += amt
-                    except (ValueError, TypeError):
-                        pass
-                
-                # Get expected amount from LCC
-                try:
-                    month_tbc = float(lcc.month_tbc) if lcc.month_tbc else 0
-                    total_dues = float(lcc.total_dues) if lcc.total_dues else 0
-                    emi_due_2 = float(lcc.emi_due_2) if lcc.emi_due_2 else 0
-                    
-                    # Check if EMI is 0/SEZ
-                    emi_value = str(lcc.emi_due_2).strip().lower() if lcc.emi_due_2 else ""
-                    if emi_value in ("0", "", "none", "sez"):
-                        if total_paid > 0:
-                            paid_count += len(payments)
-                        else:
-                            partly_paid_count += len(payments)
-                    else:
-                        # Calculate expected amount
-                        if month_tbc == 0:
-                            expected = total_dues / emi_due_2 if emi_due_2 > 0 else 0
-                        else:
-                            expected = month_tbc
-                        
-                        # Determine if PAID or PARTLY PAID
-                        if total_paid >= expected or (expected - total_paid) <= TOLERANCE:
-                            paid_count += len(payments)
-                        else:
-                            partly_paid_count += len(payments)
-                except (ValueError, TypeError, ZeroDivisionError):
-                    # If error, count as PARTLY PAID if payment exists
-                    partly_paid_count += len(payments)
-                    
-            except Lcc.DoesNotExist:
-                # Loan not in LCC, skip counting
-                pass
-        
-        status_counts['PAID'] = paid_count
-        status_counts['PARTLY_PAID'] = partly_paid_count
-        
-        # 4️⃣ NOT PAID - Calculate remaining LCC loans with NO payments
-        loans_with_payments = set(loan_payments.keys())
-        loans_with_status = closed_loan_set | repo_loan_set | loans_with_payments
-        status_counts['NOT_PAID'] = len(lcc_loan_set - loans_with_status)
+    status_counts = {'CLOSED': 0, 'REPO': 0, 'PAID': 0, 'PARTLY_PAID': 0, 'NOT_PAID': 0}
+    for loan_no, lcc in lcc_data.items():
+        paid_amount = paid_amount_per_loan.get(loan_no, 0)
+        status = get_loan_status(lcc, paid_amount, repo_set, closed_set)
+        status_counts[status] += 1
+    
+    # Verify total matches
+    if sum(status_counts.values()) != total_count:
+        status_counts['NOT_PAID'] += total_count - sum(status_counts.values())
 
     # ==========================================================
     # ORDER AND PAGINATE
@@ -1653,7 +1587,7 @@ def executive_visit_schedule_list(request):
     else:
         qs = qs.order_by('loan_number')
 
-    paginator = Paginator(qs, 500)
+    paginator = Paginator(qs, 200)  # Reduced from 500 to 200 for better performance
     page_obj = paginator.get_page(page)
 
     # ==========================================================
@@ -1661,24 +1595,12 @@ def executive_visit_schedule_list(request):
     # ==========================================================
     page_loan_numbers = [obj.loan_number for obj in page_obj]
 
-    # Get status for page loans
-    page_status = {}
-    if page_loan_numbers:
-        closed_for_page = set(Closed.objects.filter(loan_number__in=page_loan_numbers).values_list('loan_number', flat=True))
-        repo_for_page = set(Repo.objects.filter(agreement_number__in=page_loan_numbers).values_list('agreement_number', flat=True))
-        paid_for_page = set(Paid.objects.filter(loan_number__in=page_loan_numbers).values_list('loan_number', flat=True))
-        
-        for loan in page_loan_numbers:
-            if loan in closed_for_page:
-                page_status[loan] = 'CLOSED'
-            elif loan in repo_for_page:
-                page_status[loan] = 'REPO'
-            elif loan in paid_for_page:
-                page_status[loan] = 'PAID'
-            else:
-                page_status[loan] = 'NOT PAID'
+    # Get status - Fixed to use Python dict instead of DISTINCT ON
+    page_status = dict(LoanStatusCache.objects.filter(
+        loan_number__in=page_loan_numbers
+    ).values_list('loan_number', 'status'))
 
-    # Get visits
+    # Get visits - Fixed to use Python aggregation instead of DISTINCT ON
     visits = {}
     for v in ExecutiveVisitScheduling.objects.filter(loanno__in=page_loan_numbers).order_by('loanno', '-visit_schedule_date'):
         if v.loanno not in visits:
@@ -1687,7 +1609,7 @@ def executive_visit_schedule_list(request):
     # Get allocations
     allocs = {a.loan_number: a for a in CollectionAllocations.objects.filter(loan_number__in=page_loan_numbers)}
 
-    # Get notices
+    # Get notices - Fixed to use Python aggregation
     notices = {}
     for n in DueNotice.objects.filter(loan_number__in=page_loan_numbers).order_by('loan_number', '-notice_date', '-id'):
         if n.loan_number not in notices:
@@ -1699,38 +1621,47 @@ def executive_visit_schedule_list(request):
         if p.loan_number not in received:
             received[p.loan_number] = p.received_date
 
-    # Get visitors
+    # Get visitors - Fixed to use Python aggregation
     visitors_data = {}
     for v in Visiter.objects.filter(loan_number__in=page_loan_numbers).order_by('loan_number', '-created_at'):
         if v.loan_number not in visitors_data:
             visitors_data[v.loan_number] = v
 
-    # Get Freshdesk data
+    # ==========================================================
+    # GET FRESHDESK DATA (BULK QUERY - FAST!)
+    # ==========================================================
     freshdesk_data = {}
+    # Build Q object with OR conditions
     freshdesk_q = Q()
-    for loan_num in page_loan_numbers[:100]:
+    for loan_num in page_loan_numbers[:100]:  # Limit to first 100 for performance
         freshdesk_q |= Q(subject__icontains=loan_num)
 
     if freshdesk_q:
         freshdesk_tickets = Freshdesk.objects.filter(freshdesk_q).order_by('-created_time')
+        # Match each loan to its freshdesk ticket
         for fd in freshdesk_tickets:
             for loan_num in page_loan_numbers:
                 if loan_num in str(fd.subject) and loan_num not in freshdesk_data:
                     freshdesk_data[loan_num] = fd
                     break
 
-    # Get Dialer data
+    # ==========================================================
+    # GET DIALER DATA (BULK QUERY - FAST!)
+    # ==========================================================
     dialer_data = {}
+    # Get all mobile numbers for page loans
     page_mobiles = {}
     for lcc in page_obj:
         if lcc.cust_mobile:
             page_mobiles[lcc.cust_mobile] = lcc.loan_number
 
     if page_mobiles:
+        # Get latest dialer record per mobile (using Python aggregation)
         all_dialers = Dialer.objects.filter(
             mobile__in=list(page_mobiles.keys())
         ).order_by('mobile', '-created_at')
 
+        # Pick first (latest) for each mobile
         seen_mobiles = set()
         for dialer in all_dialers:
             if dialer.mobile not in seen_mobiles:
@@ -1791,10 +1722,12 @@ def executive_visit_schedule_list(request):
             "notice_return_date": notice.return_date if notice else "",
             "visitor_purpose": visitor.purpose if visitor else "",
             "visitor_remark": visitor.remarks if visitor else "",
+            # Freshdesk Data
             "Freshdesk_Description": freshdesk.description if freshdesk else "",
             "Freshdesk_Status": freshdesk.status if freshdesk else "",
             "Freshdesk_Group": freshdesk.group if freshdesk else "",
             "Freshdesk_Createdtime": freshdesk.created_time if freshdesk else "",
+            # Dialer Data
             "Dialer_PTP": dialer.ptp_date if dialer else "",
             "Dialer_PTP_Date": dialer.ptp_date if dialer else "",
             "Dialer_PTP_Remarks": dialer.remarks if dialer else "",
@@ -1832,6 +1765,49 @@ def executive_visit_schedule_list(request):
 
     return render(request, "financehub/executive_visit_schedule_list.html", context)
 
+
+TOLERANCE = 500
+
+def get_loan_status(lcc, paid_amount, repo_set, closed_set):
+    loan_no = lcc.loan_number
+
+    # 1️⃣ CLOSED
+    if loan_no in closed_set:
+        return "CLOSED"
+
+    # 2️⃣ REPO
+    if loan_no in repo_set:
+        return "REPO"
+
+    # 3️⃣ EMI = 0 / SEZ / NONE
+    if str(lcc.emi_due_2).strip().lower() in ("0", "", "none", "sez"):
+        return "PAID" if paid_amount and paid_amount > 0 else "NOT_PAID"
+
+    # 4️⃣ Parse values
+    try:
+        received = float(paid_amount or 0)
+        month_tbc = float(lcc.month_tbc or 0)
+        total_dues = float(lcc.total_dues or 0)
+        emi_due_2 = float(lcc.emi_due_2)
+    except Exception:
+        return "NOT_PAID"
+
+    # 5️⃣ Calculate revised month TBC
+    if month_tbc == 0:
+        revised_month_tbc = total_dues / emi_due_2 if emi_due_2 else 0
+    else:
+        revised_month_tbc = month_tbc
+
+    # 6️⃣ FINAL DECISION
+    if received > 0 and (
+        received >= revised_month_tbc or
+        (revised_month_tbc - received) <= TOLERANCE
+    ):
+        return "PAID"
+    elif received > 0:
+        return "PARTLY_PAID"
+    else:
+        return "NOT_PAID"
 
 
 

@@ -27,6 +27,8 @@ ALLOWED_HOSTS = [
     "65.2.185.167",
     ".ap-south-1.compute.amazonaws.com",
 ]
+ADMIN_USER= os.getenv("ADMIN_USER")
+
 
 # -------------------------------------------------------
 # INSTALLED APPS
