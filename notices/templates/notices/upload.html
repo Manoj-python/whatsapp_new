@@ -1,216 +1,303 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Legal Notice Generator</title>
 
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        body{
-            font-family: Arial, sans-serif;
-            margin:40px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
         }
 
-        .box{
-            border:1px solid #ccc;
-            padding:25px;
-            width:500px;
-            border-radius:8px;
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f172a, #1e293b, #334155);
+            padding: 30px;
         }
 
-        h2{
-            margin-bottom:20px;
+        .container {
+            max-width: 1400px;
+            margin: auto;
         }
 
-        h3{
-            margin-top:20px;
-            color:#444;
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
         }
 
-        button{
-            padding:10px 18px;
-            font-size:16px;
-            cursor:pointer;
-            background:#007bff;
-            color:white;
-            border:none;
-            border-radius:5px;
+        .header h1 {
+            font-size: 40px;
+            font-weight: 700;
         }
 
-        .message{
-            margin-top:20px;
-            font-weight:bold;
+        .header p {
+            opacity: 0.85;
+            margin-top: 10px;
         }
 
-        .success{
-            color:green;
+        .main-card {
+            background: white;
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
         }
 
-        .error{
-            color:red;
+        .section-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin: 25px 0 18px;
+            color: #0f172a;
+            border-left: 5px solid #2563eb;
+            padding-left: 12px;
         }
 
-        .download-btn{
-            display:inline-block;
-            margin-top:15px;
-            padding:10px 15px;
-            background:#28a745;
-            color:white;
-            text-decoration:none;
-            border-radius:5px;
+        .notice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .notice-card {
+            position: relative;
+        }
+
+        .notice-card input {
+            display: none;
+        }
+
+        .notice-label {
+            display: block;
+            padding: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: 0.3s;
+            background: #f8fafc;
+            font-weight: 500;
+        }
+
+        .notice-card input:checked + .notice-label {
+            border-color: #2563eb;
+            background: #dbeafe;
+            color: #1d4ed8;
+            transform: translateY(-2px);
+        }
+
+        .upload-box {
+            margin-top: 30px;
+            border: 2px dashed #94a3b8;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            background: #f8fafc;
+        }
+
+        .upload-box input {
+            margin-top: 15px;
+            font-size: 16px;
+        }
+
+        .submit-btn {
+            margin-top: 25px;
+            width: 100%;
+            padding: 18px;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 14px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .download-btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            color: white;
+            text-decoration: none;
+            border-radius: 16px;
+            font-weight: 700;
+            transition: 0.3s;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .download-wrap {
+            text-align: center;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            font-weight: 600;
+            color: #2563eb;
+        }
+
+        @media(max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+
+            .main-card {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 28px;
+            }
         }
     </style>
-
 </head>
-
 <body>
 
-<h2>Legal Notice Generator</h2>
+<div class="container">
 
-<div class="box">
+    <div class="header">
+        <h1>📄 Legal Notice Generator</h1>
+        <p>Generate PDF notices instantly from Excel and download from S3</p>
+    </div>
 
-<form method="post" enctype="multipart/form-data">
+    <div class="main-card">
+        <form method="post" enctype="multipart/form-data" id="noticeForm">
+            {% csrf_token %}
 
-{% csrf_token %}
+            <div class="section-title">Borrower Notices</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_borrower" id="sm_borrower" required><label class="notice-label" for="sm_borrower">SM Square Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_borrower" id="padmasai_borrower"><label class="notice-label" for="padmasai_borrower">Padmasai Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sree_mani_borrower" id="sree_mani_borrower"><label class="notice-label" for="sree_mani_borrower">Sree Mani Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="write_off_psf_borrower" id="write_off_psf_borrower"><label class="notice-label" for="write_off_psf_borrower">Write Off PSF Borrower</label></div>
+            </div>
 
-<!-- ========================= -->
-<!-- Borrower Notices -->
-<!-- ========================= -->
+            <div class="section-title">Guarantor Notices</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_guarantor" id="sm_guarantor"><label class="notice-label" for="sm_guarantor">SM Square Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_guarantor" id="padmasai_guarantor"><label class="notice-label" for="padmasai_guarantor">Padmasai Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sree_mani_guarantor" id="sree_mani_guarantor"><label class="notice-label" for="sree_mani_guarantor">Sree Mani Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="write_off_psf_guarantor" id="write_off_psf_guarantor"><label class="notice-label" for="write_off_psf_guarantor">Write Off PSF Guarantor</label></div>
+            </div>
 
-<h3>Borrower Notices</h3>
+            <div class="section-title">Co-Borrower</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_co_borrower" id="sm_co_borrower"><label class="notice-label" for="sm_co_borrower">SM Square Co-Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_co_borrower" id="padmasai_co_borrower"><label class="notice-label" for="padmasai_co_borrower">Padmasai Co-Borrower</label></div>
+            </div>
 
-<label>
-<input type="radio" name="notice_type" value="sm_borrower" required>
-SM Square Borrower Notice
-</label>
-<br><br>
+            <div class="section-title">Demand Notices</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="demand_notice_psf" id="demand_notice_psf"><label class="notice-label" for="demand_notice_psf">Demand Notice PSF</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="demand_notice_sms" id="demand_notice_sms"><label class="notice-label" for="demand_notice_sms">Demand Notice SMS</label></div>
+            </div>
 
-<label>
-<input type="radio" name="notice_type" value="padmasai_borrower">
-Padmasai Borrower Notice
-</label>
+            <div class="section-title">Due Notices</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_psf" id="due_notice_psf"><label class="notice-label" for="due_notice_psf">Due Notice PSF</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_sms" id="due_notice_sms"><label class="notice-label" for="due_notice_sms">Due Notice SMS</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_smf" id="due_notice_smf"><label class="notice-label" for="due_notice_smf">Due Notice SMF</label></div>
+            </div>
 
-<!-- ========================= -->
-<!-- Guarantor Notices -->
-<!-- ========================= -->
+            <div class="section-title">Pre Sale Notices</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="pre_sale_psf" id="pre_sale_psf"><label class="notice-label" for="pre_sale_psf">Pre Sale PSF</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="pre_sale_sms" id="pre_sale_sms"><label class="notice-label" for="pre_sale_sms">Pre Sale SMS</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="pre_sale_smf" id="pre_sale_smf"><label class="notice-label" for="pre_sale_smf">Pre Sale SMF</label></div>
+            </div>
 
-<h3>Guarantor Notices</h3>
+            <div class="section-title">Police Intimation</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="police_intimation_psf" id="police_intimation_psf"><label class="notice-label" for="police_intimation_psf">Police Intimation PSF</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="police_intimation_sms" id="police_intimation_sms"><label class="notice-label" for="police_intimation_sms">Police Intimation SMS</label></div>
+            </div>
 
-<label>
-<input type="radio" name="notice_type" value="sm_guarantor">
-SM Square Guarantor Notice
-</label>
-<br><br>
+            <div class="section-title">Other Documents</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="lok_adalat" id="lok_adalat"><label class="notice-label" for="lok_adalat">Lok Adalat</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="loan_app" id="loan_app"><label class="notice-label" for="loan_app">Loan App</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="ledger" id="ledger"><label class="notice-label" for="ledger">Ledger</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="ledger_app" id="ledger_app"><label class="notice-label" for="ledger_app">Ledger App</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="loss_notice" id="loss_notice"><label class="notice-label" for="loss_notice">Loss Notice</label></div>
+            </div>
 
-<label>
-<input type="radio" name="notice_type" value="padmasai_guarantor">
-Padmasai Guarantor Notice
-</label>
+            <div class="section-title">Letter Head Registration</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="ps_lh_borrower" id="ps_lh_borrower"><label class="notice-label" for="ps_lh_borrower">PSF LH Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="ps_lh_guarantor" id="ps_lh_guarantor"><label class="notice-label" for="ps_lh_guarantor">PSF LH Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_lh_borrower" id="sm_lh_borrower"><label class="notice-label" for="sm_lh_borrower">SM LH Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_lh_guarantor" id="sm_lh_guarantor"><label class="notice-label" for="sm_lh_guarantor">SM LH Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="smf_lh_borrower" id="smf_lh_borrower"><label class="notice-label" for="smf_lh_borrower">SMF LH Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="smf_lh_guarantor" id="smf_lh_guarantor"><label class="notice-label" for="smf_lh_guarantor">SMF LH Guarantor</label></div>
+            </div>
 
-<!-- ========================= -->
-<!-- Co Borrower Notices -->
-<!-- ========================= -->
+            <div class="upload-box">
+                <h3>Upload Excel File</h3>
+                <p>Select .xlsx or .xls file</p>
+                <input type="file" name="excel" accept=".xlsx,.xls" required>
+            </div>
 
-<h3>Co-Borrower Notices</h3>
+            <button type="submit" class="submit-btn">🚀 Generate PDFs</button>
 
-<label>
-<input type="radio" name="notice_type" value="sm_co_borrower">
-SM Square Co-Borrower Notice
-</label>
-<br><br>
+            <div class="loader" id="loader">
+                Generating PDFs... Please wait...
+            </div>
 
-<label>
-<input type="radio" name="notice_type" value="padmasai_co_borrower">
-Padmasai Co-Borrower Notice
-</label>
+            {% if message %}
+                <div class="message {% if '❌' in message %}error{% else %}success{% endif %}">
+                    {{ message }}
+                </div>
+            {% endif %}
 
-<!-- ========================= -->
-<!-- Lok Adalat -->
-<!-- ========================= -->
-
-<h3>Lok Adalat</h3>
-
-<label>
-<input type="radio" name="notice_type" value="lok_adalat">
-Lok Adalat Notice
-</label>
-
-<!-- ========================= -->
-<!-- Loan Application -->
-<!-- ========================= -->
-
-<h3>Loan Application</h3>
-
-<label>
-<input type="radio" name="notice_type" value="loan_app">
-Loan APP
-</label>
-
-<!-- ========================= -->
-<!-- Ledger -->
-<!-- ========================= -->
-
-<h3>Ledger</h3>
-
-<label>
-<input type="radio" name="notice_type" value="ledger">
-Ledger Notice
-</label>
-
-<!-- ========================= -->
-<!-- Ledger Application -->
-<!-- ========================= -->
-
-<h3>Ledger Application</h3>
-
-<label>
-<input type="radio" name="notice_type" value="ledger_app">
-Ledger APP
-</label>
-
-<!-- ========================= -->
-<!-- Loss Notice -->
-<!-- ========================= -->
-
-<h3>Loss Notice</h3>
-
-<label>
-<input type="radio" name="notice_type" value="loss_notice">
-Loss Notice
-</label>    
-
-<br><br>
-
-<strong>Upload Excel File:</strong>
-<br><br>
-
-<input type="file" name="excel" accept=".xlsx,.xls" required>
-
-<br><br>
-
-<button type="submit">Generate PDFs</button>
-
-</form>
-
-<!-- ========================= -->
-<!-- MESSAGE -->
-<!-- ========================= -->
-
-{% if message %}
-    <p class="message {% if '❌' in message %}error{% else %}success{% endif %}">
-        {{ message }}
-    </p>
-{% endif %}
-
-<!-- ========================= -->
-<!-- DOWNLOAD BUTTON -->
-<!-- ========================= -->
-
-{% if zip_url %}
-    <a href="{{ zip_url }}" target="_blank" class="download-btn">
-        📥 Download PDF Folder
-    </a>
-{% endif %}
-
+            {% if zip_url %}
+                <div class="download-wrap">
+                    <a href="{{ zip_url }}" target="_blank" class="download-btn">
+                        📥 Download ZIP
+                    </a>
+                </div>
+            {% endif %}
+        </form>
+    </div>
 </div>
+
+<script>
+    document.getElementById("noticeForm").addEventListener("submit", function() {
+        document.getElementById("loader").style.display = "block";
+    });
+</script>
 
 </body>
 </html>

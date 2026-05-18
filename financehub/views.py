@@ -10,7 +10,7 @@ from django.contrib.auth import authenticate, login
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.core.cache import cache
-
+from django.db.models import Sum
 # Models
 from datetime import datetime
 
@@ -1318,452 +1318,6 @@ from django.shortcuts import render
 from django.db.models import Q, Count, OuterRef, Exists
 from .models import Lcc, LoanStatusCache, ExecutiveVisitScheduling, CollectionAllocations, DueNotice, Visiter, Paid, Freshdesk, Dialer
 
-@financehub_required
-def executive_visit_schedule_list(request):
-    from django.db.models import Q, Exists, OuterRef
-    from django.core.paginator import Paginator
-    from collections import defaultdict
-    from django.db.models import Sum
-    import time
-    
-    # ==========================================================
-    # GET PARAMS
-    # ==========================================================
-    division = request.GET.get("division", "").strip()
-    blc_case = request.GET.get("blc_case", "").strip()
-    loanno = request.GET.get("loanno", "").strip()
-    empid = request.GET.get("empid", "").strip()
-    from_date = request.GET.get("from_date", "").strip()
-    to_date = request.GET.get("to_date", "").strip()
-    role = request.GET.get("role", "").strip()
-    search_empid = request.GET.get("search_empid", "").strip()
-    loan_status_filter = request.GET.get("loan_status", "").strip()
-    emi_bucket = request.GET.get("emi_bucket", "").strip()
-    remove_zeros = request.GET.get("remove_zeros") == "1"
-    remove_sez = request.GET.get("remove_sez") == "1"
-    branch = request.GET.get("branch", "").strip()
-    centre_name = request.GET.get("centre_name", "").strip()
-    visit_filter = request.GET.get("visit_filter", "").strip()
-    company = request.GET.get("company", "").strip()
-    type_of_notice = request.GET.get("type_of_notice", "").strip()
-    sort_field = request.GET.get("sort_field", "loan_number")
-    sort_order = request.GET.get("sort_order", "asc")
-    page = int(request.GET.get("page", 1))
-    login_empid = request.user.username.strip()
-
-    def valid_filter(v):
-        return v and v not in ["undefined", "null", "None", ""]
-
-    # ==========================================================
-    # GET DROPDOWNS (Cached)
-    # ==========================================================
-    dropdowns = cache.get('dropdowns_final_v3')
-    if not dropdowns:
-        dropdowns = {
-            'branches': list(Lcc.objects.filter(branch__isnull=False).exclude(branch='').values_list('branch', flat=True).distinct().order_by('branch')[:200]),
-            'centres': list(Lcc.objects.filter(centre_name__isnull=False).exclude(centre_name='').values_list('centre_name', flat=True).distinct().order_by('centre_name')[:200]),
-            'notice_types': list(DueNotice.objects.filter(type_of_notice__isnull=False).exclude(type_of_notice='').values_list('type_of_notice', flat=True).distinct().order_by('type_of_notice')[:100]),
-            'blc_cases': list(Lcc.objects.filter(blc_cases__isnull=False).exclude(blc_cases='').values_list('blc_cases', flat=True).distinct().order_by('blc_cases')[:100]),
-            'companies': list(Lcc.objects.filter(company__isnull=False).exclude(company='').values_list('company', flat=True).distinct().order_by('company')[:200]),
-        }
-        cache.set('dropdowns_final_v3', dropdowns, 3600)
-
-    # ==========================================================
-    # BUILD QUERYSET
-    # ==========================================================
-    qs = Lcc.objects.all()
-
-    # Apply all filters
-    if valid_filter(division):
-        qs = qs.filter(division=division)
-    if valid_filter(branch):
-        qs = qs.filter(branch=branch)
-    if valid_filter(centre_name):
-        qs = qs.filter(centre_name=centre_name)
-    if valid_filter(loanno):
-        qs = qs.filter(loan_number__icontains=loanno)
-    if valid_filter(company):
-        qs = qs.filter(company=company)
-    if valid_filter(blc_case):
-        qs = qs.filter(blc_cases=blc_case)
-
-    # EMI Bucket - Optimized without regex
-    if valid_filter(emi_bucket):
-        from django.db.models import FloatField
-        from django.db.models.functions import Cast
-        
-        qs = qs.annotate(emi_float=Cast('emi_due_2', FloatField()))
-        
-        if emi_bucket == "0_0":
-            qs = qs.filter(emi_float=0)
-        elif emi_bucket == "1_5":
-            qs = qs.filter(emi_float__gte=1, emi_float__lte=5)
-        elif emi_bucket == "6_10":
-            qs = qs.filter(emi_float__gte=6, emi_float__lte=10)
-        elif emi_bucket == "11_20":
-            qs = qs.filter(emi_float__gte=11, emi_float__lte=20)
-        elif emi_bucket == "21_50":
-            qs = qs.filter(emi_float__gte=21, emi_float__lte=50)
-        elif emi_bucket == "50_plus":
-            qs = qs.filter(emi_float__gt=50)
-
-    if remove_zeros:
-        qs = qs.exclude(emi_due_2__in=["0", "0.0"])
-    if remove_sez:
-        qs = qs.exclude(emi_due_2__iexact="sez")
-
-    # Role filter
-    if role == "CM":
-        qs = qs.filter(Exists(
-            CollectionAllocations.objects.filter(
-                manager_employee_id__iexact=login_empid,
-                loan_number=OuterRef('loan_number')
-            )
-        ))
-        if valid_filter(search_empid):
-            qs = qs.filter(Exists(
-                CollectionAllocations.objects.filter(
-                    Q(tl_employee_id__iexact=search_empid) | Q(employee_id__iexact=search_empid),
-                    loan_number=OuterRef('loan_number')
-                )
-            ))
-    elif role == "TL":
-        qs = qs.filter(Exists(
-            CollectionAllocations.objects.filter(
-                tl_employee_id__iexact=login_empid,
-                loan_number=OuterRef('loan_number')
-            )
-        ))
-        if valid_filter(search_empid):
-            qs = qs.filter(Exists(
-                CollectionAllocations.objects.filter(
-                    tl_employee_id__iexact=search_empid,
-                    loan_number=OuterRef('loan_number')
-                )
-            ))
-    elif role == "EXEC":
-        qs = qs.filter(Exists(
-            CollectionAllocations.objects.filter(
-                employee_id__iexact=login_empid,
-                loan_number=OuterRef('loan_number')
-            )
-        ))
-        if valid_filter(search_empid):
-            qs = qs.filter(Exists(
-                CollectionAllocations.objects.filter(
-                    employee_id__iexact=search_empid,
-                    loan_number=OuterRef('loan_number')
-                )
-            ))
-
-    # Notice filter
-    if valid_filter(type_of_notice):
-        qs = qs.filter(Exists(
-            DueNotice.objects.filter(
-                type_of_notice__iexact=type_of_notice,
-                loan_number=OuterRef('loan_number')
-            )
-        ))
-
-    # Visit filters
-    if valid_filter(empid):
-        qs = qs.filter(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                empid__icontains=empid,
-                loanno=OuterRef('loan_number')
-            )
-        ))
-
-    if from_date and to_date:
-        qs = qs.filter(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                visit_schedule_date__range=[from_date, to_date],
-                loanno=OuterRef('loan_number')
-            )
-        ))
-    elif from_date:
-        qs = qs.filter(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                visit_schedule_date__gte=from_date,
-                loanno=OuterRef('loan_number')
-            )
-        ))
-    elif to_date:
-        qs = qs.filter(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                visit_schedule_date__lte=to_date,
-                loanno=OuterRef('loan_number')
-            )
-        ))
-
-    if visit_filter == "visited":
-        qs = qs.filter(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                visit_status__iexact="visited",
-                loanno=OuterRef('loan_number')
-            )
-        ))
-    elif visit_filter == "not_visited":
-        qs = qs.filter(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                visit_status__iexact="not_visited",
-                loanno=OuterRef('loan_number')
-            )
-        ))
-    elif visit_filter == "scheduled":
-        qs = qs.filter(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                loanno=OuterRef('loan_number')
-            )
-        ))
-    elif visit_filter == "not_scheduled":
-        qs = qs.exclude(Exists(
-            ExecutiveVisitScheduling.objects.filter(
-                loanno=OuterRef('loan_number')
-            )
-        ))
-
-    # ==========================================================
-    # GET TOTAL COUNT AND STATUS COUNTS
-    # ==========================================================
-    filtered_loan_numbers = list(qs.values_list('loan_number', flat=True))
-    total_count = len(filtered_loan_numbers)
-
-    if total_count == 0:
-        context = {"data": [], "page_obj": None, "total_count": 0,
-                  "status_counts": {'CLOSED':0, 'REPO':0, 'PAID':0, 'PARTLY_PAID':0, 'NOT_PAID':0},
-                  **dropdowns}
-        return render(request, "financehub/executive_visit_schedule_list.html", context)
-
-    # Get status counts efficiently
-    from collections import defaultdict
-    closed_set = set(
-        Closed.objects.filter(loan_number__in=filtered_loan_numbers)
-        .values_list('loan_number', flat=True)
-    )
-
-    repo_set = set(
-        Repo.objects.filter(agreement_number__in=filtered_loan_numbers)
-        .values_list('agreement_number', flat=True)
-    )
-
-    # Get total paid amount per loan (aggregated in database)
-    paid_aggregate = dict(
-        Paid.objects.filter(loan_number__in=filtered_loan_numbers)
-        .values('loan_number')
-        .annotate(total=Sum('received_amount'))
-        .values_list('loan_number', 'total')
-    )
-
-    paid_amount_per_loan = {
-        loan: float(amount) if amount else 0
-        for loan, amount in paid_aggregate.items()
-    }
-
-    # Pre-fetch LCC data in one query
-    lcc_data = {
-        lcc.loan_number: lcc
-        for lcc in Lcc.objects.filter(loan_number__in=filtered_loan_numbers)
-        .only('loan_number', 'emi_due_2', 'month_tbc', 'total_dues')
-        .iterator()
-    }
-    
-    status_counts = {'CLOSED': 0, 'REPO': 0, 'PAID': 0, 'PARTLY_PAID': 0, 'NOT_PAID': 0}
-    for loan_no, lcc in lcc_data.items():
-        paid_amount = paid_amount_per_loan.get(loan_no, 0)
-        status = get_loan_status(lcc, paid_amount, repo_set, closed_set)
-        status_counts[status] += 1
-    
-    # Verify total matches
-    if sum(status_counts.values()) != total_count:
-        status_counts['NOT_PAID'] += total_count - sum(status_counts.values())
-
-    # ==========================================================
-    # ORDER AND PAGINATE
-    # ==========================================================
-    order_by = '-' + sort_field if sort_order == 'desc' else sort_field
-    if sort_field in ['loan_number', 'customer_name', 'company', 'division']:
-        qs = qs.order_by(order_by)
-    else:
-        qs = qs.order_by('loan_number')
-
-    paginator = Paginator(qs, 200)  # Reduced from 500 to 200 for better performance
-    page_obj = paginator.get_page(page)
-
-    # ==========================================================
-    # GET DATA FOR CURRENT PAGE (BULK QUERIES)
-    # ==========================================================
-    page_loan_numbers = [obj.loan_number for obj in page_obj]
-
-    # Get status - Fixed to use Python dict instead of DISTINCT ON
-    page_status = dict(LoanStatusCache.objects.filter(
-        loan_number__in=page_loan_numbers
-    ).values_list('loan_number', 'status'))
-
-    # Get visits - Fixed to use Python aggregation instead of DISTINCT ON
-    visits = {}
-    for v in ExecutiveVisitScheduling.objects.filter(loanno__in=page_loan_numbers).order_by('loanno', '-visit_schedule_date'):
-        if v.loanno not in visits:
-            visits[v.loanno] = v
-
-    # Get allocations
-    allocs = {a.loan_number: a for a in CollectionAllocations.objects.filter(loan_number__in=page_loan_numbers)}
-
-    # Get notices - Fixed to use Python aggregation
-    notices = {}
-    for n in DueNotice.objects.filter(loan_number__in=page_loan_numbers).order_by('loan_number', '-notice_date', '-id'):
-        if n.loan_number not in notices:
-            notices[n.loan_number] = n
-
-    # Get received dates
-    received = {}
-    for p in Paid.objects.filter(loan_number__in=page_loan_numbers, received_date__isnull=False).order_by('loan_number', '-received_date'):
-        if p.loan_number not in received:
-            received[p.loan_number] = p.received_date
-
-    # Get visitors - Fixed to use Python aggregation
-    visitors_data = {}
-    for v in Visiter.objects.filter(loan_number__in=page_loan_numbers).order_by('loan_number', '-created_at'):
-        if v.loan_number not in visitors_data:
-            visitors_data[v.loan_number] = v
-
-    # ==========================================================
-    # GET FRESHDESK DATA (BULK QUERY - FAST!)
-    # ==========================================================
-    freshdesk_data = {}
-    # Build Q object with OR conditions
-    freshdesk_q = Q()
-    for loan_num in page_loan_numbers[:100]:  # Limit to first 100 for performance
-        freshdesk_q |= Q(subject__icontains=loan_num)
-
-    if freshdesk_q:
-        freshdesk_tickets = Freshdesk.objects.filter(freshdesk_q).order_by('-created_time')
-        # Match each loan to its freshdesk ticket
-        for fd in freshdesk_tickets:
-            for loan_num in page_loan_numbers:
-                if loan_num in str(fd.subject) and loan_num not in freshdesk_data:
-                    freshdesk_data[loan_num] = fd
-                    break
-
-    # ==========================================================
-    # GET DIALER DATA (BULK QUERY - FAST!)
-    # ==========================================================
-    dialer_data = {}
-    # Get all mobile numbers for page loans
-    page_mobiles = {}
-    for lcc in page_obj:
-        if lcc.cust_mobile:
-            page_mobiles[lcc.cust_mobile] = lcc.loan_number
-
-    if page_mobiles:
-        # Get latest dialer record per mobile (using Python aggregation)
-        all_dialers = Dialer.objects.filter(
-            mobile__in=list(page_mobiles.keys())
-        ).order_by('mobile', '-created_at')
-
-        # Pick first (latest) for each mobile
-        seen_mobiles = set()
-        for dialer in all_dialers:
-            if dialer.mobile not in seen_mobiles:
-                seen_mobiles.add(dialer.mobile)
-                loan_num = page_mobiles.get(dialer.mobile)
-                if loan_num:
-                    dialer_data[loan_num] = dialer
-
-    # ==========================================================
-    # BUILD FINAL DATA
-    # ==========================================================
-    notice_status_map = dict(DueNotice.NoticeStatus.choices)
-    final_data = []
-
-    for idx, lcc in enumerate(page_obj, 1):
-        status = page_status.get(lcc.loan_number, 'NOT PAID')
-
-        if valid_filter(loan_status_filter) and status != loan_status_filter:
-            continue
-
-        visit = visits.get(lcc.loan_number)
-        alloc = allocs.get(lcc.loan_number)
-        notice = notices.get(lcc.loan_number)
-        visitor = visitors_data.get(lcc.loan_number)
-        freshdesk = freshdesk_data.get(lcc.loan_number)
-        dialer = dialer_data.get(lcc.loan_number)
-
-        final_data.append({
-            "obj": visit,
-            "id": visit.id if visit else idx,
-            "loan_number": lcc.loan_number,
-            "customer_name": lcc.customer_name or "",
-            "vehicle_no": lcc.vehicle_no or "",
-            "cust_mobile": lcc.cust_mobile or "",
-            "company": lcc.company or "",
-            "division": lcc.division or "",
-            "branch": lcc.branch or "",
-            "blc_case": lcc.blc_cases or "",
-            "bucket_position": lcc.emi_due_2 or "",
-            "loan_status": status,
-            "has_schedule": bool(visit),
-            "visit_date": visit.visit_schedule_date if visit else "",
-            "visit_status": visit.visit_status if visit else "",
-            "not_visited_reason": visit.not_visited_reason if visit else "",
-            "cm": alloc.cm if alloc else "",
-            "tl": alloc.tl if alloc else "",
-            "exec": alloc.executive_name if alloc else "",
-            "empid": visit.empid if visit else "",
-            "latest_visited_on": visit.visit_schedule_date if visit else "",
-            "received_date": received.get(lcc.loan_number, ""),
-            "notice_send_to": notice.send_to if notice else "",
-            "notice_bar_number": notice.bar_number if notice else "",
-            "notice_date": notice.notice_date if notice else "",
-            "notice_type": notice.type_of_notice if notice else "",
-            "notice_status": notice.notice_status if notice else "",
-            "notice_status_label": notice_status_map.get(notice.notice_status, "") if notice else "",
-            "notice_delivery_date": notice.delivery_date if notice else "",
-            "notice_return_date": notice.return_date if notice else "",
-            "visitor_purpose": visitor.purpose if visitor else "",
-            "visitor_remark": visitor.remarks if visitor else "",
-            # Freshdesk Data
-            "Freshdesk_Description": freshdesk.description if freshdesk else "",
-            "Freshdesk_Status": freshdesk.status if freshdesk else "",
-            "Freshdesk_Group": freshdesk.group if freshdesk else "",
-            "Freshdesk_Createdtime": freshdesk.created_time if freshdesk else "",
-            # Dialer Data
-            "Dialer_PTP": dialer.ptp_date if dialer else "",
-            "Dialer_PTP_Date": dialer.ptp_date if dialer else "",
-            "Dialer_PTP_Remarks": dialer.remarks if dialer else "",
-            "Dialer_RTP": dialer.disp if dialer else "",
-            "Dialer_RTP_Date": dialer.last_received_date if dialer else "",
-            "Dialer_RTP_Remarks": dialer.remarks if dialer else "",
-            "Dialer_Thirdparty": dialer.executive if dialer else "",
-            "Dialer_Thirdparty_Date": str(dialer.created_at)[:10] if dialer and dialer.created_at else "",
-            "Dialer_Thirdparty_Remarks": dialer.customer_address if dialer else "",
-            "Dialer_other": dialer.service_name if dialer else "",
-            "Dialer_other_Date": dialer.call_start_time if dialer else "",
-            "Dialer_other_Remarks": dialer.call_end_time if dialer else "",
-            "payment_source": dialer.disp if dialer else "",
-            "payment_status": "PTP" if dialer and dialer.ptp_date else "",
-            "payment_date": dialer.ptp_date if dialer else "",
-            "payment_amount": dialer.total_dues if dialer else "",
-        })
-
-    page_obj.object_list = final_data
-
-    context = {
-        "data": final_data,
-        "page_obj": page_obj,
-        "total_count": total_count,
-        "status_counts": status_counts,
-        **dropdowns,
-        "division": division, "loanno": loanno, "empid": empid,
-        "from_date": from_date, "to_date": to_date, "role": role,
-        "search_empid": search_empid, "loan_status": loan_status_filter,
-        "remove_zeros": remove_zeros, "remove_sez": remove_sez,
-        "branch": branch, "centre_name": centre_name, "emi_bucket": emi_bucket,
-        "visit_filter": visit_filter, "selected_blc_case": blc_case,
-        "type_of_notice": type_of_notice, "company": company,
-    }
-
-    return render(request, "financehub/executive_visit_schedule_list.html", context)
 
 
 TOLERANCE = 500
@@ -1810,6 +1364,443 @@ def get_loan_status(lcc, paid_amount, repo_set, closed_set):
         return "NOT_PAID"
 
 
+@financehub_required
+def executive_visit_schedule_list(request):
+    from django.core.paginator import Paginator
+    from django.core.cache import cache
+    from django.db.models import Q, Sum
+    from collections import defaultdict
+    import hashlib
+    import json
+    import time
+
+    start_time = time.time()
+
+    # ==========================================================
+    # GET PARAMS
+    # ==========================================================
+    division = request.GET.get("division", "").strip()
+    blc_case = request.GET.get("blc_case", "").strip()
+    loanno = request.GET.get("loanno", "").strip()
+    empid = request.GET.get("empid", "").strip()
+    from_date = request.GET.get("from_date", "").strip()
+    to_date = request.GET.get("to_date", "").strip()
+    role = request.GET.get("role", "").strip()
+    search_empid = request.GET.get("search_empid", "").strip()
+    loan_status_filter = request.GET.get("loan_status", "").strip()
+    emi_bucket = request.GET.get("emi_bucket", "").strip()
+    remove_zeros = request.GET.get("remove_zeros") == "1"
+    remove_sez = request.GET.get("remove_sez") == "1"
+    branch = request.GET.get("branch", "").strip()
+    centre_name = request.GET.get("centre_name", "").strip()
+    visit_filter = request.GET.get("visit_filter", "").strip()
+    company = request.GET.get("company", "").strip()
+    type_of_notice = request.GET.get("type_of_notice", "").strip()
+    sort_field = request.GET.get("sort_field", "loan_number")
+    sort_order = request.GET.get("sort_order", "asc")
+    page = int(request.GET.get("page", 1))
+    login_empid = request.user.username.strip()
+
+    def valid_filter(v):
+        return v and v not in ["undefined", "null", "None", ""]
+
+    # ==========================================================
+    # BUILD QUERYSET
+    # ==========================================================
+    qs = Lcc.objects.all().only(
+        'loan_number', 'customer_name', 'vehicle_no', 'cust_mobile',
+        'company', 'division', 'branch', 'centre_name', 'blc_cases',
+        'emi_due_2', 'emi_due', 'month_tbc', 'total_dues', 'id'
+    )
+
+    # Apply all filters (your existing filters)
+    if valid_filter(division):
+        qs = qs.filter(division=division)
+    if valid_filter(branch):
+        qs = qs.filter(branch=branch)
+    if valid_filter(centre_name):
+        qs = qs.filter(centre_name=centre_name)
+    if valid_filter(loanno):
+        qs = qs.filter(loan_number__icontains=loanno)
+    if valid_filter(company):
+        qs = qs.filter(company=company)
+    if valid_filter(blc_case):
+        qs = qs.filter(blc_cases=blc_case)
+
+    # ✅ FIX 1: Apply NOTICE FILTER EARLY (before status calculation)
+    if valid_filter(type_of_notice):
+        notice_loans = DueNotice.objects.filter(
+            type_of_notice__iexact=type_of_notice
+        ).values_list('loan_number', flat=True).distinct()
+        qs = qs.filter(loan_number__in=notice_loans)
+
+    # EMI Bucket
+    if valid_filter(emi_bucket):
+        from django.db.models import FloatField
+        from django.db.models.functions import Cast
+
+        qs = qs.annotate(emi_float=Cast('emi_due_2', FloatField()))
+
+        if emi_bucket == "0_0":
+            qs = qs.filter(emi_float=0)
+        elif emi_bucket == "1_5":
+            qs = qs.filter(emi_float__gte=1, emi_float__lte=5)
+        elif emi_bucket == "6_10":
+            qs = qs.filter(emi_float__gte=6, emi_float__lte=10)
+        elif emi_bucket == "11_20":
+            qs = qs.filter(emi_float__gte=11, emi_float__lte=20)
+        elif emi_bucket == "21_50":
+            qs = qs.filter(emi_float__gte=21, emi_float__lte=50)
+        elif emi_bucket == "50_plus":
+            qs = qs.filter(emi_float__gt=50)
+
+    if remove_zeros:
+        qs = qs.exclude(emi_due_2__in=["0", "0.0"])
+    if remove_sez:
+        qs = qs.exclude(emi_due_2__iexact="sez")
+
+    # Role filter
+    if role == "CM":
+        cm_loans = CollectionAllocations.objects.filter(
+            manager_employee_id__iexact=login_empid
+        ).values_list('loan_number', flat=True)
+        qs = qs.filter(loan_number__in=cm_loans)
+        if valid_filter(search_empid):
+            search_loans = CollectionAllocations.objects.filter(
+                Q(tl_employee_id__iexact=search_empid) | Q(employee_id__iexact=search_empid)
+            ).values_list('loan_number', flat=True)
+            qs = qs.filter(loan_number__in=search_loans)
+    elif role == "TL":
+        tl_loans = CollectionAllocations.objects.filter(
+            tl_employee_id__iexact=login_empid
+        ).values_list('loan_number', flat=True)
+        qs = qs.filter(loan_number__in=tl_loans)
+        if valid_filter(search_empid):
+            search_loans = CollectionAllocations.objects.filter(
+                tl_employee_id__iexact=search_empid
+            ).values_list('loan_number', flat=True)
+            qs = qs.filter(loan_number__in=search_loans)
+    elif role == "EXEC":
+        exec_loans = CollectionAllocations.objects.filter(
+            employee_id__iexact=login_empid
+        ).values_list('loan_number', flat=True)
+        qs = qs.filter(loan_number__in=exec_loans)
+        if valid_filter(search_empid):
+            qs = qs.filter(loan_number__in=CollectionAllocations.objects.filter(
+                employee_id__iexact=search_empid
+            ).values_list('loan_number', flat=True))
+
+    # Visit filters
+    if valid_filter(empid):
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            empid__icontains=empid
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+
+    if from_date and to_date:
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_schedule_date__range=[from_date, to_date]
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif from_date:
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_schedule_date__gte=from_date
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif to_date:
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_schedule_date__lte=to_date
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+
+    if visit_filter == "visited":
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_status__iexact="visited"
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif visit_filter == "not_visited":
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_status__iexact="not_visited"
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif visit_filter == "scheduled":
+        visit_loans = ExecutiveVisitScheduling.objects.all().values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif visit_filter == "not_scheduled":
+        visit_loans = ExecutiveVisitScheduling.objects.all().values_list('loanno', flat=True)
+        qs = qs.exclude(loan_number__in=visit_loans)
+
+    # ==========================================================
+    # GET TOTAL COUNT (BEFORE LOAN STATUS FILTER)
+    # ==========================================================
+    total_before_status = qs.count()
+
+    if total_before_status == 0:
+        dropdowns = cache.get('dropdowns_final_v4')
+        if not dropdowns:
+            dropdowns = {
+                'branches': [], 'centres': [], 'notice_types': [], 'blc_cases': [], 'companies': []
+            }
+        context = {
+            "data": [], "page_obj": None, "total_count": 0,
+            "status_counts": {'CLOSED':0, 'REPO':0, 'PAID':0, 'PARTLY_PAID':0, 'NOT_PAID':0},
+            **dropdowns
+        }
+        return render(request, "financehub/executive_visit_schedule_list.html", context)
+
+    # ==========================================================
+    # ✅ FIX 2: GET ALL LOAN NUMBERS FOR STATUS CALCULATION
+    # ==========================================================
+    all_filtered_loans = list(qs.values_list('loan_number', flat=True))
+
+    # Get closed and repo in bulk
+    closed_dict = set(Closed.objects.filter(loan_number__in=all_filtered_loans).values_list('loan_number', flat=True))
+    repo_dict = set(Repo.objects.filter(agreement_number__in=all_filtered_loans).values_list('agreement_number', flat=True))
+
+    # Get paid amounts in bulk
+    paid_dict = dict(
+        Paid.objects.filter(loan_number__in=all_filtered_loans)
+        .values('loan_number')
+        .annotate(total=Sum('received_amount'))
+        .values_list('loan_number', 'total')
+    )
+
+    # Get LCC data in bulk
+    lcc_dict = {
+        l.loan_number: l for l in Lcc.objects.filter(loan_number__in=all_filtered_loans)
+        .only('loan_number', 'emi_due_2', 'month_tbc', 'total_dues')
+    }
+
+    # Calculate status for each loan
+    loan_status_map = {}
+    status_counts = {'CLOSED': 0, 'REPO': 0, 'PAID': 0, 'PARTLY_PAID': 0, 'NOT_PAID': 0}
+
+    for loan_num in all_filtered_loans:
+        lcc_obj = lcc_dict.get(loan_num)
+        if not lcc_obj:
+            continue
+
+        paid_amount = float(paid_dict.get(loan_num, 0) or 0)
+        status = get_loan_status(lcc_obj, paid_amount, repo_dict, closed_dict)
+        loan_status_map[loan_num] = status
+        status_counts[status] += 1
+
+    # ✅ FIX 3: APPLY LOAN STATUS FILTER (BEFORE PAGINATION)
+    if valid_filter(loan_status_filter):
+        filtered_loan_numbers = [loan for loan, status in loan_status_map.items() if status == loan_status_filter]
+        qs = qs.filter(loan_number__in=filtered_loan_numbers)
+        
+        # Recalculate total after status filter
+        total_count = len(filtered_loan_numbers)
+    else:
+        total_count = total_before_status
+
+    # ==========================================================
+    # PAGINATION - Get current page data
+    # ==========================================================
+    # Get all loan numbers for pagination
+    all_loan_numbers = list(qs.values_list('loan_number', flat=True))
+
+    # Create paginator
+    paginator = Paginator(all_loan_numbers, 200)
+    page_obj = paginator.get_page(page)
+    current_page_loans = page_obj.object_list
+
+    # ==========================================================
+    # FETCH DATA FOR CURRENT PAGE ONLY
+    # ==========================================================
+    page_lcc = {l.loan_number: l for l in Lcc.objects.filter(loan_number__in=current_page_loans)}
+    closed_set = set(Closed.objects.filter(loan_number__in=current_page_loans).values_list('loan_number', flat=True))
+    repo_set = set(Repo.objects.filter(agreement_number__in=current_page_loans).values_list('agreement_number', flat=True))
+
+    paid_aggregate = dict(
+        Paid.objects.filter(loan_number__in=current_page_loans)
+        .values('loan_number')
+        .annotate(total=Sum('received_amount'))
+        .values_list('loan_number', 'total')
+    )
+
+    all_visits = {}
+    for v in ExecutiveVisitScheduling.objects.filter(loanno__in=current_page_loans).order_by('loanno', '-visit_schedule_date'):
+        if v.loanno not in all_visits:
+            all_visits[v.loanno] = v
+
+    all_allocs = {a.loan_number: a for a in CollectionAllocations.objects.filter(loan_number__in=current_page_loans)}
+
+    all_notices = {}
+    for n in DueNotice.objects.filter(loan_number__in=current_page_loans).order_by('loan_number', '-notice_date', '-id'):
+        if n.loan_number not in all_notices:
+            all_notices[n.loan_number] = n
+
+    all_received = {}
+    for p in Paid.objects.filter(loan_number__in=current_page_loans, received_date__isnull=False).order_by('loan_number', '-received_date'):
+        if p.loan_number not in all_received:
+            all_received[p.loan_number] = p.received_date
+
+    all_visitors = {}
+    for v in Visiter.objects.filter(loan_number__in=current_page_loans).order_by('loan_number', '-created_at'):
+        if v.loan_number not in all_visitors:
+            all_visitors[v.loan_number] = v
+
+    all_freshdesk = {}
+    for loan_num in current_page_loans[:100]:
+        fd_list = Freshdesk.objects.filter(subject__icontains=loan_num).order_by('-created_time')[:1]
+        if fd_list:
+            all_freshdesk[loan_num] = fd_list[0]
+
+    all_dialer = {}
+    all_mobiles = {}
+    for lcc_obj in page_lcc.values():
+        if lcc_obj.cust_mobile:
+            all_mobiles[lcc_obj.cust_mobile] = lcc_obj.loan_number
+    if all_mobiles:
+        dialer_list = Dialer.objects.filter(mobile__in=list(all_mobiles.keys())).order_by('mobile', '-created_at')
+        seen_mobiles = set()
+        for dialer in dialer_list:
+            if dialer.mobile not in seen_mobiles:
+                seen_mobiles.add(dialer.mobile)
+                loan_num = all_mobiles.get(dialer.mobile)
+                if loan_num:
+                    all_dialer[loan_num] = dialer
+
+    # ==========================================================
+    # BUILD DATA FOR CURRENT PAGE
+    # ==========================================================
+    notice_status_map = dict(DueNotice.NoticeStatus.choices)
+    all_rows = []
+
+    for loan_num in current_page_loans:
+        lcc_obj = page_lcc.get(loan_num)
+        if not lcc_obj:
+            continue
+
+        # Get status from pre-calculated map
+        status = loan_status_map.get(loan_num, "NOT_PAID")
+
+        visit = all_visits.get(loan_num)
+        alloc = all_allocs.get(loan_num)
+        notice = all_notices.get(loan_num)
+        visitor = all_visitors.get(loan_num)
+        freshdesk = all_freshdesk.get(loan_num)
+        dialer = all_dialer.get(loan_num)
+
+        all_rows.append({
+            "obj": visit,
+            "id": visit.id if visit else 0,
+            "loan_number": lcc_obj.loan_number,
+            "customer_name": lcc_obj.customer_name or "",
+            "vehicle_no": lcc_obj.vehicle_no or "",
+            "cust_mobile": lcc_obj.cust_mobile or "",
+            "company": lcc_obj.company or "",
+            "division": lcc_obj.division or "",
+            "branch": lcc_obj.branch or "",
+            "blc_case": lcc_obj.blc_cases or "",
+            "bucket_position": lcc_obj.emi_due_2 or "",
+            "loan_status": status,
+            "has_schedule": bool(visit),
+            "visit_date": visit.visit_schedule_date if visit else "",
+            "visit_status": visit.visit_status if visit else "",
+            "not_visited_reason": visit.not_visited_reason if visit else "",
+            "cm": alloc.cm if alloc else "",
+            "tl": alloc.tl if alloc else "",
+            "exec": alloc.executive_name if alloc else "",
+            "empid": visit.empid if visit else "",
+            "latest_visited_on": visit.visit_schedule_date if visit else "",
+            "received_date": all_received.get(loan_num, ""),
+            "notice_send_to": notice.send_to if notice else "",
+            "notice_bar_number": notice.bar_number if notice else "",
+            "notice_date": notice.notice_date if notice else "",
+            "notice_type": notice.type_of_notice if notice else "",
+            "notice_status": notice.notice_status if notice else "",
+            "notice_status_label": notice_status_map.get(notice.notice_status, "") if notice else "",
+            "notice_delivery_date": notice.delivery_date if notice else "",
+            "notice_return_date": notice.return_date if notice else "",
+            "visitor_purpose": visitor.purpose if visitor else "",
+            "visitor_remark": visitor.remarks if visitor else "",
+            "Freshdesk_Description": freshdesk.description if freshdesk else "",
+            "Freshdesk_Status": freshdesk.status if freshdesk else "",
+            "Freshdesk_Group": freshdesk.group if freshdesk else "",
+            "Freshdesk_Createdtime": freshdesk.created_time if freshdesk else "",
+            "Dialer_PTP": dialer.ptp_date if dialer else "",
+            "Dialer_PTP_Date": dialer.ptp_date if dialer else "",
+            "Dialer_PTP_Remarks": dialer.remarks if dialer else "",
+            "Dialer_RTP": dialer.disp if dialer else "",
+            "Dialer_RTP_Date": dialer.last_received_date if dialer else "",
+            "Dialer_RTP_Remarks": dialer.remarks if dialer else "",
+            "Dialer_Thirdparty": dialer.executive if dialer else "",
+            "Dialer_Thirdparty_Date": str(dialer.created_at)[:10] if dialer and dialer.created_at else "",
+            "Dialer_Thirdparty_Remarks": dialer.customer_address if dialer else "",
+            "Dialer_other": dialer.service_name if dialer else "",
+            "Dialer_other_Date": dialer.call_start_time if dialer else "",
+            "Dialer_other_Remarks": dialer.call_end_time if dialer else "",
+            "payment_source": dialer.disp if dialer else "",
+            "payment_status": "PTP" if dialer and dialer.ptp_date else "",
+            "payment_date": dialer.ptp_date if dialer else "",
+            "payment_amount": dialer.total_dues if dialer else "",
+        })
+
+    # Apply sorting
+    reverse_sort = sort_order == "desc"
+
+    def get_sort_key(field_name):
+        def sort_key(row):
+            value = row.get(field_name, "")
+            if value is None or value == "":
+                return ("",)
+            if field_name == "id":
+                return (value if value else 0,)
+            elif field_name == "loan_status":
+                status_order = {"PAID": 1, "PARTLY_PAID": 2, "PARTLY PAID": 2, "NOT_PAID": 3, "REPO": 4, "CLOSED": 5}
+                return (status_order.get(str(value).upper(), 99),)
+            elif field_name == "emi_due_2":
+                try:
+                    return (float(str(value).replace("SEZ", "999999").replace("sez", "999999")),)
+                except:
+                    return (999999,)
+            else:
+                return (str(value).lower(),)
+        return sort_key
+
+    all_rows.sort(key=get_sort_key(sort_field), reverse=reverse_sort)
+    page_obj.object_list = all_rows
+
+    # ==========================================================
+    # GET DROPDOWNS
+    # ==========================================================
+    dropdowns = cache.get('dropdowns_final_v4')
+    if not dropdowns:
+        dropdowns = {
+            'branches': list(Lcc.objects.filter(branch__isnull=False).exclude(branch='').values_list('branch', flat=True).distinct().order_by('branch')[:200]),
+            'centres': list(Lcc.objects.filter(centre_name__isnull=False).exclude(centre_name='').values_list('centre_name', flat=True).distinct().order_by('centre_name')[:200]),
+            'notice_types': list(DueNotice.objects.filter(type_of_notice__isnull=False).exclude(type_of_notice='').values_list('type_of_notice', flat=True).distinct().order_by('type_of_notice')[:100]),
+            'blc_cases': list(Lcc.objects.filter(blc_cases__isnull=False).exclude(blc_cases='').values_list('blc_cases', flat=True).distinct().order_by('blc_cases')[:100]),
+            'companies': list(Lcc.objects.filter(company__isnull=False).exclude(company='').values_list('company', flat=True).distinct().order_by('company')[:200]),
+        }
+        cache.set('dropdowns_final_v4', dropdowns, 3600)
+
+    elapsed_time = time.time() - start_time
+    print(f"✅ Page {page} of {paginator.num_pages} | Total: {total_count} records | Status: CLOSED={status_counts['CLOSED']}, REPO={status_counts['REPO']}, PAID={status_counts['PAID']}, PARTLY={status_counts['PARTLY_PAID']}, NOT_PAID={status_counts['NOT_PAID']} | Loaded in {elapsed_time:.2f}s")
+
+    # ==========================================================
+    # RENDER RESPONSE
+    # ==========================================================
+    context = {
+        "data": all_rows,
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "status_counts": status_counts,
+        **dropdowns,
+        "division": division, "loanno": loanno, "empid": empid,
+        "from_date": from_date, "to_date": to_date, "role": role,
+        "search_empid": search_empid, "loan_status": loan_status_filter,
+        "remove_zeros": remove_zeros, "remove_sez": remove_sez,
+        "branch": branch, "centre_name": centre_name, "emi_bucket": emi_bucket,
+        "visit_filter": visit_filter, "selected_blc_case": blc_case,
+        "type_of_notice": type_of_notice, "company": company,
+        "sort_field": sort_field, "sort_order": sort_order,
+    }
+
+    return render(request, "financehub/executive_visit_schedule_list.html", context)
 
 @financehub_required
 def executive_visit_schedule_edit(request, pk):

@@ -1,0 +1,89 @@
+● nginx.service - The nginx HTTP and reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: disabled)
+     Active: active (running) since Mon 2026-05-18 05:22:20 UTC; 21min ago
+    Process: 3052287 ExecStartPre=/usr/bin/rm -f /run/nginx.pid (code=exited, status=0/SUCCESS)
+    Process: 3052288 ExecStartPre=/usr/sbin/nginx -t (code=exited, status=0/SUCCESS)
+    Process: 3052289 ExecStart=/usr/sbin/nginx (code=exited, status=0/SUCCESS)
+   Main PID: 3052290 (nginx)
+      Tasks: 3 (limit: 4560)
+     Memory: 5.5M
+        CPU: 1.433s
+     CGroup: /system.slice/nginx.service
+             ├─3052290 "nginx: master process /usr/sbin/nginx"
+             ├─3052291 "nginx: worker process"
+             └─3052292 "nginx: worker process"
+
+May 18 05:22:20 ip-172-31-9-232.ap-south-1.compute.internal systemd[1]: Starting nginx.service - The nginx HTTP and reverse proxy server...
+May 18 05:22:20 ip-172-31-9-232.ap-south-1.compute.internal nginx[3052288]: nginx: [warn] could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+May 18 05:22:20 ip-172-31-9-232.ap-south-1.compute.internal nginx[3052288]: nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+May 18 05:22:20 ip-172-31-9-232.ap-south-1.compute.internal nginx[3052288]: nginx: configuration file /etc/nginx/nginx.conf test is successful
+May 18 05:22:20 ip-172-31-9-232.ap-south-1.compute.internal nginx[3052289]: nginx: [warn] could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+May 18 05:22:20 ip-172-31-9-232.ap-south-1.compute.internal systemd[1]: Started nginx.service - The nginx HTTP and reverse proxy server.
+
+● gunicorn.service - Gunicorn daemon for Django
+     Loaded: loaded (/etc/systemd/system/gunicorn.service; enabled; preset: disabled)
+     Active: active (running) since Mon 2026-05-18 05:22:15 UTC; 21min ago
+   Main PID: 3052275 (gunicorn)
+      Tasks: 7 (limit: 4560)
+     Memory: 462.7M
+        CPU: 1min 21.917s
+     CGroup: /system.slice/gunicorn.service
+             ├─3052275 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/gunicorn whatsapp_sender.wsgi:application --workers 3 --timeout 300 --bind unix:/home/ec2-user/project/gunicorn.sock
+             ├─3052282 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/gunicorn whatsapp_sender.wsgi:application --workers 3 --timeout 300 --bind unix:/home/ec2-user/project/gunicorn.sock
+             ├─3052283 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/gunicorn whatsapp_sender.wsgi:application --workers 3 --timeout 300 --bind unix:/home/ec2-user/project/gunicorn.sock
+             └─3052284 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/gunicorn whatsapp_sender.wsgi:application --workers 3 --timeout 300 --bind unix:/home/ec2-user/project/gunicorn.sock
+
+May 18 05:39:49 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052282]: ✅ Updated wamid.HBgMOTE4Njg4MjkyMDM2FQIAERgSQjYzN0VEODU3NzgwMDYzM0VCAA== to Sent
+May 18 05:39:49 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052282]: ✅ Updated wamid.HBgMOTE5NzAxOTEyMTExFQIAERgSMEY0RDYzRTVFRTBGNjQ1NDZCAA== to Sent
+May 18 05:39:49 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052282]: ✅ Updated wamid.HBgMOTE3Mzg2ODkyNjY3FQIAERgSNDc5MTMxMjYzQ0FGQTU5NTE4AA== to Sent
+May 18 05:39:49 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052282]: ✅ Updated wamid.HBgMOTE5MTgyOTg1OTA0FQIAERgSNkM2REY1RkZFRUM5RkVFMEIyAA== to Sent
+May 18 05:39:49 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052282]: ✅ Updated wamid.HBgMOTE2MzA1MTM5ODM0FQIAERgSODk2MkM0Q0U2Njk5ODQ1MzhFAA== to Delivered
+May 18 05:39:49 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052282]: ✅ Updated wamid.HBgMOTE5MDAwMDU5MjYzFQIAERgSQjkwQUMyNkM4REQ5OUEzNTlFAA== to Sent
+May 18 05:39:49 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052282]: ✅ Updated wamid.HBgMOTE5NjUyMjYzMzQ4FQIAERgSMUYzMjBERUIwRTFFM0E2QjQyAA== to Delivered
+May 18 05:39:54 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052284]: /home/ec2-user/project/venv/lib64/python3.9/site-packages/boto3/compat.py:84: PythonDeprecationWarning: Boto3 will no longer support Python 3.9 starting April 29, 2026. To continue receiving service updates, bug fixes, and security updates please upgrade to Python 3.10 or later. More information can be found here: https://aws.amazon.com/blogs/developer/python-support-policy-updates-for-aws-sdks-and-tools/
+May 18 05:39:54 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052284]:   warnings.warn(warning, PythonDeprecationWarning)
+May 18 05:40:44 ip-172-31-9-232.ap-south-1.compute.internal gunicorn[3052283]: Not Found: /favicon.ico
+
+● celery.service - Celery Worker (WhatsApp Bulk - Main + Secondary)
+     Loaded: loaded (/etc/systemd/system/celery.service; enabled; preset: disabled)
+     Active: active (running) since Mon 2026-05-18 04:43:31 UTC; 59min ago
+   Main PID: 3049118 (celery)
+      Tasks: 3 (limit: 4560)
+     Memory: 304.1M
+        CPU: 18.574s
+     CGroup: /system.slice/celery.service
+             ├─3049118 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/celery -A whatsapp_sender worker --loglevel=info --pool=prefork --concurrency=2 --max-tasks-per-child=100 -Q whatsapp_main,whatsapp_secondary -n whatsapp_worker@/root
+             ├─3049138 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/celery -A whatsapp_sender worker --loglevel=info --pool=prefork --concurrency=2 --max-tasks-per-child=100 -Q whatsapp_main,whatsapp_secondary -n whatsapp_worker@/root
+             └─3049139 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/celery -A whatsapp_sender worker --loglevel=info --pool=prefork --concurrency=2 --max-tasks-per-child=100 -Q whatsapp_main,whatsapp_secondary -n whatsapp_worker@/root
+
+May 18 04:43:36 ip-172-31-9-232.ap-south-1.compute.internal celery[3049139]: [2026-05-18 10:13:36,679: INFO/ForkPoolWorker-2] messaging2.tasks.finalize_bulk_job2[6b52729a-88f4-4548-8d75-4a98aaad1f8b]: Job aa338dbe-677e-4c4a-89f2-4c805ea501f7 COMPLETED and reports generated
+May 18 04:43:36 ip-172-31-9-232.ap-south-1.compute.internal celery[3049139]: [2026-05-18 10:13:36,681: INFO/ForkPoolWorker-2] Task messaging2.tasks.finalize_bulk_job2[6b52729a-88f4-4548-8d75-4a98aaad1f8b] succeeded in 0.2885012829210609s: None
+May 18 04:43:36 ip-172-31-9-232.ap-south-1.compute.internal celery[3049138]: [2026-05-18 10:13:36,683: INFO/ForkPoolWorker-1] Task messaging.tasks.process_bulk_whatsapp_batch[e6318c9c-57e0-4e10-9321-d9e7f20a3710] succeeded in 0.0030143428593873978s: None
+May 18 04:43:36 ip-172-31-9-232.ap-south-1.compute.internal celery[3049139]: [2026-05-18 10:13:36,685: INFO/ForkPoolWorker-2] Task messaging.tasks.finalize_bulk_job[81e52af3-45c3-4d1a-a1e1-ae51a48201f0] succeeded in 0.0024080430157482624s: None
+May 18 05:38:42 ip-172-31-9-232.ap-south-1.compute.internal celery[3049118]: [2026-05-18 11:08:42,439: INFO/MainProcess] Task financehub.tasks.process_universal_file[d8df1277-7aa4-4d04-88bd-ffa0d7da7d34] received
+May 18 05:38:43 ip-172-31-9-232.ap-south-1.compute.internal celery[3049139]: [2026-05-18 11:08:43,619: INFO/ForkPoolWorker-2] Task financehub.tasks.process_universal_file[d8df1277-7aa4-4d04-88bd-ffa0d7da7d34] succeeded in 1.1789477558340877s: None
+May 18 05:39:54 ip-172-31-9-232.ap-south-1.compute.internal celery[3049118]: [2026-05-18 11:09:54,978: INFO/MainProcess] Task financehub.tasks.process_universal_file[4e59fd29-a79c-4488-af46-9ddc2cb6038c] received
+May 18 05:39:56 ip-172-31-9-232.ap-south-1.compute.internal celery[3049139]: [2026-05-18 11:09:56,481: INFO/ForkPoolWorker-2] Task financehub.tasks.process_universal_file[4e59fd29-a79c-4488-af46-9ddc2cb6038c] succeeded in 1.5021540380548686s: None
+May 18 05:40:53 ip-172-31-9-232.ap-south-1.compute.internal celery[3049118]: [2026-05-18 11:10:53,474: INFO/MainProcess] Task financehub.tasks.process_universal_file[ad412583-5406-4704-ace9-b1155eaa967f] received
+May 18 05:41:02 ip-172-31-9-232.ap-south-1.compute.internal celery[3049139]: [2026-05-18 11:11:02,612: INFO/ForkPoolWorker-2] Task financehub.tasks.process_universal_file[ad412583-5406-4704-ace9-b1155eaa967f] succeeded in 9.137638308107853s: None
+
+● daphne.service - Daphne ASGI Server (Django Channels)
+     Loaded: loaded (/etc/systemd/system/daphne.service; enabled; preset: disabled)
+     Active: active (running) since Mon 2026-05-18 05:22:21 UTC; 21min ago
+   Main PID: 3052298 (daphne)
+      Tasks: 3 (limit: 4560)
+     Memory: 110.4M
+        CPU: 13.762s
+     CGroup: /system.slice/daphne.service
+             └─3052298 /home/ec2-user/project/venv/bin/python3 /home/ec2-user/project/venv/bin/daphne -v 1 -b 127.0.0.1 -p 8001 --proxy-headers --websocket_timeout 300 --websocket_connect_timeout 60 --ping-interval 20 --ping-timeout 30 --application-close-timeout 30 whatsapp_sender.asgi:application
+
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Connection successful
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: get_contacts
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
+May 18 05:43:17 ip-172-31-9-232.ap-south-1.compute.internal daphne[3052298]: Received message type: typing
