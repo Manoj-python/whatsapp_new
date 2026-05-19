@@ -1,8 +1,58 @@
 import pandas as pd
 from docxtpl import DocxTemplate
-import subprocess
 import os
 from datetime import datetime
+import subprocess
+
+# -----------------------------
+# PDF CONVERSION HELPERS (LibreOffice Only - Preserves Formatting)
+# -----------------------------
+def convert_docx_to_pdf(docx_path, output_dir):
+    """Convert DOCX to PDF using LibreOffice - Preserves ALL original formatting"""
+    try:
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Run LibreOffice conversion
+        result = subprocess.run(
+            [
+                "/usr/bin/soffice",
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                output_dir,
+                docx_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode == 0:
+            print(f"✅ PDF: {os.path.basename(docx_path).replace('.docx', '.pdf')}")
+            return True
+        else:
+            print(f"❌ LibreOffice error: {result.stderr[:200]}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        print(f"⏰ Timeout for {os.path.basename(docx_path)}")
+        return False
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
+
+def convert_batch(docx_paths, output_dir, workers=1):
+    """Sequential conversion - preserves formatting, stable for t3.medium"""
+    total = len(docx_paths)
+    for idx, (docx_path, _) in enumerate(docx_paths, 1):
+        print(f"Converting {idx}/{total}: {os.path.basename(docx_path)}")
+        convert_docx_to_pdf(docx_path, output_dir)
+
+
+
 
 # -----------------------------
 # SAFE HELPERS
@@ -36,7 +86,6 @@ def format_mobile(value):
     return str(value).split(".")[0]
 
 def format_indian_number(value):
-    # Handle NaN / empty values
     if pd.isna(value):
         return ""
 
@@ -63,9 +112,7 @@ def format_indian_number(value):
 
     return ",".join(parts) + "," + last3
 
-# Address formatter
 def format_address(address, max_lines=3, max_chars_per_line=40):
-
     if not isinstance(address, str):
         return address
 
@@ -75,7 +122,6 @@ def format_address(address, max_lines=3, max_chars_per_line=40):
     current_line = ""
 
     for word in words:
-
         if len(current_line) + len(word) + 1 <= max_chars_per_line:
             current_line += (" " if current_line else "") + word
         else:
@@ -107,7 +153,6 @@ TENS = (
 )
 
 def number_to_words_indian(num):
-
     num = safe_number(num, 0)
 
     if num == 0:
@@ -146,61 +191,9 @@ def number_to_words_indian(num):
     return " ".join(words) + " Rupees Only"
 
 # -----------------------------
-# PDF CONVERSION FOR LINUX (LibreOffice)
-# -----------------------------
-def convert_docx_to_pdf(docx_path, pdf_path):
-    """Convert DOCX to PDF using LibreOffice (Linux/EC2 compatible)"""
-    try:
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
-
-        # Use the correct soffice command (NOT libreoffice)
-        # Option 1: Use the symlink we created
-        soffice_cmd = '/usr/local/bin/soffice'
-        
-        # Option 2: Use the wrapper script (recommended for systemd)
-        # soffice_cmd = '/usr/local/bin/libreoffice-wrapper'
-        
-        # Option 3: Use direct path
-        # soffice_cmd = '/opt/libreoffice24.2/program/soffice'
-
-        # LibreOffice command for headless conversion
-        result = subprocess.run([
-            soffice_cmd,  # Changed from 'libreoffice' to soffice_cmd
-            '--headless',
-            '--convert-to', 'pdf',
-            '--outdir', os.path.dirname(pdf_path),
-            docx_path
-        ], capture_output=True, text=True, timeout=120)
-
-        if result.returncode != 0:
-            print(f"Conversion failed for {docx_path}: {result.stderr}")
-            return False
-
-        # LibreOffice creates file with same name but .pdf extension
-        generated_pdf = os.path.join(
-            os.path.dirname(pdf_path),
-            os.path.basename(docx_path).replace('.docx', '.pdf')
-        )
-
-        # Rename if the path is different
-        if generated_pdf != pdf_path:
-            if os.path.exists(generated_pdf):
-                os.rename(generated_pdf, pdf_path)
-
-        return True
-
-    except subprocess.TimeoutExpired:
-        print(f"Conversion timeout for {docx_path}")
-        return False
-    except Exception as e:
-        print(f"Conversion error for {docx_path}: {e}")
-        return False
-# -----------------------------
 # Borrower Notice
 # -----------------------------
 def generate_borrower_pdf(excel_path, borrower_tpl, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "generate_borrower_docx")
@@ -209,23 +202,21 @@ def generate_borrower_pdf(excel_path, borrower_tpl, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for _, row in df.iterrows():
+    docx_paths = []
 
+    for _, row in df.iterrows():
         dues_amount = safe_number(row["dues"])
 
         context = {
             "code": row.get("code", ""),
             "company_name": row.get("company_name", ""),
             "notice_date": format_date(row["notice_date"]),
-
             "borrower_name": row["borrower_name"],
             "borrower_father": row["borrower_father"],
             "borrower_address": format_address(row["borrower_address"]),
             "borrower_mobile": format_mobile(row["borrower_mobile"]),
-
             "loan_account": row["loan_account"],
             "vehicle_no": row["vehicle_no"],
-
             "dues": format_indian_number(dues_amount),
             "dues_2": number_to_words_indian(dues_amount),
         }
@@ -239,15 +230,14 @@ def generate_borrower_pdf(excel_path, borrower_tpl, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_borrower.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Guarantor Notice
 # -----------------------------
 def generate_guarantor_pdf(excel_path, guarantor_tpl, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "generate_guarantor_docx")
@@ -256,24 +246,21 @@ def generate_guarantor_pdf(excel_path, guarantor_tpl, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for row in df.itertuples(index=False):
+    docx_paths = []
 
+    for row in df.itertuples(index=False):
         dues_amount = safe_number(getattr(row, "dues", 0))
 
         context = {
             "code": getattr(row, "code", ""),
             "company_name": getattr(row, "company_name", ""),
             "notice_date": format_date(getattr(row, "notice_date", "")),
-
             "borrower_name": getattr(row, "borrower_name", ""),
-
             "guarantor_name": getattr(row, "guarantor_name", ""),
             "guarantor_address": format_address(getattr(row, "guarantor_address", "")),
             "guarantor_mobile": format_mobile(getattr(row, "guarantor_mobile", "")),
-
             "loan_account": getattr(row, "loan_account", ""),
             "vehicle_no": getattr(row, "vehicle_no", ""),
-
             "dues": format_indian_number(dues_amount),
             "dues_2": number_to_words_indian(dues_amount),
         }
@@ -287,15 +274,14 @@ def generate_guarantor_pdf(excel_path, guarantor_tpl, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_guarantor.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Co-Borrower Notice
 # -----------------------------
 def generate_co_borrower_pdf(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "generate_co_borrower_docx")
@@ -304,25 +290,22 @@ def generate_co_borrower_pdf(excel_path, template_path, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for _, row in df.iterrows():
+    docx_paths = []
 
+    for _, row in df.iterrows():
         dues_amount = safe_number(row.dues)
 
         context = {
             "code": row.get("code", ""),
             "company_name": row.get("company_name", ""),
             "notice_date": format_date(row["notice_date"]),
-
             "borrower_name": row["borrower_name"],
-
             "co_borrower_name": row["co_borrower_name"],
             "co_borrower_father": row["co_borrower_father"],
             "co_borrower_address": format_address(row["co_borrower_address"]),
             "co_borrower_mobile": format_mobile(row["co_borrower_mobile"]),
-
             "loan_account": row["loan_account"],
             "vehicle_no": row["vehicle_no"],
-
             "dues": format_indian_number(dues_amount),
             "dues_2": number_to_words_indian(dues_amount),
         }
@@ -336,15 +319,14 @@ def generate_co_borrower_pdf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_co_borrower.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Lok Adalat Generator
 # -----------------------------
 def generate_lokadalat_pdf(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "generate_lokadalat_docx")
@@ -353,8 +335,9 @@ def generate_lokadalat_pdf(excel_path, template_path, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for row in df.itertuples(index=False):
+    docx_paths = []
 
+    for row in df.itertuples(index=False):
         context = {
             "company_name": safe(row.company_name),
             "loan_number": safe(row.loan_number),
@@ -377,15 +360,14 @@ def generate_lokadalat_pdf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_lokadalat.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Loan APP Generator
 # -----------------------------
 def generate_loan_app_pdf(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "generate_loan_app_docx")
@@ -394,8 +376,9 @@ def generate_loan_app_pdf(excel_path, template_path, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for row in df.itertuples(index=False):
+    docx_paths = []
 
+    for row in df.itertuples(index=False):
         context = {
             "company_name": safe(row.company_name),
             "name": safe(row.name),
@@ -414,15 +397,14 @@ def generate_loan_app_pdf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_loan_app.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Ledger Generator
 # -----------------------------
 def generate_ledger_pdf(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "generate_ledger_docx")
@@ -431,8 +413,9 @@ def generate_ledger_pdf(excel_path, template_path, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for row in df.itertuples(index=False):
+    docx_paths = []
 
+    for row in df.itertuples(index=False):
         context = {
             "month": safe(row.month),
             "day2": safe(row.day2),
@@ -455,15 +438,14 @@ def generate_ledger_pdf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{emp_id}_ledger.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Ledger APP Generator
 # -----------------------------
 def generate_ledger_app_pdf(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "generate_ledger_app_docx")
@@ -472,8 +454,9 @@ def generate_ledger_app_pdf(excel_path, template_path, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for row in df.itertuples(index=False):
+    docx_paths = []
 
+    for row in df.itertuples(index=False):
         context = {
             "company_name": safe(row.company_name),
             "name": safe(row.name),
@@ -492,15 +475,14 @@ def generate_ledger_app_pdf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{emp_id}_ledger_app.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Loss Notice Generator
 # -----------------------------
 def generate_loss_notice_pdf(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "loss_notice_docx")
@@ -509,8 +491,9 @@ def generate_loss_notice_pdf(excel_path, template_path, output_dir):
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for row in df.itertuples(index=False):
+    docx_paths = []
 
+    for row in df.itertuples(index=False):
         context = {
             "date": format_date(row.date),
             "name": safe(row.name),
@@ -541,15 +524,14 @@ def generate_loss_notice_pdf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{loan_no}_loss_notice.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Letter Head Registration Borrower
 # -----------------------------
 def generate_Letter_Head_Registration_borrower(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "borrower_docx")
@@ -558,8 +540,9 @@ def generate_Letter_Head_Registration_borrower(excel_path, template_path, output
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for _, row in df.iterrows():
+    docx_paths = []
 
+    for _, row in df.iterrows():
         context = {
             "date": format_date(row.get("date")),
             "name": safe(row.get("name")),
@@ -577,15 +560,14 @@ def generate_Letter_Head_Registration_borrower(excel_path, template_path, output
         pdf_path = os.path.join(pdf_dir, f"{file_name}.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # -----------------------------
 # Letter Head Registration Guarantor
 # -----------------------------
 def generate_Letter_Head_Registration_guarantor(excel_path, template_path, output_dir):
-
     df = pd.read_excel(excel_path)
 
     docx_dir = os.path.join(output_dir, "guarantor_docx")
@@ -594,8 +576,9 @@ def generate_Letter_Head_Registration_guarantor(excel_path, template_path, outpu
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
 
-    for _, row in df.iterrows():
+    docx_paths = []
 
+    for _, row in df.iterrows():
         context = {
             "date": format_date(row.get("date")),
             "name": safe(row.get("name")),
@@ -613,9 +596,9 @@ def generate_Letter_Head_Registration_guarantor(excel_path, template_path, outpu
         pdf_path = os.path.join(pdf_dir, f"{file_name}.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 
 # =========================================================
@@ -629,6 +612,8 @@ def generate_demand_notice_psf(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         dues_amount = safe_number(row.get("dues"))
@@ -654,9 +639,9 @@ def generate_demand_notice_psf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_psf_demand.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # DEMAND NOTICE SMS
@@ -669,6 +654,8 @@ def generate_demand_notice_sms(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         dues_amount = safe_number(row.get("dues"))
@@ -694,9 +681,9 @@ def generate_demand_notice_sms(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_sms_demand.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # DUE NOTICE PSF
@@ -709,6 +696,8 @@ def generate_due_notice_psf(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -731,9 +720,9 @@ def generate_due_notice_psf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_psf_due.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # DUE NOTICE SMS
@@ -746,6 +735,8 @@ def generate_due_notice_sms(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -771,9 +762,9 @@ def generate_due_notice_sms(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_sms_due.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # DUE NOTICE SMF
@@ -786,6 +777,8 @@ def generate_due_notice_smf(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -808,9 +801,9 @@ def generate_due_notice_smf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_smf_due.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # PRE SALE PSF
@@ -823,6 +816,8 @@ def generate_pre_sale_psf(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -843,9 +838,9 @@ def generate_pre_sale_psf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_psf_pre_sale.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # PRE SALE SMS
@@ -858,6 +853,8 @@ def generate_pre_sale_sms(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -878,9 +875,9 @@ def generate_pre_sale_sms(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_sms_pre_sale.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # PRE SALE SMF
@@ -893,6 +890,8 @@ def generate_pre_sale_smf(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -913,9 +912,9 @@ def generate_pre_sale_smf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_smf_pre_sale.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # POLICE INTIMATION PSF
@@ -928,6 +927,8 @@ def generate_police_intimation_psf(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -951,9 +952,9 @@ def generate_police_intimation_psf(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_psf_police.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
 
 # =========================================================
 # POLICE INTIMATION SMS
@@ -966,6 +967,8 @@ def generate_police_intimation_sms(excel_path, template_path, output_dir):
 
     os.makedirs(docx_dir, exist_ok=True)
     os.makedirs(pdf_dir, exist_ok=True)
+
+    docx_paths = []
 
     for _, row in df.iterrows():
         context = {
@@ -989,6 +992,6 @@ def generate_police_intimation_sms(excel_path, template_path, output_dir):
         pdf_path = os.path.join(pdf_dir, f"{file_name}_sms_police.pdf")
 
         doc.save(docx_path)
-        
-        # Convert to PDF using LibreOffice
-        convert_docx_to_pdf(docx_path, pdf_path)
+        docx_paths.append((docx_path, pdf_path))
+    
+    convert_batch(docx_paths, pdf_dir)
