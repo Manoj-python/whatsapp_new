@@ -1,87 +1,1012 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Admin Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
+{% extends "adminpanel/base.html" %}
+{% load static %}
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-  <div class="container">
+{% block title %}Admin Dashboard | Case Management System{% endblock %}
 
-    <a class="navbar-brand">Admin Panel</a>
+{% block extra_css %}
+<style>
+    /* Modern Dashboard Styles */
+    :root {
+        --primary: #4361ee;
+        --primary-dark: #3a0ca3;
+        --secondary: #4cc9f0;
+        --success: #4caf50;
+        --danger: #f44336;
+        --warning: #ff9800;
+        --info: #2196f3;
+        --dark: #1a1a2e;
+        --light: #f8f9fa;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        transition: all 0.3s ease;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+    }
+    
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--secondary));
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    .stat-icon {
+        width: 50px;
+        height: 50px;
+        background: rgba(67, 97, 238, 0.1);
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 15px;
+    }
+    
+    .stat-icon i {
+        font-size: 24px;
+        color: var(--primary);
+    }
+    
+    .stat-number {
+        font-size: 32px;
+        font-weight: 800;
+        color: var(--dark);
+        line-height: 1;
+    }
+    
+    .stat-label {
+        color: #6c757d;
+        font-size: 13px;
+        margin-top: 8px;
+    }
+    
+    .level-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border-radius: 30px;
+        font-size: 12px;
+        font-weight: 600;
+        gap: 8px;
+    }
+    
+    .level-ESC1 { background: #4caf50; color: white; }
+    .level-ESC2 { background: #2196f3; color: white; }
+    .level-ESC3 { background: #ff9800; color: white; }
+    .level-ESC4 { background: #9c27b0; color: white; }
+    .level-ESC5 { background: #f44336; color: white; }
+    .level-RESOLVED { background: #4caf50; color: white; }
+    .level-CLOSED { background: #6c757d; color: white; }
+    
+    .section-card {
+        background: white;
+        border-radius: 20px;
+        padding: 25px;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--dark);
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .nav-tabs-custom {
+        border-bottom: 2px solid #e9ecef;
+        margin-bottom: 20px;
+    }
+    
+    .nav-tabs-custom .nav-link {
+        border: none;
+        color: #6c757d;
+        font-weight: 600;
+        padding: 12px 24px;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    
+    .nav-tabs-custom .nav-link:hover {
+        color: var(--primary);
+    }
+    
+    .nav-tabs-custom .nav-link.active {
+        color: var(--primary);
+        border-bottom: 2px solid var(--primary);
+        background: transparent;
+    }
+    
+    .btn-gradient {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    
+    .btn-gradient:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(67, 97, 238, 0.4);
+        color: white;
+    }
+    
+    .btn-outline-gradient {
+        background: transparent;
+        border: 2px solid var(--primary);
+        color: var(--primary);
+        padding: 6px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    
+    .btn-outline-gradient:hover {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .modern-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .modern-table thead th {
+        background: #f8f9fa;
+        padding: 12px 15px;
+        font-weight: 600;
+        color: var(--dark);
+        border-bottom: 2px solid #e9ecef;
+    }
+    
+    .modern-table tbody tr {
+        border-bottom: 1px solid #e9ecef;
+        transition: all 0.2s;
+    }
+    
+    .modern-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .modern-table td {
+        padding: 12px 15px;
+        vertical-align: middle;
+    }
+    
+    .priority-urgent { background: #f44336; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
+    .priority-high { background: #ff9800; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
+    .priority-medium { background: #2196f3; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
+    .priority-low { background: #4caf50; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .status-open { background: #2196f3; color: white; }
+    .status-in-progress { background: #ff9800; color: white; }
+    .status-resolved { background: #4caf50; color: white; }
+    .status-closed { background: #6c757d; color: white; }
+    .status-reopened { background: #f44336; color: white; }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 250px;
+        margin: 20px 0;
+    }
+    
+    .quick-action {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s;
+        cursor: pointer;
+        height: 100%;
+    }
+    
+    .quick-action:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    
+    .quick-action i {
+        font-size: 32px;
+        margin-bottom: 10px;
+    }
+    
+    /* Action Buttons */
+    .action-btn {
+        padding: 5px 10px;
+        margin: 2px;
+        border-radius: 8px;
+        font-size: 12px;
+        transition: all 0.2s;
+    }
+    
+    .action-btn:hover {
+        transform: translateY(-1px);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .stat-number {
+            font-size: 24px;
+        }
+        .nav-tabs-custom .nav-link {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+        .section-card {
+            padding: 15px;
+        }
+        .quick-action {
+            margin-bottom: 15px;
+        }
+    }
+</style>
+{% endblock %}
 
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav me-auto">
-
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'admin_user_create' %}">Create User</a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'admin_dashboard' %}">Dashboard</a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link text-danger fw-bold" href="{% url 'failed_messages' %}">
-           Messaging Failed Logs
-          </a>
-        </li>
-
-          <li class="nav-item">
-          <a class="nav-link text-danger fw-bold" href="{% url 'failed_messages2' %}">
-           Messaging2 Failed Logs2
-          </a>
-
-      </ul>
-
-      <a href="{% url 'admin_logout' %}" class="btn btn-outline-light">Logout</a>
+{% block content %}
+<div class="container-fluid">
+    <!-- Welcome Section -->
+    <div class="section-card mb-4" style="background: linear-gradient(135deg, #4361ee, #3f37c9); color: white;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-2">
+                    <i class="fas fa-chart-line"></i> Welcome back, {{ request.user.username }}!
+                </h2>
+                <p class="mb-0 opacity-75">Here's what's happening with your cases today.</p>
+            </div>
+            <div>
+                <i class="fas fa-chart-pie fa-3x opacity-50"></i>
+            </div>
+        </div>
     </div>
-
-  </div>
-</nav>
-
-<div class="container">
-
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3>All Users</h3>
-        <a href="{% url 'admin_user_create' %}" class="btn btn-success">+ Create User</a>
+    
+    <!-- Statistics Cards -->
+    <div class="row" id="statsCards">
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="stat-card" onclick="switchTab('all')">
+                <div class="stat-icon"><i class="fas fa-folder-open"></i></div>
+                <div class="stat-number" id="totalCases">{{ stats.total_cases|default:"0" }}</div>
+                <div class="stat-label">Total Cases</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="stat-card" onclick="switchTab('open')">
+                <div class="stat-icon"><i class="fas fa-play-circle"></i></div>
+                <div class="stat-number" id="openCases">{{ stats.open_cases|default:"0" }}</div>
+                <div class="stat-label">Open Cases</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="stat-card" onclick="switchTab('open')">
+                <div class="stat-icon"><i class="fas fa-spinner"></i></div>
+                <div class="stat-number" id="inProgressCases">{{ stats.in_progress_cases|default:"0" }}</div>
+                <div class="stat-label">In Progress</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="stat-card" onclick="switchTab('resolved')">
+                <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-number" id="resolvedCases">{{ stats.resolved_cases|default:"0" }}</div>
+                <div class="stat-label">Resolved</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="stat-card" onclick="switchTab('closed')">
+                <div class="stat-icon"><i class="fas fa-lock"></i></div>
+                <div class="stat-number" id="closedCases">{{ stats.closed_cases|default:"0" }}</div>
+                <div class="stat-label">Closed</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="stat-card" onclick="window.location.href='/adminpanel/users/'">
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                <div class="stat-number" id="totalAgents">{{ stats.total_agents|default:"0" }}</div>
+                <div class="stat-label">Team Members</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="stat-card" onclick="window.location.href='/adminpanel/users/'">
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                <div class="stat-number" id="totalAgents">{{ stats.reopened_cases|default:"0" }}</div>
+                <div class="stat-label">Reopened</div>
+            </div>
+        </div>
     </div>
-
-    <table class="table table-striped table-bordered shadow-sm">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Username</th>
-                <th>Staff</th>
-                <th width="180px">Actions</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            {% for u in users %}
-            <tr>
-                <td>{{ u.id }}</td>
-                <td>{{ u.username }}</td>
-                <td>{{ u.is_staff }}</td>
-                <td>
-                    <a href="{% url 'admin_user_edit' u.id %}" class="btn btn-primary btn-sm">Edit</a>
-                    <a href="{% url 'admin_user_delete' u.id %}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this user?');">Delete</a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="4" class="text-center">No users found</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
+    
+    <!-- Quick Actions Row -->
+    
+    <!-- Charts Row -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="section-card">
+                <div class="section-title">
+                    <span><i class="fas fa-chart-pie"></i> Cases by Escalation Level</span>
+                    <button class="btn btn-sm btn-outline-gradient" onclick="refreshLevelChart()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="levelChart"></canvas>
+                </div>
+                <div class="row text-center mt-3">
+                    <div class="col">
+                        <span class="level-badge level-ESC1">ESC1: {{ stats.esc1|default:"0" }}</span>
+                    </div>
+                    <div class="col">
+                        <span class="level-badge level-ESC2">ESC2: {{ stats.esc2|default:"0" }}</span>
+                    </div>
+                    <div class="col">
+                        <span class="level-badge level-ESC3">ESC3: {{ stats.esc3|default:"0" }}</span>
+                    </div>
+                    <div class="col">
+                        <span class="level-badge level-ESC4">ESC4: {{ stats.esc4|default:"0" }}</span>
+                    </div>
+                    <div class="col">
+                        <span class="level-badge level-ESC5">ESC5: {{ stats.esc5|default:"0" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="section-card">
+                <div class="section-title">
+                    <span><i class="fas fa-chart-line"></i> Weekly Case Trend (Last 7 Days)</span>
+                    <button class="btn btn-sm btn-outline-gradient" onclick="refreshTrendChart()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cases Management Tabs -->
+    <div class="section-card">
+        <div class="section-title">
+    <span><i class="fas fa-tasks"></i> Case Management</span>
+    <div>
+        <div class="input-group input-group-sm" style="width: 300px;">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by Case ID or Loan Number..." aria-label="Search">
+            <button class="btn btn-primary" type="button" onclick="searchCases()">
+                <i class="fas fa-search"></i> Search
+            </button>
+            <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <button class="btn btn-sm btn-outline-gradient ms-2" onclick="refreshCases()">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+</div>
+        
+        <ul class="nav nav-tabs-custom" id="caseTabs">
+            <li class="nav-item">
+                <a class="nav-link active" data-tab="open" href="#" onclick="switchTab('open')">
+                    <i class="fas fa-folder-open"></i> Open Cases
+                    <span class="badge bg-primary ms-1" id="openCount">{{ stats.open_cases|default:"0" }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="resolved" href="#" onclick="switchTab('resolved')">
+                    <i class="fas fa-check-circle"></i> Resolved (Pending Close)
+                    <span class="badge bg-success ms-1" id="resolvedCount">{{ stats.resolved_cases|default:"0" }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="esc5" href="#" onclick="switchTab('esc5')">
+                    <i class="fas fa-exclamation-triangle"></i> ESC5 - Admin Review
+                    <span class="badge bg-danger ms-1" id="esc5Count">{{ stats.esc5|default:"0" }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="closed" href="#" onclick="switchTab('closed')">
+                    <i class="fas fa-archive"></i> Closed Cases
+                    <span class="badge bg-secondary ms-1" id="closedCount">{{ stats.closed_cases|default:"0" }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="all" href="#" onclick="switchTab('all')">
+                    <i class="fas fa-list"></i> All Cases
+                </a>
+            </li>
+        </ul>
+        
+        <div id="casesTableContainer">
+            <div class="text-center py-4">
+                <div class="loading-spinner"></div>
+                <p class="mt-2">Loading cases...</p>
+            </div>
+        </div>
+    </div>
 </div>
 
-</body>
-</html>
+<!-- Case Detail Modal -->
+<div class="modal fade" id="caseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #4361ee, #3f37c9); color: white;">
+                <h5 class="modal-title"><i class="fas fa-folder-open"></i> Case Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="caseModalBody">
+                <div class="text-center py-4">
+                    <div class="loading-spinner"></div>
+                    <p>Loading case details...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- Close Case Modal -->
+<div class="modal fade" id="closeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-lock"></i> Close Case</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="closeCaseId">
+                <div class="mb-3">
+                    <label>Closure Reason:</label>
+                    <textarea id="closeReason" class="form-control" rows="3" placeholder="Enter reason for closing this case..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitCloseCase()">Close Case</button>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- Reopen Case Modal -->
+<div class="modal fade" id="reopenModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-undo"></i> Reopen Case</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="reopenCaseId">
+                <div class="mb-3">
+                    <label>Reopen To Level:</label>
+                    <select id="reopenLevel" class="form-select">
+                        <option value="ESC1">ESC1 - Agent Level</option>
+                        <option value="ESC2">ESC2 - Legal Team</option>
+                        <option value="ESC3">ESC3 - Team Lead</option>
+                        <option value="ESC4">ESC4 - Manager</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label>Reason for Reopening:</label>
+                    <textarea id="reopenReason" class="form-control" rows="3" placeholder="Why is this case being reopened?"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" onclick="submitReopenCase()">Reopen Case</button>
+            </div>
+        </div>
+    </div>
+</div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let levelChart = null;
+    let trendChart = null;
+    let currentTab = 'open';
+    let csrftoken = '{{ csrf_token }}';
+    
+    // ============================================
+    // CHARTS
+    // ============================================
+    
+    function initLevelChart() {
+        const ctx = document.getElementById('levelChart').getContext('2d');
+        if (levelChart) levelChart.destroy();
+        
+        levelChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['ESC1 - Agent', 'ESC2 - Legal', 'ESC3 - Lead', 'ESC4 - Manager', 'ESC5 - Admin', 'Resolved', 'Closed'],
+                datasets: [{
+                    data: [
+                        {{ stats.esc1|default:"0" }},
+                        {{ stats.esc2|default:"0" }},
+                        {{ stats.esc3|default:"0" }},
+                        {{ stats.esc4|default:"0" }},
+                        {{ stats.esc5|default:"0" }},
+                        {{ stats.resolved_cases|default:"0" }},
+                        {{ stats.closed_cases|default:"0" }}
+                    ],
+                    backgroundColor: ['#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#f44336', '#4caf50', '#6c757d'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { 
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: function(context) { return context.label + ': ' + context.raw; } } }
+                }
+            }
+        });
+    }
+    
+    function refreshLevelChart() {
+        fetch('/adminpanel/api/level-distribution/')
+            .then(response => response.json())
+            .then(data => {
+                if (levelChart) {
+                    levelChart.data.datasets[0].data = [
+                        data.esc1 || 0, data.esc2 || 0, data.esc3 || 0, 
+                        data.esc4 || 0, data.esc5 || 0, data.resolved || 0, data.closed || 0
+                    ];
+                    levelChart.update();
+                }
+            })
+            .catch(error => console.error('Error refreshing chart:', error));
+    }
+    
+    function initTrendChart() {
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+        
+        fetch('/adminpanel/api/weekly-trend/')
+            .then(response => response.json())
+            .then(data => {
+                trendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels || [],
+                        datasets: [
+                            {
+                                label: 'New Cases',
+                                data: data.new_cases || [],
+                                borderColor: '#2196f3',
+                                backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Resolved',
+                                data: data.resolved || [],
+                                borderColor: '#4caf50',
+                                backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading trend chart:', error));
+    }
+    
+    function refreshTrendChart() {
+        fetch('/adminpanel/api/weekly-trend/')
+            .then(response => response.json())
+            .then(data => {
+                if (trendChart) {
+                    trendChart.data.labels = data.labels;
+                    trendChart.data.datasets[0].data = data.new_cases;
+                    trendChart.data.datasets[1].data = data.resolved;
+                    trendChart.update();
+                } else {
+                    initTrendChart();
+                }
+            });
+    }
+    
+    // ============================================
+    // CASE MANAGEMENT
+    // ============================================
+    
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.nav-tabs-custom .nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        document.querySelector(`.nav-tabs-custom .nav-link[data-tab="${tab}"]`).classList.add('active');
+        loadCases(tab);
+    }
+    
+    function loadCases(tab) {
+        const container = document.getElementById('casesTableContainer');
+        container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p class="mt-2">Loading cases...</p></div>';
+        
+        let url = '/adminpanel/api/cases/';
+        if (tab === 'open') url = '/adminpanel/api/open-cases/';
+        else if (tab === 'resolved') url = '/adminpanel/api/resolved-cases/';
+        else if (tab === 'closed') url = '/adminpanel/api/closed-cases/';
+        else if (tab === 'esc5') url = '/adminpanel/api/esc5-cases/';
+        else if (tab === 'all') url = '/adminpanel/api/cases/';
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderCasesTable(data.cases, tab);
+                } else {
+                    container.innerHTML = '<div class="alert alert-info">No cases found</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                container.innerHTML = '<div class="alert alert-danger">Error loading cases. Please check if server is running.</div>';
+            });
+    }
+    
+    function renderCasesTable(cases, tab) {
+        const container = document.getElementById('casesTableContainer');
+        
+        if (!cases || cases.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">No cases found</div>';
+            return;
+        }
+        
+        let html = `
+            <div class="table-responsive">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>Case ID</th>
+                            <th>Customer</th>
+                            <th>Mobile</th>
+                            <th>LoanNumber</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        for (const c of cases) {
+            const priorityClass = c.priority === 'Urgent' ? 'priority-urgent' : 
+                                 c.priority === 'High' ? 'priority-high' : 
+                                 c.priority === 'Medium' ? 'priority-medium' : 'priority-low';
+            
+            const statusClass = c.status === 'Open' ? 'status-open' :
+                                c.status === 'In Progress' ? 'status-in-progress' :
+                                c.status === 'Resolved' ? 'status-resolved' :
+                                c.status === 'Closed' ? 'status-closed' : 'status-open';
+            
+            html += `
+                <tr>
+                    <td><strong>${escapeHtml(c.case_id)}</strong></td>
+                    <td>${escapeHtml(c.customer_name || c.mobile)}</small></td>
+                    <td>${c.mobile}</small></td>
+                    <td>${c.loan_number}</small></td>
+
+                    <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></small></td>
+                    <td><small>${new Date(c.created_at).toLocaleString()}</small></small></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary action-btn" onclick="viewCase('${c.case_id}')" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+            `;
+            
+            if (tab === 'resolved') {
+                html += `
+                        <button class="btn btn-sm btn-success action-btn" onclick="showCloseModal('${c.case_id}')" title="Close Case">
+                            <i class="fas fa-lock"></i>
+                        </button>
+                        <button class="btn btn-sm btn-warning action-btn" onclick="showReopenModal('${c.case_id}')" title="Reopen Case">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                `;
+            } else if (tab === 'closed') {
+                html += `
+                        <button class="btn btn-sm btn-warning action-btn" onclick="showReopenModal('${c.case_id}')" title="Reopen Case">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                `;
+            } else if (tab === 'esc5') {
+                html += `
+                        <button class="btn btn-sm btn-success action-btn" onclick="resolveCaseManually('${c.case_id}')" title="Resolve Case">
+                            <i class="fas fa-check"></i>
+                        </button>
+                `;
+            }
+            
+            html += `</small></tr>`;
+        }
+        
+        html += `</tbody>赶</div>`;
+        container.innerHTML = html;
+    }
+    
+    function viewCase(caseId) {
+        $('#caseModal').modal('show');
+        
+        fetch(`/adminpanel/case/${caseId}/detail/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderCaseDetail(data.case);
+                    loadCaseTimeline(caseId);
+                } else {
+                    document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error loading case: ${error.message}</div>`;
+            });
+    }
+    
+    function renderCaseDetail(caseData) {
+        const html = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-info-circle"></i> Case Information</h6>
+                    <table class="table table-sm">
+                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></small></tr>
+                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</small></td>
+                        <tr><th>Mobile:</th><td>${caseData.mobile}</small></td>
+                        <tr><th>Loan No:</th><td>${caseData.loan_number}</small></td>
+
+                        <tr><th>Status:</th><td>${caseData.status}</small></td>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="fas fa-users"></i> Assignment</h6>
+                    <table class="table table-sm">
+                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
+                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
+                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
+                        ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td></tr>` : ''}
+                    </table>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
+                    <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description provided')}</div>
+                </div>
+            </div>
+            ${caseData.resolution_notes ? `
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6><i class="fas fa-check-circle text-success"></i> Resolution Notes</h6>
+                    <div class="border rounded p-3 bg-light">${escapeHtml(caseData.resolution_notes)}</div>
+                </div>
+            </div>
+            ` : ''}
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
+                    <div id="timelineContainer" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                        Loading...
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('caseModalBody').innerHTML = html;
+    }
+    
+    function loadCaseTimeline(caseId) {
+        fetch(`/adminpanel/case/${caseId}/timeline/`)
+            .then(response => response.json())
+            .then(data => {
+                const timelineHtml = data.logs.map(log => `
+                    <div class="mb-2 pb-2 border-bottom">
+                        <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
+                        <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
+                        <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
+                        ${log.reason ? `<div><strong>Reason:</strong> ${escapeHtml(log.reason)}</div>` : ''}
+                    </div>
+                `).join('');
+                document.getElementById('timelineContainer').innerHTML = timelineHtml || '<div class="text-center text-muted">No timeline history</div>';
+            });
+    }
+    
+    function showCloseModal(caseId) {
+        document.getElementById('closeCaseId').value = caseId;
+        document.getElementById('closeReason').value = '';
+        $('#closeModal').modal('show');
+    }
+    
+    function submitCloseCase() {
+        const caseId = document.getElementById('closeCaseId').value;
+        const reason = document.getElementById('closeReason').value;
+        
+        fetch(`/adminpanel/case/${caseId}/close/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({ close_reason: reason })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Case closed successfully!');
+                $('#closeModal').modal('hide');
+                loadCases(currentTab);
+                setTimeout(() => { location.reload(); }, 500);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+    
+    function showReopenModal(caseId) {
+        document.getElementById('reopenCaseId').value = caseId;
+        document.getElementById('reopenReason').value = '';
+        $('#reopenModal').modal('show');
+    }
+    
+    function submitReopenCase() {
+        const caseId = document.getElementById('reopenCaseId').value;
+        const reason = document.getElementById('reopenReason').value;
+        const level = document.getElementById('reopenLevel').value;
+        
+        fetch(`/adminpanel/case/${caseId}/reopen/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                reopen_reason: reason,
+                target_level: level
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Case reopened successfully!');
+                $('#reopenModal').modal('hide');
+                loadCases(currentTab);
+                setTimeout(() => { location.reload(); }, 500);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+    
+    function resolveCaseManually(caseId) {
+        const notes = prompt('Enter resolution notes:', 'Case resolved at admin level');
+        if (notes === null) return;
+        
+        fetch(`/adminpanel/case/${caseId}/resolve/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({ resolution_notes: notes })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Case resolved successfully!');
+                loadCases(currentTab);
+                setTimeout(() => { location.reload(); }, 500);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+    function searchCases() {
+    const query = document.getElementById('searchInput').value.trim();
+    if (query.length === 0) {
+        alert('Please enter a Case ID or Loan Number');
+        return;
+    }
+    
+    const container = document.getElementById('casesTableContainer');
+    container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Searching...</p></div>';
+    
+    fetch(`/adminpanel/api/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderCasesTable(data.cases, 'search');
+                // Update active tab visual (optional)
+                document.querySelectorAll('.nav-tabs-custom .nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                // Show search indicator
+                const searchIndicator = document.createElement('div');
+                searchIndicator.className = 'alert alert-info mt-3';
+                searchIndicator.innerHTML = `<i class="fas fa-search"></i> Search results for: <strong>${escapeHtml(query)}</strong> <button class="btn btn-sm btn-link" onclick="clearSearch()">Clear search</button>`;
+                const existingAlert = document.querySelector('.search-alert');
+                if (existingAlert) existingAlert.remove();
+                container.parentNode.insertBefore(searchIndicator, container.nextSibling);
+            } else {
+                container.innerHTML = `<div class="alert alert-warning">No cases found for "${escapeHtml(query)}"</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Search error:', error);
+            container.innerHTML = '<div class="alert alert-danger">Error performing search</div>';
+        });
+}
+
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    // Remove search alert if present
+    const searchAlert = document.querySelector('.search-alert');
+    if (searchAlert) searchAlert.remove();
+    // Reload current tab
+    loadCases(currentTab);
+}
+    
+    function refreshCases() {
+        loadCases(currentTab);
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        initLevelChart();
+        initTrendChart();
+        loadCases('open');
+    });
+</script>
+{% endblock %}

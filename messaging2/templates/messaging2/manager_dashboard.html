@@ -1,0 +1,382 @@
+{% extends "messaging2/base_dashboard.html" %}
+{% block title %}Legal Dashboard - ESC2{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Pending Legal Cases</h6>
+                            <h2 class="mb-0">{{ stats.pending }}</h2>
+                        </div>
+                        <i class="fas fa-gavel fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Resolved at Legal</h6>
+                            <h2 class="mb-0">{{ stats.resolved }}</h2>
+                        </div>
+                        <i class="fas fa-check-circle fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Escalated from Legal</h6>
+                            <h2 class="mb-0">{{ stats.escalated }}</h2>
+                        </div>
+                        <i class="fas fa-arrow-up fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cases Table -->
+    <div class="card">
+        <div class="card-header bg-warning text-dark">
+            <h4><i class="fas fa-gavel"></i> Legal Team Cases (ESC2)</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="legalCasesTable">
+                    <thead>
+                        <tr>
+                            <th>Case ID</th>
+                            <th>Customer</th>
+                            <th>Mobile</th>
+                            <th>Escalated From</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in cases %}
+                        <tr class="{% if case.priority == 'Urgent' %}table-danger{% endif %}">
+                            <td><strong>{{ case.case_id }}</strong></td>
+                            <td>{{ case.customer_name|default:case.mobile }}</td>
+                            <td>{{ case.mobile }}</td>
+                            <td><span class="badge bg-secondary">{{ case.previous_level|default:"ESC1" }}</span></td>
+                            <td>
+                                <span class="badge bg-{% if case.priority == 'Urgent' %}danger{% elif case.priority == 'High' %}warning{% elif case.priority == 'Medium' %}info{% else %}secondary{% endif %}">
+                                    {{ case.priority }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if case.status == 'Open' %}primary{% elif case.status == 'In Progress' %}warning{% elif case.status == 'Reopened' %}danger{% else %}secondary{% endif %}">
+                                    {{ case.status }}
+                                </span>
+                            </td>
+                            <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')" title="Escalate">
+                                    <i class="fas fa-arrow-up"></i>
+                                </button>
+                                <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')" title="Resolve">
+                                    <i class="fas fa-check-circle"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-inbox fa-2x text-muted mb-2 d-block"></i>
+                                No ESC2 cases pending
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Case View Modal -->
+<div class="modal fade" id="caseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fas fa-folder-open"></i> Case Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="caseModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status"></div>
+                    <p>Loading case details...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Escalate Modal -->
+<div class="modal fade" id="escalateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-arrow-up"></i> Escalate Case</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="escalateCaseId">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Legal team can escalate to:
+                    <strong>ESC3 (Team Lead)</strong> or <strong>ESC4 (Manager)</strong>
+                </div>
+                <div class="mb-3">
+                    <label>Escalate To:</label>
+                    <select id="escalateLevel" class="form-select">
+                        <option value="ESC3">⭐ ESC3 - Team Lead</option>
+                        <option value="ESC4">📊 ESC4 - Manager</option>
+                    </select>
+                </div>
+                 <div class="mb-3">
+                    <label>Loan Number</label>
+                    <input type="text" id="LoanNumber" class="form-control" rows="3" placeholder="Enter the LoanNumber"></input>
+                </div>
+                <div class="mb-3">
+                    <label>Reason for Escalation:</label>
+                    <textarea id="escalateReason" class="form-control" rows="3" placeholder="Explain why this case needs escalation..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" onclick="submitEscalation()">Escalate</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resolve Modal -->
+<div class="modal fade" id="resolveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle"></i> Resolve Case</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="resolveCaseId">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Resolving this case will mark it as <strong>RESOLVED</strong>.
+                    Admin will review and close it.
+                </div>
+                <div class="mb-3">
+                    <label>Resolution Notes:</label>
+                    <textarea id="resolutionNotes" class="form-control" rows="4" placeholder="Describe how this case was resolved legally..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitResolution()">Resolve Case</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentCaseId = null;
+
+function viewCase(caseId) {
+    currentCaseId = caseId;
+    $('#caseModal').modal('show');
+    
+    fetch(`/messaging2/case/${caseId}/detail/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderCaseDetail(data.case);
+            } else {
+                document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error loading case: ${error.message}</div>`;
+        });
+}
+
+function renderCaseDetail(caseData) {
+    const levelBadges = {
+        'ESC1': 'primary', 'ESC2': 'warning', 'ESC3': 'info', 
+        'ESC4': 'danger', 'ESC5': 'dark', 'RESOLVED': 'success', 'CLOSED': 'secondary'
+    };
+    const priorityBadges = {
+        'Low': 'secondary', 'Medium': 'info', 'High': 'warning', 'Urgent': 'danger'
+    };
+    
+    const html = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6><i class="fas fa-info-circle"></i> Case Information</h6>
+                <table class="table table-sm">
+                    <tr><th>Case ID:</th><td><strong>${caseData.case_id}</strong></td></tr>
+                    <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
+                    <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
+                    <tr><th>LoanNo:</th><td>${caseData.loan_number}</td></tr>
+                    <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level] || 'secondary'}">${caseData.current_level}</span></td></tr>
+                    <tr><th>Priority:</th><td><span class="badge bg-${priorityBadges[caseData.priority] || 'secondary'}">${caseData.priority}</span></td></tr>
+                    <tr><th>Status:</th><td><span class="badge bg-${caseData.status === 'Resolved' ? 'success' : 'primary'}">${caseData.status}</span></td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6><i class="fas fa-users"></i> Assignment</h6>
+                <table class="table table-sm">
+                    <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td></tr>
+                    <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td></tr>
+                    <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td></tr>
+                    ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td></tr>` : ''}
+                </table>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
+                <div class="border rounded p-3 bg-light">
+                    ${escapeHtml(caseData.issue_description || 'No description provided')}
+                </div>
+            </div>
+        </div>
+        ${caseData.resolution_notes ? `
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6><i class="fas fa-check-circle text-success"></i> Resolution Notes</h6>
+                <div class="border rounded p-3 bg-light">
+                    ${escapeHtml(caseData.resolution_notes)}
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
+                <div id="timelineContent" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                    <div class="text-center">Loading timeline...</div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('caseModalBody').innerHTML = html;
+    loadTimeline(caseData.case_id);
+}
+
+function loadTimeline(caseId) {
+    fetch(`/messaging2/case/${caseId}/timeline/`)
+        .then(response => response.json())
+        .then(data => {
+            const timelineHtml = data.logs.map(log => `
+                <div class="timeline-item mb-2 pb-2 border-bottom">
+                    <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
+                    <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
+                    <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
+                    ${log.reason ? `<div><strong>Reason:</strong> ${escapeHtml(log.reason)}</div>` : ''}
+                </div>
+            `).join('');
+            document.getElementById('timelineContent').innerHTML = timelineHtml || '<div class="text-center text-muted">No escalation history</div>';
+        });
+}
+
+function escalateCase(caseId) {
+    document.getElementById('escalateCaseId').value = caseId;
+    document.getElementById('escalateReason').value = '';
+    document.getElementById('LoanNumber').value = '';
+    $('#escalateModal').modal('show');
+}
+
+function submitEscalation() {
+    const caseId = document.getElementById('escalateCaseId').value;
+    const newLevel = document.getElementById('escalateLevel').value;
+    const reason = document.getElementById('escalateReason').value;
+    const loan = document.getElementById('LoanNumber').value;
+    
+    if (!reason) {
+        alert('Please provide a reason for escalation');
+        return;
+    }
+    if (!loan) {
+        alert('Please provide a Loan Number');
+        return;
+    }
+    
+    fetch(`/messaging2/case/${caseId}/escalate/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ new_level: newLevel, reason: reason, loan:loan })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case escalated successfully!');
+            $('#escalateModal').modal('hide');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+}
+
+function resolveCase(caseId) {
+    document.getElementById('resolveCaseId').value = caseId;
+    document.getElementById('resolutionNotes').value = '';
+    $('#resolveModal').modal('show');
+}
+
+function submitResolution() {
+    const caseId = document.getElementById('resolveCaseId').value;
+    const notes = document.getElementById('resolutionNotes').value;
+    
+    if (!notes) {
+        alert('Please provide resolution notes');
+        return;
+    }
+    
+    fetch(`/messaging2/case/${caseId}/resolve/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ resolution_notes: notes })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            $('#resolveModal').modal('hide');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

@@ -34,24 +34,31 @@ def ws_group_name2(mobile: str) -> str:
 # Database Queries
 # -------------------------
 @sync_to_async
-def get_contacts_page2(page=1, size=30, q="", filter_type="all"):
+def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None):
     """
     Get contacts with pagination and filtering
-    filter_type: 'all', 'unread', 'groups'
+    filter_type: 'all', 'unread', 'assigned'
+    level: 'ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5' - for role-based filtering
     """
 
     qs = ChatContact2.objects.all()
 
-    # Apply filters
+    # Apply role-based level filter FIRST
+    if level and level != 'ESC1':  # Only filter non-agent roles
+        # Non-agents should ONLY see chats at their level
+        qs = qs.filter(current_level=level)
+    
+    # Apply additional filters
     if filter_type == "unread":
-        # ✅ FIX: Only show contacts with unread > 0 AND have actual messages
         qs = qs.filter(unread__gt=0)
-        # Exclude contacts with "No messages yet" or empty last_msg
         qs = qs.exclude(last_msg__icontains="No messages yet")
         qs = qs.exclude(last_msg="")
         qs = qs.exclude(last_msg__isnull=True)
-    elif filter_type == "groups":
-        pass
+    elif filter_type == "assigned":
+        # For LEGAL, LEAD, MANAGER - show only their level chats
+        if level:
+            qs = qs.filter(current_level=level)
+        qs = qs.exclude(last_msg__icontains="No messages yet")
 
     # Search filter
     if q:
@@ -64,7 +71,7 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all"):
         filters |= Q(last_msg__icontains=raw_q)
         qs = qs.filter(filters)
 
-    # Order by last_time DESC (newest first)
+    # Order by last_time DESC
     qs = qs.order_by('-last_time')
 
     # Pagination
@@ -75,17 +82,13 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all"):
 
     contacts = []
     for c in contacts_qs:
-        # ✅ FIX: If last_msg is empty, try to get latest message from WhatsApp log
         last_msg = c.last_msg or ""
         if last_msg == "" or last_msg == "No messages yet":
-            # Try to get latest message from messages table
             latest_msg = SmsWhatsAppLog2.objects.filter(mobile=c.mobile).order_by('-sent_at').first()
             if latest_msg:
                 last_msg = latest_msg.sent_text_message or "[Media]"
-                # Update the contact record for next time
                 ChatContact2.objects.filter(mobile=c.mobile).update(last_msg=last_msg)
             else:
-                # Skip contacts without any messages in unread tab
                 if filter_type == "unread":
                     continue
                 last_msg = "No messages yet"
@@ -97,20 +100,21 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all"):
             "last_status": c.last_status or "",
             "unread": c.unread,
             "last_time": c.last_time.isoformat() if c.last_time else None,
+            "current_level": c.current_level or "ESC1",
         })
 
     total_pages = (total + size - 1) // size
-
-    # ✅ FIX: Correct unread count for badge
-    unread_count = ChatContact2.objects.filter(
-        unread__gt=0
-    ).exclude(
-        last_msg__icontains="No messages yet"
-    ).exclude(
-        last_msg=""
-    ).exclude(
-        last_msg__isnull=True
-    ).count()
+    
+    # Calculate unread count for agent/admin
+    unread_count = 0
+    if not level or level == 'ESC1':  # Only for agents/admins
+        unread_count = ChatContact2.objects.filter(
+            unread__gt=0
+        ).exclude(
+            last_msg__icontains="No messages yet"
+        ).exclude(
+            last_msg=""
+        ).count()
 
     return {
         "contacts": contacts,
@@ -201,17 +205,24 @@ def get_messages_page_from_db2(mobile, before_date=None, limit=30):
     # ✅ convert to frontend format (oldest → newest)
     messages = []
     for row in reversed(rows):
+        sent_at_value = None
+        if row[4]:
+            try:
+                # If the datetime is naive, make it aware using current timezone
+                sent_at_value = timezone.localtime(
+                    timezone.make_aware(row[4], timezone.UTC)  # ← Use timezone.UTC
+                ).isoformat()
+            except Exception as e:
+                print(f"⚠️ Timezone conversion error: {e}")
+                sent_at_value = row[4].isoformat() if row[4] else None
+        else:
+            sent_at_value = None
         messages.append({
             "id": row[0],
             "mobile": row[1],
             "sent_text_message": row[2] or "",
             "message_type": row[3],
-            "sent_at": (
-        timezone.localtime(
-            timezone.make_aware(row[4], timezone.utc)
-        ).isoformat()
-        if row[4] else None
-    ),
+           "sent_at": sent_at_value,
             "message_id": row[5] or "",
             "content_type": row[6] or "text",
             "media_file": default_storage.url(row[7]) if row[7] else "",
@@ -274,7 +285,7 @@ def create_outgoing_log2(mobile: str, text: str, message_id: str, content_type: 
     """Create a log for outgoing message"""
     temp_id = message_id or str(uuid.uuid4())
     log = SmsWhatsAppLog2.objects.create(
-        customer_name=sender_name,
+        customer_name=sender_name, #thus
         mobile=format_mobile2(mobile),
         template_name="manual",
         sent_text_message=text or "",
@@ -454,20 +465,32 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
             page = int(content.get("page", 1))
             q = content.get("q", "")
             filter_type = content.get("filter", "all")
+            level = content.get("level", None)  # Get user's level
+        
+        # Get user's actual level from agent profile
+            if not level and hasattr(self, 'mobile') and self.mobile:
+                try:
+                    from django.contrib.auth.models import User
+                    from .models import Agent
+                    user = await sync_to_async(User.objects.get)(username=self.mobile)
+                    agent = await sync_to_async(Agent.objects.get)(user=user)
+                    level = agent.level
+                except:
+                    level = None
 
-            res = await get_contacts_page2(page=page, q=q, filter_type=filter_type)
+            res = await get_contacts_page2(page=page, q=q, filter_type=filter_type, level=level)
 
             if self.connection_active:
                 await self.send_json({
-                    "type": "contacts.page",
-                    "contacts": res["contacts"],
-                    "page": page,
-                    "total_pages": res["total_pages"],
-                    "has_more": page < res["total_pages"],
-                    "unread_count": res.get("unread_count", 0),
-                    "total": res["total"],
-                    "filter": filter_type
-                })
+                "type": "contacts.page",
+                "contacts": res["contacts"],
+                "page": page,
+                "total_pages": res["total_pages"],
+                "has_more": page < res["total_pages"],
+                "unread_count": res.get("unread_count", 0),
+                "total": res["total"],
+                "filter": filter_type
+            })
         except Exception as e:
             print(f"Error in _handle_get_contacts: {e}")
             traceback.print_exc()
@@ -501,30 +524,19 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
             before_date = content.get("before_date")  # For date-based pagination
             before_id = content.get("before_id")
             limit = int(content.get("limit", 30))
-            print(f"=" * 50)
-            print(f"📨 _handle_get_messages called")
-            print(f"   Mobile: {mobile}")
-            print(f"   Before date: {before_date}")
-            print(f"   Before ID: {before_id}")
-            print(f"   Limit: {limit}")
+           
 
             if not mobile:
                 print("❌ No mobile provided")
                 return
             # Get messages (first load = last 7 days, then older)
             res = await get_messages_page_from_db2(mobile, before_date,limit)
-            print(f"📊 Query result:")
-            print(f"   Messages count: {len(res['messages'])}")
-            print(f"   Has more: {res['has_more']}")
-            print(f"   Next cursor: {res.get('next_cursor_date')}")
+            
             if len(res['messages']) > 0:
-                print(f"   First message ID: {res['messages'][0].get('id')}")
-                print(f"   First message text: {res['messages'][0].get('sent_text_message')[:50]}")
+                pass
             else:
-                print(f"   ⚠️ NO MESSAGES FOUND in query result!")
                 formatted_mobile = format_mobile2(mobile)
                 direct_count = await sync_to_async(SmsWhatsAppLog2.objects.filter(mobile=formatted_mobile).count)()
-                print(f"   🔍 Direct DB check for {formatted_mobile}: {direct_count} messages")
 
 
             if self.connection_active:
@@ -550,18 +562,18 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
 
             await mark_messages_read_db2(mobile)
 
-            gm = ws_group_name2(mobile)
+            # gm = ws_group_name2(mobile)
 
-            if gm:
-                await self.channel_layer.group_send(
-                    f"chat2_{gm}",
-                    {
-                        "type": "delivery.update",
-                        "message_id": "",
-                        "status": "Read",
-                        "mobile": mobile
-                    }
-                )
+            # if gm:
+            #     await self.channel_layer.group_send(
+            #         f"chat2_{gm}",
+            #         {
+            #             "type": "delivery.update",
+            #             "message_id": "",
+            #             "status": "Read",
+            #             "mobile": mobile
+            #         }
+            #     )
 
             await self.channel_layer.group_send(
                 "global_contacts2",
@@ -612,7 +624,7 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
             # Get agent name
             agent_name = None
             try:
-                sid = self.scope["session"].get("messaging_user")
+                sid = self.scope["session"].get("messaging2_user")
                 if sid:
                     from django.contrib.auth.models import User
                     u = await sync_to_async(User.objects.filter(id=sid).first)()
@@ -720,9 +732,7 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
                             "mobile": mobile
                         }
                     )
-                print(f"WhatsApp msg sent: {msg_id}")
             else:
-                print("No message_id received from WhatsApp - send failed")
                 await sync_to_async(
                     lambda: SmsWhatsAppLog2.objects.filter(id=log_id).update(
                         status="Failed",
@@ -800,7 +810,7 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
                 "type": "unread.update",
                 "unread_count": unread_count
             })
-    
+
     # ⭐ ADD THIS FOR SAFETY ⭐
     async def presence_update(self, event):
         """Handle presence updates"""
@@ -810,4 +820,3 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
                 "mobile": event.get("mobile"),
                 "status": event.get("status")
             })
-
