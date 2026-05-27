@@ -753,6 +753,26 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                 {"type": "text", "text": str(row.get("amount", ""))},
             ],
         ),
+        "41": (
+            "due_notice_borrower_psf",
+            "en",
+            [
+                {"type": "text", "text": str(row.get("customer_name", ""))},
+                {"type": "text", "text": str(row.get("loan_number", ""))},
+                {"type": "text", "text": str(row.get("vehicle_number", ""))},
+            
+            ],
+        ),
+         "42": (
+            "due_notice_smf_borrower",
+            "en",
+            [
+                {"type": "text", "text": str(row.get("customer_name", ""))},
+                {"type": "text", "text": str(row.get("loan_number", ""))},
+                {"type": "text", "text": str(row.get("vehicle_number", ""))},
+            
+            ],
+        ),
     }
 
     template_name, lang, parameters = templates.get(choice, templates["8"])
@@ -767,7 +787,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
     # TEMPLATES WITH DOCUMENT HEADER (FIXED - UPLOADS PDF HERE)
     # --------------------------------------------------
     if choice in (
-        "13","14","21","22","23","24","30","31","32","33","34","35","36","37","38","39","40"
+        "13","14","21","22","23","24","30","31","32","33","34","35","36","37","38","39","40","41","42"
     ):
         # ==================================================
         # 📄 SELECT PDF FILE
@@ -798,6 +818,8 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             pdf_filename = row.get("customer_pdf_file")
         elif choice == "40":
             pdf_filename = row.get("writeoff_pdf_file")
+        elif choice in ("41", "42"):
+            pdf_filename = row.get("due_notice_pdf_file")
 
         if not pdf_filename:
             raise ValueError(f"PDF filename missing for template {choice}")
@@ -959,4 +981,5 @@ def send_second_message_for_mobile2(all_rows, mobile):
         message_type="Sent",
         content_type="text",
     )
+
 

@@ -123,6 +123,60 @@
             box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
         }
 
+        .submit-btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Progress Bar Styles */
+        .progress-container {
+            margin-top: 25px;
+            display: none;
+        }
+
+        .progress-bar-wrapper {
+            background: #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 40px;
+            background: linear-gradient(90deg, #2563eb, #1d4ed8);
+            color: white;
+            text-align: center;
+            line-height: 40px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: width 0.3s ease;
+            border-radius: 12px;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 14px;
+            color: #475569;
+            font-weight: 500;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-processing { background: #dbeafe; color: #1e40af; }
+        .status-completed { background: #dcfce7; color: #166534; }
+        .status-failed { background: #fee2e2; color: #991b1b; }
+
         .message {
             margin-top: 20px;
             padding: 18px;
@@ -155,29 +209,20 @@
 
         .download-btn:hover {
             transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(22, 163, 74, 0.4);
         }
 
         .download-wrap {
             text-align: center;
         }
 
-        .loader {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-            font-weight: 600;
-            color: #2563eb;
-        }
-
         @media(max-width: 768px) {
             body {
                 padding: 15px;
             }
-
             .main-card {
                 padding: 20px;
             }
-
             .header h1 {
                 font-size: 28px;
             }
@@ -187,36 +232,39 @@
 <body>
 
 <div class="container">
-
     <div class="header">
         <h1>📄 Legal Notice Generator</h1>
         <p>Generate PDF notices instantly from Excel and download from S3</p>
     </div>
 
     <div class="main-card">
-        <form method="post" enctype="multipart/form-data" id="noticeForm">
+        <form id="noticeForm" enctype="multipart/form-data">
             {% csrf_token %}
 
             <div class="section-title">Borrower Notices</div>
             <div class="notice-grid">
-                <div class="notice-card"><input type="radio" name="notice_type" value="sm_borrower" id="sm_borrower" required><label class="notice-label" for="sm_borrower">SM Square Borrower</label></div>
-                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_borrower" id="padmasai_borrower"><label class="notice-label" for="padmasai_borrower">Padmasai Borrower</label></div>
-                <div class="notice-card"><input type="radio" name="notice_type" value="sree_mani_borrower" id="sree_mani_borrower"><label class="notice-label" for="sree_mani_borrower">Sree Mani Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_borrower" id="sm_borrower" required><label class="notice-label" for="sm_borrower">SM Square Borrower LRN</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_borrower" id="padmasai_borrower"><label class="notice-label" for="padmasai_borrower">Padmasai Borrower LRN</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sree_mani_borrower" id="sree_mani_borrower"><label class="notice-label" for="sree_mani_borrower">Sree Mani Borrower LRN</label></div>
                 <div class="notice-card"><input type="radio" name="notice_type" value="write_off_psf_borrower" id="write_off_psf_borrower"><label class="notice-label" for="write_off_psf_borrower">Write Off PSF Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="write_off_sms_borrower" id="write_off_sms_borrower"><label class="notice-label" for="write_off_sms_borrower">Write Off SMS Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="write_off_smf_borrower" id="write_off_smf_borrower"><label class="notice-label" for="write_off_smf_borrower">Write Off SMF Borrower</label></div>
             </div>
 
             <div class="section-title">Guarantor Notices</div>
             <div class="notice-grid">
-                <div class="notice-card"><input type="radio" name="notice_type" value="sm_guarantor" id="sm_guarantor"><label class="notice-label" for="sm_guarantor">SM Square Guarantor</label></div>
-                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_guarantor" id="padmasai_guarantor"><label class="notice-label" for="padmasai_guarantor">Padmasai Guarantor</label></div>
-                <div class="notice-card"><input type="radio" name="notice_type" value="sree_mani_guarantor" id="sree_mani_guarantor"><label class="notice-label" for="sree_mani_guarantor">Sree Mani Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_guarantor" id="sm_guarantor"><label class="notice-label" for="sm_guarantor">SM Square Guarantor LRN</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_guarantor" id="padmasai_guarantor"><label class="notice-label" for="padmasai_guarantor">Padmasai Guarantor LRN</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sree_mani_guarantor" id="sree_mani_guarantor"><label class="notice-label" for="sree_mani_guarantor">Sree Mani Guarantor LRN</label></div>
                 <div class="notice-card"><input type="radio" name="notice_type" value="write_off_psf_guarantor" id="write_off_psf_guarantor"><label class="notice-label" for="write_off_psf_guarantor">Write Off PSF Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="write_off_sms_guarantor" id="write_off_sms_guarantor"><label class="notice-label" for="write_off_sms_guarantor">Write Off SMS Guarantor</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="write_off_smf_guarantor" id="write_off_smf_guarantor"><label class="notice-label" for="write_off_smf_guarantor">Write Off SMF Guarantor</label></div>
             </div>
 
             <div class="section-title">Co-Borrower</div>
             <div class="notice-grid">
-                <div class="notice-card"><input type="radio" name="notice_type" value="sm_co_borrower" id="sm_co_borrower"><label class="notice-label" for="sm_co_borrower">SM Square Co-Borrower</label></div>
-                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_co_borrower" id="padmasai_co_borrower"><label class="notice-label" for="padmasai_co_borrower">Padmasai Co-Borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="sm_co_borrower" id="sm_co_borrower"><label class="notice-label" for="sm_co_borrower">SM Square Co-Borrower LRN</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="padmasai_co_borrower" id="padmasai_co_borrower"><label class="notice-label" for="padmasai_co_borrower">Padmasai Co-Borrower LRN</label></div>
             </div>
 
             <div class="section-title">Demand Notices</div>
@@ -227,8 +275,10 @@
 
             <div class="section-title">Due Notices</div>
             <div class="notice-grid">
-                <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_psf" id="due_notice_psf"><label class="notice-label" for="due_notice_psf">Due Notice PSF</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_psf" id="due_notice_psf"><label class="notice-label" for="due_notice_psf">Due Notice PSF borrower</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_psf_guarantor" id="due_notice_psf_guarantor"><label class="notice-label" for="due_notice_psf_guarantor">Due Notice PSF guarantor</label></div>
                 <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_sms" id="due_notice_sms"><label class="notice-label" for="due_notice_sms">Due Notice SMS</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_sms_guarantor" id="due_notice_sms_guarantor"><label class="notice-label" for="due_notice_sms_guarantor">Due Notice SMS guarantor</label></div>
                 <div class="notice-card"><input type="radio" name="notice_type" value="due_notice_smf" id="due_notice_smf"><label class="notice-label" for="due_notice_smf">Due Notice SMF</label></div>
             </div>
 
@@ -239,19 +289,13 @@
                 <div class="notice-card"><input type="radio" name="notice_type" value="pre_sale_smf" id="pre_sale_smf"><label class="notice-label" for="pre_sale_smf">Pre Sale SMF</label></div>
             </div>
 
-            <div class="section-title">Police Intimation</div>
-            <div class="notice-grid">
-                <div class="notice-card"><input type="radio" name="notice_type" value="police_intimation_psf" id="police_intimation_psf"><label class="notice-label" for="police_intimation_psf">Police Intimation PSF</label></div>
-                <div class="notice-card"><input type="radio" name="notice_type" value="police_intimation_sms" id="police_intimation_sms"><label class="notice-label" for="police_intimation_sms">Police Intimation SMS</label></div>
-            </div>
-
             <div class="section-title">Other Documents</div>
             <div class="notice-grid">
                 <div class="notice-card"><input type="radio" name="notice_type" value="lok_adalat" id="lok_adalat"><label class="notice-label" for="lok_adalat">Lok Adalat</label></div>
                 <div class="notice-card"><input type="radio" name="notice_type" value="loan_app" id="loan_app"><label class="notice-label" for="loan_app">Loan App</label></div>
                 <div class="notice-card"><input type="radio" name="notice_type" value="ledger" id="ledger"><label class="notice-label" for="ledger">Ledger</label></div>
                 <div class="notice-card"><input type="radio" name="notice_type" value="ledger_app" id="ledger_app"><label class="notice-label" for="ledger_app">Ledger App</label></div>
-                <div class="notice-card"><input type="radio" name="notice_type" value="loss_notice" id="loss_notice"><label class="notice-label" for="loss_notice">Loss Notice</label></div>
+
             </div>
 
             <div class="section-title">Letter Head Registration</div>
@@ -264,40 +308,171 @@
                 <div class="notice-card"><input type="radio" name="notice_type" value="smf_lh_guarantor" id="smf_lh_guarantor"><label class="notice-label" for="smf_lh_guarantor">SMF LH Guarantor</label></div>
             </div>
 
+            <div class="section-title">Open Repo Letters</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="open_repo_letter_smf" id="open_repo_letter_smf"><label class="notice-label" for="open_repo_letter_smf">Open Repo Letter SMF</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="open_repo_letter_sms" id="open_repo_letter_sms"><label class="notice-label" for="open_repo_letter_sms">Open Repo Letter SMS</label></div>
+            </div>
+
+            <div class="section-title">Post-Sale Notices</div>
+            <div class="notice-grid">
+                <div class="notice-card"><input type="radio" name="notice_type" value="post_sale_sms" id="post_sale_sms"><label class="notice-label" for="post_sale_sms">Post-Sale Notice SMS</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="post_sale_psf" id="post_sale_psf"><label class="notice-label" for="post_sale_psf">Post-Sale Notice PSF</label></div>
+                <div class="notice-card"><input type="radio" name="notice_type" value="post_sale_smf" id="post_sale_smf"><label class="notice-label" for="post_sale_smf">Post-Sale Notice SMF</label></div>
+            </div>
+
             <div class="upload-box">
                 <h3>Upload Excel File</h3>
                 <p>Select .xlsx or .xls file</p>
                 <input type="file" name="excel" accept=".xlsx,.xls" required>
             </div>
 
-            <button type="submit" class="submit-btn">🚀 Generate PDFs</button>
+            <button type="submit" class="submit-btn" id="submitBtn">🚀 Generate PDFs</button>
 
-            <div class="loader" id="loader">
-                Generating PDFs... Please wait...
+            <!-- Progress Bar Container -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar" id="progressBar">0%</div>
+                </div>
+                <div class="progress-text" id="progressText"></div>
+                <div id="statusBadge"></div>
             </div>
 
-            {% if message %}
-                <div class="message {% if '❌' in message %}error{% else %}success{% endif %}">
-                    {{ message }}
-                </div>
-            {% endif %}
-
-            {% if zip_url %}
-                <div class="download-wrap">
-                    <a href="{{ zip_url }}" target="_blank" class="download-btn">
-                        📥 Download ZIP
-                    </a>
-                </div>
-            {% endif %}
+            <div id="result"></div>
         </form>
     </div>
 </div>
 
 <script>
-    document.getElementById("noticeForm").addEventListener("submit", function() {
-        document.getElementById("loader").style.display = "block";
-    });
+const form = document.getElementById('noticeForm');
+const submitBtn = document.getElementById('submitBtn');
+const progressContainer = document.getElementById('progressContainer');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
+const statusBadge = document.getElementById('statusBadge');
+const resultDiv = document.getElementById('result');
+
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+
+    // Disable submit button
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Processing...';
+
+    // Show progress container
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+    progressText.textContent = 'Starting...';
+    resultDiv.innerHTML = '';
+
+    try {
+        // Start the task
+        const response = await fetch('/notice/upload_api/', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Upload failed');
+        }
+
+        const data = await response.json();
+        const taskId = data.task_id;
+
+        // Poll for status
+        let interval = setInterval(async () => {
+            try {
+                const statusRes = await fetch(`/notice/status/${taskId}/`);
+                const statusData = await statusRes.json();
+
+                // Update progress bar
+                if (statusData.total_rows > 0) {
+                    const percent = Math.round((statusData.processed_rows / statusData.total_rows) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressBar.textContent = percent + '%';
+                    progressText.textContent = `Processing: ${statusData.processed_rows} of ${statusData.total_rows} rows`;
+                } else if (statusData.status === 'processing') {
+                    progressText.textContent = 'Processing... (preparing)';
+                }
+
+                // Update status badge
+                let statusClass = '';
+                let statusText = '';
+                if (statusData.status === 'pending') {
+                    statusClass = 'status-pending';
+                    statusText = '⏳ Pending';
+                } else if (statusData.status === 'processing') {
+                    statusClass = 'status-processing';
+                    statusText = '⚙️ Processing';
+                } else if (statusData.status === 'completed') {
+                    statusClass = 'status-completed';
+                    statusText = '✅ Completed';
+                } else if (statusData.status === 'failed') {
+                    statusClass = 'status-failed';
+                    statusText = '❌ Failed';
+                }
+
+                statusBadge.innerHTML = `<div class="status-badge ${statusClass}">${statusText}</div>`;
+
+                // Check if completed
+                if (statusData.status === 'completed') {
+                    clearInterval(interval);
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = '100%';
+                    progressText.textContent = 'Complete! Generating download link...';
+
+                    // Show download button
+                    resultDiv.innerHTML = `
+                        <div class="download-wrap">
+                            <a href="${statusData.zip_url}" target="_blank" class="download-btn">
+                                📥 Download ZIP
+                            </a>
+                        </div>
+                    `;
+
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚀 Generate PDFs';
+                }
+
+                // Check if failed
+                if (statusData.status === 'failed') {
+                    clearInterval(interval);
+                    progressText.textContent = 'Error: ' + (statusData.error || 'Unknown error');
+                    progressBar.style.background = '#ef4444';
+                    resultDiv.innerHTML = `
+                        <div class="message error">
+                            ❌ Error: ${statusData.error || 'Processing failed'}
+                        </div>
+                    `;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚀 Generate PDFs';
+                }
+
+            } catch (error) {
+                console.error('Status check error:', error);
+                clearInterval(interval);
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Generate PDFs';
+            }
+        }, 2000); // Check every 2 seconds
+
+    } catch (error) {
+        console.error('Upload error:', error);
+        resultDiv.innerHTML = `
+            <div class="message error">
+                ❌ Error: ${error.message}
+            </div>
+        `;
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🚀 Generate PDFs';
+        progressContainer.style.display = 'none';
+    }
+});
 </script>
 
 </body>
 </html>
+

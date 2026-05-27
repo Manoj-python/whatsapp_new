@@ -174,20 +174,20 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 send_second_message_for_mobile(all_rows, mobile)
                 local_success += 1
                 print(f"✅ Template 17 sent to {mobile}")
-                
+
             except Exception as e:
                 err = str(e)
                 print(f"❌ Template 17 failed for {mobile}: {err}")
-                
+
                 # Get name for this mobile (first occurrence)
                 name = ""
                 for r in rows:
                     if (format_mobile(r.get("cust_mobile") or r.get("CustMobile") or "")) == mobile:
                         name = r.get("customer_name") or r.get("CustomerName") or ""
                         break
-                
+
                 status_value = "Failed"
-                
+
                 if "131047" in err:
                     status_value = "Template Required"
                 elif "131026" in err or "131051" in err:
@@ -200,7 +200,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     status_value = "Retry"
                 elif "media" in err.lower():
                     status_value = "Media Failed"
-                
+
                 SmsWhatsAppLog.objects.create(
                     job_id=job_id,
                     customer_name=name,
@@ -212,22 +212,22 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 )
                 local_failed += 1
                 continue
-        
+
         # Update job progress
         BulkJob.objects.filter(job_id=job_id).update(
             sent_count=F("sent_count") + (local_success + local_failed),
             success_count=F("success_count") + local_success,
             failed_count=F("failed_count") + local_failed,
         )
-        
+
         job.refresh_from_db()
-        
+
         if job.sent_count >= job.total_customers:
             job.status = "Completed"
             job.completed_at = timezone.now()
             job.save(update_fields=["status", "completed_at"])
             finalize_bulk_job.delay(job_id)
-        
+
         return  # Exit early for template 17
 
     # ==================================================
@@ -258,7 +258,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             # ==================================================
             # 📁 SELECT PDF + FOLDER (ONLY OLD CODE TEMPLATES)
             # ==================================================
-           
+
             if template_choice == "21":
                 pdf_filename = row.get("welcome_pdf")
                 folder = "welcome_pdfs"
@@ -270,21 +270,24 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             elif template_choice == "25":
                 pdf_filename = row.get("lpc_pdf")
                 folder = "legal_pdfs"
-                
+
             elif template_choice == "30":
                 pdf_filename = row.get("gur_telugu_registration_pdf")
                 folder = "legal_pdfs"
-                
+
             elif template_choice == "31":
                 pdf_filename = row.get("cust_telugu_registration_pdf")
                 folder = "legal_pdfs"
-                
+
             elif template_choice == "32":
                 pdf_filename = row.get("guarantor_registration_pdf")
                 folder = "legal_pdfs"
-                
+
             elif template_choice == "33":
                 pdf_filename = row.get("customer_registration_pdf")
+                folder = "legal_pdfs"
+            elif template_choice == "35":
+                pdf_filename = row.get("due_notice_pdf_file")
                 folder = "legal_pdfs"
 
             elif template_choice == "19":
@@ -452,7 +455,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
             # Error code handling from old code
             status_value = "Failed"
-            
+
             if "131047" in err_msg:
                 status_value = "Template Required"
             elif "131026" in err_msg or "131051" in err_msg:
@@ -607,3 +610,4 @@ def process_pending_webhook_updates():
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+

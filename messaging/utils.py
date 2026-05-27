@@ -720,7 +720,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 [  {"type": "text", "text": str(row.get("guarantor_name", ""))},  # {{1}}
                    {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
                     {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
-                    
+
                 ],
              ),
              "31": (
@@ -728,7 +728,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 "te",
                 [  {"type": "text", "text": str(row.get("customer_name", ""))},  # {{1}}
                    {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
-                    
+
                 ],
              ),
             "32": (
@@ -736,7 +736,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 "en",
                 [  {"type": "text", "text": str(row.get("guarantor_name", ""))},  # {{1}}
                    {"type": "text", "text": str(row.get("loan_number", ""))},  # {{1}}
-                       {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}      
+                       {"type": "text", "text": str(row.get("customer_name", ""))},   # {{1}}
                 ],
              ),
              "33": (
@@ -752,9 +752,15 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
                 ],
                ),
-                           
-
-
+               "35": (
+                "due_notice_borrower",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
+                    {"type": "text", "text": str(row.get("loan_number", ""))},              # {{2}}
+                    {"type": "text", "text": format_whatsapp_date(row.get("vehicle_number", ""))},  # {{3}}
+                ],
+                ),
     }
 
 
@@ -771,7 +777,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
     # --------------------------------------------------
    # --------------------------------------------------
-    if choice in ("19", "20", "21", "25","30","31","32","33"):
+    if choice in ("19", "20", "21", "25","30","31","32","33","35"):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
@@ -793,6 +799,8 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
             pdf_source = row.get("guarantor_registration_pdf")
         elif choice == "33":
             pdf_source = row.get("customer_registration_pdf")
+        elif choice == "35":
+            pdf_source = row.get("due_notice_pdf_file")
 
         else:  # choice == "19"
             pdf_source = (

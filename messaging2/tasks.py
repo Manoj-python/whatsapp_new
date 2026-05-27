@@ -43,20 +43,20 @@ def make_session():
 def upload_legal_pdf_to_whatsapp2(pdf_filename, folder):
     """Upload PDF to WhatsApp - handles bytes correctly"""
     from io import BytesIO
-    
+
     # Get PDF bytes from S3 or local
     pdf_bytes = open_legal_pdf2(pdf_filename, folder)
-    
+
     if not pdf_bytes:
         raise ValueError(f"Empty PDF: {pdf_filename}")
-    
+
     # Create a BytesIO object that mimics a file
     file_obj = BytesIO(pdf_bytes)
     file_obj.name = pdf_filename
     file_obj.content_type = "application/pdf"
-    
+
     return upload_whatsapp_media2(file_obj)
-    
+
 
 @shared_task(bind=True, queue="whatsapp_secondary")
 def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_size=50):
@@ -129,7 +129,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
     import pandas as pd
     import time
     import re
-    
+
     close_old_connections()
     template_choice = str(template_choice)
 
@@ -208,9 +208,9 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             # 📁 SELECT PDF + FOLDER (FIXED)
             # ==================================================
-            if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40"):
+            if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42"):
                 is_document = True
-                
+
                 if template_choice == "14":
                     pdf_filename = row.get("guarantor_pdf_file")
                     folder = "legal_pdfs"
@@ -240,6 +240,9 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     folder = "legal_pdfs"
                 elif template_choice == "40":
                     pdf_filename = row.get("writeoff_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice in ("41", "42"):
+                    pdf_filename = row.get("due_notice_pdf_file")
                     folder = "legal_pdfs"
                 else:
                     pdf_filename = row.get("customer_pdf_file")
@@ -286,7 +289,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             # 📝 CREATE LOG (FIXED CONTENT TYPE)
             # ==================================================
             log_content_type = "document" if is_document and pdf_filename else "text"
-            
+
             log = SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
                 customer_name=name,
@@ -306,26 +309,26 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                 try:
                     print("PDF NAME:", pdf_filename)
                     print("FOLDER:", folder)
-                    
+
                     # Get PDF bytes
                     pdf_bytes = open_legal_pdf2(pdf_filename, folder)
-                    
+
                     if not pdf_bytes:
                         raise ValueError("Empty PDF")
-                    
+
                     # Validate it's bytes
                     if not isinstance(pdf_bytes, bytes):
                         pdf_bytes = bytes(pdf_bytes)
-                    
+
                     print(f"✅ PDF bytes received, size: {len(pdf_bytes)} bytes")
                     original_filename = Path(pdf_filename).name
-                    
+
                     # Save to storage
                     saved_path = default_storage.save(
                         f"chat_media2/{original_filename}",
                         ContentFile(pdf_bytes)
                     )
-                    
+
                     # Update log with media file
                     SmsWhatsAppLog2.objects.filter(id=log.id).update(
                         media_file=saved_path,
@@ -333,7 +336,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     )
                     log.refresh_from_db()
                     print("✅ PDF SAVED:", original_filename)
-                    
+
                 except Exception as e:
                     print(f"❌ PDF SAVE FAILED: {e}")
                     import traceback
@@ -350,7 +353,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     "last_time": timezone.now(),
                     "last_type": "Sent",
                     "last_status": "Sent",
-                    "unread": 0 
+                    "unread": 0
                 }
             )
 
@@ -359,10 +362,10 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
-            
+
             channel_layer = get_channel_layer()
             gm = re.sub(r"\D", "", mobile)
-            
+
             if gm:
                 async_to_sync(channel_layer.group_send)(
                     f"chat2_{gm}",
@@ -382,7 +385,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                         }
                     }
                 )
-            
+
             # Update global contacts
             async_to_sync(channel_layer.group_send)(
                 "global_contacts2",
@@ -398,7 +401,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     }
                 }
             )
-            
+
             success_records.append([name, mobile, msg_id])
             local_success += 1
             print(f"✅ Successfully sent to {mobile} - Message ID: {msg_id}")
@@ -408,7 +411,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             print(f"❌ Failed to send to {mobile}: {err_msg}")
             import traceback
             traceback.print_exc()
-            
+
             SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
                 customer_name=name,
@@ -494,11 +497,11 @@ def finalize_bulk_job2(self, job_id):
     if not success_df.empty:
         default_storage.save(success_path, ContentFile(success_buffer.getvalue()))
         job.success_report = success_path
-    
+
     if not failed_df.empty:
         default_storage.save(failed_path, ContentFile(failed_buffer.getvalue()))
         job.failed_report = failed_path
-    
+
     job.status = "Completed"
     job.completed_at = timezone.now()
 
@@ -517,20 +520,20 @@ def process_pending_webhook_updates():
     from django.core.cache import cache
     from django.utils import timezone
     from datetime import timedelta
-    
+
     keys = cache.keys("pending_wa_status_*")
-    
+
     for key in keys:
         data = cache.get(key)
         if not data:
             continue
-        
+
         msg_id = key.replace("pending_wa_status_", "")
         status_type = data.get('status')
-        
+
         # Try to find the message now
         obj = SmsWhatsAppLog2.objects.filter(message_id=msg_id).first()
-        
+
         if obj:
             if status_type == "sent":
                 norm = "Sent"
@@ -540,7 +543,7 @@ def process_pending_webhook_updates():
                 norm = "Read"
             else:
                 continue
-            
+
             SmsWhatsAppLog2.objects.filter(id=obj.id).update(status=norm)
             print(f"✅ Processed pending status for {msg_id} -> {norm}")
             cache.delete(key)
@@ -551,3 +554,4 @@ def process_pending_webhook_updates():
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+
