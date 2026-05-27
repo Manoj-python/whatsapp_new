@@ -31,6 +31,35 @@ urlpatterns = [
     #path('export/received/', views.export_received_messages_to_excel2, name='export_received2'),
 
 
+    path('agent_dashboard/', views.agent_dashboard2, name='agent_dashboard'),
+    path('legal_dashboard/', views.legal_dashboard2, name='legal_dashboard'),
+    path('lead_dashboard/', views.lead_dashboard2, name='lead_dashboard'),
+    path('manager_dashboard/', views.manager_dashboard2, name='manager_dashboard'),
+    # path('admin_dashboard/', admin_dashboard, name='admin_dashboard'),
+    
+    # ============================================
+    # CASE API ENDPOINTS (CRITICAL - Fixes 404)
+    # ============================================
+    path('case/<str:case_id>/detail/', views.get_case_detail_api2, name='get_case_detail'),
+    path('case/<str:case_id>/escalate/', views.escalate_case_api2, name='escalate_case'),
+    path('case/<str:case_id>/resolve/', views.resolve_case_api2, name='resolve_case'),
+    path('case/<str:case_id>/close/', views.close_case_api2, name='close_case'),
+    # path('case/<str:case_id>/reopen/', reopen_case_api, name='reopen_case'),
+    path('case/<str:case_id>/assign/', views.assign_case_api2, name='assign_case'),
+    path('case/<str:case_id>/timeline/', views.get_case_timeline_api2, name='case_timeline'),
+    path('case/<str:case_id>/permissions/', views.get_case_action_permissions2, name='case_permissions'),
+    path('case/by-mobile/', views.get_case_by_mobile2, name='get_case_by_mobile'),
+    path('case/create-from-chat/', views.create_case_from_chat_api2, name='create_case_from_chat'),
+    
+    # ============================================
+    # STATISTICS APIs
+    # ============================================
+    path('api/resolved-cases/', views.get_resolved_cases_api2, name='get_resolved_cases'),
+    path('api/dashboard-stats/', views.get_dashboard_stats_api2, name='dashboard_stats'),
+    path('api/user-role/', views.get_user_role_api2, name='user_role_api'),
+
+
+
 
 
 

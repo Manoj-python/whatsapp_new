@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPL Cases - {% block title %}Dashboard{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #075E54 0%, #128C7E 100%);
+            position: fixed;
+            width: 260px;
+            z-index: 100;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.85);
+            padding: 12px 20px;
+            margin: 4px 12px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .sidebar .nav-link i {
+            width: 24px;
+            margin-right: 10px;
+        }
+        
+        .main-content {
+            margin-left: 260px;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            padding: 12px 24px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .btn-sm {
+            margin: 0 2px;
+            border-radius: 6px;
+        }
+        
+        .badge {
+            padding: 5px 10px;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+        
+        .timeline-item {
+            transition: background 0.2s;
+        }
+        .timeline-item:hover {
+            background: #f8f9fa;
+        }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <div class="p-3">
+            <h4 class="text-white mb-4">
+                <i class="fab fa-whatsapp"></i> SPL Cases
+            </h4>
+            <nav class="nav flex-column">
+                {% if agent.role == 'AGENT' %}
+                <a class="nav-link {% if request.resolver_match.url_name == 'agent_dashboard' %}active{% endif %}" 
+                   href="{% url 'agent_dashboard' %}">
+                    <i class="fas fa-tasks"></i> My Cases
+                </a>
+                {% elif agent.role == 'LEGAL' %}
+                <a class="nav-link {% if request.resolver_match.url_name == 'legal_dashboard' %}active{% endif %}" 
+                   href="{% url 'legal_dashboard' %}">
+                    <i class="fas fa-gavel"></i> Legal Cases
+                </a>
+                {% elif agent.role == 'LEAD' %}
+                <a class="nav-link {% if request.resolver_match.url_name == 'lead_dashboard' %}active{% endif %}" 
+                   href="{% url 'lead_dashboard' %}">
+                    <i class="fas fa-star"></i> Lead Cases
+                </a>
+                {% elif agent.role == 'MANAGER' %}
+                <a class="nav-link {% if request.resolver_match.url_name == 'manager_dashboard' %}active{% endif %}" 
+                   href="{% url 'manager_dashboard' %}">
+                    <i class="fas fa-chart-line"></i> Manager Cases
+                </a>
+                {% elif agent.role == 'ADMIN' %}
+                <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}" 
+                   href="{% url 'admin_dashboard' %}">
+                    <i class="fas fa-crown"></i> Admin Dashboard
+                </a>
+                {% endif %}
+                
+                <a class="nav-link" href="/messaging2/chat/">
+                    <i class="fab fa-whatsapp"></i> WhatsApp Chat
+                </a>
+                <a class="nav-link" href="{% url 'upload_and_send2' %}">
+                    <i class="fas fa-upload"></i> Upload Data
+                </a>
+                
+                <hr class="bg-light">
+                <a class="nav-link" href="">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </nav>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <nav class="navbar navbar-expand-lg">
+            <div class="container-fluid">
+                <button class="btn btn-link d-md-none" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <span class="navbar-brand">
+                    Welcome, {{ user.username }}
+                    <span class="badge bg-secondary ms-2">{{ agent.role_display }}</span>
+                </span>
+                <div class="ms-auto">
+                    <span class="text-muted">
+                        <i class="fas fa-calendar"></i> 
+                        <span id="currentDateTime"></span>
+                    </span>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="p-4">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    
+    <!-- JavaScript Libraries - ORDER MATTERS -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <script>
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('show');
+        }
+        
+        function updateDateTime() {
+            const now = new Date();
+            const dateTimeElement = document.getElementById('currentDateTime');
+            if (dateTimeElement) {
+                dateTimeElement.textContent = 
+                    now.toLocaleDateString('en-IN') + ' ' + now.toLocaleTimeString('en-IN');
+            }
+        }
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+        
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const isMobile = window.innerWidth <= 768;
+            if (isMobile && sidebar && sidebar.classList.contains('show')) {
+                if (!sidebar.contains(event.target) && !event.target.closest('.btn-link')) {
+                    sidebar.classList.remove('show');
+                }
+            }
+        });
+        
+        // Global error handler for fetch
+        window.handleApiError = function(error, url) {
+            console.error('API Error:', error, 'URL:', url);
+            alert('Error connecting to server. Please check if the server is running.');
+        };
+        
+        // CSRF token setup for fetch
+        const csrftoken = document.querySelector('[name=csrf-token]')?.content || '{{ csrf_token }}';
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
