@@ -1243,6 +1243,8 @@ def generate_post_sale_notices(excel_path, template_path, output_dir, progress_c
         context = {
             "notice_date": format_date(row.get("notice_date")),
             "vehicle_no": safe(row.get("vehicle_no")),
+            "vehicle_name": safe(row.get("vehicle_name")),
+            "pincode":(safe(row.get("pincode"))),
             "borrower_name": safe(row.get("borrower_name")),
             "borrower_address": force_address_breaks(safe(row.get("borrower_address"))),
             "borrower_mobile": format_mobile(row.get("borrower_mobile")),

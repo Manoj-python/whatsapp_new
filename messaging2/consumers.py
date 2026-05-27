@@ -210,7 +210,7 @@ def get_messages_page_from_db2(mobile, before_date=None, limit=30):
             try:
                 # If the datetime is naive, make it aware using current timezone
                 sent_at_value = timezone.localtime(
-                    timezone.make_aware(row[4], timezone.UTC)  # ← Use timezone.UTC
+                    timezone.make_aware(row[4], timezone.utc)  # ← Use timezone.UTC
                 ).isoformat()
             except Exception as e:
                 print(f"⚠️ Timezone conversion error: {e}")

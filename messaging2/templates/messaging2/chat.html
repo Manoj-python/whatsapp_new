@@ -801,6 +801,7 @@
     }
 
     .document-icon {
+      position: relative;
       flex-shrink: 0;
       width: 40px;
       height: 40px;
@@ -910,7 +911,9 @@
     <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
   <div class="header-top">
-    <h4><i class="fab fa-whatsapp"></i> WhatsApp Chats</h4>
+    <h4 onclick="goToDashboard()" style="cursor: pointer;">
+    <i class="fab fa-whatsapp"></i> WhatsApp Chats
+</h4>
     <span class="esc-number">
             {{ agent.level|default:"ESC1" }}
         </span>
@@ -1106,6 +1109,20 @@ let currentUser = {
             caseSidebar.classList.remove('show');
         }
     }
+
+
+function goToDashboard() {
+    const role = "{{ agent.role|default:'AGENT' }}";
+    let url = "";
+    switch(role) {
+        case 'AGENT': url = "{% url 'agent_dashboard' %}"; break;
+        case 'LEGAL': url = "{% url 'legal_dashboard' %}"; break;
+        case 'LEAD':  url = "{% url 'lead_dashboard' %}"; break;
+        case 'MANAGER': url = "{% url 'manager_dashboard' %}"; break;
+        default: url = "{% url 'admin_dashboard' %}";
+    }
+    window.location.href = url;
+}
 
     // Render case panel content
     async function renderCasePanel() {

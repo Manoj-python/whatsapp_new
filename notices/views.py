@@ -260,17 +260,17 @@ def process_notice_task(task_id, notice_type, excel_path, temp_dir):
         elif notice_type == "post_sale_sms":
             tpl = os.path.join(settings.BASE_DIR, "templates_docx", "SMS_post_sale.docx")
             generate_post_sale_notices(excel_path, tpl, temp_dir, update_progress)
-            pdf_folder = os.path.join(temp_dir, "post_sale_sms_pdf")
+            pdf_folder = os.path.join(temp_dir, "post_sale_pdf")
 
         elif notice_type == "post_sale_psf":
             tpl = os.path.join(settings.BASE_DIR, "templates_docx", "PSF_post_sale.docx")
             generate_post_sale_notices (excel_path, tpl, temp_dir, update_progress)
-            pdf_folder = os.path.join(temp_dir, "post_sale_psf_pdf")
+            pdf_folder = os.path.join(temp_dir, "post_sale_pdf")
 
         elif notice_type == "post_sale_smf":
-            tpl = os.path.join(settings.BASE_DIR, "templates_docx", "SMF_post_sale.docx")
+            tpl = os.path.join(settings.BASE_DIR, "templates_docx", "SMF_Post_Sale.docx")
             generate_post_sale_notices(excel_path, tpl, temp_dir, update_progress)
-            pdf_folder = os.path.join(temp_dir, "post_sale_smf_pdf")
+            pdf_folder = os.path.join(temp_dir, "post_sale_pdf")
 
         # elif notice_type == "police_intimation_psf":
         #     tpl = os.path.join(settings.BASE_DIR, "templates_docx", "psf_ps_intimation.docx")
