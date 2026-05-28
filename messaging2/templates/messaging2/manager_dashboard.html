@@ -56,7 +56,7 @@
                 <table class="table table-hover" id="legalCasesTable">
                     <thead>
                         <tr>
-                            <th>Case ID</th>
+                            <th>Loan Number</th>
                             <th>Customer</th>
                             <th>Mobile</th>
                             <th>Escalated From</th>
@@ -69,7 +69,7 @@
                     <tbody>
                         {% for case in cases %}
                         <tr class="{% if case.priority == 'Urgent' %}table-danger{% endif %}">
-                            <td><strong>{{ case.case_id }}</strong></td>
+                            <td><strong>{{ case.loan_number }}</strong></td>
                             <td>{{ case.customer_name|default:case.mobile }}</td>
                             <td>{{ case.mobile }}</td>
                             <td><span class="badge bg-secondary">{{ case.previous_level|default:"ESC1" }}</span></td>

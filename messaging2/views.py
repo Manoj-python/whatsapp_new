@@ -1978,6 +1978,8 @@ def create_case_from_chat_api2(request):
             created_by=agent_name,
             assigned_to=None,  # No assignment - available to all agents
             assigned_to_name=None,
+            loan_number=data.get('loan_number', ''),
+
             
         )
         # After creating case, update contact level

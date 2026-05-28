@@ -347,7 +347,7 @@ class Case(models.Model):
         """Escalate case to new level"""
         if self.status in ['Resolved', 'Closed']:
             raise ValueError(f"Cannot escalate a {self.status} case")
-        if self.loan_number:
+        if loan:
             self.loan_number = loan
         self.previous_level = self.current_level
         self.current_level = new_level

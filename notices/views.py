@@ -1,3 +1,4 @@
+
 from django.shortcuts import render
 from django.conf import settings
 from django.http import JsonResponse
@@ -30,7 +31,8 @@ from .utils import (
     generate_open_repo_letter,
     generate_due_notice_psf_guarantor,
     generate_due_notice_sms_guarantor,
-    generate_post_sale_notices,
+    generate_post_sale_notices,generate_post_sale_guarantor,
+
 
 )
 
@@ -48,7 +50,8 @@ def process_notice_task(task_id, notice_type, excel_path, temp_dir):
         generate_demand_notice_psf, generate_demand_notice_sms, generate_due_notice_psf,
         generate_due_notice_sms, generate_due_notice_smf, generate_pre_sale_psf,
         generate_pre_sale_sms, generate_pre_sale_smf,generate_open_repo_letter,
-        generate_due_notice_psf_guarantor,generate_due_notice_sms_guarantor,generate_post_sale_notices,
+        generate_due_notice_psf_guarantor,generate_due_notice_sms_guarantor,generate_post_sale_notices,generate_post_sale_guarantor,
+
     )
 
     task = TaskStatus.objects.get(task_id=task_id)
@@ -272,6 +275,22 @@ def process_notice_task(task_id, notice_type, excel_path, temp_dir):
             generate_post_sale_notices(excel_path, tpl, temp_dir, update_progress)
             pdf_folder = os.path.join(temp_dir, "post_sale_pdf")
 
+        elif notice_type == "post_sale_guarantor_psf":
+            tpl = os.path.join(settings.BASE_DIR, "templates_docx", "PSF_Post_Sale_Notice_Guarantor.docx")
+            generate_post_sale_guarantor(excel_path, tpl, temp_dir, update_progress)
+            pdf_folder = os.path.join(temp_dir, "post_sale_guarantor_pdf")
+        
+        elif notice_type == "post_sale_guarantor_sms":
+            tpl = os.path.join(settings.BASE_DIR, "templates_docx", "SMS_Post_Sale_Notice_Guarantor.docx")
+            generate_post_sale_guarantor(excel_path, tpl, temp_dir, update_progress)
+            pdf_folder = os.path.join(temp_dir, "post_sale_guarantor_pdf")
+
+        elif notice_type == "post_sale_guarantor_smf":
+            tpl = os.path.join(settings.BASE_DIR, "templates_docx", "SMF_Post_Sale_Notice_Guarantor.docx")
+            generate_post_sale_guarantor(excel_path, tpl, temp_dir, update_progress)
+            pdf_folder = os.path.join(temp_dir, "post_sale_guarantor_pdf")
+        
+
         # elif notice_type == "police_intimation_psf":
         #     tpl = os.path.join(settings.BASE_DIR, "templates_docx", "psf_ps_intimation.docx")
         #     generate_police_intimation_psf(excel_path, tpl, temp_dir, update_progress)
@@ -394,5 +413,6 @@ def get_task_status(request, task_id):
         })
     except TaskStatus.DoesNotExist:
         return JsonResponse({'error': 'Task not found'}, status=404)
+
 
 

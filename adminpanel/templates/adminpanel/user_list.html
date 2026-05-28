@@ -408,7 +408,6 @@
                         <th><i class="fas fa-tag"></i> Role / Team</th>
                         <th><i class="fas fa-chart-line"></i> Level</th>
                         <th><i class="fas fa-shield-alt"></i> Staff</th>
-                        <th><i class="fas fa-chart-simple"></i>App</th>
                         <th><i class="fas fa-cog"></i> Actions</th>
                     </tr>
                 </thead>
@@ -458,21 +457,7 @@
                                 <span class="badge bg-secondary"><i class="fas fa-times"></i> No</span>
                             {% endif %}
                         </td>
-                        <td>
-    {% if user_data.agent %}
-        {% if user_data.agent.source_app == 'app1' %}
-            <span class="badge bg-primary">App 1 (messaging)</span>
-        {% elif user_data.agent.source_app == 'app2' %}
-            <span class="badge bg-info">App 2 (messaging2)</span>
-        {% elif user_data.agent.source_app == 'app3' %}
-            <span class="badge bg-warning">App 3 (special_cases)</span>
-        {% else %}
-            <span class="badge bg-secondary">{{ user_data.agent.source_app|default:"-" }}</span>
-        {% endif %}
-    {% else %}
-        -
-    {% endif %}
-</td>
+                       
                         <td>
                             <a href="{% url 'admin_user_edit' user_data.user.id %}" class="btn-edit" title="Edit">
                                 <i class="fas fa-edit"></i> Edit

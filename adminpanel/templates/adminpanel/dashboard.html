@@ -313,6 +313,7 @@
                 <div class="stat-label">Total Cases</div>
             </div>
         </div>
+        
         <div class="col-xl-2 col-md-4 mb-3">
             <div class="stat-card" onclick="switchTab('open')">
                 <div class="stat-icon"><i class="fas fa-play-circle"></i></div>
@@ -423,36 +424,45 @@
         <button class="btn btn-sm btn-outline-gradient ms-2" onclick="refreshCases()">
             <i class="fas fa-sync-alt"></i> Refresh
         </button>
+ <button id="exportEsc3Btn" class="btn btn-sm btn-success ms-2" onclick="exportESC3()">
+            <i class="fas fa-file-excel"></i> Export ESC3 to Excel
+        </button>
     </div>
 </div>
         
         <ul class="nav nav-tabs-custom" id="caseTabs">
             <li class="nav-item">
-                <a class="nav-link active" data-tab="open" href="#" onclick="switchTab('open')">
+                        <a class="nav-link active" data-tab="open" role="button" onclick="switchTab('open'); return false;">
                     <i class="fas fa-folder-open"></i> Open Cases
                     <span class="badge bg-primary ms-1" id="openCount">{{ stats.open_cases|default:"0" }}</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" data-tab="resolved" href="#" onclick="switchTab('resolved')">
+                        <a class="nav-link" data-tab="resolved" role="button" onclick="switchTab('resolved'); return false;">
                     <i class="fas fa-check-circle"></i> Resolved (Pending Close)
                     <span class="badge bg-success ms-1" id="resolvedCount">{{ stats.resolved_cases|default:"0" }}</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" data-tab="esc5" href="#" onclick="switchTab('esc5')">
+                <a class="nav-link" data-tab="esc5" role="button" onclick="switchTab('esc5'); return false;">
                     <i class="fas fa-exclamation-triangle"></i> ESC5 - Admin Review
                     <span class="badge bg-danger ms-1" id="esc5Count">{{ stats.esc5|default:"0" }}</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" data-tab="closed" href="#" onclick="switchTab('closed')">
+    <a class="nav-link" data-tab="esc3" role="button" onclick="switchTab('esc3'); return false;">
+        <i class="fas fa-chart-line"></i> NOC Cases (ESC3)
+        <span class="badge bg-warning ms-1" id="esc3Count">{{ stats.esc3|default:"0" }}</span>
+    </a>
+</li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="closed" role="button" onclick="switchTab('closed'); return false;">
                     <i class="fas fa-archive"></i> Closed Cases
                     <span class="badge bg-secondary ms-1" id="closedCount">{{ stats.closed_cases|default:"0" }}</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" data-tab="all" href="#" onclick="switchTab('all')">
+                <a class="nav-link" data-tab="all" role="button" onclick="switchTab('all'); return false;">
                     <i class="fas fa-list"></i> All Cases
                 </a>
             </li>
@@ -539,6 +549,7 @@
         </div>
     </div>
 </div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
@@ -638,6 +649,20 @@
             })
             .catch(error => console.error('Error loading trend chart:', error));
     }
+
+function exportESC3() {
+    window.location.href = '/adminpanel/export-esc3-cases/';
+}
+
+// Show/hide button based on current tab
+function switchTab(tab) {
+    currentTab = tab;
+    // ... existing code ...
+    const exportBtn = document.getElementById('exportEsc3Btn');
+    if (exportBtn) {
+        exportBtn.style.display = (tab === 'esc3') ? 'inline-block' : 'none';
+    }
+}
     
     function refreshTrendChart() {
         fetch('/adminpanel/api/weekly-trend/')
@@ -677,6 +702,8 @@
         else if (tab === 'closed') url = '/adminpanel/api/closed-cases/';
         else if (tab === 'esc5') url = '/adminpanel/api/esc5-cases/';
         else if (tab === 'all') url = '/adminpanel/api/cases/';
+        else if (tab === 'esc3') url = '/adminpanel/api/esc3-cases/';
+
         
         fetch(url)
             .then(response => response.json())

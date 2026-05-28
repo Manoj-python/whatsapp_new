@@ -1245,6 +1245,7 @@ def generate_post_sale_notices(excel_path, template_path, output_dir, progress_c
             "vehicle_no": safe(row.get("vehicle_no")),
             "vehicle_name": safe(row.get("vehicle_name")),
             "pincode":(safe(row.get("pincode"))),
+            "borrower_father":safe(row.get("borrower_father")),
             "borrower_name": safe(row.get("borrower_name")),
             "borrower_address": force_address_breaks(safe(row.get("borrower_address"))),
             "borrower_mobile": format_mobile(row.get("borrower_mobile")),
@@ -1267,4 +1268,50 @@ def generate_post_sale_notices(excel_path, template_path, output_dir, progress_c
         if progress_callback:
             progress_callback(idx, total_rows)
 
+
+
+
+
+
+
+
+
+def generate_post_sale_guarantor(excel_path, template_path, output_dir, progress_callback=None):
+    df = pd.read_excel(excel_path)
+    total_rows = len(df)
+
+    docx_dir = os.path.join(output_dir, "post_sale_guarantor_docx")
+    pdf_dir = os.path.join(output_dir, "post_sale_guarantor_pdf")
+
+    os.makedirs(docx_dir, exist_ok=True)
+    os.makedirs(pdf_dir, exist_ok=True)
+
+    for idx, (_, row) in enumerate(df.iterrows(), 1):
+        context = {
+            "notice_date": format_date(row.get("notice_date")),
+            "guarantor_name": safe(row.get("guarantor_name")),
+            "guarantor_father": safe(row.get("guarantor_father")),
+            "borrower_name": safe(row.get("borrower_name")),
+            "guarantor_address": force_address_breaks(safe(row.get("guarantor_address"))),
+            "mobile": format_mobile(row.get("mobile")),
+            "vehicle_no": safe(row.get("vehicle_no")),
+            "pincode":(safe(row.get("pincode"))),
+            "dues": format_indian_number(row.get("dues")),
+            "vehicle_name": safe(row.get("vehicle_name")),
+        }
+
+        file_name = str(row.get("vehicle_no", "post_sale_guarantor")).strip()
+
+        doc = DocxTemplate(template_path)
+        doc.render(context)
+
+        docx_path = os.path.join(docx_dir, f"{file_name}_post_sale_guarantor.docx")
+        pdf_path = os.path.join(pdf_dir, f"{file_name}_post_sale_guarantor.pdf")
+
+        doc.save(docx_path)
+        convert_docx_to_pdf(docx_path, pdf_path)
+        remove_blank_last_page(pdf_path)
+
+        if progress_callback:
+            progress_callback(idx, total_rows)
 

@@ -1043,7 +1043,7 @@ let currentUser = {
             const roleNames = {
                 'AGENT': 'Normal Agent',
                 'LEGAL': 'Legal Team',
-                'LEAD': 'Team Lead',
+                'LEAD': 'NOC Team',
                 'MANAGER': 'Manager',
                 'ADMIN': 'Administrator'
             };
@@ -1176,13 +1176,13 @@ function goToDashboard() {
             if (currentUser.role === 'AGENT' && currentCaseData.current_level === 'ESC1') {
                 showEscalate = true;
                 showResolve = true;
-                escalateOptions = '<option value="ESC2">⚖️ Legal Team (ESC2)</option><option value="ESC3">⭐ Team Lead (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
+                escalateOptions = '<option value="ESC2">⚖️ Legal Team (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
             }
             // LEGAL (ESC2) - Can act on ESC2 cases
             else if (currentUser.role === 'LEGAL' && currentCaseData.current_level === 'ESC2') {
                 showEscalate = true;
                 showResolve = true;
-                escalateOptions = '<option value="ESC3">⭐ Team Lead (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
+                escalateOptions = '<option value="ESC3">⭐NOC (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
             }
             // LEAD (ESC3) - Can act on ESC3 cases
             else if (currentUser.role === 'LEAD' && currentCaseData.current_level === 'ESC3') {
@@ -1200,7 +1200,7 @@ function goToDashboard() {
             else if (currentUser.role === 'ADMIN') {
                 showEscalate = true;
                 showResolve = true;
-                escalateOptions = '<option value="ESC1">📞 Agent (ESC1)</option><option value="ESC2">⚖️ Legal (ESC2)</option><option value="ESC3">⭐ Team Lead (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option><option value="ESC5">🔒 Admin (ESC5)</option>';
+                escalateOptions = '<option value="ESC1">📞 Agent (ESC1)</option><option value="ESC2">⚖️ Legal (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option><option value="ESC5">🔒 Admin (ESC5)</option>';
             }
             
             // Also allow resolve if case is at user's level and not resolved/closed
@@ -1620,7 +1620,9 @@ function goToDashboard() {
       }
       isLoadingContacts = true;
       console.log(`📞 Loading contacts page ${page}`);
-      sendWS({ type: 'get_contacts', page: page, filter: currentFilter });
+      let levelToSend = currentUser.role === 'ADMIN' ? null : currentUser.level;
+
+      sendWS({ type: 'get_contacts', page: page, filter: currentFilter, level: levelToSend });
     }
 
     function searchContacts(query) {
@@ -1628,7 +1630,9 @@ function goToDashboard() {
       contacts = [];
       hasMoreContacts = true;
       lastProcessedPage = 0;
-      sendWS({ type: 'search_contacts', q: query, filter: currentFilter });
+      let levelToSend = currentUser.role === 'ADMIN' ? null : currentUser.level;
+
+      sendWS({ type: 'search_contacts', q: query, filter: currentFilter, level: levelToSend });
     }
 
    function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore = false, currentPage = 1) {

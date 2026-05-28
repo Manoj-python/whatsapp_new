@@ -126,7 +126,7 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Case ID</th>
+                                    <th>Loan Number</th>
                                     <th>Customer</th>
                                     <th>Mobile</th>
                                     <th>Escalated From</th>
@@ -139,7 +139,7 @@
                             <tbody>
                                 {% for case in cases %}
                                 <tr class="{% if case.priority == 'Urgent' %}table-danger{% endif %}">
-                                    <td><strong>{{ case.case_id }}</strong></small></td>
+                                    <td><strong>{{ case.loan_number }}</strong></small></td>
                                     <td>{{ case.customer_name|default:case.mobile }}</small></td>
                                     <td>{{ case.mobile }}</small></td>
                                     <td><span class="badge bg-secondary">{{ case.previous_level|default:"ESC2" }}</span></small></td>
@@ -164,9 +164,7 @@
                                         <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')" title="Resolve">
                                             <i class="fas fa-check-circle"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-info" onclick="showAssignModal('{{ case.case_id }}')" title="Assign to Agent">
-                                            <i class="fas fa-user-check"></i>
-                                        </button>
+                                       
                                     </small></td>
                                 </tr>
                                 {% empty %}

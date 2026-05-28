@@ -27,7 +27,7 @@ urlpatterns = [
     path('api/closed-cases/', views.get_closed_cases_api, name='closed_cases'),
     path('api/esc5-cases/', views.get_esc5_cases_api, name='esc5_cases'),
     path('api/cases/', views.get_all_cases_api, name='all_cases'),
-    
+    path('api/esc3-cases/', views.get_esc3_cases_api, name='esc3_cases_api'),    
     # ============================================
     # CASE DETAIL & ACTION APIs
     # ============================================
@@ -36,6 +36,7 @@ urlpatterns = [
     path('case/<str:case_id>/reopen/', views.reopen_case_api, name='reopen_case'),
     path('case/<str:case_id>/resolve/', messaging2.resolve_case_api2, name='resolve_case'),
     path('case/<str:case_id>/timeline/', messaging2.get_case_timeline_api2, name='case_timeline'),
+    path('export-esc3-cases/', views.export_esc3_cases_excel, name='export_esc3_cases'),
 
     path('api/search/', views.search_cases_api, name='search_cases_api'),
 ]

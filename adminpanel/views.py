@@ -144,6 +144,63 @@ def dashboard(request):
         'current_agent': get_agent_from_user(request.user)
     })
 
+
+def get_esc3_cases_api(request):
+    """Get all ESC3 (Lead) cases"""
+    try:
+        cases = Case.objects.filter(current_level='ESC3').order_by('-priority', '-created_at')
+        return JsonResponse({
+            'success': True,
+            'cases': [{
+                'case_id': c.case_id,
+                'customer_name': c.customer_name,
+                'mobile': c.mobile,
+                'loan_number': c.loan_number,
+                'priority': c.priority,
+                'current_level': c.current_level,
+                'status': c.status,
+                'created_at': timezone.localtime(c.created_at).isoformat(),
+            } for c in cases]
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+import pandas as pd
+from django.http import HttpResponse
+
+
+@login_required
+def export_esc3_cases_excel(request):
+    """Export all ESC3 cases to Excel with UI fields"""
+    # Only allow Admin or Lead (since ESC3 is Lead level)
+    agent = get_agent_from_user(request.user)
+    if agent.role not in ['ADMIN', 'LEAD']:
+        return HttpResponse("Unauthorized", status=403)
+
+    # Fetch all ESC3 cases
+    cases = Case.objects.filter(current_level='ESC3').order_by('-priority', '-created_at')
+
+    # Prepare data for DataFrame
+    data = []
+    for c in cases:
+        data.append({
+            'Case ID': c.case_id,
+            'Customer Name': c.customer_name or '',
+            'Mobile': c.mobile,
+            'Loan Number': c.loan_number or '',
+            'Priority': c.priority,
+            'Status': c.status,
+            'Current Level': c.current_level,
+            'Created At': timezone.localtime(c.created_at).strftime('%Y-%m-%d %H:%M:%S'),
+        })
+
+    # Create Excel response
+    df = pd.DataFrame(data)
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="ESC3_Cases_Export.xlsx"'
+    df.to_excel(response, index=False, sheet_name='ESC3 Cases')
+
+    return response
+
 from django.db.models import Q
 
 @login_required
