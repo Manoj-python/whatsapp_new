@@ -1042,7 +1042,7 @@ let currentUser = {
             
             const roleNames = {
                 'AGENT': 'Normal Agent',
-                'LEGAL': 'Legal Team',
+                'LEGAL': 'Thumb Team',
                 'LEAD': 'NOC Team',
                 'MANAGER': 'Manager',
                 'ADMIN': 'Administrator'
@@ -1176,7 +1176,7 @@ function goToDashboard() {
             if (currentUser.role === 'AGENT' && currentCaseData.current_level === 'ESC1') {
                 showEscalate = true;
                 showResolve = true;
-                escalateOptions = '<option value="ESC2">⚖️ Legal Team (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
+                escalateOptions = '<option value="ESC2">⚖️ Thumb Team (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
             }
             // LEGAL (ESC2) - Can act on ESC2 cases
             else if (currentUser.role === 'LEGAL' && currentCaseData.current_level === 'ESC2') {
@@ -1200,7 +1200,7 @@ function goToDashboard() {
             else if (currentUser.role === 'ADMIN') {
                 showEscalate = true;
                 showResolve = true;
-                escalateOptions = '<option value="ESC1">📞 Agent (ESC1)</option><option value="ESC2">⚖️ Legal (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option><option value="ESC5">🔒 Admin (ESC5)</option>';
+                escalateOptions = '<option value="ESC1">📞 Agent (ESC1)</option><option value="ESC2">⚖️ Thumb (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option><option value="ESC5">🔒 Admin (ESC5)</option>';
             }
             
             // Also allow resolve if case is at user's level and not resolved/closed

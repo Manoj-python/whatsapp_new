@@ -532,8 +532,8 @@
                     <label>Reopen To Level:</label>
                     <select id="reopenLevel" class="form-select">
                         <option value="ESC1">ESC1 - Agent Level</option>
-                        <option value="ESC2">ESC2 - Legal Team</option>
-                        <option value="ESC3">ESC3 - Team Lead</option>
+                        <option value="ESC2">ESC2 -Thumb Team</option>
+                        <option value="ESC3">ESC3 - NOC Team</option>
                         <option value="ESC4">ESC4 - Manager</option>
                     </select>
                 </div>
@@ -599,7 +599,7 @@
         levelChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: ['ESC1 - Agent', 'ESC2 - Legal', 'ESC3 - Lead', 'ESC4 - Manager', 'ESC5 - Admin', 'Resolved', 'Closed'],
+                labels: ['ESC1 - Agent', 'ESC2 - Thumb', 'ESC3 - Noc', 'ESC4 - Manager', 'ESC5 - Admin', 'Resolved', 'Closed'],
                 datasets: [{
                     data: [
                         {{ stats.esc1|default:"0" }},

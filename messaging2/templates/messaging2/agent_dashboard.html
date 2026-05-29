@@ -42,57 +42,7 @@
             </div>
             
             <!-- Cases Table -->
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h4><i class="fas fa-tasks"></i> My Cases (ESC1)</h4>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover" id="casesTable">
-                            <thead>
-                                <tr>
-                                    <th>Loan Number</th>
-                                    <th>Customer</th>
-                                    <th>Mobile</th>
-                                    <th>Description</th>
-                                   
-                                    <th>Created</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for case in cases %}
-                                <tr class="{% if case.priority == 'Urgent' %}table-danger{% endif %}">
-                                    <td><strong>{{ case.loan_number }}</strong></td>
-                                    <td>{{ case.customer_name|default:case.mobile }}</td>
-                                    <td>{{ case.mobile }}</td>
-                                    <td>
-                                       {{ case.issue_description }}
-                                    </td>
-                                    
-                                    <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')" title="Escalate">
-                                            <i class="fas fa-arrow-up"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')" title="Resolve">
-                                            <i class="fas fa-check-circle"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="7" class="text-center">No cases assigned to you</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+   
         </div>
     </div>
 </div>
@@ -128,8 +78,8 @@
                 <div class="mb-3">
                     <label>Escalate To:</label>
                     <select id="escalateLevel" class="form-select">
-                        <option value="ESC2">⚖️ ESC2 - Legal Team</option>
-                        <option value="ESC3">⭐ ESC3 - Team Lead</option>
+                        <option value="ESC2">⚖️ ESC2 - Thumb Team</option>
+                        <option value="ESC3">⭐ ESC3 - NOC Team</option>
                         <option value="ESC4">📊 ESC4 - Manager</option>
                     </select>
                 </div>

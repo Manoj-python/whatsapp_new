@@ -140,7 +140,7 @@ class Agent(models.Model):
         'LEGAL': ['ESC3', 'ESC4'],
         'LEAD': ['ESC4'],
         'MANAGER': ['ESC5'],
-        'ADMIN': [],
+        'ADMIN': ['ESC1', 'ESC2', 'ESC3', 'ESC4'],
     }
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_profile')

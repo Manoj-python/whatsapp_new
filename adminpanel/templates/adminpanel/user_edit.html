@@ -420,8 +420,8 @@
                     </label>
                     <select name="role" class="form-select" required>
                         <option value="AGENT" {% if user_agent.role == 'AGENT' %}selected{% endif %}>🟢 Normal Agent - Chat Support (ESC1)</option>
-                        <option value="LEGAL" {% if user_agent.role == 'LEGAL' %}selected{% endif %}>⚖️ Legal Team (ESC2)</option>
-                        <option value="LEAD" {% if user_agent.role == 'LEAD' %}selected{% endif %}>⭐ Team Lead (ESC3)</option>
+                        <option value="LEGAL" {% if user_agent.role == 'LEGAL' %}selected{% endif %}>⚖️Thumb Team (ESC2)</option>
+                        <option value="LEAD" {% if user_agent.role == 'LEAD' %}selected{% endif %}>⭐NOC Team (ESC3)</option>
                         <option value="MANAGER" {% if user_agent.role == 'MANAGER' %}selected{% endif %}>📊 Manager (ESC4)</option>
                         <option value="ADMIN" {% if user_agent.role == 'ADMIN' %}selected{% endif %}>🔒 Administrator (ESC5)</option>
                     </select>
@@ -463,9 +463,9 @@
                                 {% elif user_agent.role == 'MANAGER' %}
                                     📊 Manager (ESC4)
                                 {% elif user_agent.role == 'LEAD' %}
-                                    ⭐ Team Lead (ESC3)
+                                    ⭐ Thumb Team (ESC3)
                                 {% elif user_agent.role == 'LEGAL' %}
-                                    ⚖️ Legal Team (ESC2)
+                                    ⚖️NOC Team (ESC2)
                                 {% else %}
                                     🟢 Normal Agent (ESC1)
                                 {% endif %}
@@ -507,8 +507,8 @@
                                     <i class="fas fa-gavel"></i>
                                 </div>
                                 <div>
-                                    <strong>ESC2 - Legal Team</strong>
-                                    <small class="d-block text-muted">Legal documents, NOC</small>
+                                    <strong>ESC2 - Thumb Team</strong>
+                                    <small class="d-block text-muted">Thumb documents,</small>
                                 </div>
                             </div>
                         </div>

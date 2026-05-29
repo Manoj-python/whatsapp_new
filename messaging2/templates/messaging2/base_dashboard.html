@@ -133,12 +133,12 @@
                 {% elif agent.role == 'LEGAL' %}
                 <a class="nav-link {% if request.resolver_match.url_name == 'legal_dashboard' %}active{% endif %}" 
                    href="{% url 'legal_dashboard' %}">
-                    <i class="fas fa-gavel"></i> Legal Cases
+                    <i class="fas fa-gavel"></i> Thumb Cases
                 </a>
                 {% elif agent.role == 'LEAD' %}
                 <a class="nav-link {% if request.resolver_match.url_name == 'lead_dashboard' %}active{% endif %}" 
                    href="{% url 'lead_dashboard' %}">
-                    <i class="fas fa-star"></i> Lead Cases
+                    <i class="fas fa-star"></i> NOC Cases
                 </a>
                 {% elif agent.role == 'MANAGER' %}
                 <a class="nav-link {% if request.resolver_match.url_name == 'manager_dashboard' %}active{% endif %}" 
