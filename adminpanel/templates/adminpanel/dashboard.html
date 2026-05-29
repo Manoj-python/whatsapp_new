@@ -549,6 +549,36 @@
         </div>
     </div>
 </div>
+<!-- Edit Case Modal -->
+<div class="modal fade" id="editCaseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-edit"></i> Edit Case</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editCaseId">
+                <div class="mb-3">
+                    <label>Loan Number</label>
+                    <input type="text" id="editLoanNumber" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label>Cstomer Name</label>
+                    <textarea id="editName" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label>Issue Description</label>
+                    <textarea id="editIssueDescription" class="form-control" rows="3"></textarea>
+                </div>               
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitEditCase()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -820,6 +850,11 @@ function switchTab(tab) {
     
     function renderCaseDetail(caseData) {
         const html = `
+         <div class="d-flex justify-content-end mb-2">
+            <button class="btn btn-sm btn-warning" onclick="openEditCaseModal('${caseData.case_id}')">
+                <i class="fas fa-edit"></i> Edit Case
+            </button>
+        </div>
             <div class="row">
                 <div class="col-md-6">
                     <h6><i class="fas fa-info-circle"></i> Case Information</h6>
@@ -883,6 +918,61 @@ function switchTab(tab) {
                 document.getElementById('timelineContainer').innerHTML = timelineHtml || '<div class="text-center text-muted">No timeline history</div>';
             });
     }
+
+    function openEditCaseModal(caseId) {
+    // Fetch current case details to populate the edit modal
+    fetch(`/adminpanel/case/${caseId}/detail/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const caseData = data.case;
+                document.getElementById('editCaseId').value = caseData.case_id;
+                document.getElementById('editLoanNumber').value = caseData.loan_number || '';
+                document.getElementById('editName').value = caseData.customer_name || '';
+                document.getElementById('editIssueDescription').value = caseData.issue_description || '';
+
+                $('#editCaseModal').modal('show');
+            } else {
+                alert('Error loading case details');
+            }
+        })
+        .catch(error => alert('Error: ' + error.message));
+}
+
+function submitEditCase() {
+    const caseId = document.getElementById('editCaseId').value;
+    const loanNumber = document.getElementById('editLoanNumber').value;
+    const Name = document.getElementById('editName').value;
+    const issueDescription = document.getElementById('editIssueDescription').value;
+
+
+    fetch(`/adminpanel/case/${caseId}/edit/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            loan_number: loanNumber,
+            customer_name: Name,
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case updated successfully!');
+            $('#editCaseModal').modal('hide');
+            // Refresh the open case detail modal
+            $('#caseModal').modal('hide');
+            viewCase(caseId);  // reopen with fresh data
+            // Also refresh the cases table if needed
+            loadCases(currentTab);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
     
     function showCloseModal(caseId) {
         document.getElementById('closeCaseId').value = caseId;

@@ -37,6 +37,7 @@ urlpatterns = [
     path('case/<str:case_id>/resolve/', messaging2.resolve_case_api2, name='resolve_case'),
     path('case/<str:case_id>/timeline/', messaging2.get_case_timeline_api2, name='case_timeline'),
     path('export-esc3-cases/', views.export_esc3_cases_excel, name='export_esc3_cases'),
+    path('case/<str:case_id>/edit/', views.edit_case_api, name='edit_case_api'),
 
     path('api/search/', views.search_cases_api, name='search_cases_api'),
 ]

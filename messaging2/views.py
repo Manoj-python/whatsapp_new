@@ -1502,7 +1502,6 @@ def get_case_detail_api2(request, case_id):
     except Case.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Case not found'})
 
-
 @csrf_exempt
 def escalate_case_api2(request, case_id):
     """API to escalate case"""
@@ -1517,6 +1516,7 @@ def escalate_case_api2(request, case_id):
         new_level = data.get('new_level')
         reason = data.get('reason', '')
         loan = data.get('loan', '')
+        name = data.get('name','')
         
         if not new_level:
             return JsonResponse({'error': 'New level required'}, status=400)
@@ -1527,7 +1527,7 @@ def escalate_case_api2(request, case_id):
         # Get mobile from case
         mobile = case.mobile
         
-        case.escalate(new_level, agent, reason, loan)
+        case.escalate(new_level, agent, reason, loan,name)
         
         # Update contact level
         ChatContact2.objects.filter(mobile=mobile).update(current_level=new_level)
@@ -1553,6 +1553,7 @@ def escalate_case_api2(request, case_id):
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
 
 @csrf_exempt
 def resolve_case_api2(request, case_id):

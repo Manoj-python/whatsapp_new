@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from django.conf import settings
 from django.conf.urls.static import static
+from adminpanel.views import edit_case_api
 
 urlpatterns = [
     # Bulk upload + WhatsApp sending
@@ -57,6 +58,7 @@ urlpatterns = [
     path('api/resolved-cases/', views.get_resolved_cases_api2, name='get_resolved_cases'),
     path('api/dashboard-stats/', views.get_dashboard_stats_api2, name='dashboard_stats'),
     path('api/user-role/', views.get_user_role_api2, name='user_role_api'),
+    path('case/<str:case_id>/edit/', edit_case_api, name='edit_case_api'),
 
 
 

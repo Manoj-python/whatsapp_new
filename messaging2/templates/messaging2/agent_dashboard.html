@@ -54,8 +54,8 @@
                                     <th>Loan Number</th>
                                     <th>Customer</th>
                                     <th>Mobile</th>
-                                    <th>Priority</th>
-                                    <th>Status</th>
+                                    <th>Description</th>
+                                   
                                     <th>Created</th>
                                     <th>Actions</th>
                                 </tr>
@@ -67,15 +67,9 @@
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
                                     <td>{{ case.mobile }}</td>
                                     <td>
-                                        <span class="badge bg-{% if case.priority == 'Urgent' %}danger{% elif case.priority == 'High' %}warning{% elif case.priority == 'Medium' %}info{% else %}secondary{% endif %}">
-                                            {{ case.priority }}
-                                        </span>
+                                       {{ case.issue_description }}
                                     </td>
-                                    <td>
-                                        <span class="badge bg-{% if case.status == 'Open' %}primary{% elif case.status == 'In Progress' %}warning{% elif case.status == 'Reopened' %}danger{% else %}success{% endif %}">
-                                            {{ case.status }}
-                                        </span>
-                                    </td>
+                                    
                                     <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
                                     <td>
                                         <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View Details">

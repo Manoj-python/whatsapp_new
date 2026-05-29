@@ -9,7 +9,7 @@ from asgiref.sync import async_to_sync
 # Import models from messaging2
 from messaging2.models import Agent, Case
 from django.utils import timezone
-
+from django.views.decorators.csrf import csrf_exempt
 def get_role_display_name(role):
     """Get display name for role"""
     role_names = {
@@ -200,6 +200,35 @@ def export_esc3_cases_excel(request):
     df.to_excel(response, index=False, sheet_name='ESC3 Cases')
 
     return response
+
+@csrf_exempt
+def edit_case_api(request, case_id):
+    """Edit case details – only for admin"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        agent = get_agent_from_user(request.user)
+        
+        case = Case.objects.get(case_id=case_id)
+        data = json.loads(request.body)
+
+        # Update allowed fields
+        if 'loan_number' in data:
+            case.loan_number = data['loan_number']
+        if 'customer_name' in data:
+            case.customer_name = data['customer_name']
+        if 'issue_description' in data:
+            case.issue_description = data['issue_description']
+        
+
+        case.save()
+        return JsonResponse({'success': True, 'message': 'Case updated'})
+
+    except Case.DoesNotExist:
+        return JsonResponse({'error': 'Case not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 from django.db.models import Q
 

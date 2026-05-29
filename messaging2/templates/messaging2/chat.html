@@ -1226,10 +1226,7 @@ function goToDashboard() {
                         </span>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <label>Priority:</label>
-                    <span class="badge bg-${currentCaseData.priority === 'Urgent' ? 'danger' : currentCaseData.priority === 'High' ? 'warning' : 'info'}">${currentCaseData.priority || 'Medium'}</span>
-                </div>
+               
                 <div class="mb-3">
                     <label>Status:</label>
                     <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span>
@@ -1253,6 +1250,8 @@ function goToDashboard() {
                     <label>Escalate To:</label>
                     <select id="escalateLevelSelect" class="form-select form-select-sm mb-2">${escalateOptions}</select>
                     <input type="text" id="escalateLoanNumber" class="form-control form-control-sm mb-2" placeholder="Enter loan Number">
+                    <input type="text" id="escalateCustomerName" class="form-control form-control-sm mb-2" placeholder="Enter Customer Name">
+
 
                     <textarea id="escalateReasonText" class="form-control form-control-sm mb-2" rows="2" placeholder="Reason for escalation..."></textarea>
 
@@ -1296,8 +1295,9 @@ function goToDashboard() {
         const levelSelect = document.getElementById('escalateLevelSelect');
         const reasonText = document.getElementById('escalateReasonText');
         const LoanText = document.getElementById('escalateLoanNumber');
+        const NameText = document.getElementById('escalateCustomerName')
         
-        if (!levelSelect || !reasonText || !LoanText) {
+        if (!levelSelect || !reasonText || !LoanText || !NameText) {
             showNotification('Form elements not found', 'error');
             return;
         }
@@ -1305,6 +1305,7 @@ function goToDashboard() {
         const level = levelSelect.value;
         const reason = reasonText.value;
         const loan = LoanText.value;
+        const name = NameText.value;
         
         if (!level) {
             showNotification('Please select escalation level', 'warning');
@@ -1316,6 +1317,10 @@ function goToDashboard() {
         }
         if (!loan) {
             showNotification('Please provide a loan number', 'warning');
+            return;
+        }
+        if (!name) {
+            showNotification('Please provide a customer name', 'warning');
             return;
         }
         
@@ -1330,6 +1335,7 @@ function goToDashboard() {
                     new_level: level,
                     reason: reason,
                     loan:loan,
+                    name:name,
                     escalated_by: currentUser.name
                 })
             });
@@ -1449,7 +1455,7 @@ function goToDashboard() {
                 },
                 body: JSON.stringify({
                     mobile: selectedMobile,
-                    customer_name: headerName.textContent,
+                    customer_name: headerName.textContent ,
                     agent_name: currentUser.name,
                     issue_description: description
                 })

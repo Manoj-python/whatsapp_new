@@ -343,12 +343,14 @@ class Case(models.Model):
     def __str__(self):
         return f"{self.case_id} - {self.current_level} - {self.status}"
     
-    def escalate(self, new_level, agent, reason=None, loan=None):
+    def escalate(self, new_level, agent, reason=None, loan=None, name=None):
         """Escalate case to new level"""
         if self.status in ['Resolved', 'Closed']:
             raise ValueError(f"Cannot escalate a {self.status} case")
         if loan:
             self.loan_number = loan
+        if name:
+            self.customer_name = name
         self.previous_level = self.current_level
         self.current_level = new_level
         self.status = 'In Progress'
