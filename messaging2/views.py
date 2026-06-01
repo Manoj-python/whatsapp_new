@@ -1190,17 +1190,31 @@ def view_secure_document2(request, log_id):
     """
     View secure NOC documents - only accessible to logged-in users
     """
+    # Check authentication
+    if not request.session.get("messaging2_user"):
+        return HttpResponseForbidden("Authentication required. Please login again.")
+
     log = get_object_or_404(SmsWhatsAppLog2, id=log_id)
 
     filename = (log.media_file.name or "").lower()
 
-    # Security check: Only allow NOC documents that were sent
-    if (
-        log.content_type != "document"
-        or log.message_type != "Sent"
-        or "noc" not in filename
-    ):
-        return HttpResponseForbidden("Not allowed")
+    # Check if this is a NOC document (case-insensitive)
+    is_noc_document = "noc" in filename
+
+    # Security check: Allow both 'Sent' and 'Sending' status (case-insensitive)
+    if log.content_type != "document":
+        return HttpResponseForbidden("Not allowed - This is not a document")
+    
+    # ✅ FIX: Allow 'sent' OR 'sending' (case-insensitive)
+    if log.message_type.lower() not in ['sent', 'sending']:
+        return HttpResponseForbidden("Not allowed - Only sent documents can be viewed")
+    
+    if not is_noc_document:
+        return HttpResponseForbidden("Not allowed - This is not a NOC document")
+    
+    # Additional security - Only allow PDF files
+    if not filename.endswith('.pdf'):
+        return HttpResponseForbidden("Not allowed - NOC documents must be PDF files")
 
     file_obj = default_storage.open(log.media_file.name, "rb")
 
@@ -1211,8 +1225,6 @@ def view_secure_document2(request, log_id):
     response["X-Content-Type-Options"] = "nosniff"
 
     return response
-
-
 
 # =============================== Escalation views =======================================================
 

@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -291,12 +292,12 @@
     .level-ESC4 { background: var(--esc4); }
     .level-ESC5 { background: var(--esc5); }
     /* Add these to your style section */
-.level-RESOLVED { 
-    background: #28a745; 
+.level-RESOLVED {
+    background: #28a745;
     font-size: 11px;
 }
-.level-CLOSED { 
-    background: #c50d1d; 
+.level-CLOSED {
+    background: #c50d1d;
     font-size: 11px;
 }
 
@@ -922,7 +923,7 @@
 
     <div class="user-badge">{{ request.user.username|slice:":2"|upper }}</div>
   </div>
-  
+
 </div>
       <div class="chat-tabs">
         <div class="chat-tab active" data-filter="all" onclick="switchTab('all')">All</div>
@@ -1034,12 +1035,12 @@ let currentUser = {
         const escIcon = document.getElementById('escIcon');
         const escText = document.getElementById('escText');
         const userBadge = document.querySelector('.user-badge');
-        
+
         if (escIcon && escText) {
             let levelNumber = currentUser.level.replace('ESC', '');
             escIcon.textContent = levelNumber;
             escIcon.className = `esc-icon esc-level-${currentUser.level}`;
-            
+
             const roleNames = {
                 'AGENT': 'Normal Agent',
                 'LEGAL': 'Thumb Team',
@@ -1049,7 +1050,7 @@ let currentUser = {
             };
             escText.textContent = `${currentUser.level} - ${roleNames[currentUser.role] || currentUser.role}`;
         }
-        
+
         if (userBadge) {
             const roleColors = {
                 'AGENT': '#4caf50',
@@ -1089,12 +1090,12 @@ let currentUser = {
     // Open case sidebar
     function openCaseSidebar() {
         console.log('📂 openCaseSidebar called, selectedMobile:', selectedMobile);
-        
+
         if (!selectedMobile) {
             showNotification('Please select a contact first', 'warning');
             return;
         }
-        
+
         const caseSidebar = document.getElementById('caseSidebar');
         if (caseSidebar) {
             caseSidebar.classList.add('show');
@@ -1128,13 +1129,13 @@ function goToDashboard() {
     async function renderCasePanel() {
     const content = document.getElementById('caseSidebarContent');
     if (!content) return;
-    
+
     content.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Loading case details...</p></div>';
-    
+
     try {
         const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(selectedMobile)}`);
         const data = await response.json();
-        
+
         if (data.case) {
             currentCaseData = data.case;
             const levelColors = {
@@ -1142,7 +1143,7 @@ function goToDashboard() {
                 'ESC3': 'warning', 'ESC4': 'danger', 'ESC5': 'dark',
                 'RESOLVED': 'success', 'CLOSED': 'secondary'
             };
-            
+
             // ============================================
             // ADD LEVEL ICON
             // ============================================
@@ -1164,14 +1165,14 @@ function goToDashboard() {
             } else {
                 levelIcon = '📊';
             }
-            
+
             // ============================================
             // Determine escalation options
             // ============================================
             let escalateOptions = '';
             let showEscalate = false;
             let showResolve = false;
-            
+
             // AGENT (ESC1) - Can act on ESC1 cases
             if (currentUser.role === 'AGENT' && currentCaseData.current_level === 'ESC1') {
                 showEscalate = true;
@@ -1202,13 +1203,13 @@ function goToDashboard() {
                 showResolve = true;
                 escalateOptions = '<option value="ESC1">📞 Agent (ESC1)</option><option value="ESC2">⚖️ Thumb (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option><option value="ESC5">🔒 Admin (ESC5)</option>';
             }
-            
+
             // Also allow resolve if case is at user's level and not resolved/closed
-            if (!showResolve && currentCaseData.current_level === currentUser.level && 
+            if (!showResolve && currentCaseData.current_level === currentUser.level &&
                 currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed') {
                 showResolve = true;
             }
-            
+
             content.innerHTML = `
                 <div class="mb-3">
                     <label>Case ID:</label>
@@ -1226,7 +1227,7 @@ function goToDashboard() {
                         </span>
                     </div>
                 </div>
-               
+
                 <div class="mb-3">
                     <label>Status:</label>
                     <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span>
@@ -1291,22 +1292,22 @@ function goToDashboard() {
     // Escalate case
     window.escalateCase = async function() {
         console.log('escalateCase called');
-        
+
         const levelSelect = document.getElementById('escalateLevelSelect');
         const reasonText = document.getElementById('escalateReasonText');
         const LoanText = document.getElementById('escalateLoanNumber');
         const NameText = document.getElementById('escalateCustomerName')
-        
+
         if (!levelSelect || !reasonText || !LoanText || !NameText) {
             showNotification('Form elements not found', 'error');
             return;
         }
-        
+
         const level = levelSelect.value;
         const reason = reasonText.value;
         const loan = LoanText.value;
         const name = NameText.value;
-        
+
         if (!level) {
             showNotification('Please select escalation level', 'warning');
             return;
@@ -1323,7 +1324,7 @@ function goToDashboard() {
             showNotification('Please provide a customer name', 'warning');
             return;
         }
-        
+
         try {
             const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/escalate/`, {
                 method: 'POST',
@@ -1339,7 +1340,7 @@ function goToDashboard() {
                     escalated_by: currentUser.name
                 })
             });
-            
+
             const data = await response.json();
             if (data.success) {
                 showNotification(`Case escalated to ${level} successfully!`, 'success');
@@ -1358,21 +1359,21 @@ function goToDashboard() {
     // Resolve current case
     window.resolveCurrentCase = async function() {
         console.log('resolveCurrentCase called');
-        
+
         const notesText = document.getElementById('resolutionNotesText');
-        
+
         if (!notesText) {
             showNotification('Resolution notes field not found', 'error');
             return;
         }
-        
+
         const notes = notesText.value;
-        
+
         if (!notes) {
             showNotification('Please provide resolution notes', 'warning');
             return;
         }
-        
+
         try {
             const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/resolve/`, {
                 method: 'POST',
@@ -1385,7 +1386,7 @@ function goToDashboard() {
                     resolved_by: currentUser.name
                 })
             });
-            
+
             const data = await response.json();
             if (data.success) {
                 showNotification('Case resolved successfully!', 'success');
@@ -1404,17 +1405,17 @@ function goToDashboard() {
     // View case timeline - FIXED
     window.viewCaseTimeline = async function() {
         console.log('viewCaseTimeline called, currentCaseData:', currentCaseData);
-        
+
         if (!currentCaseData) {
             showNotification('No case data available', 'error');
             return;
         }
-        
+
         try {
             const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/timeline/`);
             const data = await response.json();
             let timelineHtml = '<div class="mb-3"><label>Timeline:</label><div>';
-            
+
             if (data.logs && data.logs.length > 0) {
                 data.logs.forEach(log => {
                     timelineHtml += `
@@ -1430,7 +1431,7 @@ function goToDashboard() {
                 timelineHtml += '<div class="text-muted">No timeline history</div>';
             }
             timelineHtml += '</div></div><button class="btn btn-sm btn-outline-secondary w-100 mt-3" onclick="renderCasePanel()">← Back</button>';
-            
+
             document.getElementById('caseSidebarContent').innerHTML = timelineHtml;
         } catch (error) {
             console.error('Timeline error:', error);
@@ -1445,7 +1446,7 @@ function goToDashboard() {
             showNotification('Please describe the issue', 'warning');
             return;
         }
-        
+
         try {
             const response = await fetch('/messaging2/case/create-from-chat/', {
                 method: 'POST',
@@ -1480,7 +1481,7 @@ function goToDashboard() {
             const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(mobile)}`);
             const data = await response.json();
             currentCaseData = data.case;
-            
+
             if (currentCaseData) {
                 headerStatus.innerHTML = `<i class="fas fa-folder-open"></i> Case: ${currentCaseData.case_id} | Level: ${currentCaseData.current_level} | Priority: ${currentCaseData.priority}`;
             } else {
@@ -1660,10 +1661,10 @@ function goToDashboard() {
     // CRITICAL: Role-based filtering
     // ============================================
     let filteredContacts = contactsData;
-    
+
     // Debug: See what levels we received
     console.log('📋 Received contacts with levels:', contactsData.map(c => ({mobile: c.mobile, level: c.current_level})));
-    
+
     // Only AGENT and ADMIN see ALL contacts
     if (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN') {
         filteredContacts = contactsData.filter(contact => {
@@ -1734,8 +1735,8 @@ function goToDashboard() {
         indicatorContent = levelNumber;
         levelColorClass = `level-${levelClass}`;
     }
-        
-        
+
+
 
         html += `
             <div class="contact-item ${selectedMobile === contact.mobile ? 'active' : ''}"
@@ -1992,7 +1993,7 @@ function goToDashboard() {
 
     function renderMessage(msg) {
     const isSent = msg.message_type === 'Sent';
-    
+
     // ============================================
     // FORMAT TIME
     // ============================================
@@ -2016,7 +2017,7 @@ function goToDashboard() {
     } catch(e) {
         timeDisplay = 'Just now';
     }
-    
+
     // ============================================
     // GET SENDER NAME
     // ============================================
@@ -2028,18 +2029,18 @@ function goToDashboard() {
         // Received message - show customer name
         senderName = msg.sender_name || msg.customer_name || 'Customer';
     }
-    
+
     // ============================================
     // MESSAGE CONTENT
     // ============================================
     let contentHtml = '';
-    
+
     if (msg.content_type === 'image' && msg.media_file) {
         contentHtml = `
             <img src="${msg.media_file}" class="message-image" onclick="openMedia('${msg.media_file}', 'image')">
             ${msg.sent_text_message ? `<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
         `;
-    } 
+    }
     else if (msg.content_type === 'video' && msg.media_file) {
         contentHtml = `
             <video class="message-video" onclick="openMedia('${msg.media_file}', 'video')">
@@ -2047,18 +2048,18 @@ function goToDashboard() {
             </video>
             ${msg.sent_text_message ? `<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
         `;
-    } 
+    }
     else if (msg.content_type === 'audio' && msg.media_file) {
         contentHtml = `
             <audio controls src="${msg.media_file}"></audio>
             ${msg.sent_text_message ? `<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
         `;
-    } 
+    }
     else if (msg.content_type === 'document' && msg.media_file) {
         let fileName = msg.media_file.split('/').pop().split('?')[0];
         fileName = decodeURIComponent(fileName);
         const isNoc = fileName.toLowerCase().includes('noc');
-        
+
         let displayName = fileName;
         if (fileName.length > 30) {
             const nameParts = fileName.split('.');
@@ -2066,20 +2067,20 @@ function goToDashboard() {
             const name = nameParts.join('.');
             displayName = name.substring(0, 25) + '...' + ext;
         }
-        
+
         const fileExt = fileName.split('.').pop().toLowerCase();
-        
+
         let fileIcon = 'fa-file-pdf';
         let iconColor = '#dc4a2c';
         let fileTypeName = 'PDF';
-        
+
         const fileTypes = {
-            'doc': { icon: 'fa-file-word', color: '#2b579a', name: 'Word' },
-            'docx': { icon: 'fa-file-word', color: '#2b579a', name: 'Word' },
-            'xls': { icon: 'fa-file-excel', color: '#1e7145', name: 'Excel' },
-            'xlsx': { icon: 'fa-file-excel', color: '#1e7145', name: 'Excel' },
-            'ppt': { icon: 'fa-file-powerpoint', color: '#d35230', name: 'PowerPoint' },
-            'pptx': { icon: 'fa-file-powerpoint', color: '#d35230', name: 'PowerPoint' },
+            'doc': { icon: 'fa-file-word', color: '#2b579a', name: 'Word Document' },
+            'docx': { icon: 'fa-file-word', color: '#2b579a', name: 'Word Document' },
+            'xls': { icon: 'fa-file-excel', color: '#1e7145', name: 'Excel Spreadsheet' },
+            'xlsx': { icon: 'fa-file-excel', color: '#1e7145', name: 'Excel Spreadsheet' },
+            'ppt': { icon: 'fa-file-powerpoint', color: '#d35230', name: 'PowerPoint Presentation' },
+            'pptx': { icon: 'fa-file-powerpoint', color: '#d35230', name: 'PowerPoint Presentation' },
             'jpg': { icon: 'fa-file-image', color: '#f39c12', name: 'Image' },
             'jpeg': { icon: 'fa-file-image', color: '#f39c12', name: 'Image' },
             'png': { icon: 'fa-file-image', color: '#f39c12', name: 'Image' },
@@ -2090,65 +2091,81 @@ function goToDashboard() {
             'wav': { icon: 'fa-file-audio', color: '#e67e22', name: 'Audio' },
             'zip': { icon: 'fa-file-archive', color: '#f1c40f', name: 'Archive' },
             'rar': { icon: 'fa-file-archive', color: '#f1c40f', name: 'Archive' },
-            'txt': { icon: 'fa-file-alt', color: '#3498db', name: 'Text' }
+            'pdf': { icon: 'fa-file-pdf', color: '#dc4a2c', name: 'PDF Document' },
+            'txt': { icon: 'fa-file-alt', color: '#3498db', name: 'Text File' }
         };
-        
+
         if (fileTypes[fileExt]) {
             fileIcon = fileTypes[fileExt].icon;
             iconColor = fileTypes[fileExt].color;
             fileTypeName = fileTypes[fileExt].name;
         }
-        
         if (isNoc) {
+            // NOC Document - NO CLICK/VIEW OPTION (RESTRICTED)
             contentHtml = `
-                <div class="document-bubble noc-document" data-msg-id="${msg.id}" style="cursor: pointer;" onclick="openSecureNoc(${msg.id})">
-                    <div class="document-content">
-                        <div class="document-icon">
-                            <i class="fas fa-file-pdf" style="color: #dc4a2c;"></i>
-                            <i class="fas fa-lock" style="color: #dc4a2c; font-size: 10px; position: absolute;"></i>
+                <div class="document-bubble noc-document" data-msg-id="${msg.id}" style="cursor: default; background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%); border-left: 4px solid #dc3545; border-radius: 12px; opacity: 0.7;">
+                    <div class="document-content" style="display: flex; align-items: center; gap: 12px; padding: 12px;">
+                        <div class="document-icon" style="position: relative; flex-shrink: 0; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: #dc3545; border-radius: 12px;">
+                            <i class="fas fa-file-contract" style="color: white; font-size: 22px;"></i>
+                            <i class="fas fa-lock" style="color: white; font-size: 10px; position: absolute; bottom: -2px; right: -2px; background: #721c24; border-radius: 50%; padding: 2px;"></i>
                         </div>
-                        <div class="document-details">
-                            <div class="document-filename">🔒 ${escapeHtml(displayName)}</div>
-                            <div class="document-meta">
-                                <span class="document-type">Secure NOC</span>
+                        <div class="document-details" style="flex: 1; min-width: 0;">
+                            <div class="document-filename" style="font-size: 13px; font-weight: 600; color: #dc3545; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;">
+                                🔒 NOC Document (Restricted)
                             </div>
+                            <div class="document-meta" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span class="document-type" style="background: #dc3545; color: white; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 500;">
+                                    <i class="fas fa-ban" style="font-size: 10px;"></i> Cannot View
+                                </span>
+                                <span style="font-size: 10px; color: #dc3545;">
+                                    <i class="fas fa-lock"></i> Restricted Access
+                                </span>
+                            </div>
+                        </div>
+                        <div class="document-download" style="flex-shrink: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #dc3545; border-radius: 50%; opacity: 0.5;">
+                            <i class="fas fa-lock" style="color: white; font-size: 12px;"></i>
                         </div>
                     </div>
                 </div>
-                ${msg.sent_text_message ? `<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
+                ${msg.sent_text_message ? `<div class="doc-text" style="margin-top: 8px; padding: 8px 12px; background: #ffe5e5; border-radius: 8px; font-size: 12px; color: #dc3545; border-left: 3px solid #dc3545;">⚠️ NOC Document: ${escapeHtml(msg.sent_text_message)}</div>` : ''}
             `;
         } else {
+            // Enhanced Regular Document UI
             contentHtml = `
-                <div class="document-bubble" onclick="downloadDocument('${msg.media_file}', '${escapeHtml(fileName)}', event)">
-                    <div class="document-content">
-                        <div class="document-icon">
-                            <i class="fas ${fileIcon}" style="color: ${iconColor};"></i>
+                <div class="document-bubble" onclick="downloadDocument('${msg.media_file}', '${escapeHtml(fileName)}', event)" style="cursor: pointer; background: white; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s ease;">
+                    <div class="document-content" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px;">
+                        <div class="document-icon" style="flex-shrink: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: ${iconColor}15; border-radius: 10px;">
+                            <i class="fas ${fileIcon}" style="color: ${iconColor}; font-size: 20px;"></i>
                         </div>
-                        <div class="document-details">
-                            <div class="document-filename">${escapeHtml(displayName)}</div>
-                            <div class="document-meta">
-                                <span class="document-type">${fileTypeName}</span>
+                        <div class="document-details" style="flex: 1; min-width: 0;">
+                            <div class="document-filename" style="font-size: 13px; font-weight: 500; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">
+                                ${escapeHtml(displayName)}
+                            </div>
+                            <div class="document-meta" style="display: flex; align-items: center; gap: 6px;">
+                                <span class="document-type" style="font-size: 10px; color: #667781;">${fileTypeName}</span>
+                                <span style="font-size: 10px; color: #25D366;">
+                                    <i class="fas fa-download"></i> Click to download
+                                </span>
                             </div>
                         </div>
-                        <div class="document-download">
-                            <i class="fas fa-download"></i>
+                        <div class="document-download" style="flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.05); border-radius: 50%; transition: all 0.2s ease;">
+                            <i class="fas fa-download" style="color: ${iconColor}; font-size: 12px;"></i>
                         </div>
                     </div>
                 </div>
-                ${msg.sent_text_message ? `<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
+                ${msg.sent_text_message ? `<div class="doc-text" style="margin-top: 6px; font-size: 12px; color: #555; line-height: 1.4;">${escapeHtml(msg.sent_text_message)}</div>` : ''}
             `;
         }
-    } 
+    }
     else {
         contentHtml = `<div class="message-text">${escapeHtml(msg.sent_text_message || '')}</div>`;
     }
-    
     // ============================================
     // TICK/DELIVERY STATUS (Only for sent messages)
     // ============================================
     let tickHtml = '';
     const messageId = msg.message_id || msg.id;
-    
+
     if (isSent) {
     if (msg.status === 'Read')
       tickHtml = `<span class="message-tick read" data-msg-id="${messageId}">✓✓</span>`;
@@ -2160,10 +2177,7 @@ function goToDashboard() {
     else
       tickHtml = `<span class="message-tick sent" data-msg-id="${messageId}">✓</span>`;
   }
-
-
-    
-    // ============================================
+      // ============================================
     // FINAL RENDER - Message on top, Name and Time below (right-aligned)
     // ============================================
     return `
@@ -2600,14 +2614,14 @@ if (!messageId || messageId === "") {
             } else {
                 showNotification('Failed to send', 'error');
             }
-        } 
+        }
         else if (text) {
             // Only send via WebSocket – server will broadcast the message
-            sendWS({ 
-                type: 'send_message', 
-                mobile: selectedMobile, 
-                text: text, 
-                content_type: 'text' 
+            sendWS({
+                type: 'send_message',
+                mobile: selectedMobile,
+                text: text,
+                content_type: 'text'
             });
             messageInput.value = '';
             showNotification('Message sent!', 'success');
@@ -2856,7 +2870,7 @@ if (!messageId || messageId === "") {
     document.getElementById('mediaModal').addEventListener('click', function(e) {
         if (e.target === this) closeMediaModal();
     });
-    
+
     // ESC Button Event Listener - FIXED with debug
     const casePanelBtn = document.getElementById('casePanelBtn');
     if (casePanelBtn) {
@@ -2881,7 +2895,7 @@ if (!messageId || messageId === "") {
     // ============================================
     // INITIALIZATION - Load ESC info
     // ============================================
-   
+
   </script>
 </body>
 </html>
