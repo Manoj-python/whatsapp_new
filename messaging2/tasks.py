@@ -448,7 +448,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 # FINALIZER
 # ==================================================
 
-@shared_task(bind=True, queue="whatsapp_main")
+@shared_task(bind=True, queue="whatsapp_secondary")
 def finalize_bulk_job2(self, job_id):
     try:
         job = BulkJob2.objects.get(job_id=job_id)

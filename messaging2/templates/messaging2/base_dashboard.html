@@ -153,14 +153,26 @@
                 {% endif %}
                 
                 <a class="nav-link" href="/messaging2/chat/">
-                    <i class="fab fa-whatsapp"></i> WhatsApp Chat
+                    <i class="fab fa-whatsapp"></i>PSF Chat
+                </a>
+                <a class="nav-link" href="/chat/"> 
+                    <i class="fab fa-whatsapp"></i>SMS Chat
+                </a>
+                <a class="nav-link" href="/splcases_app/chat3/">
+                    <i class="fab fa-whatsapp"></i>SPL Chat
                 </a>
                 <a class="nav-link" href="{% url 'upload_and_send2' %}">
-                    <i class="fas fa-upload"></i> Upload Data
+                    <i class="fas fa-upload"></i>PSF Upload Data
+                </a>
+                <a class="nav-link" href="{% url 'upload_and_send' %}">
+                    <i class="fas fa-upload"></i>SMS Upload Data
+                </a>
+                <a class="nav-link" href="{% url 'upload' %}">
+                    <i class="fas fa-upload"></i>SPL Upload Data
                 </a>
                 
                 <hr class="bg-light">
-                <a class="nav-link" href="{% url 'messaging2_logout' %}">
+                <a class="nav-link" href="{% url 'admin_logout' %}">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>

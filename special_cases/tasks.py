@@ -951,7 +951,6 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
 # ==================================================
 @shared_task(bind=True, queue="whatsapp_secondary")
 def finalize_bulk_job3(self, job_id):
-
     try:
         job = BulkJob3.objects.get(job_id=job_id)
     except BulkJob3.DoesNotExist:
@@ -961,20 +960,32 @@ def finalize_bulk_job3(self, job_id):
     if job.success_report and job.failed_report:
         return
 
+    # Get all field names from SmsWhatsAppLog (avoid auto-created ones like id, but include them anyway)
+    from django.apps import apps
+    model = SmsWhatsAppLog3
+    field_names = [f.name for f in model._meta.get_fields() if not f.auto_created]
+    # For better readability, you can also define a fixed list of columns you want in reports
+    # field_names = ['id', 'job_id', 'customer_name', 'mobile', 'template_name', 'status', 'sent_text_message', 'error_message', ...]
+
     success_qs = SmsWhatsAppLog3.objects.filter(
-        job_id=job_id,
-        status__in=["Sent", "Delivered"]
+        job_id=job_id, status__in=["Sent", "Delivered"]
     )
-
     failed_qs = SmsWhatsAppLog3.objects.filter(
-        job_id=job_id,
-        status="Failed"
+        job_id=job_id, status="Failed"
     )
 
-    success_df = pd.DataFrame(list(success_qs.values()))
-    failed_df = pd.DataFrame(list(failed_qs.values()))
+    # Build DataFrames – always with correct columns
+    if success_qs.exists():
+        success_df = pd.DataFrame(list(success_qs.values()))
+    else:
+        success_df = pd.DataFrame(columns=field_names)
 
-    # 🔥 REMOVE TIMEZONE FROM DATETIME COLUMNS
+    if failed_qs.exists():
+        failed_df = pd.DataFrame(list(failed_qs.values()))
+    else:
+        failed_df = pd.DataFrame(columns=field_names)
+
+    # 🔥 Remove timezone from datetime columns (same as before)
     for df in [success_df, failed_df]:
         for col in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[col]):
@@ -986,35 +997,30 @@ def finalize_bulk_job3(self, job_id):
     success_buffer = io.BytesIO()
     failed_buffer = io.BytesIO()
 
-    if not success_df.empty:
-        success_df.to_excel(success_buffer, index=False)
-    if not failed_df.empty:
-        failed_df.to_excel(failed_buffer, index=False)
+    # Always write both files (even empty ones)
+    success_df.to_excel(success_buffer, index=False)
+    failed_df.to_excel(failed_buffer, index=False)
 
+    # Delete old files if they exist (optional but safe)
     if default_storage.exists(success_path):
         default_storage.delete(success_path)
     if default_storage.exists(failed_path):
         default_storage.delete(failed_path)
 
-    if not success_df.empty:
-        default_storage.save(success_path, ContentFile(success_buffer.getvalue()))
-        job.success_report = success_path
-    
-    if not failed_df.empty:
-        default_storage.save(failed_path, ContentFile(failed_buffer.getvalue()))
-        job.failed_report = failed_path
-    
+    # Save both reports unconditionally
+    default_storage.save(success_path, ContentFile(success_buffer.getvalue()))
+    job.success_report = success_path
+
+    default_storage.save(failed_path, ContentFile(failed_buffer.getvalue()))
+    job.failed_report = failed_path
+
     job.status = "Completed"
     job.completed_at = timezone.now()
-
     job.save(update_fields=[
-        "success_report",
-        "failed_report",
-        "status",
-        "completed_at"
+        "success_report", "failed_report", "status", "completed_at"
     ])
 
-    logger.info("Job %s COMPLETED and reports generated", job_id)
+    logger.info("Job %s COMPLETED and both reports generated", job_id)
 
 @shared_task
 def process_pending_webhook_updates3():

@@ -3,6 +3,20 @@
 
 {% block content %}
 <div class="container-fluid">
+    <!-- App Switcher -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                {% for key, cfg in app_list %}
+                <a href="?app={{ key }}" 
+                   class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    {{ cfg.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
     <!-- Stats Cards -->
     <div class="row mb-4">
         <div class="col-md-4">
@@ -10,7 +24,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="card-title">PendingCases</h6>
+                            <h6 class="card-title">Pending Cases</h6>
                             <h2 class="mb-0">{{ stats.pending }}</h2>
                         </div>
                         <i class="fas fa-gavel fa-2x opacity-50"></i>
@@ -49,7 +63,7 @@
     <!-- Cases Table -->
     <div class="card">
         <div class="card-header bg-warning text-dark">
-            <h4><i class="fas fa-gavel"></i>Thumb Team Cases (ESC2)</h4>
+            <h4><i class="fas fa-gavel"></i> Thumb Team Cases (ESC2)</h4>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -141,7 +155,7 @@
                 <input type="hidden" id="escalateCaseId">
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i> Thumb team can escalate to:
-                    <strong>ESC3 (Thumb)</strong> or <strong>ESC4 (Manager)</strong>
+                    <strong>ESC3 (Team Lead)</strong> or <strong>ESC4 (Manager)</strong>
                 </div>
                 <div class="mb-3">
                     <label>Escalate To:</label>
@@ -150,9 +164,9 @@
                         <option value="ESC4">📊 ESC4 - Manager</option>
                     </select>
                 </div>
-                 <div class="mb-3">
+                <div class="mb-3">
                     <label>Loan Number</label>
-                    <input type="text" id="LoanNumber" class="form-control" rows="3" placeholder="Enter the LoanNumber"></input>
+                    <input type="text" id="LoanNumber" class="form-control" placeholder="Enter the Loan Number">
                 </div>
                 <div class="mb-3">
                     <label>Reason for Escalation:</label>
@@ -195,13 +209,23 @@
 </div>
 
 <script>
+// Get current app from URL
+const urlParams = new URLSearchParams(window.location.search);
+const currentApp = urlParams.get('app') || 'psf';
+
+// Helper: add ?app= to any URL
+function addAppParam(url) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}app=${currentApp}`;
+}
+
 let currentCaseId = null;
 
 function viewCase(caseId) {
     currentCaseId = caseId;
     $('#caseModal').modal('show');
     
-    fetch(`/messaging2/case/${caseId}/detail/`)
+    fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -241,9 +265,9 @@ function renderCaseDetail(caseData) {
             <div class="col-md-6">
                 <h6><i class="fas fa-users"></i> Assignment</h6>
                 <table class="table table-sm">
-                    <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td></tr>
-                    <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td></tr>
-                    <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td></tr>
+                    <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
+                    <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
+                    <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
                     ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td></tr>` : ''}
                 </table>
             </div>
@@ -280,7 +304,7 @@ function renderCaseDetail(caseData) {
 }
 
 function loadTimeline(caseId) {
-    fetch(`/messaging2/case/${caseId}/timeline/`)
+    fetch(addAppParam(`/messaging2/case/${caseId}/timeline/`))
         .then(response => response.json())
         .then(data => {
             const timelineHtml = data.logs.map(log => `
@@ -292,6 +316,9 @@ function loadTimeline(caseId) {
                 </div>
             `).join('');
             document.getElementById('timelineContent').innerHTML = timelineHtml || '<div class="text-center text-muted">No escalation history</div>';
+        })
+        .catch(error => {
+            document.getElementById('timelineContent').innerHTML = `<div class="alert alert-danger">Error loading timeline: ${error.message}</div>`;
         });
 }
 
@@ -317,13 +344,13 @@ function submitEscalation() {
         return;
     }
     
-    fetch(`/messaging2/case/${caseId}/escalate/`, {
+    fetch(addAppParam(`/messaging2/case/${caseId}/escalate/`), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': '{{ csrf_token }}'
         },
-        body: JSON.stringify({ new_level: newLevel, reason: reason, loan:loan })
+        body: JSON.stringify({ new_level: newLevel, reason: reason, loan: loan })
     })
     .then(response => response.json())
     .then(data => {
@@ -334,7 +361,8 @@ function submitEscalation() {
         } else {
             alert('Error: ' + data.error);
         }
-    });
+    })
+    .catch(error => alert('Error: ' + error.message));
 }
 
 function resolveCase(caseId) {
@@ -352,7 +380,7 @@ function submitResolution() {
         return;
     }
     
-    fetch(`/messaging2/case/${caseId}/resolve/`, {
+    fetch(addAppParam(`/messaging2/case/${caseId}/resolve/`), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -369,7 +397,8 @@ function submitResolution() {
         } else {
             alert('Error: ' + data.error);
         }
-    });
+    })
+    .catch(error => alert('Error: ' + error.message));
 }
 
 function escapeHtml(text) {

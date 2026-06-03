@@ -3,46 +3,116 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row">
-        <div class="col-md-12">
-            <!-- Stats Cards -->
-            <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="card text-white bg-primary">
-                        <div class="card-body">
-                            <h5 class="card-title">My Assigned Cases</h5>
-                            <h2>{{ stats.my_cases }}</h2>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-white bg-info">
-                        <div class="card-body">
-                            <h5 class="card-title">Available Cases</h5>
-                            <h2>{{ stats.available_cases }}</h2>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-white bg-success">
-                        <div class="card-body">
-                            <h5 class="card-title">Resolved by Me</h5>
-                            <h2>{{ stats.resolved }}</h2>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-white bg-secondary">
-                        <div class="card-body">
-                            <h5 class="card-title">Total Handled</h5>
-                            <h2>{{ stats.total_handled }}</h2>
-                        </div>
-                    </div>
+    <!-- App Switcher -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                {% for key, cfg in app_list %}
+                <a href="?app={{ key }}" 
+                   class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    {{ cfg.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h5 class="card-title">My Assigned Cases</h5>
+                    <h2>{{ stats.my_cases }}</h2>
                 </div>
             </div>
-            
-            <!-- Cases Table -->
-   
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h5 class="card-title">Available Cases</h5>
+                    <h2>{{ stats.available_cases }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h5 class="card-title">Resolved by Me</h5>
+                    <h2>{{ stats.resolved }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-secondary">
+                <div class="card-body">
+                    <h5 class="card-title">Total Handled</h5>
+                    <h2>{{ stats.total_handled }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cases Table (you already have it, just keep as is) -->
+    <div class="card">
+        <div class="card-header">
+            <h5><i class="fas fa-tasks"></i> Cases (ESC1)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="casesTable">
+                    <thead>
+                        <tr>
+                            <th>Case ID</th>
+                            <th>Customer</th>
+                            <th>Mobile</th>
+                            <th>Loan Number</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in cases %}
+                        <tr>
+                            <td><strong>{{ case.case_id }}</strong></td>
+                            <td>{{ case.customer_name|default:case.mobile }}</td>
+                            <td>{{ case.mobile }}</td>
+                            <td>{{ case.loan_number|default:"-" }}</td>
+                            <td>
+                                <span class="badge bg-{% if case.priority == 'Urgent' %}danger{% elif case.priority == 'High' %}warning{% elif case.priority == 'Medium' %}info{% else %}secondary{% endif %}">
+                                    {{ case.priority }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if case.status == 'Open' %}primary{% elif case.status == 'In Progress' %}info{% elif case.status == 'Resolved' %}success{% else %}secondary{% endif %}">
+                                    {{ case.status }}
+                                </span>
+                            </td>
+                            <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewCase('{{ case.case_id }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                {% if case.status != 'Resolved' and case.status != 'Closed' %}
+                                    <button class="btn btn-sm btn-outline-warning" onclick="escalateCase('{{ case.case_id }}')">
+                                        <i class="fas fa-arrow-up"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success" onclick="resolveCase('{{ case.case_id }}')">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center">No cases found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
@@ -85,9 +155,8 @@
                 </div>
                 <div class="mb-3">
                     <label>Loan Number</label>
-                    <input type="text" id="LoanNumber" class="form-control" rows="3" placeholder="Enter The loan number"></input>
+                    <input type="text" id="LoanNumber" class="form-control" placeholder="Enter the loan number">
                 </div>
-                
                 <div class="mb-3">
                     <label>Reason for Escalation:</label>
                     <textarea id="escalateReason" class="form-control" rows="3" placeholder="Explain why this case needs escalation..."></textarea>
@@ -135,7 +204,10 @@ function viewCase(caseId) {
     currentCaseId = caseId;
     $('#caseModal').modal('show');
     
-    fetch(`/messaging2/case/${caseId}/detail/`)
+    // Get current app from URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const app = urlParams.get('app') || 'psf';
+    fetch(`/messaging2/case/${caseId}/detail/?app=${app}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -192,9 +264,9 @@ function renderCaseDetail(caseData) {
         </div>
         <div class="row mt-3">
             <div class="col-12">
-                <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
+                <h6><i class="fas fa-file-alt"></i> Loan Number</h6>
                 <div class="border rounded p-3 bg-light">
-                    ${escapeHtml(caseData.loan_number || 'No description provided')}
+                    ${escapeHtml(caseData.loan_number || 'Not provided')}
                 </div>
             </div>
         </div>
@@ -222,7 +294,9 @@ function renderCaseDetail(caseData) {
 }
 
 function loadTimeline(caseId) {
-    fetch(`/messaging2/case/${caseId}/timeline/`)
+    const urlParams = new URLSearchParams(window.location.search);
+    const app = urlParams.get('app') || 'psf';
+    fetch(`/messaging2/case/${caseId}/timeline/?app=${app}`)
         .then(response => response.json())
         .then(data => {
             const timelineHtml = data.logs.map(log => `
@@ -251,7 +325,7 @@ function submitEscalation() {
     const caseId = document.getElementById('escalateCaseId').value;
     const newLevel = document.getElementById('escalateLevel').value;
     const reason = document.getElementById('escalateReason').value;
-    const loan=document.getElementById('LoanNumber').value;
+    const loan = document.getElementById('LoanNumber').value;
     
     if (!reason) {
         alert('Please provide a reason for escalation');
@@ -262,7 +336,10 @@ function submitEscalation() {
         return;
     }
     
-    fetch(`/messaging2/case/${caseId}/escalate/`, {
+    const urlParams = new URLSearchParams(window.location.search);
+    const app = urlParams.get('app') || 'psf';
+    
+    fetch(`/messaging2/case/${caseId}/escalate/?app=${app}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -302,7 +379,10 @@ function submitResolution() {
         return;
     }
     
-    fetch(`/messaging2/case/${caseId}/resolve/`, {
+    const urlParams = new URLSearchParams(window.location.search);
+    const app = urlParams.get('app') || 'psf';
+    
+    fetch(`/messaging2/case/${caseId}/resolve/?app=${app}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

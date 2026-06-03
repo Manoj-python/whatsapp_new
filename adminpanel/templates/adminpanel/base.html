@@ -102,6 +102,32 @@
             align-items: center;
         }
         
+        /* App Switcher Styles */
+        .app-switcher {
+            display: flex;
+            gap: 10px;
+        }
+        .app-btn {
+            padding: 6px 18px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid #dee2e6;
+            background: white;
+            transition: all 0.2s;
+            cursor: pointer;
+            color: #495057;
+        }
+        .app-btn.active {
+            background: #4361ee;
+            border-color: #4361ee;
+            color: white;
+        }
+        .app-btn:hover:not(.active) {
+            background: #f8f9fa;
+            border-color: #4361ee;
+        }
+        
         /* Main Content */
         .main-content {
             margin-left: 260px;
@@ -126,6 +152,9 @@
             }
             .menu-toggle {
                 display: block;
+            }
+            .app-switcher {
+                margin-left: 40px;
             }
         }
         
@@ -168,8 +197,9 @@
             <p>Case Management System</p>
         </div>
         <div class="sidebar-nav">
+            <!-- Dashboard link – preserves current app -->
             <div class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
-                <a href="{% url 'admin_dashboard' %}">
+                <a href="{% url 'admin_dashboard' %}?app={{ current_app|default:'psf' }}">
                     <i class="fas fa-tachometer-alt"></i>
                     <span>Dashboard</span>
                 </a>
@@ -177,7 +207,19 @@
             <div class="sidebar-item">
                 <a href="/messaging2/chat/">
                     <i class="fab fa-whatsapp"></i>
-                    <span>WhatsApp Chat</span>
+                    <span>PSF WhatsApp Chat</span>
+                </a>
+            </div>
+            <div class="sidebar-item">
+                <a href="/chat/">
+                    <i class="fab fa-whatsapp"></i>
+                    <span>SMS WhatsApp Chat</span>
+                </a>
+            </div>
+            <div class="sidebar-item">
+                <a href="/splcases_app/chat3/">
+                                    <i class="fab fa-whatsapp"></i>
+                    <span>SPL WhatsApp Chat</span>
                 </a>
             </div>
             <div class="sidebar-item">
@@ -186,18 +228,20 @@
                     <span>User Management</span>
                 </a>
             </div>
+            <!-- Unified Failed Messages Links -->
             <div class="sidebar-item">
-                <a href="{% url 'failed_messages' %}">
+                <a href="{% url 'failed_messages_unified' app_key='sms' %}">
                     <i class="fas fa-envelope"></i>
                     <span>SMS Failed</span>
                 </a>
             </div>
             <div class="sidebar-item">
-                <a href="{% url 'failed_messages2' %}">
+                <a href="{% url 'failed_messages_unified' app_key='psf' %}">
                     <i class="fab fa-whatsapp"></i>
                     <span>PSF Failed</span>
                 </a>
             </div>
+         
             <hr style="margin: 15px 20px; border-color: rgba(255,255,255,0.1);">
             <div class="sidebar-item">
                 <a href="{% url 'admin_logout' %}">
@@ -210,14 +254,24 @@
     
     <!-- Top Navbar -->
     <div class="top-navbar">
-        <button class="menu-toggle" onclick="toggleSidebar()">
-            <i class="fas fa-bars"></i>
-        </button>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <!-- App Switcher -->
+            <div class="app-switcher">
+                <button class="app-btn {% if current_app == 'psf' %}active{% endif %}" onclick="switchApp('psf')">PSF</button>
+                <button class="app-btn {% if current_app == 'sms' %}active{% endif %}" onclick="switchApp('sms')">SMS</button>
+                <button class="app-btn {% if current_app == 'spl' %}active{% endif %}" onclick="switchApp('spl')">SPL</button>
+            </div>
+        </div>
         <div class="user-dropdown">
             <div>
                 <strong>{{ request.user.username }}</strong>
                 <br>
-                <small class="text-muted">Administrator</small>
+                <small class="text-muted">
+                    {% if request.user.is_superuser %}Administrator{% else %}{{ current_agent.role|default:"User" }}{% endif %}
+                </small>
             </div>
             <div class="user-avatar">
                 {{ request.user.username|first|upper }}
@@ -247,6 +301,13 @@
             document.getElementById('sidebar').classList.toggle('show');
         }
         
+        // App switching function
+        function switchApp(appKey) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('app', appKey);
+            window.location.href = url.toString();
+        }
+        
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', function(event) {
             const sidebar = document.getElementById('sidebar');
@@ -256,6 +317,18 @@
                     sidebar.classList.remove('show');
                 }
             }
+        });
+        
+        // Optional: highlight active app button based on URL param
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentApp = urlParams.get('app') || 'psf';
+            document.querySelectorAll('.app-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.innerText.toLowerCase() === currentApp) {
+                    btn.classList.add('active');
+                }
+            });
         });
     </script>
     

@@ -3,6 +3,20 @@
 
 {% block content %}
 <div class="container-fluid">
+    <!-- App Switcher -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                {% for key, cfg in app_list %}
+                <a href="?app={{ key }}" 
+                   class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    {{ cfg.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
     <!-- Stats Cards -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -164,7 +178,6 @@
                                         <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')" title="Resolve">
                                             <i class="fas fa-check-circle"></i>
                                         </button>
-                                       
                                     </small></td>
                                 </tr>
                                 {% empty %}
@@ -237,7 +250,7 @@
                                 </tr>
                             </thead>
                             <tbody id="resolvedAtESC3">
-                                <tr><td colspan="5" class="text-center">Loading...</small></td></tr>
+                                <tr><td colspan="5" class="text-center">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -280,7 +293,7 @@
                 </div>
                 <div class="mb-3">
                     <label>Loan Number</label>
-                    <input type="text" id="LoanNumber" class="form-control" rows="3" placeholder="Enter the loan Number"></textarea>
+                    <input type="text" id="LoanNumber" class="form-control" placeholder="Enter the loan Number">
                 </div>
                 <div class="mb-3">
                     <label>Reason for Escalation:</label>
@@ -337,7 +350,7 @@
                     <input type="text" id="editLoanNumber" class="form-control">
                 </div>
                 <div class="mb-3">
-                    <label>Cstomer Name</label>
+                    <label>Customer Name</label>
                     <textarea id="editName" class="form-control" rows="3"></textarea>
                 </div>
                 <div class="mb-3">
@@ -354,9 +367,18 @@
 </div>
 
 <script>
+// Get current app from URL
+const urlParams = new URLSearchParams(window.location.search);
+const currentApp = urlParams.get('app') || 'psf';
+
+// Helper: add ?app= to any URL
+function addAppParam(url) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}app=${currentApp}`;
+}
+
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize charts if they exist
     initCharts();
     loadResolvedAtESC3();
 });
@@ -420,7 +442,6 @@ function initCharts() {
 
 let currentCaseId = null;
 
-// Use Bootstrap modal without jQuery
 function showModal(modalId) {
     const modalElement = document.getElementById(modalId);
     if (modalElement) {
@@ -444,11 +465,9 @@ function viewCase(caseId) {
     const modalBody = document.getElementById('caseModalBody');
     modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><p>Loading case details...</p></div>';
     
-    fetch(`/messaging2/case/${caseId}/detail/`)
+    fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
         .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
         })
         .then(data => {
@@ -460,7 +479,7 @@ function viewCase(caseId) {
         })
         .catch(error => {
             console.error('Error:', error);
-            modalBody.innerHTML = `<div class="alert alert-danger">Error loading case: ${error.message}. Please check if server is running.</div>`;
+            modalBody.innerHTML = `<div class="alert alert-danger">Error loading case: ${error.message}</div>`;
         });
 }
 
@@ -472,59 +491,52 @@ function renderCaseDetail(caseData) {
     
     const html = `
     <div class="d-flex justify-content-end mb-2">
-            <button class="btn btn-sm btn-warning" onclick="openEditCaseModal('${caseData.case_id}')">
-                <i class="fas fa-edit"></i> Edit Case
-            </button>
+        <button class="btn btn-sm btn-warning" onclick="openEditCaseModal('${caseData.case_id}')">
+            <i class="fas fa-edit"></i> Edit Case
+        </button>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <h6><i class="fas fa-info-circle"></i> Case Information</h6>
+            <table class="table table-sm">
+                <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td></tr>
+                <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
+                <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
+                <tr><th>LoanNumber:</th><td>${caseData.loan_number}</small></td>
+                <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level] || 'secondary'}">${caseData.current_level}</span></small></td>
+                <tr><th>Priority:</th><td>${caseData.priority}</small></td>
+                <tr><th>Status:</th><td>${caseData.status}</small></td>
+            </table>
         </div>
-        <div class="row">
-            <div class="col-md-6">
-                <h6><i class="fas fa-info-circle"></i> Case Information</h6>
-                <table class="table table-sm">
-                    <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td></tr>
-                    <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
-                    <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
-                    <tr><th>LoanNumber:</th><td>${caseData.loan_number}</td></tr>
-                    <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level] || 'secondary'}">${caseData.current_level}</span></td></tr>
-                    <tr><th>Priority:</th><td>${caseData.priority}</td></tr>
-                    <tr><th>Status:</th><td>${caseData.status}</td></tr>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <h6><i class="fas fa-users"></i> Assignment</h6>
-                <table class="table table-sm">
-                    <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td></tr>
-                    <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td></tr>
-                    <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td></tr>
-                    ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}</td></tr>` : ''}
-                </table>
-            </div>
+        <div class="col-md-6">
+            <h6><i class="fas fa-users"></i> Assignment</h6>
+            <table class="table table-sm">
+                <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
+                <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
+                <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
+                ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}</td></tr>` : ''}
+            </table>
         </div>
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-file-alt"></i>LoanNumber</h6>
-                <div class="border rounded p-3 bg-light">${escapeHtml(caseData.loan_number || 'No loannumber')}</div>
-            </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
+            <h6><i class="fas fa-file-alt"></i>Issue Description</h6>
+            <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description provided')}</div>
         </div>
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
-                <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description provided')}</div>
-            </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
+            <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
+            <div id="timelineContent" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">Loading...</div>
         </div>
-        
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
-                <div id="timelineContent" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">Loading...</div>
-            </div>
-        </div>
+    </div>
     `;
     document.getElementById('caseModalBody').innerHTML = html;
     loadTimeline(caseData.case_id);
 }
 
 function loadTimeline(caseId) {
-    fetch(`/messaging2/case/${caseId}/timeline/`)
+    fetch(addAppParam(`/messaging2/case/${caseId}/timeline/`))
         .then(response => response.json())
         .then(data => {
             const timelineHtml = data.logs.map(log => `
@@ -532,7 +544,6 @@ function loadTimeline(caseId) {
                     <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
                     <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
                     <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
-                    <div><strong>LoanNo:</strong> ${log.loan_number || 'System'}</div>
                     ${log.reason ? `<div><strong>Reason:</strong> ${escapeHtml(log.reason)}</div>` : ''}
                 </div>
             `).join('');
@@ -564,13 +575,13 @@ function submitEscalation() {
         return;
     }
     
-    fetch(`/messaging2/case/${caseId}/escalate/`, {
+    fetch(addAppParam(`/messaging2/case/${caseId}/escalate/`), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrftoken
         },
-        body: JSON.stringify({ new_level: 'ESC4', reason: reason, loan:loan })
+        body: JSON.stringify({ new_level: 'ESC4', reason: reason, loan: loan })
     })
     .then(response => response.json())
     .then(data => {
@@ -582,9 +593,7 @@ function submitEscalation() {
             alert('Error: ' + data.error);
         }
     })
-    .catch(error => {
-        alert('Error: ' + error.message);
-    });
+    .catch(error => alert('Error: ' + error.message));
 }
 
 function resolveCase(caseId) {
@@ -602,7 +611,7 @@ function submitResolution() {
         return;
     }
     
-    fetch(`/messaging2/case/${caseId}/resolve/`, {
+    fetch(addAppParam(`/messaging2/case/${caseId}/resolve/`), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -620,17 +629,7 @@ function submitResolution() {
             alert('Error: ' + data.error);
         }
     })
-    .catch(error => {
-        alert('Error: ' + error.message);
-    });
-}
-
-function showAssignModal(caseId) {
-    const agentSelect = document.getElementById(`agentSelect_${caseId}`);
-    if (agentSelect) {
-        agentSelect.scrollIntoView({ behavior: 'smooth' });
-        agentSelect.focus();
-    }
+    .catch(error => alert('Error: ' + error.message));
 }
 
 function assignCase(caseId) {
@@ -640,7 +639,7 @@ function assignCase(caseId) {
         return;
     }
     
-    fetch(`/messaging2/case/${caseId}/assign/`, {
+    fetch(addAppParam(`/messaging2/case/${caseId}/assign/`), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -657,13 +656,11 @@ function assignCase(caseId) {
             alert('Error: ' + data.error);
         }
     })
-    .catch(error => {
-        alert('Error: ' + error.message);
-    });
+    .catch(error => alert('Error: ' + error.message));
 }
 
 function loadResolvedAtESC3() {
-    fetch('/messaging2/api/resolved-cases/')
+    fetch(addAppParam('/messaging2/api/resolved-cases/'))
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -705,8 +702,7 @@ function escapeHtml(text) {
 }
 
 function openEditCaseModal(caseId) {
-    // Fetch current case details to populate the edit modal
-    fetch(`/messaging2/case/${caseId}/detail/`)
+    fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -715,7 +711,6 @@ function openEditCaseModal(caseId) {
                 document.getElementById('editLoanNumber').value = caseData.loan_number || '';
                 document.getElementById('editName').value = caseData.customer_name || '';
                 document.getElementById('editIssueDescription').value = caseData.issue_description || '';
-
                 $('#editCaseModal').modal('show');
             } else {
                 alert('Error loading case details');
@@ -723,13 +718,14 @@ function openEditCaseModal(caseId) {
         })
         .catch(error => alert('Error: ' + error.message));
 }
+
 function submitEditCase() {
     const caseId = document.getElementById('editCaseId').value;
     const loanNumber = document.getElementById('editLoanNumber').value;
     const customerName = document.getElementById('editName').value;
     const issueDescription = document.getElementById('editIssueDescription').value;
 
-    fetch(`/adminpanel/case/${caseId}/edit/`, {
+    fetch(addAppParam(`/adminpanel/case/${caseId}/edit/`), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -747,7 +743,7 @@ function submitEditCase() {
             alert('Case updated successfully!');
             $('#editCaseModal').modal('hide');
             $('#caseModal').modal('hide');
-            location.reload();  // simplest way to refresh the table
+            location.reload();
         } else {
             alert('Error: ' + data.error);
         }

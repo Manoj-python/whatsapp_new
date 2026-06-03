@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 <style>
-    /* Modern Dashboard Styles */
+    /* Your existing CSS styles (unchanged) */
     :root {
         --primary: #4361ee;
         --primary-dark: #3a0ca3;
@@ -255,7 +255,6 @@
         margin-bottom: 10px;
     }
     
-    /* Action Buttons */
     .action-btn {
         padding: 5px 10px;
         margin: 2px;
@@ -268,7 +267,30 @@
         transform: translateY(-1px);
     }
     
-    /* Responsive */
+    /* App switcher style */
+    .app-switcher {
+        display: flex;
+        gap: 8px;
+        margin-right: 20px;
+    }
+    .app-btn {
+        padding: 6px 16px;
+        border-radius: 30px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid #ddd;
+        background: white;
+        transition: all 0.2s;
+    }
+    .app-btn.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    .app-btn:hover:not(.active) {
+        background: #f0f2f5;
+    }
+    
     @media (max-width: 768px) {
         .stat-number {
             font-size: 24px;
@@ -283,6 +305,13 @@
         .quick-action {
             margin-bottom: 15px;
         }
+        .app-switcher {
+            margin-right: 10px;
+        }
+        .app-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+        }
     }
 </style>
 {% endblock %}
@@ -296,7 +325,7 @@
                 <h2 class="mb-2">
                     <i class="fas fa-chart-line"></i> Welcome back, {{ request.user.username }}!
                 </h2>
-                <p class="mb-0 opacity-75">Here's what's happening with your cases today.</p>
+                <p class="mb-0 opacity-75">Here's what's happening with your <strong>{{ app_name }}</strong> cases today.</p>
             </div>
             <div>
                 <i class="fas fa-chart-pie fa-3x opacity-50"></i>
@@ -352,13 +381,11 @@
         <div class="col-xl-2 col-md-4 mb-3">
             <div class="stat-card" onclick="window.location.href='/adminpanel/users/'">
                 <div class="stat-icon"><i class="fas fa-users"></i></div>
-                <div class="stat-number" id="totalAgents">{{ stats.reopened_cases|default:"0" }}</div>
+                <div class="stat-number" id="reopenedCases">{{ stats.reopened_cases|default:"0" }}</div>
                 <div class="stat-label">Reopened</div>
             </div>
         </div>
     </div>
-    
-    <!-- Quick Actions Row -->
     
     <!-- Charts Row -->
     <div class="row">
@@ -410,35 +437,35 @@
     <!-- Cases Management Tabs -->
     <div class="section-card">
         <div class="section-title">
-    <span><i class="fas fa-tasks"></i> Case Management</span>
-    <div>
-        <div class="input-group input-group-sm" style="width: 300px;">
-            <input type="text" id="searchInput" class="form-control" placeholder="Search by Case ID or Loan Number..." aria-label="Search">
-            <button class="btn btn-primary" type="button" onclick="searchCases()">
-                <i class="fas fa-search"></i> Search
-            </button>
-            <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
-                <i class="fas fa-times"></i>
-            </button>
+            <span><i class="fas fa-tasks"></i> Case Management</span>
+            <div>
+                <div class="input-group input-group-sm" style="width: 300px;">
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search by Case ID or Loan Number..." aria-label="Search">
+                    <button class="btn btn-primary" type="button" onclick="searchCases()">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                    <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <button class="btn btn-sm btn-outline-gradient ms-2" onclick="refreshCases()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+                <button id="exportEsc3Btn" class="btn btn-sm btn-success ms-2" onclick="exportESC3()" style="display: none;">
+                    <i class="fas fa-file-excel"></i> Export ESC3 to Excel
+                </button>
+            </div>
         </div>
-        <button class="btn btn-sm btn-outline-gradient ms-2" onclick="refreshCases()">
-            <i class="fas fa-sync-alt"></i> Refresh
-        </button>
- <button id="exportEsc3Btn" class="btn btn-sm btn-success ms-2" onclick="exportESC3()">
-            <i class="fas fa-file-excel"></i> Export ESC3 to Excel
-        </button>
-    </div>
-</div>
         
         <ul class="nav nav-tabs-custom" id="caseTabs">
             <li class="nav-item">
-                        <a class="nav-link active" data-tab="open" role="button" onclick="switchTab('open'); return false;">
+                <a class="nav-link active" data-tab="open" role="button" onclick="switchTab('open'); return false;">
                     <i class="fas fa-folder-open"></i> Open Cases
                     <span class="badge bg-primary ms-1" id="openCount">{{ stats.open_cases|default:"0" }}</span>
                 </a>
             </li>
             <li class="nav-item">
-                        <a class="nav-link" data-tab="resolved" role="button" onclick="switchTab('resolved'); return false;">
+                <a class="nav-link" data-tab="resolved" role="button" onclick="switchTab('resolved'); return false;">
                     <i class="fas fa-check-circle"></i> Resolved (Pending Close)
                     <span class="badge bg-success ms-1" id="resolvedCount">{{ stats.resolved_cases|default:"0" }}</span>
                 </a>
@@ -450,11 +477,11 @@
                 </a>
             </li>
             <li class="nav-item">
-    <a class="nav-link" data-tab="esc3" role="button" onclick="switchTab('esc3'); return false;">
-        <i class="fas fa-chart-line"></i> NOC Cases (ESC3)
-        <span class="badge bg-warning ms-1" id="esc3Count">{{ stats.esc3|default:"0" }}</span>
-    </a>
-</li>
+                <a class="nav-link" data-tab="esc3" role="button" onclick="switchTab('esc3'); return false;">
+                    <i class="fas fa-chart-line"></i> NOC Cases (ESC3)
+                    <span class="badge bg-warning ms-1" id="esc3Count">{{ stats.esc3|default:"0" }}</span>
+                </a>
+            </li>
             <li class="nav-item">
                 <a class="nav-link" data-tab="closed" role="button" onclick="switchTab('closed'); return false;">
                     <i class="fas fa-archive"></i> Closed Cases
@@ -532,7 +559,7 @@
                     <label>Reopen To Level:</label>
                     <select id="reopenLevel" class="form-select">
                         <option value="ESC1">ESC1 - Agent Level</option>
-                        <option value="ESC2">ESC2 -Thumb Team</option>
+                        <option value="ESC2">ESC2 - Thumb Team</option>
                         <option value="ESC3">ESC3 - NOC Team</option>
                         <option value="ESC4">ESC4 - Manager</option>
                     </select>
@@ -549,6 +576,7 @@
         </div>
     </div>
 </div>
+
 <!-- Edit Case Modal -->
 <div class="modal fade" id="editCaseModal" tabindex="-1">
     <div class="modal-dialog">
@@ -564,13 +592,13 @@
                     <input type="text" id="editLoanNumber" class="form-control">
                 </div>
                 <div class="mb-3">
-                    <label>Cstomer Name</label>
+                    <label>Customer Name</label>
                     <textarea id="editName" class="form-control" rows="3"></textarea>
                 </div>
                 <div class="mb-3">
                     <label>Issue Description</label>
                     <textarea id="editIssueDescription" class="form-control" rows="3"></textarea>
-                </div>               
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -580,16 +608,50 @@
     </div>
 </div>
 
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     let levelChart = null;
     let trendChart = null;
     let currentTab = 'open';
     let csrftoken = '{{ csrf_token }}';
+    let currentApp = '{{ current_app }}';   // from context (psf, sms, spl)
     
     // ============================================
-    // CHARTS
+    // APP SWITCHER – add to top navbar
+    // ============================================
+    function initAppSwitcher() {
+        const topNavbar = document.querySelector('.top-navbar .user-dropdown');
+        if (!topNavbar) return;
+        
+        const switcherHtml = `
+            <div class="app-switcher">
+                {% for key, name in app_list %}
+                <button class="app-btn {% if key == current_app %}active{% endif %}" data-app="{{ key }}" onclick="switchApp('{{ key }}')">
+                    {{ name }}
+                </button>
+                {% endfor %}
+            </div>
+        `;
+        topNavbar.insertAdjacentHTML('beforebegin', switcherHtml);
+    }
+    
+    function switchApp(appKey) {
+        // Reload dashboard with selected app
+        const url = new URL(window.location.href);
+        url.searchParams.set('app', appKey);
+        window.location.href = url.toString();
+    }
+    
+    // ============================================
+    // UTILITIES – add ?app= to fetch URLs
+    // ============================================
+    function buildUrl(baseUrl) {
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        return `${baseUrl}${separator}app=${currentApp}`;
+    }
+    
+    // ============================================
+    // CHARTS (with app parameter)
     // ============================================
     
     function initLevelChart() {
@@ -626,7 +688,7 @@
     }
     
     function refreshLevelChart() {
-        fetch('/adminpanel/api/level-distribution/')
+        fetch(buildUrl('/adminpanel/api/level-distribution/'))
             .then(response => response.json())
             .then(data => {
                 if (levelChart) {
@@ -636,6 +698,14 @@
                     ];
                     levelChart.update();
                 }
+                // Update the stat badges in the row (optional)
+                document.querySelectorAll('.level-badge').forEach(badge => {
+                    if (badge.innerText.includes('ESC1')) badge.innerText = `ESC1: ${data.esc1 || 0}`;
+                    if (badge.innerText.includes('ESC2')) badge.innerText = `ESC2: ${data.esc2 || 0}`;
+                    if (badge.innerText.includes('ESC3')) badge.innerText = `ESC3: ${data.esc3 || 0}`;
+                    if (badge.innerText.includes('ESC4')) badge.innerText = `ESC4: ${data.esc4 || 0}`;
+                    if (badge.innerText.includes('ESC5')) badge.innerText = `ESC5: ${data.esc5 || 0}`;
+                });
             })
             .catch(error => console.error('Error refreshing chart:', error));
     }
@@ -644,7 +714,7 @@
         const ctx = document.getElementById('trendChart').getContext('2d');
         if (trendChart) trendChart.destroy();
         
-        fetch('/adminpanel/api/weekly-trend/')
+        fetch(buildUrl('/adminpanel/api/weekly-trend/'))
             .then(response => response.json())
             .then(data => {
                 trendChart = new Chart(ctx, {
@@ -679,23 +749,9 @@
             })
             .catch(error => console.error('Error loading trend chart:', error));
     }
-
-function exportESC3() {
-    window.location.href = '/adminpanel/export-esc3-cases/';
-}
-
-// Show/hide button based on current tab
-function switchTab(tab) {
-    currentTab = tab;
-    // ... existing code ...
-    const exportBtn = document.getElementById('exportEsc3Btn');
-    if (exportBtn) {
-        exportBtn.style.display = (tab === 'esc3') ? 'inline-block' : 'none';
-    }
-}
     
     function refreshTrendChart() {
-        fetch('/adminpanel/api/weekly-trend/')
+        fetch(buildUrl('/adminpanel/api/weekly-trend/'))
             .then(response => response.json())
             .then(data => {
                 if (trendChart) {
@@ -710,7 +766,7 @@ function switchTab(tab) {
     }
     
     // ============================================
-    // CASE MANAGEMENT
+    // CASE MANAGEMENT (with app parameter)
     // ============================================
     
     function switchTab(tab) {
@@ -720,22 +776,28 @@ function switchTab(tab) {
         });
         document.querySelector(`.nav-tabs-custom .nav-link[data-tab="${tab}"]`).classList.add('active');
         loadCases(tab);
+        
+        // Show/hide export ESC3 button
+        const exportBtn = document.getElementById('exportEsc3Btn');
+        if (exportBtn) {
+            exportBtn.style.display = (tab === 'esc3') ? 'inline-block' : 'none';
+        }
     }
     
     function loadCases(tab) {
         const container = document.getElementById('casesTableContainer');
         container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p class="mt-2">Loading cases...</p></div>';
         
-        let url = '/adminpanel/api/cases/';
+        let url = '';
         if (tab === 'open') url = '/adminpanel/api/open-cases/';
         else if (tab === 'resolved') url = '/adminpanel/api/resolved-cases/';
         else if (tab === 'closed') url = '/adminpanel/api/closed-cases/';
         else if (tab === 'esc5') url = '/adminpanel/api/esc5-cases/';
         else if (tab === 'all') url = '/adminpanel/api/cases/';
         else if (tab === 'esc3') url = '/adminpanel/api/esc3-cases/';
-
+        else url = '/adminpanel/api/cases/';
         
-        fetch(url)
+        fetch(buildUrl(url))
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -788,12 +850,11 @@ function switchTab(tab) {
             html += `
                 <tr>
                     <td><strong>${escapeHtml(c.case_id)}</strong></td>
-                    <td>${escapeHtml(c.customer_name || c.mobile)}</small></td>
-                    <td>${c.mobile}</small></td>
-                    <td>${c.loan_number}</small></td>
-
-                    <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></small></td>
-                    <td><small>${new Date(c.created_at).toLocaleString()}</small></small></td>
+                    <td>${escapeHtml(c.customer_name || c.mobile)}</td>
+                    <td>${c.mobile}</td>
+                    <td>${c.loan_number || ''}</td>
+                    <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></td>
+                    <td><small>${new Date(c.created_at).toLocaleString()}</small></td>
                     <td>
                         <button class="btn btn-sm btn-primary action-btn" onclick="viewCase('${c.case_id}')" title="View Details">
                             <i class="fas fa-eye"></i>
@@ -823,17 +884,20 @@ function switchTab(tab) {
                 `;
             }
             
-            html += `</small></tr>`;
+            html += `</td>
+                </tr>`;
         }
         
-        html += `</tbody>赶</div>`;
+        html += `</tbody>
+                </table>
+            </div>`;
         container.innerHTML = html;
     }
     
     function viewCase(caseId) {
         $('#caseModal').modal('show');
         
-        fetch(`/adminpanel/case/${caseId}/detail/`)
+        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -850,29 +914,28 @@ function switchTab(tab) {
     
     function renderCaseDetail(caseData) {
         const html = `
-         <div class="d-flex justify-content-end mb-2">
-            <button class="btn btn-sm btn-warning" onclick="openEditCaseModal('${caseData.case_id}')">
-                <i class="fas fa-edit"></i> Edit Case
-            </button>
-        </div>
+            <div class="d-flex justify-content-end mb-2">
+                <button class="btn btn-sm btn-warning" onclick="openEditCaseModal('${caseData.case_id}')">
+                    <i class="fas fa-edit"></i> Edit Case
+                </button>
+            </div>
             <div class="row">
                 <div class="col-md-6">
                     <h6><i class="fas fa-info-circle"></i> Case Information</h6>
                     <table class="table table-sm">
-                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></small></tr>
-                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</small></td>
-                        <tr><th>Mobile:</th><td>${caseData.mobile}</small></td>
-                        <tr><th>Loan No:</th><td>${caseData.loan_number}</small></td>
-
-                        <tr><th>Status:</th><td>${caseData.status}</small></td>
+                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td></tr>
+                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
+                        <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
+                        <tr><th>Loan No:</th><td>${caseData.loan_number || ''}</td></tr>
+                        <tr><th>Status:</th><td>${caseData.status}</td></tr>
                     </table>
                 </div>
                 <div class="col-md-6">
                     <h6><i class="fas fa-users"></i> Assignment</h6>
                     <table class="table table-sm">
-                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
-                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
-                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
+                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td></tr>
+                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td></tr>
+                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td></tr>
                         ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td></tr>` : ''}
                     </table>
                 </div>
@@ -904,7 +967,7 @@ function switchTab(tab) {
     }
     
     function loadCaseTimeline(caseId) {
-        fetch(`/adminpanel/case/${caseId}/timeline/`)
+        fetch(buildUrl(`/adminpanel/case/${caseId}/timeline/`))
             .then(response => response.json())
             .then(data => {
                 const timelineHtml = data.logs.map(log => `
@@ -918,61 +981,55 @@ function switchTab(tab) {
                 document.getElementById('timelineContainer').innerHTML = timelineHtml || '<div class="text-center text-muted">No timeline history</div>';
             });
     }
-
+    
     function openEditCaseModal(caseId) {
-    // Fetch current case details to populate the edit modal
-    fetch(`/adminpanel/case/${caseId}/detail/`)
+        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const caseData = data.case;
+                    document.getElementById('editCaseId').value = caseData.case_id;
+                    document.getElementById('editLoanNumber').value = caseData.loan_number || '';
+                    document.getElementById('editName').value = caseData.customer_name || '';
+                    document.getElementById('editIssueDescription').value = caseData.issue_description || '';
+                    $('#editCaseModal').modal('show');
+                } else {
+                    alert('Error loading case details');
+                }
+            })
+            .catch(error => alert('Error: ' + error.message));
+    }
+    
+    function submitEditCase() {
+        const caseId = document.getElementById('editCaseId').value;
+        const loanNumber = document.getElementById('editLoanNumber').value;
+        const customerName = document.getElementById('editName').value;
+        
+        fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                loan_number: loanNumber,
+                customer_name: customerName
+            })
+        })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                const caseData = data.case;
-                document.getElementById('editCaseId').value = caseData.case_id;
-                document.getElementById('editLoanNumber').value = caseData.loan_number || '';
-                document.getElementById('editName').value = caseData.customer_name || '';
-                document.getElementById('editIssueDescription').value = caseData.issue_description || '';
-
-                $('#editCaseModal').modal('show');
+                alert('Case updated successfully!');
+                $('#editCaseModal').modal('hide');
+                $('#caseModal').modal('hide');
+                viewCase(caseId);
+                loadCases(currentTab);
             } else {
-                alert('Error loading case details');
+                alert('Error: ' + data.error);
             }
         })
         .catch(error => alert('Error: ' + error.message));
-}
-
-function submitEditCase() {
-    const caseId = document.getElementById('editCaseId').value;
-    const loanNumber = document.getElementById('editLoanNumber').value;
-    const Name = document.getElementById('editName').value;
-    const issueDescription = document.getElementById('editIssueDescription').value;
-
-
-    fetch(`/adminpanel/case/${caseId}/edit/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({
-            loan_number: loanNumber,
-            customer_name: Name,
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Case updated successfully!');
-            $('#editCaseModal').modal('hide');
-            // Refresh the open case detail modal
-            $('#caseModal').modal('hide');
-            viewCase(caseId);  // reopen with fresh data
-            // Also refresh the cases table if needed
-            loadCases(currentTab);
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => alert('Error: ' + error.message));
-}
+    }
     
     function showCloseModal(caseId) {
         document.getElementById('closeCaseId').value = caseId;
@@ -984,7 +1041,7 @@ function submitEditCase() {
         const caseId = document.getElementById('closeCaseId').value;
         const reason = document.getElementById('closeReason').value;
         
-        fetch(`/adminpanel/case/${caseId}/close/`, {
+        fetch(buildUrl(`/adminpanel/case/${caseId}/close/`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1016,7 +1073,7 @@ function submitEditCase() {
         const reason = document.getElementById('reopenReason').value;
         const level = document.getElementById('reopenLevel').value;
         
-        fetch(`/adminpanel/case/${caseId}/reopen/`, {
+        fetch(buildUrl(`/adminpanel/case/${caseId}/reopen/`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1044,7 +1101,7 @@ function submitEditCase() {
         const notes = prompt('Enter resolution notes:', 'Case resolved at admin level');
         if (notes === null) return;
         
-        fetch(`/adminpanel/case/${caseId}/resolve/`, {
+        fetch(buildUrl(`/adminpanel/case/${caseId}/resolve/`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1063,53 +1120,53 @@ function submitEditCase() {
             }
         });
     }
+    
     function searchCases() {
-    const query = document.getElementById('searchInput').value.trim();
-    if (query.length === 0) {
-        alert('Please enter a Case ID or Loan Number');
-        return;
+        const query = document.getElementById('searchInput').value.trim();
+        if (query.length === 0) {
+            alert('Please enter a Case ID or Loan Number');
+            return;
+        }
+        
+        const container = document.getElementById('casesTableContainer');
+        container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Searching...</p></div>';
+        
+        fetch(buildUrl(`/adminpanel/api/search/?q=${encodeURIComponent(query)}`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderCasesTable(data.cases, 'search');
+                    // Remove any existing search alert
+                    const oldAlert = document.querySelector('.search-alert');
+                    if (oldAlert) oldAlert.remove();
+                    const searchAlert = document.createElement('div');
+                    searchAlert.className = 'alert alert-info mt-3 search-alert';
+                    searchAlert.innerHTML = `<i class="fas fa-search"></i> Search results for: <strong>${escapeHtml(query)}</strong> <button class="btn btn-sm btn-link" onclick="clearSearch()">Clear search</button>`;
+                    container.parentNode.insertBefore(searchAlert, container.nextSibling);
+                } else {
+                    container.innerHTML = `<div class="alert alert-warning">No cases found for "${escapeHtml(query)}"</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                container.innerHTML = '<div class="alert alert-danger">Error performing search</div>';
+            });
     }
     
-    const container = document.getElementById('casesTableContainer');
-    container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Searching...</p></div>';
-    
-    fetch(`/adminpanel/api/search/?q=${encodeURIComponent(query)}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                renderCasesTable(data.cases, 'search');
-                // Update active tab visual (optional)
-                document.querySelectorAll('.nav-tabs-custom .nav-link').forEach(link => {
-                    link.classList.remove('active');
-                });
-                // Show search indicator
-                const searchIndicator = document.createElement('div');
-                searchIndicator.className = 'alert alert-info mt-3';
-                searchIndicator.innerHTML = `<i class="fas fa-search"></i> Search results for: <strong>${escapeHtml(query)}</strong> <button class="btn btn-sm btn-link" onclick="clearSearch()">Clear search</button>`;
-                const existingAlert = document.querySelector('.search-alert');
-                if (existingAlert) existingAlert.remove();
-                container.parentNode.insertBefore(searchIndicator, container.nextSibling);
-            } else {
-                container.innerHTML = `<div class="alert alert-warning">No cases found for "${escapeHtml(query)}"</div>`;
-            }
-        })
-        .catch(error => {
-            console.error('Search error:', error);
-            container.innerHTML = '<div class="alert alert-danger">Error performing search</div>';
-        });
-}
-
-function clearSearch() {
-    document.getElementById('searchInput').value = '';
-    // Remove search alert if present
-    const searchAlert = document.querySelector('.search-alert');
-    if (searchAlert) searchAlert.remove();
-    // Reload current tab
-    loadCases(currentTab);
-}
+    function clearSearch() {
+        document.getElementById('searchInput').value = '';
+        const searchAlert = document.querySelector('.search-alert');
+        if (searchAlert) searchAlert.remove();
+        loadCases(currentTab);
+    }
     
     function refreshCases() {
         loadCases(currentTab);
+    }
+    
+    function exportESC3() {
+        // Export ESC3 cases for current app
+        window.location.href = buildUrl('/adminpanel/export-esc3-cases/');
     }
     
     function escapeHtml(text) {
@@ -1121,9 +1178,16 @@ function clearSearch() {
     
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
+        initAppSwitcher();
         initLevelChart();
         initTrendChart();
         loadCases('open');
+        
+        // Set export button visibility based on initial tab
+        const exportBtn = document.getElementById('exportEsc3Btn');
+        if (exportBtn) {
+            exportBtn.style.display = (currentTab === 'esc3') ? 'inline-block' : 'none';
+        }
     });
 </script>
 {% endblock %}

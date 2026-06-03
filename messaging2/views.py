@@ -25,7 +25,8 @@ from django.contrib.auth import authenticate
 from django.contrib import messages
 from django.core.paginator import Paginator
 from .consumers import *
-
+from django.http import StreamingHttpResponse, HttpResponseForbidden, Http404
+from django.shortcuts import get_object_or_404
 import pytz
 import os
 import tempfile
@@ -37,27 +38,70 @@ from django.db.models import Q,Value
 from django.core.paginator import Paginator
 from django.db.models.functions import Replace
 import unicodedata
-from django.http import JsonResponse
-from adminpanel.views import get_agent_from_user
+import uuid
+import requests
+import time
+import traceback
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse, Http404
+from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render, redirect, get_object_or_404
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.db.models import Max, Count, Q, F
+from django.conf import settings
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.utils import timezone
+from django.contrib.auth import authenticate, login as auth_login
+from django.contrib import messages
+from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
 
+from .models import *
+from .utils import *
+from .tasks import *
+from .forms import UploadForm2
+from .consumers import *
 
-FILE_TYPES = [
-    ("write_off", "Write Off"),
-    ("dealer_ta_balances", "Dealer TA Balances"),
-    ("auction", "Auction"),
-    ("ledger", "Ledger"),
-]
+import pytz
+import os
+import tempfile
+from financehub.models import *
+from django.db.models.functions import Replace
+import unicodedata
 
+# Import the unified app config from adminpanel
+from adminpanel.views import APP_CONFIG, get_agent_from_user
 
+# ============================================
+# HELPER: get models for selected app
+# ============================================
+def get_models_for_app(request):
+    """Return (case_model, contact_model, log_model, channel_group) for the app selected via ?app="""
+    app_key = request.GET.get('app', 'psf')
+    if app_key not in APP_CONFIG:
+        app_key = 'psf'
+    cfg = APP_CONFIG[app_key]
+    return cfg['case_model'], cfg['contact_model'], cfg['log_model'], cfg['channel_group']
+
+def get_case_model_for_app(request):
+    """Convenience: only case model"""
+    return get_models_for_app(request)[0]
+
+def get_contact_model_for_app(request):
+    """Convenience: only contact model"""
+    return get_models_for_app(request)[1]
+
+# ============================================
+# AUTHENTICATION (unchanged)
+# ============================================
 def messaging2_login(request):
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
-
         user = authenticate(username=username, password=password)
         if user:
             auth_login(request, user)
-            
             agent, created = Agent.objects.get_or_create(
                 user=user,
                 defaults={
@@ -67,10 +111,7 @@ def messaging2_login(request):
                     'role': 'ADMIN' if user.is_superuser else 'AGENT'
                 }
             )
-            
             request.session["messaging2_user"] = user.id
-            
-            # Redirect based on role
             if agent.role == 'ADMIN':
                 return redirect('admin_dashboard')
             elif agent.role == 'MANAGER':
@@ -83,23 +124,22 @@ def messaging2_login(request):
                 return redirect('agent_dashboard')
         else:
             messages.error(request, "Invalid username or password")
-
     return render(request, "messaging2/login.html")
-
 
 def messaging2_logout(request):
     request.session.pop("messaging2_user", None)
     return redirect("messaging2_login")
 
-
 def messaging2_required(view_func):
     def wrapper(request, *args, **kwargs):
-        if not request.session.get("messaging2_user"):
-            return redirect("messaging2_login")
-        return view_func(request, *args, **kwargs)
+        # First check Django auth
+        if request.user.is_authenticated:
+            return view_func(request, *args, **kwargs)
+        # Then check custom session key (legacy)
+        if request.session.get("messaging2_user"):
+            return view_func(request, *args, **kwargs)
+        return redirect(settings.LOGIN_URL)
     return wrapper
-
-
 def serialize_log(m):
     return {
         "id": m.id,
@@ -118,9 +158,7 @@ def ws_group2(mobile: str) -> str:
         return ""
     return re.sub(r"\D", "", str(mobile))
 
-
 def send_whatsapp_text2(to_number, text_body):
-    """Send text message via WhatsApp API"""
     url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP2_PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {settings.WHATSAPP2_ACCESS_TOKEN}",
@@ -136,18 +174,11 @@ def send_whatsapp_text2(to_number, text_body):
     resp.raise_for_status()
     return resp.json()
 
-
-
 def broadcast_delivery2(mobile, message_id, status):
     from channels.layers import get_channel_layer
     from asgiref.sync import async_to_sync
-    from django.utils import timezone
-
-
     channel_layer = get_channel_layer()
-
     status = (status or "").lower()
-
     if status == "sent":
         norm = "Sent"
     elif status == "delivered":
@@ -156,54 +187,24 @@ def broadcast_delivery2(mobile, message_id, status):
         norm = "Read"
     else:
         norm = "Failed"
-
-    # 🔥 UPDATE CONTACT TABLE (VERY IMPORTANT)
-    ChatContact2.objects.filter(mobile=mobile).update(
-        last_status=norm,
-
-    )
-
+    ChatContact2.objects.filter(mobile=mobile).update(last_status=norm)
     gm = ws_group2(mobile)
-
-    # ===== CHAT TICKS =====
     if gm:
         async_to_sync(channel_layer.group_send)(
             f"chat2_{gm}",
-            {
-                "type": "delivery.update",
-                "message_id": message_id,
-                "status": norm,
-                "mobile": mobile
-            }
+            {"type": "delivery.update", "message_id": message_id, "status": norm, "mobile": mobile}
         )
-
-    # ===== GLOBAL TICKS (ALL USERS) =====
     async_to_sync(channel_layer.group_send)(
         "delivery_group2",
-        {
-            "type": "delivery.update",
-            "message_id": message_id,
-            "status": norm,
-            "mobile": mobile
-        }
+        {"type": "delivery.update", "message_id": message_id, "status": norm, "mobile": mobile}
     )
-
-    # ===== 🔥 CONTACT UPDATE =====
     async_to_sync(channel_layer.group_send)(
         "global_contacts2",
-        {
-            "type": "contact.update",
-            "contact": {
-                "mobile": mobile,
-                "last_status": norm,
-                #"last_time": timezone.now().isoformat()
-            }
-        }
+        {"type": "contact.update", "contact": {"mobile": mobile, "last_status": norm}}
     )
 
-
 # -----------------------------------------------------
-# Bulk Upload Start (S3-safe)
+# Bulk Upload (PSF only - unchanged)
 # -----------------------------------------------------
 @messaging2_required
 def upload_and_send2(request):
@@ -212,20 +213,13 @@ def upload_and_send2(request):
         if form.is_valid():
             choice = form.cleaned_data["template_choice"]
             excel_file = request.FILES["excel_file"]
-
-            # Save uploaded Excel to S3 under uploads/
             unique_name = f"{uuid.uuid4().hex}_{excel_file.name}"
             s3_key = f"uploads2/{unique_name}"
             default_storage.save(s3_key, excel_file)
-
-            # Read Excel from S3 into pandas
             with default_storage.open(s3_key, "rb") as f:
                 data = f.read()
-
             df = pd.read_excel(io.BytesIO(data), dtype=str).fillna("")
             job_id = str(uuid.uuid4())
-
-            # Create Bulk Job
             BulkJob2.objects.create(
                 job_id=job_id,
                 template_name=choice,
@@ -233,24 +227,12 @@ def upload_and_send2(request):
                 excel_file=s3_key,
                 status="Pending",
             )
-
-            # 🔥 FORCE TASK INTO WHATSAPP2_main QUEUE
-            process_bulk_whatsapp2.apply_async(
-                args=(s3_key, choice, job_id),
-                queue="whatsapp_secondary"
-            )
-
+            process_bulk_whatsapp2.apply_async(args=(s3_key, choice, job_id), queue="whatsapp_secondary")
             return redirect("job_status2", job_id=job_id)
-
     else:
         form = UploadForm2()
-
     return render(request, "messaging2/index.html", {"form": form})
 
-
-# -----------------------------------------------------
-# Bulk Job Status Page
-# -----------------------------------------------------
 def job_status2(request, job_id):
     job = get_object_or_404(BulkJob2, job_id=job_id)
     progress = 0
@@ -258,89 +240,50 @@ def job_status2(request, job_id):
         progress = round((job.sent_count / job.total_customers) * 100, 2)
     return render(request, "messaging2/job_status.html", {"job": job, "progress": progress})
 
-
-# -----------------------------------------------------
-# Download Success Report (redirect to S3)
-# -----------------------------------------------------
 def download_success_report2(request, job_id):
     job = get_object_or_404(BulkJob2, job_id=job_id)
     if job.success_report:
         return redirect(default_storage.url(job.success_report.name))
     raise Http404("Success report not found.")
 
-
-# -----------------------------------------------------
-# Download Failed Report (redirect to S3)
-# -----------------------------------------------------
 def download_failed_report2(request, job_id):
     job = get_object_or_404(BulkJob2, job_id=job_id)
     if job.failed_report:
-          return redirect(default_storage.url(job.failed_report.name))
-
+        return redirect(default_storage.url(job.failed_report.name))
     raise Http404("Failed report not found.")
 
-
 # -----------------------------------------------------
-# CHAT DASHBOARD
+# CHAT DASHBOARD (PSF only)
 # -----------------------------------------------------
-
 def chat_dashboard2(request):
-    # Get the agent for the logged-in user
-    
-    agent = get_agent_from_user(request.user)  # ← ADD THIS
-    
-    mobiles = (
-        SmsWhatsAppLog2.objects
-        .values("mobile")
-        .annotate(last_sent=Max("sent_at"))
-        .order_by("-last_sent")
-    )
-
+    agent = get_agent_from_user(request.user)
+    mobiles = (SmsWhatsAppLog2.objects.values("mobile").annotate(last_sent=Max("sent_at")).order_by("-last_sent"))
     seen = set()
     mobile_list = []
-
     for m in mobiles:
         normalized = format_mobile2(str(m["mobile"]))
         if normalized not in seen:
             seen.add(normalized)
             mobile_list.append({"mobile": normalized})
-
     return render(request, "messaging2/chat.html", {
         "mobile_list": mobile_list,
         "user_name": request.user.username,
         "MEDIA_URL": settings.MEDIA_URL,
-        "agent": agent,  # ← ADD THIS - CRITICAL!
-        "user": request.user,  # ← ADD THIS
+        "agent": agent,
+        "user": request.user,
     })
 
-
-# -----------------------------------------------------
-# Get Messages for Mobile (returns public S3 URLs)
-# -----------------------------------------------------
-# in messaging2views.py (chat2_messages_api)
-from django.core.paginator import Paginator
-
-
-# -----------------------------------------------------
-# Get Messages for Mobile (returns public S3 URLs)
-# -----------------------------------------------------
 def chat_messages_api2(request, mobile):
     mobile = format_mobile2(mobile)
     page = int(request.GET.get("page", 1))
-    size = 500  # 500 messages per page
-
+    size = 500
     qs = SmsWhatsAppLog2.objects.filter(mobile=mobile).order_by("-sent_at")
-
     paginator = Paginator(qs, size)
-
     try:
         pg = paginator.page(page)
     except:
         return JsonResponse({"messages": [], "has_more": False})
-
-    # Messages oldest → newest
     result = list(pg.object_list)[::-1]
-
     def to_json(m):
         media_url = ""
         if m.media_file:
@@ -348,7 +291,6 @@ def chat_messages_api2(request, mobile):
                 media_url = default_storage.url(m.media_file.name)
             except:
                 media_url = getattr(m.media_file, "url", "")
-
         return {
             "id": m.id,
             "mobile": m.mobile,
@@ -359,17 +301,30 @@ def chat_messages_api2(request, mobile):
             "content_type": m.content_type or "text",
             "media_file": media_url,
             "status": m.status or "",
-            "sender_name": m.customer_name or "",      # ★ added sender_name
+            "sender_name": m.customer_name or "",
         }
+    return JsonResponse({"messages": [to_json(m) for m in result], "has_more": pg.has_next()})
 
-    return JsonResponse({
-        "messages": [to_json(m) for m in result],
-        "has_more": pg.has_next()
-    })
+def contacts_api2(request):
+    q = request.GET.get("q", "").strip()
+    qs = (SmsWhatsAppLog2.objects.values("mobile")
+          .annotate(last_time=Max("sent_at"),
+                    unread=Count("id", filter=Q(message_type="Received", status="Unread")))
+          .order_by("-last_time"))
+    if q:
+        digits = re.sub(r"\D", "", q)
+        if digits:
+            qs = qs.filter(mobile__icontains=digits)
+        else:
+            mobiles_matching = SmsWhatsAppLog2.objects.filter(sent_text_message__icontains=q).values_list("mobile", flat=True).distinct()
+            qs = qs.filter(mobile__in=list(mobiles_matching))
+    result = [{
+        "mobile": format_mobile2(item["mobile"]),
+        "last_time": item["last_time"].isoformat() if item["last_time"] else "",
+        "unread": item["unread"],
+    } for item in qs]
+    return JsonResponse({"contacts": result})
 
-
-
-# messaging2views.py - COMPLETE FIXED VERSION
 
 import pandas as pd
 import io
@@ -397,28 +352,6 @@ from django.core.paginator import Paginator
 # =============================================
 # HELPER FUNCTIONS
 # =============================================
-def ws_group2(mobile: str) -> str:
-    if not mobile:
-        return ""
-    return re.sub(r"\D", "", str(mobile))
-
-
-def send_whatsapp_text2(to_number, text_body):
-    """Send text message via WhatsApp API"""
-    url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP2_PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {settings.WHATSAPP2_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "text",
-        "text": {"body": text_body[:4096]},
-    }
-    resp = requests.post(url, headers=headers, json=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
 
 
 def download_whatsapp_media2(media_id):
@@ -496,61 +429,6 @@ def chat_messages_api2(request, mobile):
     })
 
 
-def contacts_api2(request):
-    q = request.GET.get("q", "").strip()
-    qs = (
-        SmsWhatsAppLog2.objects.values("mobile")
-        .annotate(last_time=Max("sent_at"),
-                  unread=Count("id", filter=Q(message_type="Received", status="Unread")))
-        .order_by("-last_time")
-    )
-
-    if q:
-        digits = re.sub(r"\D", "", q)
-        if digits:
-            qs = qs.filter(mobile__icontains=digits)
-        else:
-            mobiles_matching = SmsWhatsAppLog2.objects.filter(sent_text_message__icontains=q).values_list("mobile", flat=True).distinct()
-            qs = qs.filter(mobile__in=list(mobiles_matching))
-
-    result = [{
-        "mobile": format_mobile2(item["mobile"]),
-        "last_time": item["last_time"].isoformat() if item["last_time"] else "",
-        "unread": item["unread"],
-    } for item in qs]
-    return JsonResponse({"contacts": result})
-
-
-# @csrf_exempt
-# def mark_read3(request, mobile):
-#     try:
-#         mobile_norm = format_mobile2(mobile)
-#         ChatContact2.objects.filter(mobile=mobile_norm).update(unread=0)
-#         channel_layer = get_channel_layer()
-#         gm = ws_group2(mobile_norm)
-#         if gm:
-#             async_to_sync(channel_layer.group_send)(
-#                 f"chat2_{gm}",
-#                 {
-#                     "type": "delivery.update",
-#                     "message_id": "",
-#                     "status": "Read",
-#                     "mobile": mobile_norm,
-#                 }
-#             )
-#         async_to_sync(channel_layer.group_send)(
-#             "global_contacts2",
-#             {"type": "presence.update", "mobile": mobile_norm, "status": "updated"}
-#         )
-#         return JsonResponse({"status": "ok"})
-#     except Exception as e:
-#         return JsonResponse({"error": str(e)}, status=500)
-
-
-# =============================================
-# SEND REPLY API - FIXED (NO RACE CONDITION)
-# =============================================
-# messaging2views.py - COMPLETE WORKING VERSION
 
 @csrf_exempt
 def send_reply_api2(request):
@@ -841,7 +719,7 @@ def whatsapp_webhook2(request):
                             content_type = msg_type
                             text_body = f"[{msg_type.title()}]"
                             # print(f"📎 {msg_type} from {mobile}, media_id: {media_id}")
-                            media_file_data = download_whatsapp_media3(media_id)
+                            media_file_data = download_whatsapp_media2(media_id)
                             if media_file_data:
                                 pass
                                 # print(f"✅ Downloaded {msg_type}")
@@ -1053,83 +931,6 @@ def whatsapp_webhook2(request):
 
     return HttpResponseBadRequest("Unsupported method")
 
-# -----------------------------------------------------
-# Download media from WA (helper)
-# -----------------------------------------------------
-def download_whatsapp_media3(media_id):
-    """Download media from WhatsApp"""
-    try:
-        access_token = settings.WHATSAPP2_ACCESS_TOKEN
-        headers = {"Authorization": f"Bearer {access_token}"}
-
-        # Use v22.0
-        meta_url = f"https://graph.facebook.com/v22.0/{media_id}"
-        meta_resp = requests.get(meta_url, headers=headers, timeout=30)
-        meta_resp.raise_for_status()
-        meta = meta_resp.json()
-
-        file_url = meta.get("url")
-        mime = meta.get("mime_type", "")
-        ext = mime.split("/")[-1] if "/" in mime else "bin"
-
-        file_resp = requests.get(file_url, headers=headers, timeout=30)
-        file_resp.raise_for_status()
-
-        filename = f"WHATSAPP2_{media_id}.{ext}"
-        return filename, file_resp.content
-
-    except Exception as e:
-        # print(f"Media download error: {e}")
-        return None
-
-
-
-
-# -----------------------------------------------------
-# Contacts API (for sidebar)
-# -----------------------------------------------------
-
-def contacts_api3(request):
-    from django.db import connection
-    from django.utils import timezone
-
-    query = """
-        SELECT
-            l.mobile,
-            MAX(l.sent_at) as last_time,
-            SUM(CASE WHEN l.message_type = 'Received' AND l.status = 'Unread' THEN 1 ELSE 0 END) as unread,
-            (
-                SELECT l2.sent_text_message
-                FROM messaging2_smswhatsapplog2 l2
-                WHERE l2.mobile = l.mobile
-                ORDER BY l2.sent_at DESC
-                LIMIT 1
-            ) as last_msg
-        FROM messaging2_smswhatsapplog2 l
-        GROUP BY l.mobile
-        HAVING last_msg IS NOT NULL AND last_msg != ''
-        ORDER BY last_time DESC
-    """
-
-    with connection.cursor() as cursor:
-        cursor.execute(query)
-        rows = cursor.fetchall()
-
-    result = []
-
-    for row in rows:
-        result.append({
-            "mobile": format_mobile2(row[0]),
-            "last_time": timezone.localtime(row[1]).isoformat() if row[1] else "",
-            "unread": row[2] or 0,
-            "last_msg": row[3] or ""
-        })
-
-    return JsonResponse({"contacts": result})
-# -----------------------------------------------------
-# Mark messages read
-# -----------------------------------------------------
-
 @csrf_exempt
 def mark_read2(request, mobile):
     try:
@@ -1138,38 +939,23 @@ def mark_read2(request, mobile):
         channel_layer = get_channel_layer()
         gm = ws_group2(mobile_norm)
         if gm:
-            # conversation level read
             async_to_sync(channel_layer.group_send)(
                 f"chat2_{gm}",
-                {
-                    "type": "delivery.update",
-                    "message_id": "",    # empty => conversation-level read
-                    "status": "Read",
-                    "mobile": mobile_norm,
-                }
+                {"type": "delivery.update", "message_id": "", "status": "Read", "mobile": mobile_norm}
             )
-
-        # notify contacts to refresh unread count
         async_to_sync(channel_layer.group_send)(
             "global_contacts2",
             {"type": "presence.update", "mobile": mobile_norm, "status": "updated"}
         )
-
         return JsonResponse({"status": "ok"})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-
-
-from django.http import JsonResponse
-from .models import SmsWhatsAppLog2
 
 def get_contact_messages2(request):
     mobile = request.GET.get('mobile')
     if not mobile:
         return JsonResponse({'error': 'Mobile required'}, status=400)
-
     messages = SmsWhatsAppLog2.objects.filter(mobile=mobile).order_by('sent_at')
-
     data = {
         'messages': [{
             'id': m.id,
@@ -1183,50 +969,165 @@ def get_contact_messages2(request):
     }
     return JsonResponse(data)
 
-from django.http import StreamingHttpResponse, HttpResponseForbidden, Http404
-from django.shortcuts import get_object_or_404
-
 def view_secure_document2(request, log_id):
-    """
-    View secure NOC documents - only accessible to logged-in users
-    """
-    # Check authentication
     if not request.session.get("messaging2_user"):
-        return HttpResponseForbidden("Authentication required. Please login again.")
-
+        return HttpResponseForbidden("Authentication required.")
     log = get_object_or_404(SmsWhatsAppLog2, id=log_id)
-
     filename = (log.media_file.name or "").lower()
-
-    # Check if this is a NOC document (case-insensitive)
     is_noc_document = "noc" in filename
-
-    # Security check: Allow both 'Sent' and 'Sending' status (case-insensitive)
     if log.content_type != "document":
         return HttpResponseForbidden("Not allowed - This is not a document")
-    
-    # ✅ FIX: Allow 'sent' OR 'sending' (case-insensitive)
     if log.message_type.lower() not in ['sent', 'sending']:
         return HttpResponseForbidden("Not allowed - Only sent documents can be viewed")
-    
     if not is_noc_document:
         return HttpResponseForbidden("Not allowed - This is not a NOC document")
-    
-    # Additional security - Only allow PDF files
     if not filename.endswith('.pdf'):
         return HttpResponseForbidden("Not allowed - NOC documents must be PDF files")
-
     file_obj = default_storage.open(log.media_file.name, "rb")
-
     response = StreamingHttpResponse(file_obj, content_type="application/pdf")
     response["Content-Disposition"] = "inline; filename=NOC.pdf"
     response["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response["Pragma"] = "no-cache"
-    response["X-Content-Type-Options"] = "nosniff"
-
     return response
 
 # =============================== Escalation views =======================================================
+
+
+# ============================================
+# ESCALATION DASHBOARDS (APP-AWARE)
+# ============================================
+
+@messaging2_required
+def agent_dashboard2(request):
+    CaseModel = get_case_model_for_app(request)
+    ContactModel = get_contact_model_for_app(request)
+    agent = get_agent_from_user(request.user)
+    cases = CaseModel.objects.filter(
+        Q(assigned_to=agent) | Q(current_level='ESC1', assigned_to__isnull=True),
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed').order_by('-priority', '-created_at')
+    stats = {
+        'my_cases': cases.filter(assigned_to=agent).count(),
+        'available_cases': cases.filter(assigned_to__isnull=True).count(),
+        'resolved': CaseModel.objects.filter(resolved_by=agent.name).count(),
+        'total_handled': CaseModel.objects.filter(assigned_to=agent).count(),
+    }
+    current_app = request.GET.get('app', 'psf')
+    return render(request, 'messaging2/agent_dashboard.html', {
+        'cases': cases,
+        'stats': stats,
+        'agent': agent,
+        'current_app': current_app,
+        'app_list': APP_CONFIG.items(),
+    })
+
+@messaging2_required
+def legal_dashboard2(request):
+    CaseModel = get_case_model_for_app(request)
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'LEGAL':
+        return redirect('agent_dashboard')
+    cases = CaseModel.objects.filter(
+        current_level='ESC2',
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed').order_by('-priority', '-created_at')
+    stats = {
+        'pending': cases.count(),
+        'resolved': CaseModel.objects.filter(resolved_at_level='ESC2').count(),
+        'escalated': CaseModel.objects.filter(previous_level='ESC2').count(),
+    }
+    current_app = request.GET.get('app', 'psf')
+    return render(request, 'messaging2/legal_dashboard.html', {
+        'cases': cases,
+        'stats': stats,
+        'agent': agent,
+        'current_app': current_app,
+        'app_list': APP_CONFIG.items(),
+    })
+
+@messaging2_required
+def lead_dashboard2(request):
+    CaseModel = get_case_model_for_app(request)
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'LEAD':
+        return redirect('agent_dashboard')
+    cases = CaseModel.objects.filter(
+        current_level='ESC3',
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed').order_by('-priority', '-created_at')
+    agents = Agent.objects.filter(role='AGENT', is_active=True)
+    total_cases = CaseModel.objects.filter(current_level='ESC3').count()
+    open_cases = CaseModel.objects.filter(current_level='ESC3', status='Open').count()
+    start_of_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    resolved_this_month = CaseModel.objects.filter(
+        resolved_at_level='ESC3',
+        resolved_at__gte=start_of_month
+    ).count()
+    priority_counts = {
+        'urgent': CaseModel.objects.filter(current_level='ESC3', priority='Urgent').count(),
+        'high': CaseModel.objects.filter(current_level='ESC3', priority='High').count(),
+        'medium': CaseModel.objects.filter(current_level='ESC3', priority='Medium').count(),
+        'low': CaseModel.objects.filter(current_level='ESC3', priority='Low').count(),
+    }
+    weekly_labels = []
+    weekly_new_cases = []
+    weekly_resolved_cases = []
+    for i in range(6, -1, -1):
+        date = timezone.now().date() - timedelta(days=i)
+        weekly_labels.append(date.strftime('%a, %b %d'))
+        start_of_day = timezone.make_aware(datetime.combine(date, datetime.min.time()))
+        end_of_day = start_of_day + timedelta(days=1)
+        weekly_new_cases.append(CaseModel.objects.filter(
+            current_level='ESC3',
+            created_at__gte=start_of_day,
+            created_at__lt=end_of_day
+        ).count())
+        weekly_resolved_cases.append(CaseModel.objects.filter(
+            resolved_at_level='ESC3',
+            resolved_at__gte=start_of_day,
+            resolved_at__lt=end_of_day
+        ).count())
+    current_app = request.GET.get('app', 'psf')
+    return render(request, 'messaging2/lead_dashboard.html', {
+        'cases': cases,
+        'agents': agents,
+        'agent': agent,
+        'total_cases': total_cases,
+        'open_cases': open_cases,
+        'resolved_this_month': resolved_this_month,
+        'priority_urgent': priority_counts['urgent'],
+        'priority_high': priority_counts['high'],
+        'priority_medium': priority_counts['medium'],
+        'priority_low': priority_counts['low'],
+        'weekly_labels': weekly_labels,
+        'weekly_new_cases': weekly_new_cases,
+        'weekly_resolved_cases': weekly_resolved_cases,
+        'current_app': current_app,
+        'app_list': APP_CONFIG.items(),
+    })
+
+@messaging2_required
+def manager_dashboard2(request):
+    CaseModel = get_case_model_for_app(request)
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'MANAGER':
+        return redirect('agent_dashboard')
+    cases = CaseModel.objects.filter(
+        current_level='ESC4',
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed').order_by('-priority', '-created_at')
+    stats = {
+        'pending': cases.count(),
+        'resolved': CaseModel.objects.filter(resolved_at_level='ESC4').count(),
+        'escalated_to_admin': CaseModel.objects.filter(current_level='ESC5').count(),
+    }
+    current_app = request.GET.get('app', 'psf')
+    return render(request, 'messaging2/manager_dashboard.html', {
+        'cases': cases,
+        'stats': stats,
+        'agent': agent,
+        'current_app': current_app,
+        'app_list': APP_CONFIG.items(),
+    })
 
 import json
 import uuid
@@ -1251,242 +1152,10 @@ from .models import *
 
 
 
-def get_agent_from_user2(user):
-    try:
-        return Agent.objects.get(user=user)
-    except Agent.DoesNotExist:
-        role = 'ADMIN' if user.is_superuser else 'AGENT'
-        agent = Agent.objects.create(
-            user=user,
-            agent_id=f"AGT-{user.id}",
-            name=user.get_full_name() or user.username,
-            email=user.email or f"{user.username}@example.com",
-            role=role,
-            is_active=True
-        )
-        return agent
-
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-
-@login_required
-def get_user_role_api2(request):
-    """API to get current user's role and ESC level"""
-    try:
-        from .models import Agent
-        
-        agent = Agent.objects.get(user=request.user)
-        
-        # Role display names
-        role_display_names = {
-            'AGENT': 'Normal Agent',
-            'LEGAL': 'Legal Team',
-            'LEAD': 'Team Lead',
-            'MANAGER': 'Manager',
-            'ADMIN': 'Administrator',
-        }
-        
-        # ESC Level icons/colors
-        esc_levels = {
-            'ESC1': {'icon': '1', 'color': '#4caf50', 'name': 'Level 1 - Agent'},
-            'ESC2': {'icon': '2', 'color': '#2196f3', 'name': 'Level 2 - Legal'},
-            'ESC3': {'icon': '3', 'color': '#ff9800', 'name': 'Level 3 - Lead'},
-            'ESC4': {'icon': '4', 'color': '#9c27b0', 'name': 'Level 4 - Manager'},
-            'ESC5': {'icon': '5', 'color': '#f44336', 'name': 'Level 5 - Admin'},
-        }
-        
-        level = agent.level
-        level_info = esc_levels.get(level, {'icon': '?', 'color': '#666', 'name': 'Unknown'})
-        
-        return JsonResponse({
-            'success': True,
-            'role': agent.role,
-            'role_display': role_display_names.get(agent.role, agent.role),
-            'level': level,
-            'level_info': level_info,
-            'name': agent.name,
-            'email': agent.email,
-        })
-        
-    except Agent.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'error': 'Agent profile not found'
-        }, status=404)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
-# ============================================
-# DASHBOARD VIEWS
-# ============================================
-
-@messaging2_required
-def agent_dashboard2(request):
-    """Agent Dashboard - ESC1 cases assigned to this agent"""
-    agent = get_agent_from_user(request.user)
-    
-    # Cases assigned to this agent OR cases at ESC1 level (unassigned for AGENT role)
-    cases = Case.objects.filter(
-        Q(assigned_to=agent) | Q(current_level='ESC1', assigned_to__isnull=True),
-        status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
-    
-    stats = {
-        'my_cases': cases.filter(assigned_to=agent).count(),
-        'available_cases': cases.filter(assigned_to__isnull=True).count(),
-        'resolved': Case.objects.filter(resolved_by=agent.name).count(),
-        'total_handled': Case.objects.filter(assigned_to=agent).count(),
-    }
-    
-    return render(request, 'messaging2/agent_dashboard.html', {
-        'cases': cases,
-        'stats': stats,
-        'agent': agent,
-    })
-
-
-@messaging2_required
-def legal_dashboard2(request):
-    """Legal Team Dashboard - ESC2 cases only"""
-    agent = get_agent_from_user(request.user)
-    
-    if agent.role != 'LEGAL':
-        return redirect('agent_dashboard')
-    
-    cases = Case.objects.filter(
-        current_level='ESC2',
-        status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
-    
-    stats = {
-        'pending': cases.count(),
-        'resolved': Case.objects.filter(resolved_at_level='ESC2').count(),
-        'escalated': Case.objects.filter(previous_level='ESC2').count(),
-    }
-    
-    return render(request, 'messaging2/legal_dashboard.html', {
-        'cases': cases,
-        'stats': stats,
-        'agent': agent,
-    })
-
-
-@messaging2_required
-def lead_dashboard2(request):
-    """Team Lead Dashboard - ESC3 cases only"""
-    agent = get_agent_from_user(request.user)
-    
-    if agent.role != 'LEAD':
-        return redirect('agent_dashboard')
-    
-    cases = Case.objects.filter(
-        current_level='ESC3',
-        status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
-    
-    # Get all agents for assignment
-    agents = Agent.objects.filter(role='AGENT', is_active=True)
-    
-    # Statistics
-    total_cases = Case.objects.filter(current_level='ESC3').count()
-    open_cases = Case.objects.filter(current_level='ESC3', status='Open').count()
-    
-    start_of_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    resolved_this_month = Case.objects.filter(
-        resolved_at_level='ESC3',
-        resolved_at__gte=start_of_month
-    ).count()
-    
-    # Priority distribution
-    priority_counts = {
-        'urgent': Case.objects.filter(current_level='ESC3', priority='Urgent').count(),
-        'high': Case.objects.filter(current_level='ESC3', priority='High').count(),
-        'medium': Case.objects.filter(current_level='ESC3', priority='Medium').count(),
-        'low': Case.objects.filter(current_level='ESC3', priority='Low').count(),
-    }
-    
-    # Weekly trend
-    weekly_labels = []
-    weekly_new_cases = []
-    weekly_resolved_cases = []
-    
-    for i in range(6, -1, -1):
-        date = timezone.now().date() - timedelta(days=i)
-        weekly_labels.append(date.strftime('%a, %b %d'))
-        
-        start_of_day = timezone.make_aware(datetime.combine(date, datetime.min.time()))
-        end_of_day = start_of_day + timedelta(days=1)
-        
-        new_count = Case.objects.filter(
-            current_level='ESC3',
-            created_at__gte=start_of_day,
-            created_at__lt=end_of_day
-        ).count()
-        weekly_new_cases.append(new_count)
-        
-        resolved_count = Case.objects.filter(
-            resolved_at_level='ESC3',
-            resolved_at__gte=start_of_day,
-            resolved_at__lt=end_of_day
-        ).count()
-        weekly_resolved_cases.append(resolved_count)
-    
-    return render(request, 'messaging2/lead_dashboard.html', {
-        'cases': cases,
-        'agents': agents,
-        'agent': agent,
-        'total_cases': total_cases,
-        'open_cases': open_cases,
-        'resolved_this_month': resolved_this_month,
-        'priority_urgent': priority_counts['urgent'],
-        'priority_high': priority_counts['high'],
-        'priority_medium': priority_counts['medium'],
-        'priority_low': priority_counts['low'],
-        'weekly_labels': weekly_labels,
-        'weekly_new_cases': weekly_new_cases,
-        'weekly_resolved_cases': weekly_resolved_cases,
-    })
-
-
-@messaging2_required
-def manager_dashboard2(request):
-    """Manager Dashboard - ESC4 cases only"""
-    agent = get_agent_from_user(request.user)
-    
-    if agent.role != 'MANAGER':
-        return redirect('agent_dashboard')
-    
-    cases = Case.objects.filter(
-        current_level='ESC4',
-        status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
-    
-    stats = {
-        'pending': cases.count(),
-        'resolved': Case.objects.filter(resolved_at_level='ESC4').count(),
-        'escalated_to_admin': Case.objects.filter(current_level='ESC5').count(),
-    }
-    
-    return render(request, 'messaging2/manager_dashboard.html', {
-        'cases': cases,
-        'stats': stats,
-        'agent': agent,
-    })
-
-
-
-
-
-# ============================================
-# CASE API ENDPOINTS
-# ============================================
-
 def get_case_detail_api2(request, case_id):
-    """API endpoint to get case details"""
+    CaseModel = get_case_model_for_app(request)
     try:
-        case = Case.objects.get(case_id=case_id)
+        case = CaseModel.objects.get(case_id=case_id)
         return JsonResponse({
             'success': True,
             'case': {
@@ -1497,7 +1166,7 @@ def get_case_detail_api2(request, case_id):
                 'previous_level': case.previous_level,
                 'status': case.status,
                 'priority': case.priority,
-                'loan_number':case.loan_number,
+                'loan_number': case.loan_number,
                 'assigned_to_name': case.assigned_to_name,
                 'created_by': case.created_by,
                 'created_at': case.created_at.isoformat(),
@@ -1506,280 +1175,144 @@ def get_case_detail_api2(request, case_id):
                 'resolved_by_role': case.resolved_by_role,
                 'resolved_by': case.resolved_by,
                 'issue_description': case.issue_description,
-                'loan_number':case.loan_number,
                 'resolution_notes': case.resolution_notes,
                 'reopen_count': case.reopen_count,
             }
         })
-    except Case.DoesNotExist:
+    except CaseModel.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Case not found'})
 
 @csrf_exempt
 def escalate_case_api2(request, case_id):
-    """API to escalate case"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    
     try:
+        CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
         agent = get_agent_from_user(request.user)
-        case = Case.objects.get(case_id=case_id)
+        case = CaseModel.objects.get(case_id=case_id)
         data = json.loads(request.body)
-        
         new_level = data.get('new_level')
         reason = data.get('reason', '')
         loan = data.get('loan', '')
-        name = data.get('name','')
-        
+        name = data.get('name', '')
         if not new_level:
             return JsonResponse({'error': 'New level required'}, status=400)
-        
         if not case.can_escalate(agent, new_level):
             return JsonResponse({'error': 'You cannot escalate to this level'}, status=403)
-        
-        # Get mobile from case
         mobile = case.mobile
-        
-        case.escalate(new_level, agent, reason, loan,name)
-        
-        # Update contact level
-        ChatContact2.objects.filter(mobile=mobile).update(current_level=new_level)
+        case.escalate(new_level, agent, reason, loan, name)
+        ContactModel.objects.filter(mobile=mobile).update(current_level=new_level)
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
-            "global_contacts2",
-            {
-                "type": "contact.update",
-                "contact": {
-                "mobile": case.mobile,
-                "current_level": new_level   # the new ESC level (e.g., "ESC2")
-                }
-            }
+            channel_group,
+            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": new_level}}
         )
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Case escalated from {case.previous_level} to {new_level}',
-            'new_level': new_level
-        })
-        
-    except Case.DoesNotExist:
+        return JsonResponse({'success': True, 'message': f'Case escalated to {new_level}', 'new_level': new_level})
+    except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @csrf_exempt
 def resolve_case_api2(request, case_id):
-    """Resolve case"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    
     try:
+        CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
         agent = get_agent_from_user(request.user)
-        case = Case.objects.get(case_id=case_id)
-        
+        case = CaseModel.objects.get(case_id=case_id)
         if not case.can_resolve(agent):
-            return JsonResponse({
-                'error': f'Cannot resolve case in {case.status} status'
-            }, status=400)
-        
+            return JsonResponse({'error': f'Cannot resolve case in {case.status} status'}, status=400)
         data = json.loads(request.body)
         resolution_notes = data.get('resolution_notes', '')
-        
         case.resolve(agent, resolution_notes)
-        
-        # After resolving case, update contact level to RESOLVED
-        ChatContact2.objects.filter(mobile=case.mobile).update(current_level='RESOLVED')
+        ContactModel.objects.filter(mobile=case.mobile).update(current_level='RESOLVED')
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
-            "global_contacts2",
-        {
-            "type": "contact.update",
-            "contact": {
-            "mobile": case.mobile,
-            "current_level": 'RESOLVED'
-        }
-    }
-)
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Case resolved successfully',
-            'case': {
-                'case_id': case.case_id,
-                'status': case.status,
-                'current_level': case.current_level,
-            }
-        })
-        
-    except Case.DoesNotExist:
+            channel_group,
+            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'RESOLVED'}}
+        )
+        return JsonResponse({'success': True, 'message': 'Case resolved successfully', 'case': {'case_id': case.case_id, 'status': case.status, 'current_level': case.current_level}})
+    except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)        
-    except Case.DoesNotExist:
-        return JsonResponse({'error': 'Case not found'}, status=404)
-    except ValueError as e:
-        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @csrf_exempt
 def close_case_api2(request, case_id):
-    """
-    Close case - ONLY ADMIN can close
-    Case must be in RESOLVED status
-    """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    
     try:
+        CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
         agent = get_agent_from_user(request.user)
-        
         if agent.role != 'ADMIN':
-            return JsonResponse({
-                'error': 'Only Admin can close cases'
-            }, status=403)
-        
-        case = Case.objects.get(case_id=case_id)
-        
+            return JsonResponse({'error': 'Only Admin can close cases'}, status=403)
+        case = CaseModel.objects.get(case_id=case_id)
         if not case.can_close(agent):
-            return JsonResponse({
-                'error': f'Cannot close case in {case.status} status. Case must be resolved first.'
-            }, status=400)
-        
+            return JsonResponse({'error': f'Cannot close case in {case.status} status'}, status=400)
         data = json.loads(request.body)
         close_reason = data.get('close_reason', '')
-        
         case.close(agent, close_reason)
-        ChatContact2.objects.filter(mobile=case.mobile).update(
-            current_level='CLOSED',
-            last_status='Closed'
-        )
+        ContactModel.objects.filter(mobile=case.mobile).update(current_level='CLOSED', last_status='Closed')
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
-            "global_contacts2",
-            {
-                "type": "contact.update",
-                "contact": {
-                    "mobile": case.mobile,
-                    "current_level": 'CLOSED'
-                }
-            }
+            channel_group,
+            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'CLOSED'}}
         )
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Case {case.case_id} closed successfully',
-            'case': {
-                'case_id': case.case_id,
-                'status': case.status,
-                'current_level': case.current_level,
-                'closed_at': case.closed_at.isoformat(),
-                'closed_by': case.closed_by,
-            }
-        })
-        
-    except Case.DoesNotExist:
+        return JsonResponse({'success': True, 'message': f'Case {case.case_id} closed successfully'})
+    except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
-    except PermissionError as e:
-        return JsonResponse({'error': str(e)}, status=403)
-    except ValueError as e:
-        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @csrf_exempt
 def reopen_case_api2(request, case_id):
-    """
-    Reopen a resolved case - Available to appropriate teams
-    """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    
     try:
+        CaseModel = get_case_model_for_app(request)
         agent = get_agent_from_user(request.user)
-        case = Case.objects.get(case_id=case_id)
-        
+        case = CaseModel.objects.get(case_id=case_id)
         if case.status == 'Closed':
-            return JsonResponse({
-                'error': 'Cannot reopen a closed case. Only admin can reopen closed cases.'
-            }, status=400)
-        
+            return JsonResponse({'error': 'Cannot reopen a closed case. Only admin can reopen closed cases.'}, status=400)
         if case.status != 'Resolved':
-            return JsonResponse({
-                'error': f'Only resolved cases can be reopened. Current status: {case.status}'
-            }, status=400)
-        
+            return JsonResponse({'error': f'Only resolved cases can be reopened. Current status: {case.status}'}, status=400)
         data = json.loads(request.body)
         reopen_reason = data.get('reopen_reason', '')
         target_level = data.get('target_level', None)
-        
-        if agent.role != 'ADMIN':
-            if not agent.can_view_case(case):
-                return JsonResponse({
-                    'error': 'You do not have permission to reopen this case'
-                }, status=403)
-        
+        if agent.role != 'ADMIN' and not agent.can_view_case(case):
+            return JsonResponse({'error': 'You do not have permission to reopen this case'}, status=403)
         case.reopen(agent, reopen_reason, target_level)
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Case reopened to {case.current_level}',
-            'case': {
-                'case_id': case.case_id,
-                'status': case.status,
-                'current_level': case.current_level,
-                'reopen_count': case.reopen_count,
-                'reopened_at': case.reopened_at.isoformat(),
-            }
-        })
-        
-    except Case.DoesNotExist:
+        return JsonResponse({'success': True, 'message': f'Case reopened to {case.current_level}'})
+    except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
-    except ValueError as e:
-        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @csrf_exempt
 def assign_case_api2(request, case_id):
-    """API to assign case to an agent"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    
     try:
+        CaseModel = get_case_model_for_app(request)
         agent = get_agent_from_user(request.user)
-        
-        # Only LEAD or ADMIN can assign
         if agent.role not in ['LEAD', 'ADMIN']:
             return JsonResponse({'error': 'Only Team Lead or Admin can assign cases'}, status=403)
-        
-        case = Case.objects.get(case_id=case_id)
+        case = CaseModel.objects.get(case_id=case_id)
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
-        
-        try:
-            target_agent = Agent.objects.get(id=agent_id)
-        except Agent.DoesNotExist:
-            return JsonResponse({'error': 'Agent not found'}, status=404)
-        
+        target_agent = Agent.objects.get(id=agent_id)
         case.assign_to_agent(target_agent, agent.name, data.get('notes', ''))
-        
         return JsonResponse({'success': True})
-        
-    except Case.DoesNotExist:
+    except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-
 def get_case_timeline_api2(request, case_id):
-    """Get case escalation timeline"""
-    case = get_object_or_404(Case, case_id=case_id)
+    CaseModel = get_case_model_for_app(request)
+    case = get_object_or_404(CaseModel, case_id=case_id)
     logs = case.escalation_logs.all()[:50]
-    
     return JsonResponse({
         'logs': [{
             'from_level': log.from_level,
@@ -1790,13 +1323,11 @@ def get_case_timeline_api2(request, case_id):
         } for log in logs]
     })
 
-
 def get_case_action_permissions2(request, case_id):
-    """Get available actions for current user on this case"""
     try:
+        CaseModel = get_case_model_for_app(request)
         agent = get_agent_from_user(request.user)
-        case = Case.objects.get(case_id=case_id)
-        
+        case = CaseModel.objects.get(case_id=case_id)
         permissions = {
             'can_view': agent.can_view_case(case) or agent.role == 'ADMIN',
             'can_escalate': case.can_escalate(agent, '') and agent.role != 'ADMIN' and case.status not in ['Resolved', 'Closed'],
@@ -1805,15 +1336,10 @@ def get_case_action_permissions2(request, case_id):
             'can_reopen': case.status == 'Resolved' and (agent.role == 'ADMIN' or agent.can_view_case(case)),
             'can_assign': agent.role in ['LEAD', 'ADMIN'] and case.status not in ['Resolved', 'Closed'],
         }
-        
         escalation_options = []
         if agent.role != 'ADMIN' and case.status not in ['Resolved', 'Closed']:
             for level in agent.ESCALATION_MATRIX.get(agent.role, []):
-                escalation_options.append({
-                    'level': level,
-                    'name': dict(Case.ESCALATION_CHOICES).get(level, level)
-                })
-        
+                escalation_options.append({'level': level, 'name': dict(CaseModel.ESCALATION_CHOICES).get(level, level)})
         return JsonResponse({
             'success': True,
             'permissions': permissions,
@@ -1822,107 +1348,78 @@ def get_case_action_permissions2(request, case_id):
             'case_level': case.current_level,
             'user_role': agent.role,
         })
-        
-    except Case.DoesNotExist:
+    except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
 
-
 def get_resolved_cases_api2(request):
-    """Get all resolved cases (for admin to review before closing)"""
+    CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
-    
     if agent.role != 'ADMIN':
         return JsonResponse({'error': 'Admin access required'}, status=403)
-    
-    resolved_cases = Case.objects.filter(
-        status='Resolved',
-        current_level='RESOLVED'
-    ).order_by('-resolved_at')
-    
-    cases_data = []
-    for case in resolved_cases:
-        cases_data.append({
-            'case_id': case.case_id,
-            'customer_name': case.customer_name,
-            'mobile': case.mobile,
-            'loan_number':case.loan_number,
-            'resolved_at_level': case.resolved_at_level,
-            'resolved_by_role': case.resolved_by_role,
-            'resolved_by': case.resolved_by,
-            'resolved_at': case.resolved_at.isoformat(),
-            'resolution_notes': case.resolution_notes,
-            'reopen_count': case.reopen_count,
-        })
-    
-    return JsonResponse({
-        'success': True,
-        'cases': cases_data,
-        'total': resolved_cases.count()
-    })
-
+    resolved_cases = CaseModel.objects.filter(status='Resolved', current_level='RESOLVED').order_by('-resolved_at')
+    cases_data = [{
+        'case_id': c.case_id,
+        'customer_name': c.customer_name,
+        'mobile': c.mobile,
+        'loan_number': c.loan_number,
+        'resolved_at_level': c.resolved_at_level,
+        'resolved_by_role': c.resolved_by_role,
+        'resolved_by': c.resolved_by,
+        'resolved_at': c.resolved_at.isoformat(),
+        'resolution_notes': c.resolution_notes,
+        'reopen_count': c.reopen_count,
+    } for c in resolved_cases]
+    return JsonResponse({'success': True, 'cases': cases_data, 'total': resolved_cases.count()})
 
 def get_dashboard_stats_api2(request):
-    """Get dashboard statistics based on user role"""
+    CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
-    
-    stats = {
-        'role': agent.role,
-        'level': agent.level,
-        'name': agent.name,
-    }
-    
+    stats = {'role': agent.role, 'level': agent.level, 'name': agent.name}
     if agent.role == 'ADMIN':
         stats.update({
-            'total_cases': Case.objects.count(),
-            'open_cases': Case.objects.filter(status='Open').count(),
-            'in_progress': Case.objects.filter(status='In Progress').count(),
-            'resolved_pending_close': Case.objects.filter(status='Resolved', current_level='RESOLVED').count(),
-            'closed_cases': Case.objects.filter(status='Closed').count(),
-            'escalated_to_admin': Case.objects.filter(current_level='ESC5').count(),
+            'total_cases': CaseModel.objects.count(),
+            'open_cases': CaseModel.objects.filter(status='Open').count(),
+            'in_progress': CaseModel.objects.filter(status='In Progress').count(),
+            'resolved_pending_close': CaseModel.objects.filter(status='Resolved', current_level='RESOLVED').count(),
+            'closed_cases': CaseModel.objects.filter(status='Closed').count(),
+            'escalated_to_admin': CaseModel.objects.filter(current_level='ESC5').count(),
         })
     elif agent.role == 'MANAGER':
         stats.update({
-            'my_level_cases': Case.objects.filter(current_level='ESC4', status__in=['Open', 'In Progress']).count(),
-            'resolved_at_my_level': Case.objects.filter(resolved_at_level='ESC4').count(),
+            'my_level_cases': CaseModel.objects.filter(current_level='ESC4', status__in=['Open', 'In Progress']).count(),
+            'resolved_at_my_level': CaseModel.objects.filter(resolved_at_level='ESC4').count(),
         })
     elif agent.role == 'LEAD':
         stats.update({
-            'my_level_cases': Case.objects.filter(current_level='ESC3', status__in=['Open', 'In Progress']).count(),
-            'resolved_at_my_level': Case.objects.filter(resolved_at_level='ESC3').count(),
+            'my_level_cases': CaseModel.objects.filter(current_level='ESC3', status__in=['Open', 'In Progress']).count(),
+            'resolved_at_my_level': CaseModel.objects.filter(resolved_at_level='ESC3').count(),
             'assigned_agents': Agent.objects.filter(role='AGENT', is_active=True).count(),
         })
     elif agent.role == 'LEGAL':
         stats.update({
-            'my_level_cases': Case.objects.filter(current_level='ESC2', status__in=['Open', 'In Progress']).count(),
-            'resolved_at_my_level': Case.objects.filter(resolved_at_level='ESC2').count(),
+            'my_level_cases': CaseModel.objects.filter(current_level='ESC2', status__in=['Open', 'In Progress']).count(),
+            'resolved_at_my_level': CaseModel.objects.filter(resolved_at_level='ESC2').count(),
         })
     else:  # AGENT
         stats.update({
-            'assigned_to_me': Case.objects.filter(assigned_to=agent, status__in=['Open', 'In Progress']).count(),
-            'resolved_by_me': Case.objects.filter(resolved_by=agent.name).count(),
+            'assigned_to_me': CaseModel.objects.filter(assigned_to=agent, status__in=['Open', 'In Progress']).count(),
+            'resolved_by_me': CaseModel.objects.filter(resolved_by=agent.name).count(),
         })
-    
     return JsonResponse(stats)
 
-
 def get_case_by_mobile2(request):
-    """API to get case by mobile number"""
     mobile = request.GET.get('mobile', '')
     if not mobile:
         return JsonResponse({'error': 'Mobile required'}, status=400)
-    
     mobile = format_mobile2(mobile)
-    
-    case = Case.objects.filter(
-        mobile=mobile
-    ).order_by('-created_at').first()
-    
+    CaseModel = get_case_model_for_app(request)
+    case = CaseModel.objects.filter(mobile=mobile).order_by('-created_at').first()
     if case:
         return JsonResponse({
             'case': {
                 'case_id': case.case_id,
                 'customer_name': case.customer_name or mobile,
-                'loan_number':case.loan_number,
+                'loan_number': case.loan_number,
                 'created_by': case.created_by or 'System',
                 'assigned_to_name': case.assigned_to_name or 'Unassigned',
                 'current_level': case.current_level,
@@ -1930,37 +1427,25 @@ def get_case_by_mobile2(request):
                 'priority': case.priority,
                 'issue_description': case.issue_description or '',
                 'created_at': case.created_at.isoformat(),
-               
             }
         })
-    
     return JsonResponse({'case': None})
-
 
 @csrf_exempt
 def create_case_from_chat_api2(request):
-    """API to create case from chat"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    
     try:
         data = json.loads(request.body)
         mobile = data.get('mobile', '')
         customer_name = data.get('customer_name', '')
         agent_name = data.get('agent_name', 'Agent')
         issue_description = data.get('issue_description', '')
-        
         mobile = format_mobile2(mobile)
-        
         if not customer_name or customer_name.strip() == "":
             customer_name = mobile
-        
-        # Check for existing case
-        existing_case = Case.objects.filter(
-            mobile=mobile,
-            status__in=['Open', 'In Progress', 'Resolved']
-        ).first()
-        
+        CaseModel, ContactModel, _, _ = get_models_for_app(request)
+        existing_case = CaseModel.objects.filter(mobile=mobile, status__in=['Open', 'In Progress', 'Resolved']).first()
         if existing_case:
             return JsonResponse({
                 'success': True,
@@ -1976,10 +1461,8 @@ def create_case_from_chat_api2(request):
                 },
                 'existing': True
             })
-        
         case_id = f"CASE-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
-        
-        case = Case.objects.create(
+        case = CaseModel.objects.create(
             case_id=case_id,
             customer_name=customer_name,
             mobile=mobile,
@@ -1989,35 +1472,28 @@ def create_case_from_chat_api2(request):
             status='Open',
             priority='Medium',
             created_by=agent_name,
-            assigned_to=None,  # No assignment - available to all agents
+            assigned_to=None,
             assigned_to_name=None,
             loan_number=data.get('loan_number', ''),
-
-            
         )
-        # After creating case, update contact level
-        ChatContact2.objects.update_or_create(
-            mobile=mobile,
-            defaults={'current_level': case.current_level}
-                                      )
-        return JsonResponse({
-            'success': True,
-            'case': {
-                'case_id': case.case_id,
-                'customer_name': case.customer_name,
-                'created_by': case.created_by,
-                'assigned_to_name': case.assigned_to_name or 'Unassigned',
-                'current_level': case.current_level,
-                'status': case.status,
-                'priority': case.priority,
-                'issue_description': case.issue_description or '',
-            },
-            'existing': False
-        })
-        
+        ContactModel.objects.update_or_create(mobile=mobile, defaults={'current_level': case.current_level})
+        return JsonResponse({'success': True, 'case': {'case_id': case.case_id, 'customer_name': case.customer_name, 'current_level': case.current_level, 'status': case.status}, 'existing': False})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+@messaging2_required
+def get_user_role_api2(request):
+    try:
+        agent = Agent.objects.get(user=request.user)
+        role_display_names = {'AGENT': 'Normal Agent', 'LEGAL': 'Legal Team', 'LEAD': 'Team Lead', 'MANAGER': 'Manager', 'ADMIN': 'Administrator'}
+        esc_levels = {'ESC1': {'icon': '1', 'color': '#4caf50', 'name': 'Level 1 - Agent'}, 'ESC2': {'icon': '2', 'color': '#2196f3', 'name': 'Level 2 - Legal'}, 'ESC3': {'icon': '3', 'color': '#ff9800', 'name': 'Level 3 - Lead'}, 'ESC4': {'icon': '4', 'color': '#9c27b0', 'name': 'Level 4 - Manager'}, 'ESC5': {'icon': '5', 'color': '#f44336', 'name': 'Level 5 - Admin'}}
+        level = agent.level
+        level_info = esc_levels.get(level, {'icon': '?', 'color': '#666', 'name': 'Unknown'})
+        return JsonResponse({'success': True, 'role': agent.role, 'role_display': role_display_names.get(agent.role, agent.role), 'level': level, 'level_info': level_info, 'name': agent.name, 'email': agent.email})
+    except Agent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent profile not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 

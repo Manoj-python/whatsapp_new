@@ -1,580 +1,151 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit User | Case Management System</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 70px 0 30px;
-        }
-        
-        /* Modern Navbar - Compact */
-        .navbar-modern {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            z-index: 9999;
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
-            padding: 8px 0;
-        }
-        
-        .navbar-brand {
-            font-weight: 800;
-            font-size: 1.3rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .nav-link {
-            font-weight: 500;
-            color: #4a5568;
-            transition: all 0.3s ease;
-            margin: 0 3px;
-            border-radius: 8px;
-            padding: 6px 14px;
-            font-size: 14px;
-        }
-        
-        .nav-link:hover {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-logout {
-            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 6px 16px;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-logout:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(229, 62, 62, 0.4);
-        }
-        
-        /* Form Card - Wider and Compact */
-        .form-card {
-            background: white;
-            border-radius: 20px;
-            padding: 25px 35px;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
-            max-width: 900px;
-            width: 90%;
-            margin: 0 auto;
-        }
-        
-        .form-title {
-            font-size: 24px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 5px;
-        }
-        
-        .form-subtitle {
-            color: #718096;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #e2e8f0;
-            font-size: 14px;
-        }
-        
-        .form-label {
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 5px;
-            font-size: 13px;
-        }
-        
-        .form-control, .form-select {
-            border-radius: 10px;
-            border: 2px solid #e2e8f0;
-            padding: 8px 12px;
-            transition: all 0.3s ease;
-            font-size: 14px;
-        }
-        
-        .form-control:focus, .form-select:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        .input-icon {
-            position: relative;
-        }
-        
-        .input-icon i {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #a0aec0;
-            font-size: 14px;
-        }
-        
-        .input-icon .form-control {
-            padding-left: 38px;
-        }
-        
-        .btn-update {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 14px;
-            width: 100%;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-update:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-cancel {
-            background: #e2e8f0;
-            color: #4a5568;
-            border: none;
-            padding: 10px;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 14px;
-            width: 100%;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-cancel:hover {
-            background: #cbd5e0;
-        }
-        
-        .user-badge {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            display: inline-block;
-        }
-        
-        /* Role Cards - Compact */
-        .role-card {
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 10px;
-            margin-bottom: 8px;
-            transition: all 0.3s ease;
-        }
-        
-        .role-card:hover {
-            border-color: #667eea;
-            background: #f7fafc;
-        }
-        
-        .role-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 10px;
-        }
-        
-        .role-AGENT .role-icon { background: #48bb7820; color: #48bb78; }
-        .role-LEGAL .role-icon { background: #71809620; color: #718096; }
-        .role-LEAD .role-icon { background: #4299e120; color: #4299e1; }
-        .role-MANAGER .role-icon { background: #ed893620; color: #ed8936; }
-        .role-ADMIN .role-icon { background: #f5656520; color: #f56565; }
-        
-        .role-card strong {
-            font-size: 13px;
-        }
-        
-        .role-card small {
-            font-size: 11px;
-        }
-        
-        /* Alert */
-        .alert-custom {
-            border-radius: 10px;
-            border: none;
-            padding: 10px 15px;
-            margin-bottom: 15px;
-            font-size: 13px;
-        }
-        
-        /* Info Box */
-        .info-box {
-            background: #f7fafc;
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 16px;
-        }
-        
-        .info-label {
-            font-size: 12px;
-            color: #718096;
-            margin-bottom: 4px;
-        }
-        
-        .info-value {
-            font-size: 14px;
-            font-weight: 600;
-            color: #2d3748;
-        }
-        
-        /* Footer */
-        .footer {
-            text-align: center;
-            padding: 15px;
-            color: rgba(255,255,255,0.8);
-            font-size: 11px;
-            margin-top: 20px;
-        }
-        
-        small.text-muted {
-            font-size: 11px;
-        }
-        
-        .mb-3 {
-            margin-bottom: 12px !important;
-        }
-        
-        .mb-4 {
-            margin-bottom: 16px !important;
-        }
-        
-        .mt-2 {
-            margin-top: 8px !important;
-        }
-        
-        .p-3 {
-            padding: 12px !important;
-        }
-        
-        .gap-2 {
-            gap: 8px !important;
-        }
-        
-        .g-2 {
-            --bs-gutter-y: 0.5rem;
-        }
-        
-        @media (max-width: 768px) {
-            .form-card {
-                margin: 15px;
-                padding: 20px;
-                width: auto;
-            }
-            .form-title {
-                font-size: 20px;
-            }
-            .role-card strong {
-                font-size: 11px;
-            }
-            .navbar-brand {
-                font-size: 1rem;
-            }
-            .nav-link {
-                padding: 4px 8px;
-                font-size: 11px;
-            }
-            .btn-logout {
-                padding: 4px 10px;
-                font-size: 11px;
-            }
-        }
-    </style>
-</head>
-<body>
+{% extends "adminpanel/base.html" %}
+{% load static %}
 
-<!-- Modern Navbar - Compact -->
-<nav class="navbar-modern">
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <a class="navbar-brand" href="{% url 'admin_dashboard' %}">
-                    <i class="fas fa-tasks"></i> CaseManager Pro
-                </a>
-            </div>
-            <div>
-                <a href="{% url 'admin_user_create' %}" class="nav-link d-inline-block">
-                    <i class="fas fa-user-plus"></i> Create User
-                </a>
-                <a href="{% url 'admin_user_list' %}" class="nav-link d-inline-block">
-                    <i class="fas fa-users"></i> Users
-                </a>
-                <a href="{% url 'admin_dashboard' %}" class="nav-link d-inline-block">
-                    <i class="fas fa-chart-line"></i> Dashboard
-                </a>
-                <a href="{% url 'admin_logout' %}" class="btn-logout ms-2">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
+{% block title %}Edit User | Case Management System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .card-header {
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        border-radius: 20px 20px 0 0 !important;
+        padding: 20px;
+    }
+    .form-label {
+        font-weight: 600;
+        color: #1a1a2e;
+    }
+    .form-control, .form-select {
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        padding: 10px 15px;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67,97,238,0.25);
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #4361ee, #3f37c9);
+        border: none;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 600;
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(67,97,238,0.4);
+    }
+    .info-box {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+            <div class="card">
+                <div class="card-header text-white">
+                    <h4 class="mb-0"><i class="fas fa-user-edit"></i> Edit User</h4>
+                </div>
+                <div class="card-body p-4">
+                    <div class="text-center mb-3">
+                        <span class="badge bg-secondary">Editing: {{ user.username }}</span>
+                    </div>
+
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username *</label>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   value="{{ user.username }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   placeholder="Leave blank to keep current password">
+                            <div class="form-text">Only enter if you want to change the password.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ user.email }}">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Full Name (Display Name)</label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ user_agent.name|default:'' }}" placeholder="e.g., John Doe">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="mobile" class="form-label">Mobile Number</label>
+                            <input type="tel" class="form-control" id="mobile" name="mobile" 
+                                   value="{{ user_agent.mobile|default:'' }}" placeholder="+91XXXXXXXXXX">
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="role" class="form-label">Role *</label>
+                            <select class="form-select" id="role" name="role" required>
+                                {% for value, label in role_choices %}
+                                <option value="{{ value }}" {% if user_agent and user_agent.role == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text mt-1">
+                                <i class="fas fa-info-circle"></i> 
+                                Role determines dashboard access and escalation permissions.
+                                <br>Staff status (Admin/Manager) will be set automatically.
+                            </div>
+                        </div>
+
+                        <!-- Current info summary -->
+                        <div class="info-box">
+                            <h6 class="mb-2"><i class="fas fa-chart-line"></i> Current Information</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Current Role</small><br>
+                                    <strong>
+                                        {% if user_agent %}
+                                            {{ user_agent.get_role_display }}
+                                        {% else %}
+                                            Not assigned
+                                        {% endif %}
+                                    </strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Cases Handled</small><br>
+                                    <strong>{{ user_agent.total_cases_handled|default:"0" }}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between gap-2">
+                            <a href="{% url 'admin_user_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Update User
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
-</nav>
-
-<div class="container">
-    <div class="form-card">
-        <div class="text-center">
-            <div class="form-title">
-                <i class="fas fa-user-edit"></i> Edit User
-            </div>
-            <div class="form-subtitle">
-                Update user information and role
-            </div>
-        </div>
-        
-        <div class="text-center mb-3">
-            <span class="user-badge">
-                <i class="fas fa-user"></i> Editing: {{ user.username }}
-            </span>
-        </div>
-        
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-custom alert-dismissible fade show">
-                    <i class="fas {% if message.tags == 'success' %}fa-check-circle{% else %}fa-exclamation-circle{% endif %} me-2"></i>
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-        
-        <form method="POST">
-            {% csrf_token %}
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">
-                        <i class="fas fa-user text-primary"></i> Username *
-                    </label>
-                    <div class="input-icon">
-                        <i class="fas fa-user"></i>
-                        <input type="text" name="username" class="form-control" value="{{ user.username }}" required>
-                    </div>
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">
-                        <i class="fas fa-lock text-primary"></i> New Password
-                    </label>
-                    <div class="input-icon">
-                        <i class="fas fa-lock"></i>
-                        <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current">
-                    </div>
-                    <small class="text-muted">Only enter if you want to change password</small>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-12 mb-3">
-                    <label class="form-label">
-                        <i class="fas fa-envelope text-primary"></i> Email Address
-                    </label>
-                    <div class="input-icon">
-                        <i class="fas fa-envelope"></i>
-                        <input type="email" name="email" class="form-control" value="{{ user.email }}">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">
-                        <i class="fas fa-tag text-primary"></i> Team / Role *
-                    </label>
-                    <select name="role" class="form-select" required>
-                        <option value="AGENT" {% if user_agent.role == 'AGENT' %}selected{% endif %}>🟢 Normal Agent - Chat Support (ESC1)</option>
-                        <option value="LEGAL" {% if user_agent.role == 'LEGAL' %}selected{% endif %}>⚖️Thumb Team (ESC2)</option>
-                        <option value="LEAD" {% if user_agent.role == 'LEAD' %}selected{% endif %}>⭐NOC Team (ESC3)</option>
-                        <option value="MANAGER" {% if user_agent.role == 'MANAGER' %}selected{% endif %}>📊 Manager (ESC4)</option>
-                        <option value="ADMIN" {% if user_agent.role == 'ADMIN' %}selected{% endif %}>🔒 Administrator (ESC5)</option>
-                    </select>
-                    <small class="text-muted">Determines case access level and escalation permissions</small>
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <div class="form-check mt-4 pt-2">
-                        <input type="checkbox" name="is_staff" class="form-check-input" id="isStaff" {% if user.is_staff %}checked{% endif %}>
-                        <label class="form-check-label" for="isStaff">
-                            <i class="fas fa-shield-alt"></i> Staff Status
-                        </label>
-                        <br>
-                        <small class="text-muted">Enable for Managers and Admins only</small>
-                    </div>
-                </div>
-            </div>
-            <div class="mb-3">
-    <label>Assign to WhatsApp App</label>
-    <select name="source_app" class="form-select">
-        <option value="app1" {% if user_agent.source_app == 'app1' %}selected{% endif %}>App 1 - SMS</option>
-        <option value="app2" {% if user_agent.source_app == 'app2' %}selected{% endif %}>App 2 - PSF</option>
-        <option value="app3" {% if user_agent.source_app == 'app3' %}selected{% endif %}>App 3 - special_cases</option>
-    </select>
 </div>
-            
-            <!-- Current Role Info - Compact -->
-            <div class="info-box mb-3">
-                <div class="fw-bold mb-2 small">
-                    <i class="fas fa-chart-line text-primary"></i> Current Information
-                </div>
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="info-label">Current Role</div>
-                        <div class="info-value">
-                            {% if user_agent %}
-                                {% if user_agent.role == 'ADMIN' %}
-                                    🔒 Administrator (ESC5)
-                                {% elif user_agent.role == 'MANAGER' %}
-                                    📊 Manager (ESC4)
-                                {% elif user_agent.role == 'LEAD' %}
-                                    ⭐ Thumb Team (ESC3)
-                                {% elif user_agent.role == 'LEGAL' %}
-                                    ⚖️NOC Team (ESC2)
-                                {% else %}
-                                    🟢 Normal Agent (ESC1)
-                                {% endif %}
-                            {% else %}
-                                No role assigned
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="info-label">Cases Handled</div>
-                        <div class="info-value">{{ user_agent.total_cases_handled|default:"0" }}</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Role Guide - Compact -->
-            <div class="mb-3 p-2" style="background: #f7fafc; border-radius: 12px;">
-                <div class="fw-bold mb-2 small">
-                    <i class="fas fa-info-circle text-primary"></i> Team Responsibilities
-                </div>
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <div class="role-card role-AGENT">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-headset"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC1 - Normal Agent</strong>
-                                    <small class="d-block text-muted">Chat support, basic queries</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="role-card role-LEGAL">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-gavel"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC2 - Thumb Team</strong>
-                                    <small class="d-block text-muted">Thumb documents,</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="role-card role-LEAD">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-star"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC3 - Team Lead</strong>
-                                    <small class="d-block text-muted">Technical issues</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="role-card role-MANAGER">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-chart-line"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC4 - Manager</strong>
-                                    <small class="d-block text-muted">High-value cases</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-12">
-                        <div class="role-card role-ADMIN">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-crown"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC5 - Administrator</strong>
-                                    <small class="d-block text-muted">Full access, user management</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row g-2">
-                <div class="col-md-6">
-                    <button type="submit" class="btn-update">
-                        <i class="fas fa-save"></i> Update User
-                    </button>
-                </div>
-                <div class="col-md-6">
-                    <a href="{% url 'admin_user_list' %}" class="btn-cancel d-block text-center text-decoration-none">
-                        <i class="fas fa-arrow-left"></i> Cancel
-                    </a>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
+{% endblock %}
 
-<div class="footer">
-    <p>&copy; 2024 Case Management System | Powered by Django</p>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>

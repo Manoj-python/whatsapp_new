@@ -152,14 +152,18 @@ def messaging_login(request):
 
 def messaging_logout(request):
     request.session.pop("messaging_user", None)
-    return redirect("/login/")
+    return redirect("admin_login")
 
 
 def messaging_required(view_func):
     def wrapper(request, *args, **kwargs):
-        if not request.session.get("messaging_user"):
-            return redirect("/login/")
-        return view_func(request, *args, **kwargs)
+        # First check Django auth
+        if request.user.is_authenticated:
+            return view_func(request, *args, **kwargs)
+        # Then check custom session key (legacy)
+        if request.session.get("messaging_user"):
+            return view_func(request, *args, **kwargs)
+        return redirect(settings.LOGIN_URL)
     return wrapper
 
 # -----------------------------------------------------
@@ -239,32 +243,28 @@ def download_failed_report(request, job_id):
 
     raise Http404("Failed report not found.")
 
-
+from adminpanel.views import get_agent_from_user
 # -----------------------------------------------------
 # CHAT DASHBOARD
 # -----------------------------------------------------
+from django.contrib.auth.decorators import login_required
 @messaging_required
 def chat_dashboard(request):
-    mobiles = (
-        SmsWhatsAppLog.objects
-        .values("mobile")
-        .annotate(last_sent=Max("sent_at"))
-        .order_by("-last_sent")
-    )
-
+    agent = get_agent_from_user(request.user)
+    mobiles = (SmsWhatsAppLog.objects.values("mobile").annotate(last_sent=Max("sent_at")).order_by("-last_sent"))
     seen = set()
     mobile_list = []
-
     for m in mobiles:
         normalized = format_mobile(str(m["mobile"]))
         if normalized not in seen:
             seen.add(normalized)
             mobile_list.append({"mobile": normalized})
-
     return render(request, "messaging/chat.html", {
         "mobile_list": mobile_list,
         "user_name": request.user.username,
         "MEDIA_URL": settings.MEDIA_URL,
+        "agent": agent,
+        "user": request.user,
     })
 
 
@@ -346,67 +346,6 @@ from django.utils import timezone
 
 
 
-
-
-
-
-
-# =============================================
-# SEND REPLY API - FIXED WITH SAVE FIRST PATTERN
-# =============================================
-# messagingviews.py - COMPLETE WORKING VERSION (NO DUPLICATES)
-
-import pandas as pd
-import io
-import json
-import re
-import uuid
-import requests
-import time
-import traceback
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse, Http404
-from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import render, redirect, get_object_or_404
-from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
-from django.db.models import Max, Count, Q, F
-from django.conf import settings
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
-from django.utils import timezone
-
-from django.contrib.auth import authenticate
-from django.contrib import messages
-from django.core.paginator import Paginator
-
-
-# =============================================
-# HELPER FUNCTIONS
-# =============================================
-def ws_group(mobile: str) -> str:
-    if not mobile:
-        return ""
-    return re.sub(r"\D", "", str(mobile))
-
-
-def send_whatsapp_text(to_number, text_body):
-    """Send text message via WhatsApp API"""
-    url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "text",
-        "text": {"body": text_body[:4096]},
-    }
-    resp = requests.post(url, headers=headers, json=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
-
-
 def download_whatsapp_media(media_id):
     """Download media from WhatsApp"""
     try:
@@ -439,47 +378,6 @@ def download_whatsapp_media(media_id):
 # CHAT DASHBOARD & MESSAGES API
 # =============================================
 
-
-
-def chat_messages_api(request, mobile):
-    mobile = format_mobile(mobile)
-    page = int(request.GET.get("page", 1))
-    size = 500
-
-    qs = SmsWhatsAppLog.objects.filter(mobile=mobile).order_by("-sent_at")
-    paginator = Paginator(qs, size)
-
-    try:
-        pg = paginator.page(page)
-    except:
-        return JsonResponse({"messages": [], "has_more": False})
-
-    result = list(pg.object_list)[::-1]
-
-    def to_json(m):
-        media_url = ""
-        if m.media_file:
-            try:
-                media_url = default_storage.url(m.media_file.name)
-            except:
-                media_url = getattr(m.media_file, "url", "")
-        return {
-            "id": m.id,
-            "mobile": m.mobile,
-            "sent_text_message": m.sent_text_message or "",
-            "message_type": m.message_type,
-            "sent_at": m.sent_at.isoformat() if m.sent_at else "",
-            "message_id": m.message_id,
-            "content_type": m.content_type or "text",
-            "media_file": media_url,
-            "status": m.status or "",
-            "sender_name": m.customer_name or "",
-        }
-
-    return JsonResponse({
-        "messages": [to_json(m) for m in result],
-        "has_more": pg.has_next()
-    })
 
 
 def contacts_api(request):
@@ -710,6 +608,20 @@ def send_reply_api(request):
 
         # WebSocket broadcast
         channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            "global_contacts",
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": mobile,
+                    "last_msg": text or f"[{content_type_val.title()}]",
+                    "last_time": timezone.now().isoformat(),
+                    "last_type": "Sent",
+                    "last_status": "Sent" if msg_id else "Failed",
+                    "unread": 0
+                }
+            }
+        )
         gm = re.sub(r"\D", "", mobile)
 
         if gm:
@@ -825,6 +737,12 @@ def whatsapp_webhook(request):
                             error = msg.get("errors", [{}])[0].get("message", "Unknown")
                             # print(f"⚠️ Unsupported: {error}")
                             continue
+                        customer_name = ""
+                        contacts_data = value.get("contacts", [])
+                        if contacts_data:
+                            customer_name = contacts_data[0].get("profile", {}).get("name", "")
+                            print(f"📛 Customer name: {customer_name}")  # Debug print
+
 
                         # Save message
                         with transaction.atomic():
@@ -884,6 +802,7 @@ def whatsapp_webhook(request):
                                         "message_type": "Received",
                                         "message_id": log.message_id,
                                         "status": log.status,
+                                        "sender_name": customer_name 
                                     }
                                 }
                             )
@@ -1020,34 +939,6 @@ def whatsapp_webhook(request):
 
     return HttpResponseBadRequest("Unsupported method")
 
-# -----------------------------------------------------
-# Download media from WA (helper)
-# -----------------------------------------------------
-def download_whatsapp_media(media_id):
-    """Download media from WhatsApp"""
-    try:
-        access_token = settings.WHATSAPP_ACCESS_TOKEN
-        headers = {"Authorization": f"Bearer {access_token}"}
-
-        # Use v22.0
-        meta_url = f"https://graph.facebook.com/v22.0/{media_id}"
-        meta_resp = requests.get(meta_url, headers=headers, timeout=30)
-        meta_resp.raise_for_status()
-        meta = meta_resp.json()
-
-        file_url = meta.get("url")
-        mime = meta.get("mime_type", "")
-        ext = mime.split("/")[-1] if "/" in mime else "bin"
-
-        file_resp = requests.get(file_url, headers=headers, timeout=30)
-        file_resp.raise_for_status()
-
-        filename = f"WHATSAPP_{media_id}.{ext}"
-        return filename, file_resp.content
-
-    except Exception as e:
-        # print(f"Media download error: {e}")
-        return None
 
 
 
@@ -1055,76 +946,9 @@ def download_whatsapp_media(media_id):
 # -----------------------------------------------------
 # Contacts API (for sidebar)
 # -----------------------------------------------------
-
-def contacts_api(request):
-    from django.db import connection
-    from django.utils import timezone
-
-    query = """
-        SELECT
-            l.mobile,
-            MAX(l.sent_at) as last_time,
-            SUM(CASE WHEN l.message_type = 'Received' AND l.status = 'Unread' THEN 1 ELSE 0 END) as unread,
-            (
-                SELECT l2.sent_text_message
-                FROM messaging_smswhatsapplog l2
-                WHERE l2.mobile = l.mobile
-                ORDER BY l2.sent_at DESC
-                LIMIT 1
-            ) as last_msg
-        FROM messaging_smswhatsapplog l
-        GROUP BY l.mobile
-        HAVING last_msg IS NOT NULL AND last_msg != ''
-        ORDER BY last_time DESC
-    """
-
-    with connection.cursor() as cursor:
-        cursor.execute(query)
-        rows = cursor.fetchall()
-
-    result = []
-
-    for row in rows:
-        result.append({
-            "mobile": format_mobile(row[0]),
-            "last_time": timezone.localtime(row[1]).isoformat() if row[1] else "",
-            "unread": row[2] or 0,
-            "last_msg": row[3] or ""
-        })
-
-    return JsonResponse({"contacts": result})
-# -----------------------------------------------------
 # Mark messages read
 # -----------------------------------------------------
 
-@csrf_exempt
-def mark_read(request, mobile):
-    try:
-        mobile_norm = format_mobile(mobile)
-        ChatContact.objects.filter(mobile=mobile).update(unread=0)
-        channel_layer = get_channel_layer()
-        gm = ws_group(mobile_norm)
-        if gm:
-            # conversation level read
-            async_to_sync(channel_layer.group_send)(
-                f"chat_{gm}",
-                {
-                    "type": "delivery.update",
-                    "message_id": "",    # empty => conversation-level read
-                    "status": "Read",
-                    "mobile": mobile_norm,
-                }
-            )
-
-        # notify contacts to refresh unread count
-        async_to_sync(channel_layer.group_send)(
-            "global_contacts",
-            {"type": "presence.update", "mobile": mobile_norm, "status": "updated"}
-        )
-
-        return JsonResponse({"status": "ok"})
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
 
 
 from django.http import JsonResponse
