@@ -208,6 +208,7 @@ CELERY_TASK_ROUTES = {
     "messaging2.tasks.*": {"queue": "whatsapp_secondary"},
     "financehub.tasks.*": {"queue": "whatsapp_main"},
     "special_cases.tasks.*": {"queue": "whatsapp_secondary"},
+     "notices.tasks.*": {"queue": "notices"},
 }
 
 # -------------------------------------------------------

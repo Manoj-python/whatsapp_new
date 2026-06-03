@@ -1,13 +1,12 @@
-
 from django.shortcuts import render
 from django.conf import settings
 from django.http import JsonResponse
+from notices.tasks import process_notice_task_celery
 import os
 import tempfile
 import shutil
 import boto3
 import uuid
-import threading
 from botocore.config import Config
 from .models import TaskStatus
 from .utils import (
@@ -279,7 +278,7 @@ def process_notice_task(task_id, notice_type, excel_path, temp_dir):
             tpl = os.path.join(settings.BASE_DIR, "templates_docx", "PSF_Post_Sale_Notice_Guarantor.docx")
             generate_post_sale_guarantor(excel_path, tpl, temp_dir, update_progress)
             pdf_folder = os.path.join(temp_dir, "post_sale_guarantor_pdf")
-        
+
         elif notice_type == "post_sale_guarantor_sms":
             tpl = os.path.join(settings.BASE_DIR, "templates_docx", "SMS_Post_Sale_Notice_Guarantor.docx")
             generate_post_sale_guarantor(excel_path, tpl, temp_dir, update_progress)
@@ -289,7 +288,7 @@ def process_notice_task(task_id, notice_type, excel_path, temp_dir):
             tpl = os.path.join(settings.BASE_DIR, "templates_docx", "SMF_Post_Sale_Notice_Guarantor.docx")
             generate_post_sale_guarantor(excel_path, tpl, temp_dir, update_progress)
             pdf_folder = os.path.join(temp_dir, "post_sale_guarantor_pdf")
-        
+
 
         # elif notice_type == "police_intimation_psf":
         #     tpl = os.path.join(settings.BASE_DIR, "templates_docx", "psf_ps_intimation.docx")
@@ -387,12 +386,12 @@ def upload_excel_api(request):
             f.write(chunk)
 
     # Start background thread
-    thread = threading.Thread(
-        target=process_notice_task,
-        args=(task_id, notice_type, excel_path, temp_dir)
-    )
-    thread.daemon = True
-    thread.start()
+    process_notice_task_celery.delay(
+    task_id,
+    notice_type,
+    excel_path,
+    temp_dir
+)
 
     return JsonResponse({
         'task_id': task_id,

@@ -119,6 +119,17 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
                 Model.objects.values_list(unique_field, flat=True)
             )
 
+        # CLU duplicate prevention
+        clu_existing = set()
+
+        if Model.__name__ == "Clu":
+            clu_existing = set(
+                Model.objects.values_list(
+                    "employee_id",
+                    "visited_on"
+                )
+            )
+
         # =====================================================
         # ====================== CSV ===========================
         # =====================================================
@@ -179,6 +190,18 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
                         if not key or key in existing_values:
                             continue
                         existing_values.add(key)
+
+                    # CLU duplicate check
+                    if Model.__name__ == "Clu":
+                        visit_key = (
+                            str(cleaned.get("employee_id", "")).strip(),
+                            str(cleaned.get("visited_on", "")).strip(),
+                        )
+
+                        if visit_key in clu_existing:
+                            continue
+
+                        clu_existing.add(visit_key)
 
                     batch.append(Model(**cleaned))
                     processed_rows += 1
@@ -262,6 +285,18 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
                         continue
                     existing_values.add(key)
 
+                # CLU duplicate check
+                if Model.__name__ == "Clu":
+                    visit_key = (
+                        str(cleaned.get("employee_id", "")).strip(),
+                        str(cleaned.get("visited_on", "")).strip(),
+                    )
+
+                    if visit_key in clu_existing:
+                        continue
+
+                    clu_existing.add(visit_key)
+
                 batch.append(Model(**cleaned))
                 processed_rows += 1
 
@@ -280,7 +315,7 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
         if Model.__name__ == "Lcc":
             from django.core.cache import cache
             from .models import LoanStatusCache
-            
+
             cache.delete('dropdowns_final_v3')
             deleted_count = LoanStatusCache.objects.all().delete()
             print(f"Cleared LoanStatusCache after LCC upload")
@@ -295,3 +330,4 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
             os.remove(tmp_path)
         except:
             pass
+

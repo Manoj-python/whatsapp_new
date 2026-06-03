@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Employee Monthly Attendance - CLU Visit Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .main-container {
+            background: #f8f9fc;
+            border-radius: 30px;
+            margin-top: 80px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .attendance-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .attendance-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .calendar-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+        }
+
+        .calendar-week {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .day-cell {
+            background: white;
+            border: 1px solid #e3e6f0;
+            border-radius: 12px;
+            padding: 15px 8px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            min-height: 100px;
+        }
+
+        .day-cell:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            z-index: 1;
+        }
+
+        .day-cell.weekend {
+            background-color: #f8f9fc;
+            border: 2px dashed #6c757d;
+        }
+
+        .day-cell.present {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .day-cell.present-late {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .day-cell.absent {
+            background: #f8f9fc;
+            color: #6c757d;
+        }
+
+        .day-number {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .day-name {
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .visit-time {
+            font-size: 11px;
+            margin-top: 8px;
+            padding: 3px 6px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.3s ease;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 14px;
+            margin-bottom: 0;
+        }
+
+        .employee-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .employee-avatar {
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin-right: 20px;
+        }
+
+        .modal-details {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .detail-item {
+            padding: 10px;
+            border-bottom: 1px solid #e3e6f0;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #4e73df;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 20px;
+            margin-bottom: 10px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 5px;
+            margin-right: 8px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .weekday-header {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            background: #f8f9fc;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 15px;
+                margin-top: 60px;
+            }
+
+            .day-cell {
+                min-height: 70px;
+                padding: 8px 4px;
+            }
+
+            .day-number {
+                font-size: 16px;
+            }
+
+            .stat-number {
+                font-size: 20px;
+            }
+
+            .calendar-week {
+                gap: 5px;
+            }
+
+            .weekday-header {
+                font-size: 10px;
+                padding: 5px;
+            }
+
+            .day-name {
+                font-size: 8px;
+            }
+
+            .visit-time {
+                font-size: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">
+            <i class="fas fa-chart-line me-2"></i>FinanceHub
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'upload_loan_data' %}">
+                        <i class="fas fa-upload me-1"></i> Upload
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lcc_list' %}">
+                        <i class="fas fa-database me-1"></i> LCC Data
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'feedback_list' %}">
+                        <i class="fas fa-comment me-1"></i> Feedback
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'executive_visit_schedule_list' %}">
+                        <i class="fas fa-calendar me-1"></i> Visits
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle active" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-chart-bar me-1"></i> Reports
+                    </a>
+                    <ul class="dropdown-menu">
+                    
+                        <li><a class="dropdown-item active" href="{% url 'employee_monthly_attendance' %}">
+                            <i class="fas fa-calendar-check me-2"></i>Monthly Attendance
+                        </a></li>
+                    </ul>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center ms-3">
+                <span class="text-white me-3">
+                    <i class="fas fa-user-circle me-1"></i>{{ request.user.username }}
+                </span>
+                <a href="{% url 'fh_logout' %}" class="btn btn-dark btn-sm">
+                    <i class="fas fa-sign-out-alt me-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<div class="container main-container fade-in">
+    <!-- Search Section -->
+    <div class="attendance-card mb-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3">
+                <i class="fas fa-calendar-alt text-primary me-2"></i>Employee Monthly Attendance
+            </h5>
+            <form method="GET" action="{% url 'employee_monthly_attendance' %}" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">
+                        <i class="fas fa-id-card me-1"></i>Employee Number
+                    </label>
+                    <input type="text"
+                           class="form-control"
+                           name="employee_id"
+                           placeholder="Enter Employee Number"
+                           value="{{ employee_search }}"
+                           required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">
+                        <i class="fas fa-calendar me-1"></i>Year
+                    </label>
+                    <select class="form-select" name="year">
+                        {% for y in years %}
+                            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">
+                        <i class="fas fa-calendar-alt me-1"></i>Month
+                    </label>
+                    <select class="form-select" name="month">
+                        {% for m in months %}
+                            <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search me-2"></i>View
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if error %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+        </div>
+    {% endif %}
+
+    {% if employee %}
+        <!-- Employee Info -->
+        <div class="employee-info d-flex align-items-center">
+            <div class="employee-avatar">
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <div>
+                <h3 class="mb-1">{{ employee.employee_name }}</h3>
+                <p class="mb-0">
+                    <i class="fas fa-id-card me-2"></i>{{ employee.employee_number }} |
+                    <i class="fas fa-briefcase ms-2 me-1"></i>{{ employee.curr_designation|default:"N/A" }} |
+                    <i class="fas fa-building ms-2 me-1"></i>{{ employee.curr_department|default:"N/A" }} |
+                    <i class="fas fa-map-marker-alt ms-2 me-1"></i>{{ employee.curr_location|default:"N/A" }}
+                </p>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3 col-6">
+                <div class="stats-card text-center">
+                    <div class="stat-number text-success">{{ attendance_percentage }}%</div>
+                    <p class="stat-label">Attendance Rate</p>
+                    <small class="text-muted">{{ days_present }}/{{ working_days }} days</small>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stats-card text-center">
+                    <div class="stat-number text-primary">{{ days_present }}</div>
+                    <p class="stat-label">Days Present</p>
+                    <small class="text-muted">{{ on_time_visits }} on-time</small>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stats-card text-center">
+                    <div class="stat-number text-warning">{{ days_absent }}</div>
+                    <p class="stat-label">Days Absent</p>
+                    <small class="text-muted">No CLU visit</small>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stats-card text-center">
+                    <div class="stat-number text-danger">{{ late_visits }}</div>
+                    <p class="stat-label">Late Visits</p>
+                    <small class="text-muted">After 7:00 AM</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="attendance-card mb-4">
+            <div class="card-body">
+                <h6 class="card-title mb-3">
+                    <i class="fas fa-info-circle me-2"></i>Legend
+                </h6>
+                <div class="d-flex flex-wrap">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);"></div>
+                        <span>Present (Before 7 AM)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"></div>
+                        <span>Present (After 7 AM - Late)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f8f9fc; border: 1px solid #dee2e6;"></div>
+                        <span>Absent (No CLU Visit)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f8f9fc; border: 2px dashed #6c757d;"></div>
+                        <span>Weekend/Holiday</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendar View -->
+        <div class="attendance-card">
+            <div class="calendar-header">
+                <h4 class="mb-0 text-center">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    {{ month_name }} {{ year }}
+                </h4>
+            </div>
+            <div class="card-body">
+                <!-- Weekday Headers -->
+                <div class="calendar-week mb-2">
+                    <div class="weekday-header">Mon</div>
+                    <div class="weekday-header">Tue</div>
+                    <div class="weekday-header">Wed</div>
+                    <div class="weekday-header">Thu</div>
+                    <div class="weekday-header">Fri</div>
+                    <div class="weekday-header text-danger">Sat</div>
+                    <div class="weekday-header text-danger">Sun</div>
+                </div>
+
+                <!-- Calendar Days Container -->
+                <div id="calendarContainer"></div>
+            </div>
+        </div>
+    {% elif not error %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Enter an Employee Number to view monthly attendance
+        </div>
+    {% endif %}
+</div>
+
+<!-- Modal for Day Details -->
+<div class="modal fade" id="dayModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-calendar-day me-2"></i>
+                    <span id="modalDate"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalContent" class="modal-details">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="container mt-4">
+
+    <h3>Download Employee Report</h3>
+
+    <form method="get" action="{% url 'employee_report' %}">
+
+        <div class="mb-3">
+            <label>From Date</label>
+            <input
+                type="date"
+                name="from_date"
+                class="form-control"
+                required
+            >
+        </div>
+
+        <div class="mb-3">
+            <label>To Date</label>
+            <input
+                type="date"
+                name="to_date"
+                class="form-control"
+                required
+            >
+        </div>
+
+        <button
+            type="submit"
+            class="btn btn-success"
+        >
+            Download Report
+        </button>
+
+    </form>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Convert Django attendance data to JavaScript array
+    const attendanceData = [
+        {% for day in attendance_data %}
+        {
+            date: "{{ day.date|date:'Y-m-d' }}",
+            display_date: "{{ day.date|date:'Y-m-d' }}",
+            day_name: "{{ day.day_name }}",
+            day_number: {{ day.day_number }},
+            is_weekend: {{ day.is_weekend|lower }},
+            has_visit: {{ day.has_visit|lower }},
+            visit_time: "{{ day.visit_time|default:'' }}",
+            is_late: {{ day.is_late|lower }},
+            remarks: "{{ day.remarks|escapejs }}",
+            customer_name: "{{ day.customer_name|escapejs }}",
+            loan_number: "{{ day.loan_number|default:'N/A' }}",
+            status: "{{ day.status|default:'N/A' }}",
+            type_of_visit: "{{ day.type_of_visit|default:'N/A' }}",
+            status_class: "{% if day.has_visit and not day.is_late %}present{% elif day.has_visit and day.is_late %}present-late{% elif day.is_weekend %}weekend{% else %}absent{% endif %}"
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    function renderCalendar() {
+        if (!attendanceData || attendanceData.length === 0) {
+            console.log('No attendance data');
+            return;
+        }
+        
+        const calendarContainer = document.getElementById('calendarContainer');
+        if (!calendarContainer) return;
+        
+        // Get first day of month
+        const firstDate = new Date(attendanceData[0].date);
+        let firstDayOfWeek = firstDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        
+        // Adjust for Monday as first day of week
+        let offset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+        
+        let currentWeek = '<div class="calendar-week">';
+        let weeks = [];
+        
+        // Add empty cells for offset
+        for (let i = 0; i < offset; i++) {
+            currentWeek += '<div class="day-cell" style="opacity: 0; background: transparent; border: none; min-height: auto;"></div>';
+        }
+        
+        // Add days
+        for (let index = 0; index < attendanceData.length; index++) {
+            const day = attendanceData[index];
+            let cellClass = 'day-cell';
+            
+            if (day.is_weekend) {
+                cellClass += ' weekend';
+            } else if (day.has_visit && !day.is_late) {
+                cellClass += ' present';
+            } else if (day.has_visit && day.is_late) {
+                cellClass += ' present-late';
+            } else if (!day.has_visit && !day.is_weekend) {
+                cellClass += ' absent';
+            }
+            
+            currentWeek += `
+                <div class="${cellClass}"
+                     onclick="showDayDetails('${day.date}', '${day.day_name}', ${day.has_visit}, '${day.visit_time || ''}', ${day.is_late}, '${day.remarks.replace(/'/g, "\\'")}', '${day.customer_name.replace(/'/g, "\\'")}', '${day.loan_number}', '${day.status}', '${day.type_of_visit}')">
+                    <div class="day-number">${day.day_number}</div>
+                    <div class="day-name">${day.day_name.substring(0, 3)}</div>
+                    ${day.has_visit ? `<div class="visit-time"><i class="fas fa-clock me-1"></i>${day.visit_time}</div>` : ''}
+                </div>
+            `;
+            
+            // Check if we need to close the week and start a new one
+            const currentDate = new Date(day.date);
+            const isSunday = currentDate.getDay() === 0;
+            const isLastDay = index === attendanceData.length - 1;
+            
+            if (isSunday && !isLastDay) {
+                currentWeek += '</div>';
+                weeks.push(currentWeek);
+                currentWeek = '<div class="calendar-week">';
+            } else if (isLastDay) {
+                currentWeek += '</div>';
+                weeks.push(currentWeek);
+            }
+        }
+        
+        calendarContainer.innerHTML = weeks.join('');
+    }
+    
+    function showDayDetails(date, dayName, hasVisit, visitTime, isLate, remarks, customer, loan, status, visitType) {
+        document.getElementById('modalDate').innerHTML = `${dayName}, ${date}`;
+        
+        let modalContent = '';
+        
+        if (hasVisit) {
+            modalContent = `
+                <div class="detail-item">
+                    <div class="detail-label">
+                        <i class="fas fa-clock me-1"></i>Visit Time
+                    </div>
+                    <div class="detail-value">
+                        ${visitTime}
+                        ${isLate ? '<span class="badge bg-danger ms-2">Late (After 7 AM)</span>' : '<span class="badge bg-success ms-2">On Time</span>'}
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">
+                        <i class="fas fa-user me-1"></i>Customer Name
+                    </div>
+                    <div class="detail-value">${customer}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">
+                        <i class="fas fa-file-invoice me-1"></i>Loan Number
+                    </div>
+                    <div class="detail-value">${loan}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">
+                        <i class="fas fa-tag me-1"></i>Status
+                    </div>
+                    <div class="detail-value">${status}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">
+                        <i class="fas fa-clipboard-list me-1"></i>Visit Type
+                    </div>
+                    <div class="detail-value">${visitType}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">
+                        <i class="fas fa-comment me-1"></i>Remarks
+                    </div>
+                    <div class="detail-value">${remarks || 'No remarks'}</div>
+                </div>
+            `;
+        } else {
+            modalContent = `
+                <div class="text-center py-4">
+                    <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                    <h6>No CLU Visit Recorded</h6>
+                    <p class="text-muted">No visit data available for this day</p>
+                </div>
+            `;
+        }
+        
+        document.getElementById('modalContent').innerHTML = modalContent;
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('dayModal'));
+        modal.show();
+    }
+    
+    // Initialize calendar when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        renderCalendar();
+    });
+</script>
+
+</body>
+</html>

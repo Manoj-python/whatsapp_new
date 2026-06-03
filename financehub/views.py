@@ -1,7 +1,8 @@
+
 import os
 import tempfile
 import unicodedata
-import datetime
+import datetime  # This imports the module (use datetime.datetime, datetime.date, etc.)
 import json
 from django.conf import settings
 from django.shortcuts import render, redirect
@@ -11,8 +12,12 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.core.cache import cache
 from django.db.models import Sum
-# Models
-from datetime import datetime
+
+import boto3
+import tempfile
+import os
+import uuid
+
 
 from .models import (
     UploadHistory,
@@ -22,7 +27,7 @@ from .models import (
     Clu,
     Freshdesk,
     DueNotice,
-    Visiter, 
+    Visiter,
     Dialer, # ✅ ADD THIS
 )
 
@@ -122,7 +127,6 @@ FILE_TYPES = [
 
 ]
 
-
 @financehub_required
 def upload_loan_data(request):
 
@@ -147,7 +151,7 @@ def upload_loan_data(request):
             return render(request, "financehub/upload.html",
                           {"error": "Only CSV / XLS / XLSX allowed.", "file_types": FILE_TYPES})
 
-        # ✅ Create upload record with file saved to S3 (using finance_uploads field)
+        # Create upload record with file saved to S3 (using finance_uploads field)
         upload = UploadHistory.objects.create(
             filename=file.name,
             uploaded_by=request.user.username,
@@ -158,26 +162,26 @@ def upload_loan_data(request):
             processed_rows=0
         )
 
-        # ✅ Download the file from S3 to temp location for Celery processing
-        import boto3
-        import tempfile
-        import os
-        
+        # Download the file from S3 to temp location for Celery processing
+
         s3 = boto3.client(
             's3',
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             region_name=settings.AWS_S3_REGION_NAME,
         )
-        
-        # Create temp file path
+
+        # Create unique temp file path
         tmp_dir = tempfile.gettempdir()
-        tmp_path = os.path.join(tmp_dir, f"upload_{file.name}")
-        
+        tmp_path = os.path.join(
+            tmp_dir,
+            f"{uuid.uuid4()}_{file.name}"
+        )
+
         # Download from S3 to temp location
         s3.download_file(
             settings.AWS_STORAGE_BUCKET_NAME,
-            upload.finance_uploads.name,  # S3 path (finance_uploads/filename)
+            upload.finance_uploads.name,
             tmp_path
         )
 
@@ -194,11 +198,8 @@ def upload_loan_data(request):
 
     return render(request, "financehub/upload.html", {
         "file_types": FILE_TYPES,
-        "ADMIN_USER":settings.ADMIN_USER
+        "ADMIN_USER": settings.ADMIN_USER
     })
-
-
-
 
 # LCC LIST WITH POWER SEARCH + PAGINATION (100 PER PAGE)
 from django.db.models import Q
@@ -1187,7 +1188,7 @@ from .models import (
     EseBuzz,
     Smsquare,
     Upi,
-    Freshdesk, 
+    Freshdesk,
     Dialer,
     DueNotice,
 )
@@ -1589,7 +1590,7 @@ def executive_visit_schedule_list(request):
     if valid_filter(loan_status_filter):
         filtered_loan_numbers = [loan for loan, status in loan_status_map.items() if status == loan_status_filter]
         qs = qs.filter(loan_number__in=filtered_loan_numbers)
-        
+
         # Recalculate total after status filter
         total_count = len(filtered_loan_numbers)
     else:
@@ -2005,7 +2006,7 @@ def due_notice_list(request):
         },
     )
 
-     
+
 
 # ======================== DELETE OPTION FOR LCC, C ALLOCATION, REPO, PAID, CLOSED =========================
 
@@ -2046,6 +2047,7 @@ def closed_delete(request):
 
 
 
+
 @financehub_required
 def download_employee_report(request):
 
@@ -2057,9 +2059,15 @@ def download_employee_report(request):
     from openpyxl import load_workbook
     from openpyxl.styles import Font
 
-    # -------------------------
-    # STEP 1: LOAD EMPLOYEES
-    # -------------------------
+    # =====================================================
+    # GET DATE RANGE
+    # =====================================================
+    from_date_param = request.GET.get("from_date", "").strip()
+    to_date_param = request.GET.get("to_date", "").strip()
+
+    # =====================================================
+    # LOAD EMPLOYEE MASTER
+    # =====================================================
     master_qs = EmployeeMaster.objects.all().values(
         "employee_number",
         "employee_name",
@@ -2076,36 +2084,52 @@ def download_employee_report(request):
     master_df = pd.DataFrame(list(master_qs))
 
     if master_df.empty:
-        return HttpResponse("No data found")
+        return HttpResponse("No Employee Master data found.")
 
-    master_df['status'] = master_df['status'].astype(str).str.strip().str.upper()
-
-    master_df['joined_on'] = pd.to_datetime(
-        master_df['joined_on'],
-        format='%d-%b-%y',
-        errors='coerce'
+    master_df["status"] = (
+        master_df["status"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
     )
 
-    master_df['lwd'] = pd.to_datetime(
-        master_df['lwd'],
-        format='%d %b %Y',
-        errors='coerce'
+    master_df["joined_on"] = pd.to_datetime(
+        master_df["joined_on"],
+        format="%d-%b-%y",
+        errors="coerce"
     )
 
-    master_df['phone'] = master_df['phone'].astype(str).str.split('.').str[0]
+    master_df["lwd"] = pd.to_datetime(
+        master_df["lwd"],
+        format="%d %b %Y",
+        errors="coerce"
+    )
+
+    master_df["phone"] = (
+        master_df["phone"]
+        .astype(str)
+        .str.split(".")
+        .str[0]
+    )
 
     active_employees = master_df[
-        (master_df['status'] != 'LEFT') &
-        (master_df['curr_department'].str.upper().isin(['COLLECTION', 'SALES/COLLECTION']))
+        (master_df["status"] != "LEFT")
+        &
+        (
+            master_df["curr_department"]
+            .str.upper()
+            .isin(["COLLECTION", "SALES/COLLECTION"])
+        )
     ]
 
     active_employees = active_employees[
-        active_employees['curr_location'].str.upper() != 'HEAD OFFICE - RANIGUNJ'
+        active_employees["curr_location"].str.upper()
+        != "HEAD OFFICE - RANIGUNJ"
     ]
 
-    # -------------------------
-    # STEP 2: CLU
-    # -------------------------
+    # =====================================================
+    # LOAD CLU
+    # =====================================================
     clu_qs = Clu.objects.values(
         "employee_id",
         "employee_name",
@@ -2115,118 +2139,264 @@ def download_employee_report(request):
     clu_df = pd.DataFrame(list(clu_qs))
 
     if not clu_df.empty:
-        clu_df = clu_df[clu_df['employee_id'].notnull()]
+
+        clu_df = clu_df[
+            clu_df["employee_id"].notnull()
+        ]
 
         clu_df["visit_datetime"] = pd.to_datetime(
             clu_df["visited_on"],
             format="%b %d,%Y, %I:%M:%S %p",
-            errors='coerce'
+            errors="coerce"
         )
 
-        clu_df["visit_date"] = clu_df["visit_datetime"].dt.normalize()
+        clu_df["visit_date"] = (
+            clu_df["visit_datetime"]
+            .dt.normalize()
+        )
 
-        max_date = clu_df["visit_date"].max()
-    else:
-        max_date = pd.Timestamp(datetime.date.today())
+    # =====================================================
+    # DATE RANGE LOGIC
+    # =====================================================
+    try:
 
-    # -------------------------
-    # ✅ FULL MONTH LOGIC
-    # -------------------------
-    year = max_date.year
-    month = max_date.month
+        # ---------------------------------
+        # CUSTOM DATE RANGE
+        # ---------------------------------
+        if from_date_param and to_date_param:
 
-    start_date = datetime.date(year, month, 1)
-    end_date = datetime.date(year, month, calendar.monthrange(year, month)[1])
+            start_date = datetime.datetime.strptime(
+                from_date_param,
+                "%Y-%m-%d"
+            ).date()
 
-    all_days_list = pd.date_range(start=start_date, end=end_date)
+            end_date = datetime.datetime.strptime(
+                to_date_param,
+                "%Y-%m-%d"
+            ).date()
 
-    # -------------------------
-    # CLEAN CLU DATA
-    # -------------------------
-    if not clu_df.empty:
-        clu_df = clu_df.sort_values(by=["visit_datetime"])
-        clu_df = clu_df.groupby(["employee_id", "visit_date"], as_index=False).first()
+            if start_date > end_date:
+                return HttpResponse(
+                    "From Date cannot be greater than To Date"
+                )
 
-    # -------------------------
-    # CREATE ALL COMBINATIONS
-    # -------------------------
-    employees = active_employees[['employee_number', 'employee_name', 'joined_on']].drop_duplicates()
+            if not clu_df.empty:
 
-    all_days = pd.DataFrame(
-        [(eid, ename, join_date, day) for eid, ename, join_date in employees.values for day in all_days_list],
-        columns=["employee_id", "employee_name", "joined_on", "visit_date"]
+                clu_df = clu_df[
+                    (clu_df["visit_date"] >= pd.Timestamp(start_date))
+                    &
+                    (clu_df["visit_date"] <= pd.Timestamp(end_date))
+                ]
+
+        # ---------------------------------
+        # CURRENT MONTH (OLD LOGIC)
+        # ---------------------------------
+        else:
+
+            if not clu_df.empty:
+
+                max_date = clu_df["visit_date"].max()
+
+                if pd.isna(max_date):
+                    max_date = pd.Timestamp(
+                        datetime.date.today()
+                    )
+
+            else:
+
+                max_date = pd.Timestamp(
+                    datetime.date.today()
+                )
+
+            year = max_date.year
+            month = max_date.month
+
+            start_date = datetime.date(
+                year,
+                month,
+                1
+            )
+
+            end_date = datetime.date(
+                year,
+                month,
+                calendar.monthrange(year, month)[1]
+            )
+
+    except Exception as e:
+
+        return HttpResponse(
+            f"Invalid date range selected. Error: {str(e)}"
+        )
+
+    # =====================================================
+    # GENERATE DATE LIST
+    # =====================================================
+    all_days_list = pd.date_range(
+        start=start_date,
+        end=end_date
     )
 
-    # -------------------------
-    # MERGE
-    # -------------------------
+    # =====================================================
+    # CLEAN CLU
+    # =====================================================
     if not clu_df.empty:
+
+        clu_df = clu_df.sort_values(
+            by=["visit_datetime"]
+        )
+
+        clu_df = clu_df.groupby(
+            ["employee_id", "visit_date"],
+            as_index=False
+        ).first()
+
+    # =====================================================
+    # EMPLOYEE x DAY MATRIX
+    # =====================================================
+    employees = active_employees[
+        [
+            "employee_number",
+            "employee_name",
+            "joined_on"
+        ]
+    ].drop_duplicates()
+
+    all_days = pd.DataFrame(
+        [
+            (eid, ename, jdate, day)
+            for eid, ename, jdate in employees.values
+            for day in all_days_list
+        ],
+        columns=[
+            "employee_id",
+            "employee_name",
+            "joined_on",
+            "visit_date"
+        ]
+    )
+
+    # =====================================================
+    # MERGE VISITS
+    # =====================================================
+    if not clu_df.empty:
+
         merged = pd.merge(
             all_days,
-            clu_df[['employee_id', 'visit_date', 'visit_datetime']],
-            on=['employee_id', 'visit_date'],
-            how='left'
+            clu_df[
+                [
+                    "employee_id",
+                    "visit_date",
+                    "visit_datetime"
+                ]
+            ],
+            on=[
+                "employee_id",
+                "visit_date"
+            ],
+            how="left"
         )
-    else:
-        merged = all_days.copy()
-        merged['visit_datetime'] = None
 
-    # -------------------------
+    else:
+
+        merged = all_days.copy()
+        merged["visit_datetime"] = None
+
+    # =====================================================
     # PIVOT
-    # -------------------------
+    # =====================================================
     day_df = merged.pivot(
-        index=['employee_id', 'employee_name', 'joined_on'],
-        columns='visit_date',
-        values='visit_datetime'
+        index=[
+            "employee_id",
+            "employee_name",
+            "joined_on"
+        ],
+        columns="visit_date",
+        values="visit_datetime"
     ).reset_index()
 
-    day_df = day_df[['employee_id', 'employee_name', 'joined_on'] + list(all_days_list)]
+    day_df = day_df[
+        [
+            "employee_id",
+            "employee_name",
+            "joined_on"
+        ]
+        + list(all_days_list)
+    ]
 
-    # -------------------------
-    # APPLY BUSINESS LOGIC
-    # -------------------------
+    # =====================================================
+    # ATTENDANCE LOGIC
+    # =====================================================
     for day in all_days_list:
+
         day_df[day] = day_df.apply(
-            lambda row: (
-                'Not Yet Joined'
-                if pd.notna(row['joined_on']) and row['joined_on'] > day
-                else (None if pd.isna(row[day]) else row[day])
+            lambda row:
+            (
+                "Not Yet Joined"
+                if (
+                    pd.notna(row["joined_on"])
+                    and row["joined_on"] > day
+                )
+                else (
+                    None
+                    if pd.isna(row[day])
+                    else row[day]
+                )
             ),
             axis=1
         )
 
-    # -------------------------
+    # =====================================================
     # FINAL MERGE
-    # -------------------------
+    # =====================================================
     final_df = pd.merge(
         active_employees,
         day_df,
-        left_on=['employee_number', 'employee_name', 'joined_on'],
-        right_on=['employee_id', 'employee_name', 'joined_on'],
-        how='left'
+        left_on=[
+            "employee_number",
+            "employee_name",
+            "joined_on"
+        ],
+        right_on=[
+            "employee_id",
+            "employee_name",
+            "joined_on"
+        ],
+        how="left"
     )
 
-    cols = list(active_employees.columns) + list(all_days_list)
+    cols = (
+        list(active_employees.columns)
+        + list(all_days_list)
+    )
+
     final_df = final_df[cols]
 
-    final_df['joined_on'] = final_df['joined_on'].dt.strftime('%Y-%m-%d')
-    final_df['status'] = final_df['status'].replace(['NULL', None, ''], 'NONE')
+    final_df["joined_on"] = (
+        final_df["joined_on"]
+        .dt.strftime("%Y-%m-%d")
+    )
 
-    # -------------------------
-    # CLEAN COLUMN NAMES
-    # -------------------------
-    new_columns = []
-    for col in final_df.columns:
-        if isinstance(col, pd.Timestamp):
-            new_columns.append(col.strftime("%d-%b (%a)"))  # 🔥 upgraded
-        else:
-            new_columns.append(col)
+    final_df["status"] = final_df["status"].replace(
+        ["NULL", None, ""],
+        "NONE"
+    )
 
-    final_df.columns = new_columns
+    # =====================================================
+    # COLUMN NAMES
+    # =====================================================
+    final_df.columns = [
+        (
+            col.strftime("%d-%b (%a)")
+            if isinstance(col, pd.Timestamp)
+            else col
+        )
+        for col in final_df.columns
+    ]
 
-    # -------------------------
-    # EXCEL
-    # -------------------------
+    # =====================================================
+    # EXCEL EXPORT
+    # =====================================================
     output = BytesIO()
     final_df.to_excel(output, index=False)
     output.seek(0)
@@ -2234,49 +2404,248 @@ def download_employee_report(request):
     wb = load_workbook(output)
     ws = wb.active
 
-    day_to_col_index = {day: 11 + idx for idx, day in enumerate(all_days_list)}
+    day_to_col_index = {
+        day: 11 + idx
+        for idx, day in enumerate(all_days_list)
+    }
 
     for row_idx in range(2, ws.max_row + 1):
-        for day_date, col_idx in day_to_col_index.items():
-            cell = ws.cell(row=row_idx, column=col_idx)
 
-            if cell.value == 'Not Yet Joined':
+        for day_date, col_idx in day_to_col_index.items():
+
+            cell = ws.cell(
+                row=row_idx,
+                column=col_idx
+            )
+
+            if cell.value == "Not Yet Joined":
+
                 cell.font = Font(color="000000")
 
-            elif cell.value == 'Sunday':
+            elif cell.value == "Sunday":
+
                 cell.font = Font(color="0000FF")
 
-            elif cell.value == 'Absent':
+            elif cell.value == "Absent":
+
                 cell.font = Font(color="000000")
 
-            elif isinstance(cell.value, datetime.datetime):
-                if cell.value.time() > datetime.time(7, 0):
-                    cell.font = Font(color="FF0000")
-                else:
-                    cell.font = Font(color="000000")
+            elif isinstance(
+                cell.value,
+                datetime.datetime
+            ):
 
-                cell.number_format = 'MMM DD,YYYY, hh:mm:ss AM/PM'
+                if cell.value.time() > datetime.time(7, 0):
+
+                    cell.font = Font(
+                        color="FF0000"
+                    )
+
+                else:
+
+                    cell.font = Font(
+                        color="000000"
+                    )
+
+                cell.number_format = (
+                    "MMM DD,YYYY, hh:mm:ss AM/PM"
+                )
 
             elif cell.value is None:
+
                 if day_date.weekday() == 6:
-                    cell.value = 'Sunday'
-                    cell.font = Font(color="0000FF")
+
+                    cell.value = "Sunday"
+                    cell.font = Font(
+                        color="0000FF"
+                    )
+
                 else:
-                    cell.value = 'Absent'
-                    cell.font = Font(color="000000")
+
+                    cell.value = "Absent"
+                    cell.font = Font(
+                        color="000000"
+                    )
 
     final_output = BytesIO()
     wb.save(final_output)
     final_output.seek(0)
 
+    # =====================================================
+    # FILE NAME
+    # =====================================================
+    if from_date_param and to_date_param:
+
+        filename = (
+            f"Employee_Report_"
+            f"{from_date_param}"
+            f"_to_"
+            f"{to_date_param}.xlsx"
+        )
+
+    else:
+
+        filename = (
+            f"Employee_Report_"
+            f"{start_date.strftime('%Y-%m')}.xlsx"
+        )
+
     response = HttpResponse(
         final_output,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        content_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        )
     )
-    response['Content-Disposition'] = 'attachment; filename="Employee_Report_Month.xlsx"'
+
+    response["Content-Disposition"] = (
+        f'attachment; filename="{filename}"'
+    )
 
     return response
 
 @financehub_required
 def employee_report_page(request):
     return render(request, "financehub/employee_report.html")
+
+
+
+
+@financehub_required
+def employee_monthly_attendance(request):
+    """Display monthly attendance with CLU visit timings for selected employee"""
+
+    employee_id = request.GET.get('employee_id', '').strip()
+    year = request.GET.get('year', str(datetime.datetime.now().year))
+    month = request.GET.get('month', str(datetime.datetime.now().month))
+
+    context = {
+        'employee': None,
+        'attendance_data': [],
+        'year': int(year),
+        'month': int(month),
+        'months': range(1, 13),
+        'years': range(2020, datetime.datetime.now().year + 1),
+        'employee_search': employee_id,
+        'error': None
+    }
+
+    # Get employee details
+    if employee_id:
+        try:
+            employee = EmployeeMaster.objects.get(employee_number=employee_id)
+            context['employee'] = employee
+        except EmployeeMaster.DoesNotExist:
+            context['error'] = f"Employee with ID '{employee_id}' not found"
+            return render(request, "financehub/employee_monthly_attendance.html", context)
+
+        # Get CLU data for the employee for selected month
+        year_int = int(year)
+        month_int = int(month)
+
+        # Create date range for the month
+        start_date = datetime.date(year_int, month_int, 1)
+        if month_int == 12:
+            end_date = datetime.date(year_int + 1, 1, 1) - datetime.timedelta(days=1)
+        else:
+            end_date = datetime.date(year_int, month_int + 1, 1) - datetime.timedelta(days=1)
+
+        # Get all CLU visits for this employee in the date range
+        clu_visits = Clu.objects.filter(
+            employee_id=employee_id,
+            visited_on__isnull=False
+        ).order_by('visited_on')
+
+        # Parse dates and create attendance map
+        attendance_map = {}
+
+        for visit in clu_visits:
+            try:
+                # Parse visited_on date with multiple formats
+                visited_value = str(visit.visited_on).strip()
+                visited_date = None
+
+                # Try different date formats
+                date_formats = [
+                    "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d",
+                    "%d-%b-%Y %H:%M:%S",
+                    "%d-%b-%Y %I:%M %p",
+                    "%b %d,%Y, %I:%M:%S %p",
+                    "%d/%m/%Y",
+                ]
+
+                for fmt in date_formats:
+                    try:
+                        visited_date = datetime.datetime.strptime(visited_value, fmt)
+                        break
+                    except (ValueError, TypeError):
+                        continue
+
+                if visited_date:
+                    date_key = visited_date.date()
+                    # Only include if within selected month
+                    if start_date <= date_key <= end_date:
+                        attendance_map[date_key] = {
+                            'time': visited_date.time(),
+                            'datetime': visited_date,
+                            'remarks': getattr(visit, 'remarks', '') or '',
+                            'customer_name': getattr(visit, 'customer_name', '') or '',
+                            'loan_number': getattr(visit, 'loan_number', '') or '',
+                            'status': getattr(visit, 'status', '') or '',
+                            'type_of_visit': getattr(visit, 'type_of_visit', '') or ''
+                        }
+            except Exception as e:
+                print(f"Error parsing date: {visit.visited_on}, Error: {e}")
+                continue
+
+        # Build attendance data for all days of the month
+        attendance_data = []
+        current_date = start_date
+        while current_date <= end_date:
+            visit_info = attendance_map.get(current_date)
+
+            day_data = {
+                'date': current_date,
+                'day_name': current_date.strftime('%A'),
+                'day_number': current_date.day,
+                'is_weekend': current_date.weekday() >= 5,  # Saturday=5, Sunday=6
+                'has_visit': visit_info is not None,
+                'visit_time': visit_info['time'].strftime('%I:%M %p') if visit_info and visit_info['time'] else None,
+                'visit_datetime': visit_info['datetime'] if visit_info else None,
+                'is_late': visit_info and visit_info['time'] and visit_info['time'] > datetime.time(7, 0) if visit_info else False,
+                'remarks': visit_info['remarks'] if visit_info else '',
+                'customer_name': visit_info['customer_name'] if visit_info else '',
+                'loan_number': visit_info['loan_number'] if visit_info else '',
+                'status': visit_info['status'] if visit_info else '',
+                'type_of_visit': visit_info['type_of_visit'] if visit_info else ''
+            }
+            attendance_data.append(day_data)
+            current_date += datetime.timedelta(days=1)
+
+        # Calculate statistics
+        total_days = len(attendance_data)
+        working_days = sum(1 for d in attendance_data if not d['is_weekend'])
+        holidays = sum(1 for d in attendance_data if d['is_weekend'])
+        days_present = sum(1 for d in attendance_data if d['has_visit'])
+        days_absent = working_days - days_present
+        late_visits = sum(1 for d in attendance_data if d['is_late'])
+        on_time_visits = days_present - late_visits
+        attendance_percentage = (days_present / working_days * 100) if working_days > 0 else 0
+
+        context.update({
+            'attendance_data': attendance_data,
+            'total_days': total_days,
+            'working_days': working_days,
+            'holidays': holidays,
+            'days_present': days_present,
+            'days_absent': days_absent,
+            'late_visits': late_visits,
+            'on_time_visits': on_time_visits,
+            'attendance_percentage': round(attendance_percentage, 2),
+            'month_name': start_date.strftime('%B'),
+            'year': year_int,
+            'month': month_int
+        })
+
+    return render(request, "financehub/employee_monthly_attendance.html", context)

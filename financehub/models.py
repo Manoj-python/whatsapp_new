@@ -194,6 +194,13 @@ class Clu(models.Model):
             models.Index(fields=['visited_on']),
         ]
 
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee_id', 'visited_on'],
+                name='unique_clu_employee_visit'
+            )
+        ]
+
     def __str__(self):
         return f"{self.employee_name} - {self.customer_name}"
 
