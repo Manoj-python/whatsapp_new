@@ -53,68 +53,6 @@
         </div>
     </div>
 
-    <!-- Cases Table (you already have it, just keep as is) -->
-    <div class="card">
-        <div class="card-header">
-            <h5><i class="fas fa-tasks"></i> Cases (ESC1)</h5>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover" id="casesTable">
-                    <thead>
-                        <tr>
-                            <th>Case ID</th>
-                            <th>Customer</th>
-                            <th>Mobile</th>
-                            <th>Loan Number</th>
-                            <th>Priority</th>
-                            <th>Status</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for case in cases %}
-                        <tr>
-                            <td><strong>{{ case.case_id }}</strong></td>
-                            <td>{{ case.customer_name|default:case.mobile }}</td>
-                            <td>{{ case.mobile }}</td>
-                            <td>{{ case.loan_number|default:"-" }}</td>
-                            <td>
-                                <span class="badge bg-{% if case.priority == 'Urgent' %}danger{% elif case.priority == 'High' %}warning{% elif case.priority == 'Medium' %}info{% else %}secondary{% endif %}">
-                                    {{ case.priority }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge bg-{% if case.status == 'Open' %}primary{% elif case.status == 'In Progress' %}info{% elif case.status == 'Resolved' %}success{% else %}secondary{% endif %}">
-                                    {{ case.status }}
-                                </span>
-                            </td>
-                            <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-primary" onclick="viewCase('{{ case.case_id }}')">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                {% if case.status != 'Resolved' and case.status != 'Closed' %}
-                                    <button class="btn btn-sm btn-outline-warning" onclick="escalateCase('{{ case.case_id }}')">
-                                        <i class="fas fa-arrow-up"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-success" onclick="resolveCase('{{ case.case_id }}')">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="8" class="text-center">No cases found.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Case View Modal -->

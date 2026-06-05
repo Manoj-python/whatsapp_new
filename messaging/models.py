@@ -16,7 +16,7 @@ class SmsWhatsAppLog(models.Model):
     sent_at = models.DateTimeField(default=timezone.now, db_index=True)
     error_message = models.TextField(blank=True, default='')
     customer_name = models.CharField(max_length=255, blank=True, default='')  # Customer name (for received)
-    # sender_name = models.CharField(max_length=255, blank=True, default='')  # Customer name (for received)
+    sender_name = models.CharField(max_length=255, blank=True, default='')  # Customer name (for received)
 
 
     
@@ -88,10 +88,7 @@ class BulkJob(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
-    batch_size = models.IntegerField(default=50)
-    completed_batches = models.IntegerField(default=0)
-    priority = models.IntegerField(default=0)
-    total_batches = models.IntegerField(default=0)
+  
 
     
     

@@ -406,6 +406,8 @@
                         <th><i class="fas fa-user"></i> Username</th>
                         <th><i class="fas fa-envelope"></i>Name</th>
                         <th><i class="fas fa-envelope"></i>MobileNumber</th>
+                        <th><i class="fas fa-envelope"></i>Email</th>
+
 
                         <th><i class="fas fa-tag"></i> Role / Team</th>
                         <th><i class="fas fa-chart-line"></i> Level</th>
@@ -426,7 +428,8 @@
                             </div>
                         </td>
                          <td>{{ user_data.agent.name|default:"-" }}</td>      <!-- ✅ use agent.name -->
-                         <td>{{ user_data.agent.mobile|default:"-" }}</td> 
+                         <td>{{ user_data.agent.mobile|default:"-" }}</td>
+                         <td>{{  user_data.agent.email | default:"-"}}</td> 
                         <td>
                             {% if user_data.agent %}
                                 <span class="role-badge role-{{ user_data.agent.role }}">

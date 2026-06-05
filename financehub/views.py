@@ -1364,7 +1364,6 @@ def get_loan_status(lcc, paid_amount, repo_set, closed_set):
     else:
         return "NOT_PAID"
 
-
 @financehub_required
 def executive_visit_schedule_list(request):
     from django.core.paginator import Paginator
@@ -1393,6 +1392,8 @@ def executive_visit_schedule_list(request):
     remove_zeros = request.GET.get("remove_zeros") == "1"
     remove_sez = request.GET.get("remove_sez") == "1"
     branch = request.GET.get("branch", "").strip()
+    suitcase = request.GET.get("suitcase", "").strip()
+
     centre_name = request.GET.get("centre_name", "").strip()
     visit_filter = request.GET.get("visit_filter", "").strip()
     company = request.GET.get("company", "").strip()
@@ -1411,7 +1412,7 @@ def executive_visit_schedule_list(request):
     qs = Lcc.objects.all().only(
         'loan_number', 'customer_name', 'vehicle_no', 'cust_mobile',
         'company', 'division', 'branch', 'centre_name', 'blc_cases',
-        'emi_due_2', 'emi_due', 'month_tbc', 'total_dues', 'id'
+        'emi_due_2', 'emi_due', 'month_tbc', 'total_dues', 'id','suitcase'
     )
 
     # Apply all filters (your existing filters)
@@ -1434,6 +1435,13 @@ def executive_visit_schedule_list(request):
             type_of_notice__iexact=type_of_notice
         ).values_list('loan_number', flat=True).distinct()
         qs = qs.filter(loan_number__in=notice_loans)
+
+    if valid_filter(suitcase):
+        suitcases = Lcc.objects.filter(
+            suitcase__iexact=suitcase
+        ).values_list('loan_number', flat=True).distinct()
+        qs = qs.filter(loan_number__in=suitcases)
+
 
     # EMI Bucket
     if valid_filter(emi_bucket):
@@ -1540,7 +1548,7 @@ def executive_visit_schedule_list(request):
         dropdowns = cache.get('dropdowns_final_v4')
         if not dropdowns:
             dropdowns = {
-                'branches': [], 'centres': [], 'notice_types': [], 'blc_cases': [], 'companies': []
+                'branches': [], 'centres': [], 'notice_types': [], 'blc_cases': [], 'companies': [], 'suitcases':[],
             }
         context = {
             "data": [], "page_obj": None, "total_count": 0,
@@ -1590,7 +1598,7 @@ def executive_visit_schedule_list(request):
     if valid_filter(loan_status_filter):
         filtered_loan_numbers = [loan for loan, status in loan_status_map.items() if status == loan_status_filter]
         qs = qs.filter(loan_number__in=filtered_loan_numbers)
-
+        
         # Recalculate total after status filter
         total_count = len(filtered_loan_numbers)
     else:
@@ -1690,6 +1698,7 @@ def executive_visit_schedule_list(request):
             "id": visit.id if visit else 0,
             "loan_number": lcc_obj.loan_number,
             "customer_name": lcc_obj.customer_name or "",
+            "suitcase":lcc_obj.suitcase or "",
             "vehicle_no": lcc_obj.vehicle_no or "",
             "cust_mobile": lcc_obj.cust_mobile or "",
             "company": lcc_obj.company or "",
@@ -1776,6 +1785,7 @@ def executive_visit_schedule_list(request):
             'notice_types': list(DueNotice.objects.filter(type_of_notice__isnull=False).exclude(type_of_notice='').values_list('type_of_notice', flat=True).distinct().order_by('type_of_notice')[:100]),
             'blc_cases': list(Lcc.objects.filter(blc_cases__isnull=False).exclude(blc_cases='').values_list('blc_cases', flat=True).distinct().order_by('blc_cases')[:100]),
             'companies': list(Lcc.objects.filter(company__isnull=False).exclude(company='').values_list('company', flat=True).distinct().order_by('company')[:200]),
+            'suitcases':list(Lcc.objects.filter(suitcase__isnull=False).exclude(suitcase='').values_list('suitcase', flat=True).distinct().order_by('suitcase')[:200])
         }
         cache.set('dropdowns_final_v4', dropdowns, 3600)
 
@@ -1796,12 +1806,14 @@ def executive_visit_schedule_list(request):
         "search_empid": search_empid, "loan_status": loan_status_filter,
         "remove_zeros": remove_zeros, "remove_sez": remove_sez,
         "branch": branch, "centre_name": centre_name, "emi_bucket": emi_bucket,
-        "visit_filter": visit_filter, "selected_blc_case": blc_case,
+        "visit_filter": visit_filter, "selected_blc_case": blc_case,"suitcase":suitcase,
+
         "type_of_notice": type_of_notice, "company": company,
         "sort_field": sort_field, "sort_order": sort_order,
     }
 
     return render(request, "financehub/executive_visit_schedule_list.html", context)
+
 
 @financehub_required
 def executive_visit_schedule_edit(request, pk):

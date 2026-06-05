@@ -333,6 +333,10 @@ def open_legal_pdf2(filename, folder):
 # ---------------------------
 # WhatsApp number pre-check
 # ---------------------------
+
+# ---------------------------
+# WhatsApp number pre-check
+# ---------------------------
 def check_whatsapp_number2(mobile: str) -> Dict[str, Any]:
     try:
         url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP2_PHONE_NUMBER_ID}/messages"
@@ -365,34 +369,6 @@ def check_whatsapp_number2(mobile: str) -> Dict[str, Any]:
         return {"valid": True, "blocked": False, "reason": "Unknown (assumed valid)"}
     except Exception as e:
         return {"valid": True, "blocked": False, "reason": f"Validation error (assume valid): {e}"}
-
-
-# ---------------------------
-# Template fetch & render
-# ---------------------------
-def get_template_text_from_whatsapp2(template_name: str) -> str:
-    """
-    Fetch BODY text of a WhatsApp template (for DB preview).
-    """
-    try:
-        url = (
-            f"https://graph.facebook.com/v22.0/"
-            f"{settings.WHATSAPP2_BUSINESS_ACCOUNT_ID}/message_templates"
-            f"?name={template_name}"
-        )
-        headers = {"Authorization": f"Bearer {settings.WHATSAPP2_ACCESS_TOKEN}"}
-        r = requests.get(url, headers=headers, timeout=15)
-        data = r.json()
-
-        if "data" in data and data["data"]:
-            for comp in data["data"][0].get("components", []):
-                if comp.get("type") == "BODY":
-                    return comp.get("text", "")
-
-        return "Template body not found."
-    except Exception as e:
-        return f"[Template fetch error: {e}]"
-
 
 def render_template_text2(template_body: str, parameters: list) -> str:
     """

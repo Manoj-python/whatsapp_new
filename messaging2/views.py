@@ -1497,4 +1497,3 @@ def get_user_role_api2(request):
 
 
 
-

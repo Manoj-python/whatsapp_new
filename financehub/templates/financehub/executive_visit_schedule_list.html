@@ -213,7 +213,16 @@
                         <select name="type_of_notice" class="form-select">
                             <option value="">All</option>
                             {% for t in notice_types %}
-                                <option value="{{ t }}" {% if c == type_of_notice %}selected{% endif %}>{{ t }}</option>
+                                <option value="{{ t }}" {% if t == type_of_notice %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-2 col-md-3 col-sm-6">
+                        <label>Suit Cases</label>
+                        <select name="suitcase" class="form-select">
+                            <option value="">All</option>
+                            {% for s in suitcases %}
+                                <option value="{{ s }}" {% if s == suitcase %}selected{% endif %}>{{ s }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -363,6 +372,8 @@
         <th class="sortable" data-field="payment_amount">Payment Amount</th>
         <th class="sortable" data-field="received_date">Received</th>
         <th class="sortable" data-field="empid">Emp</th>
+       <th class="sortable" data-field="suitcase">suitcases</th>
+
         <th class="sortable" data-field="latest_visited_on">Visit</th>
         <th class="sortable" data-field="visit_status">Latest CLU</th>
         <th class="sortable" data-field="has_schedule">Status</th>
@@ -511,7 +522,11 @@
 
                 <td>{{ r.received_date|default:"—" }}</td>
                 <td>{{ r.empid|default:"—" }}</td>
+
+                <td>{{ r.suitcase | default:"-" }}</td>
                 <td>{{ r.visit_date|default:"—" }}</td>
+
+
 
                 <td>
                     {% if r.latest_visited_on %}

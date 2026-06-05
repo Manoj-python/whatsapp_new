@@ -608,6 +608,48 @@
     </div>
 </div>
 
+
+<!-- Escalate Modal -->
+<div class="modal fade" id="escalateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-arrow-up"></i> Escalate Case</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="escalateCaseId">
+                <div class="mb-3">
+                    <label>Escalate To Level:</label>
+                    <select id="escalateLevelSelect" class="form-select">
+                        <option value="ESC1">ESC1 - Agent</option>
+                        <option value="ESC2">ESC2 - Thumb Team</option>
+                        <option value="ESC3">ESC3 - NOC Team</option>
+                        <option value="ESC4">ESC4 - Manager</option>
+                        <option value="ESC5">ESC5 - Admin</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label>Loan Number (optional):</label>
+                    <input type="text" id="escalateLoanNumber" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label>Customer Name (optional):</label>
+                    <input type="text" id="escalateCustomerName" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label>Reason for Escalation:</label>
+                    <textarea id="escalateReason" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" onclick="submitEscalation()">Escalate</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     let levelChart = null;
@@ -918,6 +960,10 @@
                 <button class="btn btn-sm btn-warning" onclick="openEditCaseModal('${caseData.case_id}')">
                     <i class="fas fa-edit"></i> Edit Case
                 </button>
+
+ <button class="btn btn-sm btn-info" onclick="showEscalateModal('${caseData.case_id}')">
+        <i class="fas fa-arrow-up"></i> Escalate
+    </button>
             </div>
             <div class="row">
                 <div class="col-md-6">
@@ -1120,6 +1166,53 @@
             }
         });
     }
+
+function showEscalateModal(caseId) {
+    document.getElementById('escalateCaseId').value = caseId;
+    document.getElementById('escalateReason').value = '';
+    document.getElementById('escalateLoanNumber').value = '';
+    document.getElementById('escalateCustomerName').value = '';
+    $('#escalateModal').modal('show');
+}
+
+function submitEscalation() {
+    const caseId = document.getElementById('escalateCaseId').value;
+    const newLevel = document.getElementById('escalateLevelSelect').value;
+    const reason = document.getElementById('escalateReason').value;
+    const loan = document.getElementById('escalateLoanNumber').value;
+    const name = document.getElementById('escalateCustomerName').value;
+
+    if (!reason) {
+        alert('Please provide a reason for escalation');
+        return;
+    }
+
+    // Use messaging2 endpoint instead of adminpanel
+    fetch(`/messaging2/case/${caseId}/escalate/?app=${currentApp}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            new_level: newLevel,
+            reason: reason,
+            loan: loan,
+            name: name
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Case escalated to ${newLevel} successfully!`);
+            $('#escalateModal').modal('hide');
+            refreshCases();  // reload current tab
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
     
     function searchCases() {
         const query = document.getElementById('searchInput').value.trim();

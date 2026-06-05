@@ -17,7 +17,8 @@ class SmsWhatsAppLog2(models.Model):
     error_message = models.TextField(blank=True, default='')
     customer_name = models.CharField(max_length=255, blank=True, default='')  # Customer name (for received)
     sender_name = models.CharField(max_length=255, blank=True, default='')  # Customer name (for received)
-
+    error_code = models.IntegerField(null=True, blank=True, help_text="WhatsApp API error code")
+    error_reason = models.TextField(blank=True, help_text="Detailed error reason")
 
     
     class Meta:

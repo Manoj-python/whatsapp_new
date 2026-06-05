@@ -281,7 +281,7 @@ def lcc_detail_list(request):
 
 
 # ================= VIEW =================
-@financehub_required
+@splcase_required
 def write_off_list(request):
     search_raw = request.GET.get("search", "").strip()
     search_clean = normalize_excel_text(search_raw)
