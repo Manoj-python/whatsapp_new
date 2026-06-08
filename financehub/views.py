@@ -2523,6 +2523,12 @@ def employee_report_page(request):
 
 
 
+import json
+from django.shortcuts import render
+from django.utils import timezone
+import datetime
+from .models import EmployeeMaster, Clu
+
 @financehub_required
 def employee_monthly_attendance(request):
     """Display monthly attendance with CLU visit timings for selected employee"""
@@ -2534,6 +2540,7 @@ def employee_monthly_attendance(request):
     context = {
         'employee': None,
         'attendance_data': [],
+        'attendance_data_json': '[]',  # Add this for JSON serialization
         'year': int(year),
         'month': int(month),
         'months': range(1, 13),
@@ -2562,20 +2569,20 @@ def employee_monthly_attendance(request):
         else:
             end_date = datetime.date(year_int, month_int + 1, 1) - datetime.timedelta(days=1)
 
-        # Get all CLU visits for this employee in the date range
+        # Get ALL CLU visits for this employee in the date range (not just first)
         clu_visits = Clu.objects.filter(
             employee_id=employee_id,
             visited_on__isnull=False
-        ).order_by('visited_on')
+        ).order_by('visited_on')  # Sort by datetime
 
-        # Parse dates and create attendance map
-        attendance_map = {}
+        # Parse dates and create attendance map with ALL visits
+        attendance_map = {}  # date -> list of visits
 
         for visit in clu_visits:
             try:
                 # Parse visited_on date with multiple formats
                 visited_value = str(visit.visited_on).strip()
-                visited_date = None
+                visited_datetime = None
 
                 # Try different date formats
                 date_formats = [
@@ -2589,24 +2596,34 @@ def employee_monthly_attendance(request):
 
                 for fmt in date_formats:
                     try:
-                        visited_date = datetime.datetime.strptime(visited_value, fmt)
+                        visited_datetime = datetime.datetime.strptime(visited_value, fmt)
                         break
                     except (ValueError, TypeError):
                         continue
 
-                if visited_date:
-                    date_key = visited_date.date()
+                if visited_datetime:
+                    date_key = visited_datetime.date()
                     # Only include if within selected month
                     if start_date <= date_key <= end_date:
-                        attendance_map[date_key] = {
-                            'time': visited_date.time(),
-                            'datetime': visited_date,
+                        if date_key not in attendance_map:
+                            attendance_map[date_key] = []
+
+                        # Convert time to string for JSON serialization
+                        time_value = visited_datetime.time()
+                        
+                        attendance_map[date_key].append({
+                            'datetime': visited_datetime.isoformat(),  # Convert to ISO format string
+                            'time': time_value.strftime('%H:%M:%S'),  # Convert time to string
+                            'time_display': time_value.strftime('%I:%M %p'),  # Display format
                             'remarks': getattr(visit, 'remarks', '') or '',
                             'customer_name': getattr(visit, 'customer_name', '') or '',
                             'loan_number': getattr(visit, 'loan_number', '') or '',
                             'status': getattr(visit, 'status', '') or '',
-                            'type_of_visit': getattr(visit, 'type_of_visit', '') or ''
-                        }
+                            'type_of_visit': getattr(visit, 'type_of_visit', '') or '',
+                            'employee_name': getattr(visit, 'employee_name', '') or '',
+                            'visit_address': getattr(visit, 'visit_address', '') or '',
+                            'reason_for_visit': getattr(visit, 'reason_for_visit', '') or '',
+                        })
             except Exception as e:
                 print(f"Error parsing date: {visit.visited_on}, Error: {e}")
                 continue
@@ -2615,27 +2632,39 @@ def employee_monthly_attendance(request):
         attendance_data = []
         current_date = start_date
         while current_date <= end_date:
-            visit_info = attendance_map.get(current_date)
+            day_visits = attendance_map.get(current_date, [])
+
+            # Sort visits by time to get earliest first
+            day_visits.sort(key=lambda x: x['time'] if x['time'] else '23:59:59')
+
+            # Determine if Saturday is working day (Saturday = 5, Sunday = 6)
+            # Saturday (5) is now a working day, only Sunday (6) is weekend
+            is_weekend = current_date.weekday() == 6  # Only Sunday is weekend
+
+            # Get first visit of the day (if any)
+            first_visit = day_visits[0] if day_visits else None
 
             day_data = {
-                'date': current_date,
+                'date': current_date.isoformat(),  # Convert date to ISO format string
                 'day_name': current_date.strftime('%A'),
                 'day_number': current_date.day,
-                'is_weekend': current_date.weekday() >= 5,  # Saturday=5, Sunday=6
-                'has_visit': visit_info is not None,
-                'visit_time': visit_info['time'].strftime('%I:%M %p') if visit_info and visit_info['time'] else None,
-                'visit_datetime': visit_info['datetime'] if visit_info else None,
-                'is_late': visit_info and visit_info['time'] and visit_info['time'] > datetime.time(7, 0) if visit_info else False,
-                'remarks': visit_info['remarks'] if visit_info else '',
-                'customer_name': visit_info['customer_name'] if visit_info else '',
-                'loan_number': visit_info['loan_number'] if visit_info else '',
-                'status': visit_info['status'] if visit_info else '',
-                'type_of_visit': visit_info['type_of_visit'] if visit_info else ''
+                'is_weekend': is_weekend,
+                'has_visit': len(day_visits) > 0,
+                'visit_time': first_visit['time_display'] if first_visit and first_visit.get('time_display') else None,
+                'visit_datetime': first_visit['datetime'] if first_visit else None,
+                'is_late': first_visit and first_visit['time'] and first_visit['time'] > '07:00:00' if first_visit else False,
+                'remarks': first_visit['remarks'] if first_visit else '',
+                'customer_name': first_visit['customer_name'] if first_visit else '',
+                'loan_number': first_visit['loan_number'] if first_visit else '',
+                'status': first_visit['status'] if first_visit else '',
+                'type_of_visit': first_visit['type_of_visit'] if first_visit else '',
+                'visit_count': len(day_visits),
+                'all_visits': day_visits
             }
             attendance_data.append(day_data)
             current_date += datetime.timedelta(days=1)
 
-        # Calculate statistics
+        # Calculate statistics (working days now include Saturday)
         total_days = len(attendance_data)
         working_days = sum(1 for d in attendance_data if not d['is_weekend'])
         holidays = sum(1 for d in attendance_data if d['is_weekend'])
@@ -2645,8 +2674,12 @@ def employee_monthly_attendance(request):
         on_time_visits = days_present - late_visits
         attendance_percentage = (days_present / working_days * 100) if working_days > 0 else 0
 
+        # Convert attendance_data to JSON for JavaScript
+        attendance_data_json = json.dumps(attendance_data, default=str)
+
         context.update({
             'attendance_data': attendance_data,
+            'attendance_data_json': attendance_data_json,  # Add JSON version for JavaScript
             'total_days': total_days,
             'working_days': working_days,
             'holidays': holidays,

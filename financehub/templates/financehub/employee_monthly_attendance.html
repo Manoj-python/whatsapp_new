@@ -66,7 +66,7 @@
 
         .day-cell.weekend {
             background-color: #f8f9fc;
-            border: 2px dashed #6c757d;
+            border: 2px dashed #dc3545;
         }
 
         .day-cell.present {
@@ -151,7 +151,7 @@
         }
 
         .modal-details {
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
         }
 
@@ -186,6 +186,34 @@
             margin-right: 8px;
         }
 
+        .timeline-card {
+            border-left: 4px solid;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .timeline-card.early {
+            border-left-color: #28a745;
+        }
+
+        .timeline-card.late {
+            border-left-color: #dc3545;
+        }
+
+        .visit-badge {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 20px;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -201,6 +229,14 @@
             padding: 10px;
             background: #f8f9fc;
             border-radius: 10px;
+        }
+
+        .weekday-header.saturday {
+            color: #fd7e14;
+        }
+
+        .weekday-header.sunday {
+            color: #dc3545;
         }
 
         @media (max-width: 768px) {
@@ -279,7 +315,6 @@
                         <i class="fas fa-chart-bar me-1"></i> Reports
                     </a>
                     <ul class="dropdown-menu">
-                    
                         <li><a class="dropdown-item active" href="{% url 'employee_monthly_attendance' %}">
                             <i class="fas fa-calendar-check me-2"></i>Monthly Attendance
                         </a></li>
@@ -395,7 +430,7 @@
             <div class="col-md-3 col-6">
                 <div class="stats-card text-center">
                     <div class="stat-number text-danger">{{ late_visits }}</div>
-                    <p class="stat-label">Late Visits</p>
+                    <p class="stat-label">Late Visit</p>
                     <small class="text-muted">After 7:00 AM</small>
                 </div>
             </div>
@@ -410,20 +445,30 @@
                 <div class="d-flex flex-wrap">
                     <div class="legend-item">
                         <div class="legend-color" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);"></div>
-                        <span>Present (Before 7 AM)</span>
+                        <span>Present (Before 7 AM) - First Visit</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"></div>
-                        <span>Present (After 7 AM - Late)</span>
+                        <span>Present (After 7 AM - Late) - First Visit</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: #f8f9fc; border: 1px solid #dee2e6;"></div>
                         <span>Absent (No CLU Visit)</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #f8f9fc; border: 2px dashed #6c757d;"></div>
-                        <span>Weekend/Holiday</span>
+                        <div class="legend-color" style="background: #f8f9fc; border: 2px dashed #dc3545;"></div>
+                        <span>Sunday (Holiday)</span>
                     </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #17a2b8;"></div>
+                        <span>Multiple Visits (Click to see all)</span>
+                    </div>
+                </div>
+                <div class="mt-2 text-muted small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Calendar shows the <strong>first visit time</strong> of each day. Click on any day to see all visits.
+                    <br><i class="fas fa-calendar-alt me-1"></i>
+                    <strong>Note:</strong> Saturday is considered a working day.
                 </div>
             </div>
         </div>
@@ -444,8 +489,8 @@
                     <div class="weekday-header">Wed</div>
                     <div class="weekday-header">Thu</div>
                     <div class="weekday-header">Fri</div>
-                    <div class="weekday-header text-danger">Sat</div>
-                    <div class="weekday-header text-danger">Sun</div>
+                    <div class="weekday-header saturday">Sat</div>
+                    <div class="weekday-header sunday">Sun</div>
                 </div>
 
                 <!-- Calendar Days Container -->
@@ -460,16 +505,46 @@
     {% endif %}
 </div>
 
+<!-- Download Report Section -->
+<div class="container mt-4 mb-4">
+    <div class="attendance-card">
+        <div class="card-body">
+            <h5 class="card-title mb-3">
+                <i class="fas fa-download text-success me-2"></i>Download Employee Report
+            </h5>
+            <form method="get" action="{% url 'employee_report' %}" class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">
+                        <i class="fas fa-calendar-day me-1"></i>From Date
+                    </label>
+                    <input type="date" name="from_date" class="form-control" required>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">
+                        <i class="fas fa-calendar-day me-1"></i>To Date
+                    </label>
+                    <input type="date" name="to_date" class="form-control" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-download me-2"></i>Download
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Modal for Day Details -->
 <div class="modal fade" id="dayModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title">
                     <i class="fas fa-calendar-day me-2"></i>
                     <span id="modalDate"></span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div id="modalContent" class="modal-details">
@@ -482,95 +557,48 @@
         </div>
     </div>
 </div>
-<div class="container mt-4">
 
-    <h3>Download Employee Report</h3>
-
-    <form method="get" action="{% url 'employee_report' %}">
-
-        <div class="mb-3">
-            <label>From Date</label>
-            <input
-                type="date"
-                name="from_date"
-                class="form-control"
-                required
-            >
-        </div>
-
-        <div class="mb-3">
-            <label>To Date</label>
-            <input
-                type="date"
-                name="to_date"
-                class="form-control"
-                required
-            >
-        </div>
-
-        <button
-            type="submit"
-            class="btn btn-success"
-        >
-            Download Report
-        </button>
-
-    </form>
-
-</div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Convert Django attendance data to JavaScript array
-    const attendanceData = [
-        {% for day in attendance_data %}
-        {
-            date: "{{ day.date|date:'Y-m-d' }}",
-            display_date: "{{ day.date|date:'Y-m-d' }}",
-            day_name: "{{ day.day_name }}",
-            day_number: {{ day.day_number }},
-            is_weekend: {{ day.is_weekend|lower }},
-            has_visit: {{ day.has_visit|lower }},
-            visit_time: "{{ day.visit_time|default:'' }}",
-            is_late: {{ day.is_late|lower }},
-            remarks: "{{ day.remarks|escapejs }}",
-            customer_name: "{{ day.customer_name|escapejs }}",
-            loan_number: "{{ day.loan_number|default:'N/A' }}",
-            status: "{{ day.status|default:'N/A' }}",
-            type_of_visit: "{{ day.type_of_visit|default:'N/A' }}",
-            status_class: "{% if day.has_visit and not day.is_late %}present{% elif day.has_visit and day.is_late %}present-late{% elif day.is_weekend %}weekend{% else %}absent{% endif %}"
-        }{% if not forloop.last %},{% endif %}
-        {% endfor %}
-    ];
+    // Convert Django attendance data to JavaScript array using safe JSON
+    const attendanceData = {{ attendance_data_json|safe }};
     
+    console.log('Attendance Data Loaded:', attendanceData);
+    console.log('Number of days:', attendanceData.length);
+
     function renderCalendar() {
         if (!attendanceData || attendanceData.length === 0) {
             console.log('No attendance data');
+            const calendarContainer = document.getElementById('calendarContainer');
+            if (calendarContainer) {
+                calendarContainer.innerHTML = '<div class="alert alert-info">No attendance data available for this month</div>';
+            }
             return;
         }
-        
+
         const calendarContainer = document.getElementById('calendarContainer');
         if (!calendarContainer) return;
-        
+
         // Get first day of month
         const firstDate = new Date(attendanceData[0].date);
         let firstDayOfWeek = firstDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        
+
         // Adjust for Monday as first day of week
         let offset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-        
+
         let currentWeek = '<div class="calendar-week">';
         let weeks = [];
-        
+
         // Add empty cells for offset
         for (let i = 0; i < offset; i++) {
             currentWeek += '<div class="day-cell" style="opacity: 0; background: transparent; border: none; min-height: auto;"></div>';
         }
-        
+
         // Add days
         for (let index = 0; index < attendanceData.length; index++) {
             const day = attendanceData[index];
             let cellClass = 'day-cell';
-            
+
             if (day.is_weekend) {
                 cellClass += ' weekend';
             } else if (day.has_visit && !day.is_late) {
@@ -580,21 +608,29 @@
             } else if (!day.has_visit && !day.is_weekend) {
                 cellClass += ' absent';
             }
+
+            // Add badge for multiple visits
+            const multipleVisitsBadge = day.visit_count > 1 ? 
+                `<span class="badge bg-info visit-badge"><i class="fas fa-clock me-1"></i>${day.visit_count} visits</span>` : '';
+
+            // Store visits data as JSON string for onclick
+            const visitsJson = JSON.stringify(day.all_visits).replace(/'/g, "&apos;");
             
             currentWeek += `
-                <div class="${cellClass}"
-                     onclick="showDayDetails('${day.date}', '${day.day_name}', ${day.has_visit}, '${day.visit_time || ''}', ${day.is_late}, '${day.remarks.replace(/'/g, "\\'")}', '${day.customer_name.replace(/'/g, "\\'")}', '${day.loan_number}', '${day.status}', '${day.type_of_visit}')">
+                <div class="${cellClass}" 
+                     onclick='showDayDetails("${day.date}", "${day.day_name}", ${day.has_visit}, "${day.visit_time || ''}", ${day.is_late}, ${JSON.stringify(day.remarks || '').replace(/'/g, "\\'")}, ${JSON.stringify(day.customer_name || '')}, ${JSON.stringify(day.loan_number || 'N/A')}, ${JSON.stringify(day.status || 'N/A')}, ${JSON.stringify(day.type_of_visit || 'N/A')}, ${visitsJson}, ${day.visit_count})'>
+                    ${multipleVisitsBadge}
                     <div class="day-number">${day.day_number}</div>
                     <div class="day-name">${day.day_name.substring(0, 3)}</div>
                     ${day.has_visit ? `<div class="visit-time"><i class="fas fa-clock me-1"></i>${day.visit_time}</div>` : ''}
                 </div>
             `;
-            
+
             // Check if we need to close the week and start a new one
             const currentDate = new Date(day.date);
             const isSunday = currentDate.getDay() === 0;
             const isLastDay = index === attendanceData.length - 1;
-            
+
             if (isSunday && !isLastDay) {
                 currentWeek += '</div>';
                 weeks.push(currentWeek);
@@ -604,74 +640,129 @@
                 weeks.push(currentWeek);
             }
         }
-        
+
         calendarContainer.innerHTML = weeks.join('');
     }
-    
-    function showDayDetails(date, dayName, hasVisit, visitTime, isLate, remarks, customer, loan, status, visitType) {
+
+    function showDayDetails(date, dayName, hasVisit, visitTime, isLate, remarks, customer, loan, status, visitType, allVisits, visitCount) {
+        console.log('Showing details for:', date);
+        console.log('All visits:', allVisits);
+        console.log('Visit count:', visitCount);
+        
         document.getElementById('modalDate').innerHTML = `${dayName}, ${date}`;
-        
+
         let modalContent = '';
-        
-        if (hasVisit) {
-            modalContent = `
-                <div class="detail-item">
-                    <div class="detail-label">
-                        <i class="fas fa-clock me-1"></i>Visit Time
+
+        if (hasVisit && allVisits && allVisits.length > 0) {
+            if (visitCount === 1) {
+                // Single visit display
+                modalContent = `
+                    <div class="timeline-card early p-3 mb-3" style="background: #f8f9fc;">
+                        <div class="detail-item">
+                            <div class="detail-label">
+                                <i class="fas fa-clock me-1"></i>Visit Time
+                            </div>
+                            <div class="detail-value">
+                                <strong>${visitTime}</strong>
+                                ${isLate ? '<span class="badge bg-danger ms-2"><i class="fas fa-exclamation-triangle me-1"></i>Late (After 7 AM)</span>' : '<span class="badge bg-success ms-2"><i class="fas fa-check-circle me-1"></i>On Time</span>'}
+                            </div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">
+                                <i class="fas fa-user me-1"></i>Customer Name
+                            </div>
+                            <div class="detail-value">${customer}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">
+                                <i class="fas fa-file-invoice me-1"></i>Loan Number
+                            </div>
+                            <div class="detail-value">${loan}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">
+                                <i class="fas fa-tag me-1"></i>Status
+                            </div>
+                            <div class="detail-value">${status}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">
+                                <i class="fas fa-clipboard-list me-1"></i>Visit Type
+                            </div>
+                            <div class="detail-value">${visitType}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">
+                                <i class="fas fa-comment me-1"></i>Remarks
+                            </div>
+                            <div class="detail-value">${remarks || 'No remarks'}</div>
+                        </div>
                     </div>
-                    <div class="detail-value">
-                        ${visitTime}
-                        ${isLate ? '<span class="badge bg-danger ms-2">Late (After 7 AM)</span>' : '<span class="badge bg-success ms-2">On Time</span>'}
+                `;
+            } else {
+                // Multiple visits display
+                modalContent = `
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>${visitCount} visits</strong> were made on this day
                     </div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">
-                        <i class="fas fa-user me-1"></i>Customer Name
-                    </div>
-                    <div class="detail-value">${customer}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">
-                        <i class="fas fa-file-invoice me-1"></i>Loan Number
-                    </div>
-                    <div class="detail-value">${loan}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">
-                        <i class="fas fa-tag me-1"></i>Status
-                    </div>
-                    <div class="detail-value">${status}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">
-                        <i class="fas fa-clipboard-list me-1"></i>Visit Type
-                    </div>
-                    <div class="detail-value">${visitType}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">
-                        <i class="fas fa-comment me-1"></i>Remarks
-                    </div>
-                    <div class="detail-value">${remarks || 'No remarks'}</div>
-                </div>
-            `;
+                    <div class="timeline">
+                `;
+                
+                // Display all visits in chronological order
+                allVisits.forEach((visit, idx) => {
+                    const visitLate = visit.time && visit.time > '07:00:00';
+                    const cardClass = visitLate ? 'late' : 'early';
+                    const bgClass = visitLate ? 'danger' : 'success';
+                    
+                    modalContent += `
+                        <div class="timeline-card ${cardClass} card mb-3">
+                            <div class="card-header bg-${bgClass} text-white">
+                                <strong><i class="fas fa-clock me-2"></i>Visit ${idx + 1}: ${visit.time_display || visit.time}</strong>
+                                ${visitLate ? '<span class="badge bg-warning text-dark ms-2"><i class="fas fa-exclamation-triangle me-1"></i></span>' : '<span class="badge bg-light text-success ms-2"><i class="fas fa-check-circle me-1"></i>On Time</span>'}
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong><i class="fas fa-user me-2"></i>Customer:</strong> ${visit.customer_name || 'N/A'}</p>
+                                        <p><strong><i class="fas fa-file-invoice me-2"></i>Loan:</strong> ${visit.loan_number || 'N/A'}</p>
+                                        <p><strong><i class="fas fa-tag me-2"></i>Status:</strong> ${visit.status || 'N/A'}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong><i class="fas fa-clipboard-list me-2"></i>Visit Type:</strong> ${visit.type_of_visit || 'N/A'}</p>
+                                        <p><strong><i class="fas fa-map-marker-alt me-2"></i>Address:</strong> ${visit.visit_address ? (visit.visit_address.substring(0, 100) + (visit.visit_address.length > 100 ? '...' : '')) : 'N/A'}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <p><strong><i class="fas fa-bullhorn me-2"></i>Reason:</strong> ${visit.reason_for_visit || 'N/A'}</p>
+                                        <p><strong><i class="fas fa-comment me-2"></i>Remarks:</strong> ${visit.remarks || 'No remarks'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                modalContent += `</div>`;
+            }
         } else {
             modalContent = `
-                <div class="text-center py-4">
-                    <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
-                    <h6>No CLU Visit Recorded</h6>
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-times fa-4x text-muted mb-3"></i>
+                    <h5>No CLU Visit Recorded</h5>
                     <p class="text-muted">No visit data available for this day</p>
                 </div>
             `;
         }
-        
+
         document.getElementById('modalContent').innerHTML = modalContent;
-        
+
         // Show modal
         const modal = new bootstrap.Modal(document.getElementById('dayModal'));
         modal.show();
     }
-    
+
     // Initialize calendar when page loads
     document.addEventListener('DOMContentLoaded', function() {
         renderCalendar();
