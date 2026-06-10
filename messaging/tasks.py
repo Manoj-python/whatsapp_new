@@ -18,6 +18,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db import transaction, close_old_connections
 from django.db.models import F
+from .utils import open_legal_pdf 
 
 from .models import *
 from .utils import *
@@ -58,7 +59,7 @@ def upload_legal_pdf_to_whatsapp(pdf_filename, folder):
     return upload_whatsapp_media(file_obj)
 
 
-@shared_task(bind=True, queue="whatsapp_main")
+@shared_task(bind=True, queue="messaging")
 def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_size=50):
     template_choice = str(template_choice)
     close_old_connections()
@@ -111,14 +112,14 @@ def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_si
     for i in range(0, total, chunk_size):
         process_bulk_whatsapp_batch.apply_async(
             args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total)),
-            queue="whatsapp_main",
+            queue="messaging",
         )
 
 
 # ==================================================
 # BATCH WORKER (FIXED VERSION)
 # ==================================================
-@shared_task(bind=True, queue="whatsapp_main")
+@shared_task(bind=True, queue="messaging")
 def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, start, end):
     from django.db import close_old_connections
     from django.core.files.base import ContentFile
@@ -185,21 +186,32 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     if (format_mobile(r.get("cust_mobile") or r.get("CustMobile") or "")) == mobile:
                         name = r.get("customer_name") or r.get("CustomerName") or ""
                         break
-
+                    
                 status_value = "Failed"
 
-                if "131047" in err:
-                    status_value = "Template Required"
-                elif "131026" in err or "131051" in err:
-                    status_value = "Blocked"
-                elif "131009" in err or "131045" in err:
-                    status_value = "Invalid"
-                elif "132000" in err or "132001" in err:
-                    status_value = "Template Failed"
-                elif "timeout" in err.lower():
-                    status_value = "Retry"
-                elif "media" in err.lower():
-                    status_value = "Media Failed"
+                ERROR_MAP = {
+                    "131026": "NOT_ON_WHATSAPP",
+                    "131011": "BLOCKED_BY_USER",
+                    "130403": "BLOCKED_BY_BUSINESS",
+                    "131050": "OPTED_OUT",
+                    "190": "TOKEN_ERROR",
+                    "131009": "INVALID_PARAMETER",
+                    "131000": "UNKNOWN_ERROR",
+                    "131045": "REGISTRATION_ERROR",
+                    "131047": "24H_WINDOW_EXPIRED",
+                    "131051": "UNSUPPORTED_MESSAGE_TYPE",
+                    "132000": "TEMPLATE_PARAM_ERROR",
+                    "132001": "TEMPLATE_NOT_FOUND",
+                    "132015": "TEMPLATE_PAUSED",
+                    "132016": "TEMPLATE_DISABLED",
+                    "130429": "RATE_LIMIT",
+                    "131056": "TOO_MANY_MESSAGES",
+                }
+
+                for code, label in ERROR_MAP.items():
+                    if code in err:  # ✅ FIXED: changed err_msg to err
+                        status_value = label
+                        break
 
                 SmsWhatsAppLog.objects.create(
                     job_id=job_id,
@@ -448,26 +460,41 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             print(f"✅ Successfully sent to {mobile} - Message ID: {msg_id}")
 
         except Exception as e:
-            err_msg = str(e)
-            print(f"❌ Failed to send to {mobile}: {err_msg}")
-            import traceback
-            traceback.print_exc()
+            err = str(e)
+            print(f"❌ Template 17 failed for {mobile}: {err}")
 
-            # Error code handling from old code
+            # Get name for this mobile (first occurrence)
+            name = ""
+            for r in rows:
+                if (format_mobile(r.get("cust_mobile") or r.get("CustMobile") or "")) == mobile:
+                    name = r.get("customer_name") or r.get("CustomerName") or ""
+                    break
+                        
             status_value = "Failed"
 
-            if "131047" in err_msg:
-                status_value = "Template Required"
-            elif "131026" in err_msg or "131051" in err_msg:
-                status_value = "Blocked"
-            elif "131009" in err_msg or "131045" in err_msg:
-                status_value = "Invalid"
-            elif "132000" in err_msg or "132001" in err_msg:
-                status_value = "Template Failed"
-            elif "timeout" in err_msg.lower():
-                status_value = "Retry"
-            elif "media" in err_msg.lower():
-                status_value = "Media Failed"
+            ERROR_MAP = {
+                "131026": "NOT_ON_WHATSAPP",
+                "131011": "BLOCKED_BY_USER",
+                "130403": "BLOCKED_BY_BUSINESS",
+                "131050": "OPTED_OUT",
+                "190": "TOKEN_ERROR",
+                "131009": "INVALID_PARAMETER",
+                "131000": "UNKNOWN_ERROR",
+                "131045": "REGISTRATION_ERROR",
+                "131047": "24H_WINDOW_EXPIRED",
+                "131051": "UNSUPPORTED_MESSAGE_TYPE",
+                "132000": "TEMPLATE_PARAM_ERROR",
+                "132001": "TEMPLATE_NOT_FOUND",
+                "132015": "TEMPLATE_PAUSED",
+                "132016": "TEMPLATE_DISABLED",
+                "130429": "RATE_LIMIT",
+                "131056": "TOO_MANY_MESSAGES",
+            }
+
+            for code, label in ERROR_MAP.items():
+                if code in err:  # ✅ FIXED: changed err_msg to err
+                    status_value = label
+                    break
 
             SmsWhatsAppLog.objects.create(
                 job_id=job_id,
@@ -476,13 +503,10 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 template_name=template_choice,
                 status=status_value,
                 message_type="Failed",
-                error_message=err_msg,
-                content_type="text",
+                error_message=err,
             )
-            failed_records.append([name, mobile, err_msg])
             local_failed += 1
-
-        time.sleep(0.3)
+            continue
 
     # ==================================================
     # 📊 UPDATE JOB PROGRESS
@@ -503,7 +527,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 # ==================================================
 # FINALIZER
 # ==================================================
-@shared_task(bind=True, queue="whatsapp_main")
+@shared_task(bind=True, queue="messaging")
 def finalize_bulk_job(self, job_id):
     try:
         job = BulkJob.objects.get(job_id=job_id)
@@ -522,10 +546,12 @@ def finalize_bulk_job(self, job_id):
     # field_names = ['id', 'job_id', 'customer_name', 'mobile', 'template_name', 'status', 'sent_text_message', 'error_message', ...]
 
     success_qs = SmsWhatsAppLog.objects.filter(
-        job_id=job_id, status__in=["Sent", "Delivered"]
+    job_id=job_id, status__in=["Sent", "Delivered", "Read"]
     )
-    failed_qs = SmsWhatsAppLog.objects.filter(
-        job_id=job_id, status="Failed"
+    failed_qs = SmsWhatsAppLog.objects.exclude(
+        status__in=["Sent", "Delivered", "Read"]
+    ).filter(
+        job_id=job_id
     )
 
     # Build DataFrames – always with correct columns
@@ -617,4 +643,5 @@ def process_pending_webhook_updates():
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+
 

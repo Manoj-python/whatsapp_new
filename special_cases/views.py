@@ -717,7 +717,7 @@ def upload_and_send3(request):
             # 🔥 FORCE TASK INTO WHATSAPP2_main QUEUE
             process_bulk_whatsapp3.apply_async(
                 args=(s3_key, choice, job_id),
-                queue="whatsapp_secondary"
+                queue="special_cases"
             )
 
             return redirect("job_status3", job_id=job_id)
@@ -1394,10 +1394,10 @@ def whatsapp_webhook3(request):
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts3",
                             {
-                                
+
                                 "type": "unread.update",
                                 "unread_count": total_unread
-                                
+
                             }
                         )
 
@@ -1502,3 +1502,4 @@ def view_secure_document3(request, log_id):
     response["X-Content-Type-Options"] = "nosniff"
 
     return response
+

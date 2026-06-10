@@ -58,8 +58,8 @@ def upload_legal_pdf_to_whatsapp2(pdf_filename, folder):
     return upload_whatsapp_media2(file_obj)
 
 
-@shared_task(bind=True, queue="whatsapp_secondary")
-def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_size=50):
+@shared_task(bind=True, queue="messaging2")
+def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_size=100):
     template_choice = str(template_choice)
     close_old_connections()
 
@@ -111,14 +111,14 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_s
     for i in range(0, total, chunk_size):
         process_bulk_whatsapp_batch2.apply_async(
             args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total)),
-            queue="whatsapp_secondary",
+            queue="messaging2",
         )
 
 
 # ==================================================
 # BATCH WORKER (FIXED VERSION)
 # ==================================================
-@shared_task(bind=True, queue="whatsapp_secondary")
+@shared_task(bind=True, queue="messaging2")
 def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, start, end):
     from django.db import close_old_connections
     from django.core.files.base import ContentFile
@@ -412,12 +412,40 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             import traceback
             traceback.print_exc()
 
+            # Map error codes to specific statuses
+            status_value = "Failed"
+            
+            ERROR_MAP = {
+                "100": "INVALID_PARAMETER_100",
+                "131026": "NOT_ON_WHATSAPP",
+                "131011": "BLOCKED_BY_USER",
+                "130403": "BLOCKED_BY_BUSINESS",
+                "131050": "OPTED_OUT",
+                "190": "TOKEN_ERROR",
+                "131009": "INVALID_PARAMETER",
+                "131000": "UNKNOWN_ERROR",
+                "131045": "REGISTRATION_ERROR",
+                "131047": "24H_WINDOW_EXPIRED",
+                "131051": "UNSUPPORTED_MESSAGE_TYPE",
+                "132000": "TEMPLATE_PARAM_ERROR",
+                "132001": "TEMPLATE_NOT_FOUND",
+                "132015": "TEMPLATE_PAUSED",
+                "132016": "TEMPLATE_DISABLED",
+                "130429": "RATE_LIMIT",
+                "131056": "TOO_MANY_MESSAGES",
+            }
+            
+            for code, label in ERROR_MAP.items():
+                if code in err_msg:
+                    status_value = label
+                    break
+
             SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
                 customer_name=name,
                 mobile=mobile,
                 template_name=template_choice,
-                status="Failed",
+                status=status_value,  # ✅ Now uses mapped status
                 message_type="Sent",
                 error_message=err_msg,
                 content_type="text",
@@ -425,7 +453,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             failed_records.append([name, mobile, err_msg])
             local_failed += 1
 
-        time.sleep(0.3)
+        time.sleep(0.1)
 
     # ==================================================
     # 📊 UPDATE JOB PROGRESS
@@ -448,7 +476,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 # FINALIZER
 # ==================================================
 
-@shared_task(bind=True, queue="whatsapp_secondary")
+@shared_task(bind=True, queue="messaging2")
 def finalize_bulk_job2(self, job_id):
     try:
         job = BulkJob2.objects.get(job_id=job_id)
@@ -467,10 +495,12 @@ def finalize_bulk_job2(self, job_id):
     # field_names = ['id', 'job_id', 'customer_name', 'mobile', 'template_name', 'status', 'sent_text_message', 'error_message', ...]
 
     success_qs = SmsWhatsAppLog2.objects.filter(
-        job_id=job_id, status__in=["Sent", "Delivered"]
+        job_id=job_id, status__in=["Sent", "Delivered", "Read"]
     )
-    failed_qs = SmsWhatsAppLog2.objects.filter(
-        job_id=job_id, status="Failed"
+    failed_qs = SmsWhatsAppLog2.objects.exclude(
+        status__in=["Sent", "Delivered", "Read"]
+    ).filter(
+        job_id=job_id
     )
 
     # Build DataFrames – always with correct columns
@@ -563,3 +593,5 @@ def process_pending_webhook_updates():
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
 
+
+	

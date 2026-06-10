@@ -1,7 +1,3 @@
-"""
-Django settings for whatsapp_sender project.
-"""
-
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -204,12 +200,13 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Kolkata"
 
 CELERY_TASK_ROUTES = {
-    "messaging.tasks.*": {"queue": "whatsapp_main"},
-    "messaging2.tasks.*": {"queue": "whatsapp_secondary"},
-    "financehub.tasks.*": {"queue": "whatsapp_main"},
-    "special_cases.tasks.*": {"queue": "whatsapp_secondary"},
-     "notices.tasks.*": {"queue": "notices"},
+    "messaging.tasks.*": {"queue": "messaging"},
+    "messaging2.tasks.*": {"queue": "messaging2"},
+    "financehub.tasks.*": {"queue": "financehub"},
+    "special_cases.tasks.*": {"queue": "special_cases"},
+    "notices.tasks.*": {"queue": "notices"},
 }
+
 
 # -------------------------------------------------------
 # CSRF

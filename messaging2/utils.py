@@ -330,9 +330,6 @@ def open_legal_pdf2(filename, folder):
     )
 
 
-# ---------------------------
-# WhatsApp number pre-check
-# ---------------------------
 
 # ---------------------------
 # WhatsApp number pre-check

@@ -201,7 +201,7 @@ def upload_and_send(request):
             # 🔥 FORCE TASK INTO WHATSAPP2_main QUEUE
             process_bulk_whatsapp.apply_async(
                 args=(s3_key, choice, job_id),
-                queue="whatsapp_main"
+                queue="messaging"
             )
 
             return redirect("job_status", job_id=job_id)
@@ -802,7 +802,7 @@ def whatsapp_webhook(request):
                                         "message_type": "Received",
                                         "message_id": log.message_id,
                                         "status": log.status,
-                                        "sender_name": customer_name 
+                                        "sender_name": customer_name
                                     }
                                 }
                             )
@@ -823,7 +823,6 @@ def whatsapp_webhook(request):
                         )
 
                         # print(f"✅ Saved incoming {msg_type} from {mobile}")
-
                     # ======================================
                     # PROCESS STATUS UPDATES
                     # ======================================
@@ -852,11 +851,10 @@ def whatsapp_webhook(request):
                             # print(f"❌ Message not found: {msg_id}")
                             continue
 
-
-
                         mobile = obj.mobile
-                        #error handling 
+                        #error handling
                         errors = status.get("errors",[])
+                        
                         if status_type == "sent":
                             norm = "Sent"
                         elif status_type == "delivered":
@@ -867,23 +865,45 @@ def whatsapp_webhook(request):
                             norm = "Failed"
                             if errors:
                                 err = errors[0]
-                                code = int(err.get("code",0))
-                                # handel reengagement
+                                code = int(err.get("code", 0))
+                                
+                                # Map each error code to specific status (matching tasks.py ERROR_MAP)
                                 if code == 131047:
-                                    norm = "Re-engagement Required"
-                                elif code in [131026, 131051, 131011]:
-                                    norm = "Blocked"
-                                elif code in [131009, 131045]:
-                                    norm = "Invalid"
-                                elif code in [132000, 132001, 131008]:
-                                    norm = "Template Failed"
-                                elif code in [130429, 80007]:
-                                    norm = "Rate Limited"
-                                elif code in [10, 190, 200]:
-                                    norm = "Auth Failed"
+                                    norm = "24H_WINDOW_EXPIRED"
+                                elif code == 131026:
+                                    norm = "NOT_ON_WHATSAPP"
+                                elif code == 131051:
+                                    norm = "UNSUPPORTED_MESSAGE_TYPE"
+                                elif code == 131011:
+                                    norm = "BLOCKED_BY_USER"
+                                elif code == 130403:
+                                    norm = "BLOCKED_BY_BUSINESS"
+                                elif code == 131050:
+                                    norm = "OPTED_OUT"
+                                elif code == 190:
+                                    norm = "TOKEN_ERROR"
+                                elif code == 131009:
+                                    norm = "INVALID_PARAMETER"
+                                elif code == 131000:
+                                    norm = "UNKNOWN_ERROR"
+                                elif code == 131045:
+                                    norm = "REGISTRATION_ERROR"
+                                elif code == 132000:
+                                    norm = "TEMPLATE_PARAM_ERROR"
+                                elif code == 132001:
+                                    norm = "TEMPLATE_NOT_FOUND"
+                                elif code == 132015:
+                                    norm = "TEMPLATE_PAUSED"
+                                elif code == 132016:
+                                    norm = "TEMPLATE_DISABLED"
+                                elif code == 130429:
+                                    norm = "RATE_LIMIT"
+                                elif code == 131056:
+                                    norm = "TOO_MANY_MESSAGES"
+                                elif code in [10, 200]:
+                                    norm = "AUTH_FAILED"
                                 else:
-                                    norm = f"Failed ({code})"
-                        
+                                    norm = f"Failed_{code}"
                         else:
                             continue
 
@@ -908,10 +928,10 @@ def whatsapp_webhook(request):
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts",
                             {
-                                "type":"contact.update",
-                                "contact":{
-                                    "mobile":mobile,
-                                    "last_status":norm
+                                "type": "contact.update",
+                                "contact": {
+                                    "mobile": mobile,
+                                    "last_status": norm
                                 }
                             }
                         )
@@ -922,10 +942,8 @@ def whatsapp_webhook(request):
                             "global_contacts",
                             {
                                 "type": "unread.update",
-                                
                                 "unread_count": total_unread
-                                }
-                            
+                            }
                         )
 
                         # print(f"✅ Updated {msg_id} to {norm}")
@@ -938,7 +956,6 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
-
 
 
 
@@ -1002,3 +1019,4 @@ def view_secure_document(request, log_id):
     response["X-Content-Type-Options"] = "nosniff"
 
     return response
+

@@ -454,7 +454,7 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
                         cleaned[col] = parse_decimal_safe(val)
 
                     elif field_type == "IntegerField":
-                        
+
                         try:
                             cleaned[col] = int(str(val).replace(",", ""))
                         except:
@@ -549,22 +549,22 @@ def make_session():
 def upload_legal_pdf_to_whatsapp3(pdf_filename, folder):
     """Upload PDF to WhatsApp - handles bytes correctly"""
     from io import BytesIO
-    
+
     # Get PDF bytes from S3 or local
     pdf_bytes = open_legal_pdf3(pdf_filename, folder)
-    
+
     if not pdf_bytes:
         raise ValueError(f"Empty PDF: {pdf_filename}")
-    
+
     # Create a BytesIO object that mimics a file
     file_obj = BytesIO(pdf_bytes)
     file_obj.name = pdf_filename
     file_obj.content_type = "application/pdf"
-    
-    return upload_whatsapp_media3(file_obj)
-    
 
-@shared_task(bind=True, queue="whatsapp_secondary")
+    return upload_whatsapp_media3(file_obj)
+
+
+@shared_task(bind=True, queue="special_cases")
 def process_bulk_whatsapp3(self, excel_s3_path, template_choice, job_id, chunk_size=50):
     template_choice = str(template_choice)
     close_old_connections()
@@ -617,14 +617,14 @@ def process_bulk_whatsapp3(self, excel_s3_path, template_choice, job_id, chunk_s
     for i in range(0, total, chunk_size):
         process_bulk_whatsapp_batch3.apply_async(
             args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total)),
-            queue="whatsapp_secondary",
+            queue="special_cases",
         )
 
 
 # ==================================================
 # BATCH WORKER (FIXED VERSION)
 # ==================================================
-@shared_task(bind=True, queue="whatsapp_secondary")
+@shared_task(bind=True, queue="special_cases")
 def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, start, end):
     from django.db import close_old_connections
     from django.core.files.base import ContentFile
@@ -635,7 +635,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
     import pandas as pd
     import time
     import re
-    
+
     close_old_connections()
     template_choice = str(template_choice)
 
@@ -716,7 +716,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40"):
                 is_document = True
-                
+
                 if template_choice == "14":
                     pdf_filename = row.get("guarantor_pdf_file")
                     folder = "legal_pdfs"
@@ -792,7 +792,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
             # 📝 CREATE LOG (FIXED CONTENT TYPE)
             # ==================================================
             log_content_type = "document" if is_document and pdf_filename else "text"
-            
+
             log = SmsWhatsAppLog3.objects.create(
                 job_id=job_id,
                 customer_name=name,
@@ -812,25 +812,25 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
                 try:
                     print("PDF NAME:", pdf_filename)
                     print("FOLDER:", folder)
-                    
+
                     # Get PDF bytes
                     pdf_bytes = open_legal_pdf3(pdf_filename, folder)
-                    
+
                     if not pdf_bytes:
                         raise ValueError("Empty PDF")
-                    
+
                     # Validate it's bytes
                     if not isinstance(pdf_bytes, bytes):
                         pdf_bytes = bytes(pdf_bytes)
-                    
+
                     print(f"✅ PDF bytes received, size: {len(pdf_bytes)} bytes")
-                    
+
                     # Save to storage
                     saved_path = default_storage.save(
                         f"chat_media3/{pdf_filename}",
                         ContentFile(pdf_bytes)
                     )
-                    
+
                     # Update log with media file
                     SmsWhatsAppLog3.objects.filter(id=log.id).update(
                         media_file=saved_path,
@@ -838,7 +838,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
                     )
                     log.refresh_from_db()
                     print("✅ PDF SAVED:", saved_path)
-                    
+
                 except Exception as e:
                     print(f"❌ PDF SAVE FAILED: {e}")
                     import traceback
@@ -855,7 +855,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
                     "last_time": timezone.now(),
                     "last_type": "Sent",
                     "last_status": "Sent",
-                    "unread": 0 
+                    "unread": 0
                 }
             )
 
@@ -864,10 +864,10 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
-            
+
             channel_layer = get_channel_layer()
             gm = re.sub(r"\D", "", mobile)
-            
+
             if gm:
                 async_to_sync(channel_layer.group_send)(
                     f"chat3_{gm}",
@@ -887,7 +887,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
                         }
                     }
                 )
-            
+
             # Update global contacts
             async_to_sync(channel_layer.group_send)(
                 "global_contacts3",
@@ -903,7 +903,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
                     }
                 }
             )
-            
+
             success_records.append([name, mobile, msg_id])
             local_success += 1
             print(f"✅ Successfully sent to {mobile} - Message ID: {msg_id}")
@@ -913,7 +913,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
             print(f"❌ Failed to send to {mobile}: {err_msg}")
             import traceback
             traceback.print_exc()
-            
+
             SmsWhatsAppLog3.objects.create(
                 job_id=job_id,
                 customer_name=name,
@@ -949,7 +949,7 @@ def process_bulk_whatsapp_batch3(self, excel_s3_path, template_choice, job_id, s
 # ==================================================
 # FINALIZER
 # ==================================================
-@shared_task(bind=True, queue="whatsapp_secondary")
+@shared_task(bind=True, queue="special_cases")
 def finalize_bulk_job3(self, job_id):
     try:
         job = BulkJob3.objects.get(job_id=job_id)
@@ -1022,26 +1022,26 @@ def finalize_bulk_job3(self, job_id):
 
     logger.info("Job %s COMPLETED and both reports generated", job_id)
 
-@shared_task
+@shared_task(queue="special_cases")
 def process_pending_webhook_updates3():
     """Process any status updates that arrived before the message was saved"""
     from django.core.cache import cache
     from django.utils import timezone
     from datetime import timedelta
-    
+
     keys = cache.keys("pending_wa_status_*")
-    
+
     for key in keys:
         data = cache.get(key)
         if not data:
             continue
-        
+
         msg_id = key.replace("pending_wa_status_", "")
         status_type = data.get('status')
-        
+
         # Try to find the message now
         obj = SmsWhatsAppLog3.objects.filter(message_id=msg_id).first()
-        
+
         if obj:
             if status_type == "sent":
                 norm = "Sent"
@@ -1051,7 +1051,7 @@ def process_pending_webhook_updates3():
                 norm = "Read"
             else:
                 continue
-            
+
             SmsWhatsAppLog3.objects.filter(id=obj.id).update(status=norm)
             print(f"✅ Processed pending status for {msg_id} -> {norm}")
             cache.delete(key)
@@ -1062,3 +1062,4 @@ def process_pending_webhook_updates3():
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+

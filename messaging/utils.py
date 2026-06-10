@@ -356,17 +356,51 @@ def check_whatsapp_number(mobile: str) -> Dict[str, Any]:
         err = data.get("error") or {}
         code = err.get("code")
         msg = err.get("message", "")
+        
         if code:
             icode = int(code)
-            if icode == 131011:
-                return {"valid": False, "blocked": True, "reason": "User blocked business"}
-            if icode in (131009, 131045, 131000):
-                return {"valid": False, "blocked": False, "reason": msg}
+            
+            # Map each error code to specific status (matching tasks.py ERROR_MAP)
+            if icode == 131047:
+                return {"valid": False, "blocked": False, "reason": "24H_WINDOW_EXPIRED - Template window expired"}
+            elif icode == 131026:
+                return {"valid": False, "blocked": False, "reason": "NOT_ON_WHATSAPP - Number not on WhatsApp"}
+            elif icode == 131051:
+                return {"valid": False, "blocked": False, "reason": "UNSUPPORTED_MESSAGE_TYPE"}
+            elif icode == 131011:
+                return {"valid": False, "blocked": True, "reason": "BLOCKED_BY_USER - User blocked business"}
+            elif icode == 130403:
+                return {"valid": False, "blocked": True, "reason": "BLOCKED_BY_BUSINESS - Business blocked user"}
+            elif icode == 131050:
+                return {"valid": False, "blocked": True, "reason": "OPTED_OUT - User opted out"}
+            elif icode == 190:
+                return {"valid": False, "blocked": False, "reason": "TOKEN_ERROR - Invalid access token"}
+            elif icode == 131009:
+                return {"valid": False, "blocked": False, "reason": "INVALID_PARAMETER"}
+            elif icode == 131000:
+                return {"valid": False, "blocked": False, "reason": "UNKNOWN_ERROR"}
+            elif icode == 131045:
+                return {"valid": False, "blocked": False, "reason": "REGISTRATION_ERROR"}
+            elif icode == 132000:
+                return {"valid": False, "blocked": False, "reason": "TEMPLATE_PARAM_ERROR"}
+            elif icode == 132001:
+                return {"valid": False, "blocked": False, "reason": "TEMPLATE_NOT_FOUND"}
+            elif icode == 132015:
+                return {"valid": False, "blocked": False, "reason": "TEMPLATE_PAUSED"}
+            elif icode == 132016:
+                return {"valid": False, "blocked": False, "reason": "TEMPLATE_DISABLED"}
+            elif icode == 130429:
+                return {"valid": False, "blocked": False, "reason": "RATE_LIMIT - Too many requests"}
+            elif icode == 131056:
+                return {"valid": False, "blocked": False, "reason": "TOO_MANY_MESSAGES"}
+            elif icode in [10, 200]:
+                return {"valid": False, "blocked": False, "reason": "AUTH_FAILED"}
+            else:
+                return {"valid": False, "blocked": False, "reason": f"Failed_{icode}: {msg}"}
 
         return {"valid": True, "blocked": False, "reason": "Unknown (assumed valid)"}
     except Exception as e:
         return {"valid": True, "blocked": False, "reason": f"Validation error (assume valid): {e}"}
-
 
 # ---------------------------
 # Template fetch & render

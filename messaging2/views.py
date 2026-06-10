@@ -227,7 +227,7 @@ def upload_and_send2(request):
                 excel_file=s3_key,
                 status="Pending",
             )
-            process_bulk_whatsapp2.apply_async(args=(s3_key, choice, job_id), queue="whatsapp_secondary")
+            process_bulk_whatsapp2.apply_async(args=(s3_key, choice, job_id), queue="messaging2")
             return redirect("job_status2", job_id=job_id)
     else:
         form = UploadForm2()
@@ -655,6 +655,10 @@ def send_reply_api2(request):
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE FIXED VERSION
 # =============================================
+
+# =============================================
+# WHATSAPP WEBHOOK - COMPLETE FIXED VERSION
+# =============================================
 @csrf_exempt
 def whatsapp_webhook2(request):
     # print("🔥 WEBHOOK HIT")
@@ -796,8 +800,7 @@ def whatsapp_webhook2(request):
                                         "message_type": "Received",
                                         "message_id": log.message_id,
                                         "status": log.status,
-                                        "sender_name": customer_name   # 🔥 ADD THIS LINE
-
+                                        "sender_name": customer_name
                                     }
                                 }
                             )
@@ -847,10 +850,10 @@ def whatsapp_webhook2(request):
                             # print(f"❌ Message not found: {msg_id}")
                             continue
 
-
-
                         mobile = obj.mobile
+                        #error handling
                         errors = status.get("errors",[])
+
                         if status_type == "sent":
                             norm = "Sent"
                         elif status_type == "delivered":
@@ -861,28 +864,60 @@ def whatsapp_webhook2(request):
                             norm = "Failed"
                             if errors:
                                 err = errors[0]
-                                code = int(err.get("code",0))
-                                # handel reengagement
-                                if code == 131047:
-                                    norm = "Re-engagement Required"
-                                elif code in [131026, 131051, 131011]:
-                                    norm = "Blocked"
-                                elif code in [131009, 131045]:
-                                    norm = "Invalid"
-                                elif code in [132000, 132001, 131008]:
-                                    norm = "Template Failed"
-                                elif code in [130429, 80007]:
-                                    norm = "Rate Limited"
-                                elif code in [10, 190, 200]:
-                                    norm = "Auth Failed"
-                                else:
-                                    norm = f"Failed ({code})"
+                                code = int(err.get("code", 0))
 
+                                # Map each error code to specific status (matching tasks.py ERROR_MAP)
+                                if code == 131047:
+                                    norm = "24H_WINDOW_EXPIRED"
+                                elif code == 131026:
+                                    norm = "NOT_ON_WHATSAPP"
+                                elif code == 131051:
+                                    norm = "UNSUPPORTED_MESSAGE_TYPE"
+                                elif code == 131011:
+                                    norm = "BLOCKED_BY_USER"
+                                elif code == 130403:
+                                    norm = "BLOCKED_BY_BUSINESS"
+                                elif code == 131050:
+                                    norm = "OPTED_OUT"
+                                elif code == 190:
+                                    norm = "TOKEN_ERROR"
+                                elif code == 131009:
+                                    norm = "INVALID_PARAMETER"
+                                elif code == 131000:
+                                    norm = "UNKNOWN_ERROR"
+                                elif code == 131045:
+                                    norm = "REGISTRATION_ERROR"
+                                elif code == 132000:
+                                    norm = "TEMPLATE_PARAM_ERROR"
+                                elif code == 132001:
+                                    norm = "TEMPLATE_NOT_FOUND"
+                                elif code == 132015:
+                                    norm = "TEMPLATE_PAUSED"
+                                elif code == 132016:
+                                    norm = "TEMPLATE_DISABLED"
+                                elif code == 130429:
+                                    norm = "RATE_LIMIT"
+                                elif code == 131056:
+                                    norm = "TOO_MANY_MESSAGES"
+                                elif code in [10, 200]:
+                                    norm = "AUTH_FAILED"
+                                else:
+                                    norm = f"Failed_{code}"
                         else:
                             continue
 
-                        # Update database
-                        SmsWhatsAppLog2.objects.filter(message_id=msg_id).update(status=norm,error_message=json.dumps(errors) if errors else "")
+                        # 🔥 FIXED: Update database with ALL error fields (error_code + error_reason)
+                        update_data = {
+                            'status': norm,
+                            'error_message': json.dumps(errors) if errors else ""
+                        }
+                        
+                        if errors:
+                            err = errors[0]
+                            update_data['error_code'] = err.get('code')
+                            update_data['error_reason'] = err.get('title', '') or err.get('message', '')
+                        
+                        SmsWhatsAppLog2.objects.filter(message_id=msg_id).update(**update_data)
                         ChatContact2.objects.filter(mobile=mobile).update(last_status=norm)
 
                         # WebSocket update
@@ -897,26 +932,24 @@ def whatsapp_webhook2(request):
                                     "mobile": mobile
                                 }
                             )
-
                         async_to_sync(channel_layer.group_send)(
-                                "global_contacts2",
+                            "global_contacts2",
                             {
-                                "type":"contact.update",
-                                "contact":{
-                                    "mobile":mobile,
-                                    "last_status":norm
+                                "type": "contact.update",
+                                "contact": {
+                                    "mobile": mobile,
+                                    "last_status": norm
                                 }
                             }
                         )
+
                         print(f"✅ Updated {msg_id} to {norm}")
                         total_unread = ChatContact2.objects.filter(unread__gt=0).count()
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts2",
                             {
-
                                 "type": "unread.update",
                                 "unread_count": total_unread
-
                             }
                         )
 
@@ -930,6 +963,9 @@ def whatsapp_webhook2(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
+
+
+
 
 @csrf_exempt
 def mark_read2(request, mobile):
