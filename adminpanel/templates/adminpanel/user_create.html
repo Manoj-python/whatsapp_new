@@ -28,7 +28,6 @@
             padding: 70px 0 30px;
         }
         
-        /* Modern Navbar - Compact */
         .navbar-modern {
             position: fixed;
             top: 0;
@@ -81,13 +80,12 @@
             box-shadow: 0 5px 15px rgba(229, 62, 62, 0.4);
         }
         
-        /* Form Card - Wider and Compact */
         .form-card {
             background: white;
             border-radius: 20px;
             padding: 25px 35px;
             box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
-            max-width: 900px;
+            max-width: 1000px;
             width: 90%;
             margin: 0 auto;
         }
@@ -180,51 +178,6 @@
             background: #cbd5e0;
         }
         
-        /* Role Cards - Compact */
-        .role-card {
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 10px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .role-card:hover {
-            border-color: #667eea;
-            background: #f7fafc;
-        }
-        
-        .role-card.selected {
-            border-color: #667eea;
-            background: linear-gradient(135deg, #667eea10, #764ba210);
-        }
-        
-        .role-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 10px;
-        }
-        
-        .role-AGENT .role-icon { background: #48bb7820; color: #48bb78; }
-        .role-LEGAL .role-icon { background: #71809620; color: #718096; }
-        .role-LEAD .role-icon { background: #4299e120; color: #4299e1; }
-        .role-MANAGER .role-icon { background: #ed893620; color: #ed8936; }
-        .role-ADMIN .role-icon { background: #f5656520; color: #f56565; }
-        
-        .role-card strong {
-            font-size: 13px;
-        }
-        
-        .role-card small {
-            font-size: 11px;
-        }
-        
-        /* Alert */
         .alert-custom {
             border-radius: 10px;
             border: none;
@@ -233,7 +186,6 @@
             font-size: 13px;
         }
         
-        /* Footer */
         .footer {
             text-align: center;
             padding: 15px;
@@ -279,9 +231,6 @@
             .form-title {
                 font-size: 20px;
             }
-            .role-card strong {
-                font-size: 11px;
-            }
             .navbar-brand {
                 font-size: 1rem;
             }
@@ -298,7 +247,6 @@
 </head>
 <body>
 
-<!-- Modern Navbar - Compact -->
 <nav class="navbar-modern">
     <div class="container">
         <div class="d-flex justify-content-between align-items-center">
@@ -386,132 +334,72 @@
                 </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label">
-                        <i class="fas fa-envelope text-primary"></i>Mobile Number
+                        <i class="fas fa-phone text-primary"></i> Mobile Number
                     </label>
                     <div class="input-icon">
-                        <i class="fas fa-envelope"></i>
-                            <input type="tel" class="form-control" id="mobile" name="mobile" placeholder="+91XXXXXXXXXX">
+                        <i class="fas fa-phone"></i>
+                        <input type="tel" class="form-control" id="mobile" name="mobile" placeholder="+91XXXXXXXXXX">
                     </div>
-                    <small class="text-muted">Used for notifications</small>
+                    <small class="text-muted">Contact number</small>
                 </div>
             </div>
             
-            
             <div class="row">
-                 <div class="col-md-6 mb-3">
-                    <label class="form-label">
-                        <i class="fas fa-envelope text-primary"></i>Full Name
-                    </label>
-                    <div class="input-icon">
-                        <i class="fas fa-envelope"></i>
-                            <input type="text" class="form-control" id="name" name="name" placeholder="e.g., John Doe">
-                    </div>
-                </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label">
-                        <i class="fas fa-tag text-primary"></i> Select Team / Role *
+                        <i class="fas fa-user-circle text-primary"></i> Full Name
                     </label>
-                    <select name="role" class="form-select" required>
-                        <option value="">-- Select a Team --</option>
-                        <option value="AGENT">🟢 Normal Agent - Chat Support (ESC1)</option>
-                        <option value="LEGAL">⚖️ Thumb Team (ESC2)</option>
-                        <option value="LEAD">⭐ NOC (ESC3)</option>
-                        <option value="MANAGER">📊 Manager (ESC4)</option>
-                        <option value="ADMIN">🔒 Administrator (ESC5)</option>
-                    </select>
-                    <small class="text-muted">Determines case access level</small>
-                </div>
-               
+                    <div class="input-icon">
+                        <i class="fas fa-user-circle"></i>
+                        <input type="text" class="form-control" id="name" name="name" placeholder="e.g., John Doe">
+                    </div>
+                    <small class="text-muted">Display name</small>
                 </div>
                 
-                            <div class="row">
-
-<div class="col-md-6 mb-3">
-                    <div class="form-check mt-4 pt-2">
+               
+            </div>
+            
+           <div class="row">
+        <div class="col-md-6 mb-3">
+            <label class="form-label">Role *</label>
+            <select name="role" class="form-select" required>
+                <option value="">Select a role...</option>
+                {% for role, label in role_choices %}
+                    <option value="{{ role }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="mb-3">
+    <label class="form-label">Groups (Departments) *</label>
+    <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+        {% for group in groups %}
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="groups" value="{{ group.id }}" id="group_{{ group.id }}">
+                <label class="form-check-label" for="group_{{ group.id }}">
+                    {{ group.name }}
+                </label>
+            </div>
+        {% endfor %}
+    </div>
+    <small class="text-muted">Select at least one group.</small>
+</div>
+    </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="form-check mt-2">
                         <input type="checkbox" name="is_staff" class="form-check-input" id="isStaff">
                         <label class="form-check-label" for="isStaff">
                             <i class="fas fa-shield-alt"></i> Staff Status
                         </label>
                         <br>
-                        <small class="text-muted">Enable for Managers and Admins only</small>
-                    </div>
-                </div>   
-                </div>        
-            <!-- Role Guide - Compact -->
-            <!-- <div class="mb-3 p-2" style="background: #f7fafc; border-radius: 12px;">
-                <div class="fw-bold mb-2 small">
-                    <i class="fas fa-info-circle text-primary"></i> Team Responsibilities
-                </div>
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <div class="role-card role-AGENT">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-headset"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC1 - Normal Agent</strong>
-                                    <small class="d-block text-muted">Chat support, basic queries</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="role-card role-LEGAL">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-gavel"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC2 - Thumb Team</strong>
-                                    <small class="d-block text-muted">Thumb</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="role-card role-LEAD">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-star"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC3 - NOC TEAM</strong>
-                                    <small class="d-block text-muted">Technical issues</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="role-card role-MANAGER">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-chart-line"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC4 - Manager</strong>
-                                    <small class="d-block text-muted">High-value cases</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-12">
-                        <div class="role-card role-ADMIN">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon">
-                                    <i class="fas fa-crown"></i>
-                                </div>
-                                <div>
-                                    <strong>ESC5 - Administrator</strong>
-                                    <small class="d-block text-muted">Full access, user management</small>
-                                </div>
-                            </div>
-                        </div>
+                        <small class="text-muted">Enable for Managers and Admins only (grants Django admin access)</small>
                     </div>
                 </div>
-            </div> -->
+            </div>
             
-            <div class="row g-2">
+            <div class="row g-2 mt-2">
                 <div class="col-md-6">
                     <button type="submit" class="btn-create">
                         <i class="fas fa-save"></i> Create User

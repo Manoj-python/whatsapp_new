@@ -1,0 +1,264 @@
+{% extends "messaging2/base_dashboard.html" %}
+{% block title %}Head Dashboard - ESC4{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- App Switcher -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group">
+                {% for key, cfg in app_list %}
+                <a href="?app={{ key }}" class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    {{ cfg.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h6>Pending Cases (ESC4)</h6>
+                    <h2>{{ stats.pending }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h6>Resolved at ESC4</h6>
+                    <h2>{{ stats.resolved }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h6>Escalated to Admin</h6>
+                    <h2>{{ stats.escalated_to_admin }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Department-wise Cards (Clickable) -->
+    <div class="row mb-4" id="deptCards">
+        <div class="col-md-3 mb-2">
+            <div class="card text-white bg-primary dept-card" data-dept="all" style="cursor: pointer;">
+                <div class="card-body text-center">
+                    <h5>All Departments</h5>
+                    <h3>{{ stats.pending }}</h3>
+                    <small>Total Pending</small>
+                </div>
+            </div>
+        </div>
+        {% for dept in dept_stats %}
+        <div class="col-md-3 mb-2">
+            <div class="card text-white bg-secondary dept-card" data-dept="{{ dept.name }}" style="cursor: pointer;">
+                <div class="card-body text-center">
+                    <h5>{{ dept.name }}</h5>
+                    <h3>{{ dept.pending }}</h3>
+                    <small>Pending | Today: {{ dept.today }}</small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Cases Table -->
+    <div class="card">
+        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0"><i class="fas fa-user-tie"></i> Head Cases (ESC4)</h4>
+            <div>
+                <span id="currentFilterBadge" class="badge bg-light text-dark">All Departments</span>
+                <button class="btn btn-sm btn-light ms-2" onclick="refreshCases()"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="casesTable">
+                    <thead>
+                        <tr>
+                            <th>Loan No</th>
+                            <th>Customer</th>
+                            <th>Mobile</th>
+                            <th>Department</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in cases %}
+                        <tr class="{% if case.created_at|date:'Y-m-d' == today_date %}table-info{% endif %}">
+                            <td>{{ case.loan_number|default:"-" }}</small></td>
+                            <td>{{ case.customer_name|default:case.mobile }}</small></td>
+                            <td>{{ case.mobile }}</small></td>
+                            <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
+                            <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></small></td>
+                            <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
+                            <td>{{ case.created_at|date:"d/m/Y H:i" }}</small></td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+                                <button class="btn btn-sm btn-info" onclick="showAssignModal('{{ case.case_id }}')"><i class="fas fa-user-check"></i> Assign</button>
+                                <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
+                                <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check-circle"></i></button>
+                            </small></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8" class="text-center">No ESC4 cases in your departments.{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Modal (same as manager dashboard) -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-user-check"></i> Assign Case to Agent</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assignCaseId">
+                <div class="mb-3">
+                    <label>Select Agent:</label>
+                    <select id="assignAgentId" class="form-select">
+                        <option value="">-- Select Agent --</option>
+                        {% for agent in agents_list %}
+                        <option value="{{ agent.id }}">{{ agent.name }} ({{ agent.role_display }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label>Assignment Notes (optional):</label>
+                    <textarea id="assignNotes" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-info" onclick="submitAssignCase()">Assign Case</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentDepartment = 'all';
+const todayStr = '{{ today_date }}';
+
+function refreshCases() {
+    loadCases(currentDepartment);
+}
+
+function loadCases(department) {
+    currentDepartment = department;
+    const url = `/messaging2/head-cases/?app={{ current_app }}&dept=${encodeURIComponent(department)}`;
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            renderCaseTable(data.cases);
+            document.getElementById('currentFilterBadge').innerText = department === 'all' ? 'All Departments' : department;
+            // Highlight active department card
+            document.querySelectorAll('.dept-card').forEach(card => {
+                const deptName = card.getAttribute('data-dept');
+                if ((deptName === 'all' && department === 'all') || deptName === department) {
+                    card.classList.remove('bg-secondary');
+                    card.classList.add('bg-success');
+                } else {
+                    card.classList.remove('bg-success');
+                    card.classList.add('bg-secondary');
+                }
+            });
+        })
+        .catch(err => console.error(err));
+}
+
+function renderCaseTable(cases) {
+    const tbody = document.querySelector('#casesTable tbody');
+    if (!cases || cases.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No cases found</td></tr>';
+        return;
+    }
+    let html = '';
+    for (let c of cases) {
+        const isToday = new Date(c.created_at).toLocaleDateString('en-CA') === todayStr;
+        html += `
+            <tr ${isToday ? 'class="table-info"' : ''}>
+                <td>${c.loan_number || '-'}</small></td>
+                <td>${escapeHtml(c.customer_name || c.mobile)}</small></td>
+                <td>${c.mobile}</small></td>
+                <td><span class="badge bg-secondary">${c.group_name || '-'}</span></small></td>
+                <td><span class="badge bg-${c.priority.toLowerCase()}">${c.priority}</span></small></td>
+                <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></small></td>
+                <td>${new Date(c.created_at).toLocaleString()}</small></td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>
+                    <button class="btn btn-sm btn-info" onclick="showAssignModal('${c.case_id}')"><i class="fas fa-user-check"></i> Assign</button>
+                    <button class="btn btn-sm btn-warning" onclick="escalateCase('${c.case_id}')"><i class="fas fa-arrow-up"></i></button>
+                    <button class="btn btn-sm btn-success" onclick="resolveCase('${c.case_id}')"><i class="fas fa-check-circle"></i></button>
+                </small></td>
+            </tr>
+        `;
+    }
+    tbody.innerHTML = html;
+}
+
+function showAssignModal(caseId) {
+    document.getElementById('assignCaseId').value = caseId;
+    document.getElementById('assignAgentId').value = '';
+    document.getElementById('assignNotes').value = '';
+    $('#assignModal').modal('show');
+}
+
+function submitAssignCase() {
+    const caseId = document.getElementById('assignCaseId').value;
+    const agentId = document.getElementById('assignAgentId').value;
+    const notes = document.getElementById('assignNotes').value;
+    if (!agentId) {
+        alert('Please select an agent');
+        return;
+    }
+    fetch(`/messaging2/case/${caseId}/assign/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ agent_id: agentId, notes: notes })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case assigned successfully!');
+            $('#assignModal').modal('hide');
+            loadCases(currentDepartment);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Initialize click handlers for department cards
+document.querySelectorAll('.dept-card').forEach(card => {
+    card.addEventListener('click', () => {
+        const dept = card.getAttribute('data-dept');
+        loadCases(dept);
+    });
+});
+</script>
+
+{% include "messaging2/_case_modals.html" %}
+{% endblock %}

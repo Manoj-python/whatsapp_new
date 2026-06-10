@@ -10,6 +10,8 @@ urlpatterns = [
     # ============================================
     path('login/', views.login_view, name='admin_login'),
     path('logout/', views.logout_view, name='admin_logout'),
+    path('create-group/', views.create_group, name='create-group'),
+
 
     # ============================================
     # DASHBOARD (supports ?app=psf|sms|spl)
@@ -33,19 +35,21 @@ urlpatterns = [
     path('failed-messages/', views.failed_messages_legacy_sms, name='failed_messages'),
     path('failed-messages2/', views.failed_messages_legacy_psf, name='failed_messages2'),
 
-    # ============================================
-    # API ENDPOINTS – all support ?app= query param
-    # ============================================
+   # ============================================
     # Statistics & charts
     path('api/level-distribution/', views.get_level_distribution_api, name='level_distribution'),
     path('api/weekly-trend/', views.get_weekly_trend_api, name='weekly_trend'),
 
-    # Case listings
+    # NEW: Required for the new dashboard
+    path('api/stats/', views.get_stats_api, name='stats_api'),
+    path('api/department-stats/', views.get_department_stats_api, name='department_stats_api'),
+    path('api/cases/', views.get_filtered_cases_api, name='all_cases'),   # REPLACED with filtered version
+
+    # Case listings (original endpoints kept for backward compatibility)
     path('api/open-cases/', views.get_open_cases_api, name='open_cases'),
     path('api/resolved-cases/', views.get_resolved_cases_api, name='resolved_cases'),
     path('api/closed-cases/', views.get_closed_cases_api, name='closed_cases'),
     path('api/esc5-cases/', views.get_esc5_cases_api, name='esc5_cases'),
-    path('api/cases/', views.get_all_cases_api, name='all_cases'),
     path('api/esc3-cases/', views.get_esc3_cases_api, name='esc3_cases_api'),
 
     # Case detail & actions

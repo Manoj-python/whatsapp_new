@@ -125,32 +125,17 @@
                 <i class="fab fa-whatsapp"></i>
             </h4>
             <nav class="nav flex-column">
-                {% if agent.role == 'AGENT' %}
-                <a class="nav-link {% if request.resolver_match.url_name == 'agent_dashboard' %}active{% endif %}" 
-                   href="{% url 'agent_dashboard' %}">
-                    <i class="fas fa-tasks"></i> My Cases
-                </a>
-                {% elif agent.role == 'LEGAL' %}
-                <a class="nav-link {% if request.resolver_match.url_name == 'legal_dashboard' %}active{% endif %}" 
-                   href="{% url 'legal_dashboard' %}">
-                    <i class="fas fa-gavel"></i> Thumb Cases
-                </a>
-                {% elif agent.role == 'LEAD' %}
-                <a class="nav-link {% if request.resolver_match.url_name == 'lead_dashboard' %}active{% endif %}" 
-                   href="{% url 'lead_dashboard' %}">
-                    <i class="fas fa-star"></i> NOC Cases
-                </a>
-                {% elif agent.role == 'MANAGER' %}
-                <a class="nav-link {% if request.resolver_match.url_name == 'manager_dashboard' %}active{% endif %}" 
-                   href="{% url 'manager_dashboard' %}">
-                    <i class="fas fa-chart-line"></i> Manager Cases
-                </a>
-                {% elif agent.role == 'ADMIN' %}
-                <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}" 
-                   href="{% url 'admin_dashboard' %}">
-                    <i class="fas fa-crown"></i> Admin Dashboard
-                </a>
-                {% endif %}
+               {% if agent.role == 'AGENT' %}
+<a class="nav-link" href="{% url 'agent_dashboard' %}"><i class="fas fa-tasks"></i> My Cases</a>
+{% elif agent.role == 'LEAD' %}
+<a class="nav-link" href="{% url 'executive_dashboard' %}"><i class="fas fa-star"></i> Lead Cases (ESC2)</a>
+{% elif agent.role == 'MANAGER' %}
+<a class="nav-link" href="{% url 'manager_dashboard' %}"><i class="fas fa-chart-line"></i> Manager Cases (ESC3)</a>
+{% elif agent.role == 'HEAD' %}
+<a class="nav-link" href="{% url 'head_dashboard' %}"><i class="fas fa-user-tie"></i> Head Cases (ESC4)</a>
+{% elif agent.role == 'ADMIN' %}
+<a class="nav-link" href="{% url 'admin_dashboard' %}"><i class="fas fa-crown"></i> Admin Dashboard</a>
+{% endif %}
                 
                 <a class="nav-link" href="/messaging2/chat/">
                     <i class="fab fa-whatsapp"></i>PSF Chat

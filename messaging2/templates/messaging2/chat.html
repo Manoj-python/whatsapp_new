@@ -8,12 +8,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
       --whatsapp-green: #25D366;
       --whatsapp-dark: #075E54;
@@ -28,2874 +23,654 @@
       --esc4: #9c27b0;
       --esc5: #f44336;
     }
-
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: var(--chat-bg);
       height: 100vh;
       overflow: hidden;
     }
-
-    .chat-container {
-      display: flex;
-      height: 100vh;
-      background: var(--sidebar-bg);
-      overflow: hidden;
-    }
-
-    /* ========== SIDEBAR ========== */
+    .chat-container { display: flex; height: 100vh; background: var(--sidebar-bg); overflow: hidden; }
     .sidebar {
-      width: 380px;
-      background: white;
-      border-right: 1px solid #e9ecef;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      transition: transform 0.3s ease;
-      overflow: hidden;
+      width: 380px; background: white; border-right: 1px solid #e9ecef;
+      display: flex; flex-direction: column; height: 100vh; transition: transform 0.3s ease; overflow: hidden;
     }
-
     @media (max-width: 768px) {
-      .sidebar {
-        width: 100%;
-        position: fixed;
-        left: 0;
-        top: 0;
-        z-index: 1000;
-        transform: translateX(0);
-      }
-      .sidebar.hide {
-        transform: translateX(-100%);
-      }
-      .chat-area {
-        width: 100%;
-      }
+      .sidebar { width: 100%; position: fixed; left: 0; top: 0; z-index: 1000; transform: translateX(0); }
+      .sidebar.hide { transform: translateX(-100%); }
+      .chat-area { width: 100%; }
     }
-
-    /* Sidebar Header */
-    .sidebar-header {
-      padding: 16px;
-      background: var(--whatsapp-dark);
-      color: white;
-      flex-shrink: 0;
-    }
-
-    /* Header Top Row */
-    .header-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-    }
-
-    .header-top h4 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .user-badge {
-      width: 32px;
-      height: 32px;
-      background: rgba(255,255,255,0.2);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 14px;
-      color: white;
-    }
-
-    /* User Info Single Line - Compact */
-    .user-info-line {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 12px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255,255,255,0.2);
-    }
-
-    .esc-badge-compact {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255,255,255,0.15);
-      padding: 4px 12px;
-      border-radius: 30px;
-    }
-
-    .esc-number {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: bold;
-      color: white;
-    }
-
-    .esc-number.level-1 { background: #4caf50; }
-    .esc-number.level-2 { background: #2196f3; }
-    .esc-number.level-3 { background: #ff9800; }
-    .esc-number.level-4 { background: #9c27b0; }
-    .esc-number.level-5 { background: #f44336; }
-
-    .role-name {
-      font-size: 12px;
-      font-weight: 500;
-      color: white;
-    }
-
-    .user-name-compact {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      color: rgba(255,255,255,0.9);
-    }
-
-    .user-name-compact i {
-      font-size: 12px;
-    }
-
-    /* Search Box */
-    .search-box {
-      padding: 12px;
-      background: white;
-      border-bottom: 1px solid #e9ecef;
-      flex-shrink: 0;
-    }
-
-    .search-box input {
-      width: 100%;
-      padding: 10px 16px;
-      border: none;
-      background: var(--sidebar-bg);
-      border-radius: 20px;
-      font-size: 14px;
-      outline: none;
-    }
-
-    /* Chat Tabs */
-    .chat-tabs {
-      display: flex;
-      background: white;
-      border-bottom: 1px solid #e9ecef;
-      padding: 0 16px;
-      gap: 24px;
-    }
-
-    .chat-tab {
-      padding: 12px 0;
-      font-size: 15px;
-      font-weight: 500;
-      color: #667781;
-      cursor: pointer;
-      position: relative;
-      transition: all 0.2s;
-    }
-
-    .chat-tab.active {
-      color: var(--whatsapp-green);
-    }
-
-    .chat-tab.active::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: var(--whatsapp-green);
-      border-radius: 3px;
-    }
-
-    .chat-tab:hover {
-      color: var(--whatsapp-dark);
-    }
-
-    .chat-tab .badge {
-      background: #dc3545;
-      color: white;
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 12px;
-      margin-left: 6px;
-    }
-
-    /* Contact List */
-    .contact-list {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-    }
-
-    .contact-item {
-      display: flex;
-      align-items: center;
-      padding: 12px 16px;
-      cursor: pointer;
-      transition: background 0.2s;
-      border-bottom: 1px solid #f0f0f0;
-      min-height: 72px;
-      background: white;
-    }
-
-    .contact-item.active {
-      background: #e8f0fe;
-    }
-
-    .contact-avatar {
-      width: 48px;
-      height: 48px;
-      min-width: 48px;
-      border-radius: 50%;
-      background: var(--whatsapp-green);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 18px;
-      margin-right: 12px;
-      flex-shrink: 0;
-      position: relative;
-    }
-
-    /* ESC Level Indicator on Avatar */
-    .esc-level-indicator {
-      position: absolute;
-      bottom: -2px;
-      right: -2px;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      border: 2px solid white;
-      font-size: 9px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-    }
+    .sidebar-header { padding: 16px; background: var(--whatsapp-dark); color: white; flex-shrink: 0; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .header-top h4 { margin: 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .user-badge { width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; color: white; }
+    .esc-number { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: white; background: var(--esc1); }
+    .role-name { font-size: 12px; font-weight: 500; color: white; }
+    .search-box { padding: 12px; background: white; border-bottom: 1px solid #e9ecef; flex-shrink: 0; }
+    .search-box input { width: 100%; padding: 10px 16px; border: none; background: var(--sidebar-bg); border-radius: 20px; font-size: 14px; outline: none; }
+    .chat-tabs { display: flex; background: white; border-bottom: 1px solid #e9ecef; padding: 0 16px; gap: 24px; }
+    .chat-tab { padding: 12px 0; font-size: 15px; font-weight: 500; color: #667781; cursor: pointer; position: relative; }
+    .chat-tab.active { color: var(--whatsapp-green); }
+    .chat-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: var(--whatsapp-green); border-radius: 3px; }
+    .chat-tab .badge { background: #dc3545; color: white; font-size: 11px; padding: 2px 6px; border-radius: 12px; margin-left: 6px; }
+    .contact-list { flex: 1; overflow-y: auto; overflow-x: hidden; }
+    .contact-item { display: flex; align-items: center; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0; min-height: 72px; background: white; }
+    .contact-item.active { background: #e8f0fe; }
+    .contact-avatar { width: 48px; height: 48px; min-width: 48px; border-radius: 50%; background: var(--whatsapp-green); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; margin-right: 12px; position: relative; }
+    .esc-level-indicator { position: absolute; bottom: -2px; right: -2px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid white; font-size: 9px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
     .level-ESC1 { background: var(--esc1); }
     .level-ESC2 { background: var(--esc2); }
     .level-ESC3 { background: var(--esc3); }
     .level-ESC4 { background: var(--esc4); }
     .level-ESC5 { background: var(--esc5); }
-    /* Add these to your style section */
-.level-RESOLVED {
-    background: #28a745;
-    font-size: 11px;
-}
-.level-CLOSED {
-    background: #c50d1d;
-    font-size: 11px;
-}
-
-    .contact-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .contact-name {
-      font-weight: 600;
-      font-size: 15px;
-      margin-bottom: 4px;
-      color: #111;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .contact-last-msg {
-      font-size: 13px;
-      color: #667781;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .contact-meta {
-      text-align: right;
-      flex-shrink: 0;
-      min-width: 45px;
-    }
-
-    .contact-time {
-      font-size: 11px;
-      color: #667781;
-      margin-bottom: 4px;
-    }
-
-    .unread-badge {
-      background: var(--whatsapp-green);
-      color: white;
-      border-radius: 20px;
-      padding: 2px 8px;
-      font-size: 11px;
-      font-weight: 600;
-      display: inline-block;
-      min-width: 20px;
-      text-align: center;
-    }
-
-    /* Chat Area */
-    .chat-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: var(--chat-bg);
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Chat Header */
-    .chat-header {
-      background: white;
-      padding: 12px 20px;
-      display: flex;
-      align-items: center;
-      border-bottom: 1px solid #e9ecef;
-      flex-shrink: 0;
-    }
-
-    .chat-header-back {
-      display: none;
-      background: none;
-      border: none;
-      font-size: 20px;
-      margin-right: 12px;
-      cursor: pointer;
-      padding: 8px;
-      border-radius: 50%;
-    }
-
-    @media (max-width: 768px) {
-      .chat-header-back {
-        display: block;
-      }
-    }
-
-    .chat-header-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--whatsapp-green);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-      margin-right: 12px;
-      flex-shrink: 0;
-    }
-
-    .chat-header-info {
-      flex: 1;
-    }
-
-    .chat-header-name {
-      font-weight: 600;
-      font-size: 16px;
-      margin-bottom: 2px;
-    }
-
-    .chat-header-status {
-      font-size: 12px;
-      color: #667781;
-    }
-
-    /* Case Panel Button */
-    .case-panel-btn {
-      background: linear-gradient(135deg, #4361ee, #3f37c9);
-      border: none;
-      color: white;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      margin-left: 10px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .case-panel-btn:hover {
-      transform: scale(1.05);
-    }
-
-    /* Messages */
-    .messages-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .message-row {
-      display: flex;
-      width: 100%;
-      margin-bottom: 4px;
-    }
-
-    .message-row.sent {
-      justify-content: flex-end;
-    }
-
-    .message-row.received {
-      justify-content: flex-start;
-    }
-
-    .message-bubble {
-      max-width: 70%;
-      min-width: 60px;
-      padding: 8px 12px;
-      border-radius: 12px;
-      word-wrap: break-word;
-    }
-
-    .message-bubble.sent {
-      background: var(--sent-bubble);
-      border-bottom-right-radius: 4px;
-    }
-
-    .message-bubble.received {
-      background: var(--received-bubble);
-      border-bottom-left-radius: 4px;
-    }
-
-    .message-text {
-      font-size: 14px;
-      line-height: 1.4;
-      color: #111;
-    }
-
-    .message-meta {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 4px;
-      margin-top: 4px;
-      font-size: 10px;
-      color: #667781;
-    }
-
-    .message-time {
-      font-size: 10px;
-    }
-
-    .message-tick {
-      font-size: 12px;
-      margin-left: 4px;
-      display: inline-block;
-    }
-
+    .level-RESOLVED { background: #28a745; font-size: 11px; }
+    .level-CLOSED { background: #c50d1d; font-size: 11px; }
+    .contact-info { flex: 1; min-width: 0; }
+    .contact-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; color: #111; display: flex; justify-content: space-between; align-items: center; }
+    .contact-last-msg { font-size: 13px; color: #667781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .contact-meta { text-align: right; flex-shrink: 0; min-width: 45px; }
+    .contact-time { font-size: 11px; color: #667781; margin-bottom: 4px; }
+    .unread-badge { background: var(--whatsapp-green); color: white; border-radius: 20px; padding: 2px 8px; font-size: 11px; font-weight: 600; display: inline-block; min-width: 20px; text-align: center; }
+    .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); height: 100vh; overflow: hidden; }
+    .chat-header { background: white; padding: 12px 20px; display: flex; align-items: center; border-bottom: 1px solid #e9ecef; flex-shrink: 0; }
+    .chat-header-back { display: none; background: none; border: none; font-size: 20px; margin-right: 12px; cursor: pointer; padding: 8px; border-radius: 50%; }
+    @media (max-width: 768px) { .chat-header-back { display: block; } }
+    .chat-header-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--whatsapp-green); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 12px; flex-shrink: 0; }
+    .chat-header-info { flex: 1; }
+    .chat-header-name { font-weight: 600; font-size: 16px; margin-bottom: 2px; }
+    .chat-header-status { font-size: 12px; color: #667781; }
+    .case-panel-btn { background: linear-gradient(135deg, #4361ee, #3f37c9); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; margin-left: 10px; cursor: pointer; transition: all 0.2s; }
+    .messages-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .message-row { display: flex; width: 100%; margin-bottom: 4px; }
+    .message-row.sent { justify-content: flex-end; }
+    .message-row.received { justify-content: flex-start; }
+    .message-bubble { max-width: 70%; min-width: 60px; padding: 8px 12px; border-radius: 12px; word-wrap: break-word; }
+    .message-bubble.sent { background: var(--sent-bubble); border-bottom-right-radius: 4px; }
+    .message-bubble.received { background: var(--received-bubble); border-bottom-left-radius: 4px; }
+    .message-text { font-size: 14px; line-height: 1.4; color: #111; }
+    .message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 4px; font-size: 10px; color: #667781; }
+    .message-time { font-size: 10px; }
+    .message-tick { font-size: 12px; margin-left: 4px; display: inline-block; }
     .message-tick.sent { color: #8696a0; }
     .message-tick.delivered { color: #25D366; font-weight: bold; }
     .message-tick.read { color: #34B7F1; font-weight: bold; }
     .message-tick.failed { color: #dc3545; }
-
-    .message-image {
-      max-width: 250px;
-      max-height: 250px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    .message-video {
-      max-width: 250px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    /* Composer */
-    .composer {
-      background: white;
-      padding: 12px 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-top: 1px solid #e9ecef;
-    }
-
-    .composer-input {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      background: var(--sidebar-bg);
-      border-radius: 24px;
-      padding: 8px 16px;
-    }
-
-    .composer-input input {
-      flex: 1;
-      border: none;
-      background: none;
-      outline: none;
-      font-size: 14px;
-    }
-
-    .composer button {
-      background: var(--whatsapp-green);
-      border: none;
-      color: white;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      cursor: pointer;
-    }
-
-    /* Case Sidebar */
-    .case-sidebar {
-      width: 350px;
-      background: white;
-      border-left: 1px solid #e9ecef;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      transform: translateX(100%);
-      transition: transform 0.3s ease;
-      position: fixed;
-      right: 0;
-      top: 0;
-      z-index: 1001;
-    }
-
-    .case-sidebar.show {
-      transform: translateX(0);
-    }
-
-    .case-sidebar-header {
-      padding: 16px;
-      background: var(--whatsapp-dark);
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .case-sidebar-header h5 {
-      margin: 0;
-    }
-
-    .close-case-sidebar {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 20px;
-      cursor: pointer;
-    }
-
-    .case-sidebar-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-    }
-
-    /* Loading States */
-    .loading-spinner {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid var(--whatsapp-green);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    .loading, .empty-state {
-      text-align: center;
-      padding: 40px;
-      color: #667781;
-    }
-
-    /* Notifications */
-    .notification {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      border-radius: 8px;
-      color: white;
-      z-index: 9999;
-      animation: slideInRight 0.3s ease;
-    }
-
-    @keyframes slideInRight {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-
+    .message-image { max-width: 250px; max-height: 250px; border-radius: 8px; cursor: pointer; }
+    .message-video { max-width: 250px; border-radius: 8px; cursor: pointer; }
+    .composer { background: white; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-top: 1px solid #e9ecef; }
+    .composer-input { flex: 1; display: flex; align-items: center; background: var(--sidebar-bg); border-radius: 24px; padding: 8px 16px; }
+    .composer-input input { flex: 1; border: none; background: none; outline: none; font-size: 14px; }
+    .composer button { background: var(--whatsapp-green); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; }
+    .case-sidebar { width: 350px; background: white; border-left: 1px solid #e9ecef; display: flex; flex-direction: column; height: 100vh; transform: translateX(100%); transition: transform 0.3s ease; position: fixed; right: 0; top: 0; z-index: 1001; }
+    .case-sidebar.show { transform: translateX(0); }
+    .case-sidebar-header { padding: 16px; background: var(--whatsapp-dark); color: white; display: flex; justify-content: space-between; align-items: center; }
+    .case-sidebar-header h5 { margin: 0; }
+    .close-case-sidebar { background: none; border: none; color: white; font-size: 20px; cursor: pointer; }
+    .case-sidebar-content { flex: 1; overflow-y: auto; padding: 16px; }
+    .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid var(--whatsapp-green); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .loading, .empty-state { text-align: center; padding: 40px; color: #667781; }
+    .notification { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; color: white; z-index: 9999; animation: slideInRight 0.3s ease; }
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     .notification.success { background: var(--whatsapp-green); }
     .notification.error { background: #dc3545; }
     .notification.info { background: #17a2b8; }
     .notification.warning { background: #ff9800; }
-
-    /* Date Separator */
-    .date-separator {
-      text-align: center;
-      margin: 16px 0;
-    }
-
-    .date-separator span {
-      background: rgba(0,0,0,0.05);
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 11px;
-      color: #667781;
-    }
-
-    /* Load Older Button */
-    .load-older-container {
-      display: flex;
-      justify-content: center;
-      margin: 16px 0;
-      cursor: pointer;
-    }
-
-    .load-older-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 18px;
-      background: var(--whatsapp-green);
-      color: white;
-      border-radius: 24px;
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .load-older-btn:hover {
-      background: var(--whatsapp-teal);
-    }
-
-    /* File Preview */
-    .file-preview {
-      background: white;
-      padding: 8px 20px;
-      border-top: 1px solid #e9ecef;
-      display: none;
-    }
-
-    .file-preview.show {
-      display: block;
-    }
-
-    .preview-card {
-      background: #f8f9fa;
-      padding: 8px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-    }
-
-    .preview-card i {
-      font-size: 24px;
-      color: var(--whatsapp-green);
-    }
-
-    .preview-info {
-      flex: 1;
-    }
-
-    .preview-cancel {
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: #dc3545;
-      font-size: 16px;
-      padding: 4px;
-    }
-
-    /* Typing Indicator */
-    .typing-indicator {
-      padding: 8px 20px;
-      font-size: 12px;
-      color: #667781;
-      font-style: italic;
-    }
-
-    /* Media Modal */
-    .media-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.95);
-      display: none;
-      z-index: 2000;
-    }
-
-    .media-modal.show {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal-close {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: rgba(0,0,0,0.7);
-      border: none;
-      color: white;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      font-size: 24px;
-      cursor: pointer;
-      z-index: 2001;
-    }
-
-    /* Scrollbars */
-    .messages-container::-webkit-scrollbar,
-    .contact-list::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .messages-container::-webkit-scrollbar-track,
-    .contact-list::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-
-    .messages-container::-webkit-scrollbar-thumb,
-    .contact-list::-webkit-scrollbar-thumb {
-      background: #c1c1c1;
-      border-radius: 3px;
-    }
-
-    /* Document Bubble */
-    .document-bubble {
-      max-width: 280px;
-      background: #f0f0f0;
-      border-radius: 12px;
-      overflow: hidden;
-      cursor: pointer;
-    }
-
-    .document-bubble:hover {
-      background: #e5e5e5;
-    }
-
-    .document-content {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 12px;
-    }
-
-    .document-icon {
-      position: relative;
-      flex-shrink: 0;
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: white;
-      border-radius: 10px;
-    }
-
-    .document-icon i {
-      font-size: 22px;
-    }
-
-    .document-details {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .document-filename {
-      font-size: 13px;
-      font-weight: 500;
-      color: #111;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .document-download {
-      flex-shrink: 0;
-      color: #8696a0;
-      font-size: 14px;
-      padding: 6px;
-      border-radius: 50%;
-    }
-
-    .document-bubble:hover .document-download i {
-      color: var(--whatsapp-green);
-    }
-
-    .doc-text {
-      margin-top: 6px;
-      font-size: 13px;
-      color: #111;
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      .message-bubble { max-width: 85%; min-width: 50px; padding: 6px 10px; }
-      .message-image { max-width: 100%; max-height: 200px; }
-      .message-video { max-width: 100%; max-height: 200px; }
-      .document-bubble { max-width: 100%; min-width: 200px; }
-      .composer { padding: 8px 12px; gap: 8px; }
-      .composer-input { padding: 6px 12px; }
-      .composer button { width: 35px; height: 35px; }
-      .chat-header { padding: 10px 15px; }
-      .chat-header-avatar { width: 35px; height: 35px; font-size: 14px; }
-    }
-
-    @media (max-width: 480px) {
-      .message-bubble { max-width: 90%; }
-      .message-image { max-height: 180px; }
-      .message-video { max-height: 180px; }
-      .document-bubble { min-width: 180px; }
-      .messages-container { padding: 12px; gap: 8px; }
-    }
-    /* Message Footer - Name and Time on same line, right-aligned */
-.message-footer {
+    .date-separator { text-align: center; margin: 16px 0; }
+    .date-separator span { background: rgba(0,0,0,0.05); padding: 4px 12px; border-radius: 12px; font-size: 11px; color: #667781; }
+    .load-older-container { display: flex; justify-content: center; margin: 16px 0; cursor: pointer; }
+    .load-older-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: var(--whatsapp-green); color: white; border-radius: 24px; font-size: 13px; font-weight: 500; }
+    .file-preview { background: white; padding: 8px 20px; border-top: 1px solid #e9ecef; display: none; }
+    .file-preview.show { display: block; }
+    .preview-card { background: #f8f9fa; padding: 8px; border-radius: 8px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .typing-indicator { padding: 8px 20px; font-size: 12px; color: #667781; font-style: italic; }
+    .media-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; z-index: 2000; }
+    .media-modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-close { position: fixed; top: 20px; right: 20px; background: rgba(0,0,0,0.7); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; font-size: 24px; cursor: pointer; z-index: 2001; }
+    .message-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; font-size: 10px; flex-wrap: wrap; }
+    .message-sender { font-weight: 600; color: #075E54; font-size: 10px; }
+    .message-row.received .message-sender { color: #128C7E; }
+    .contact-dept {
+    font-size: 11px;
+    color: #6c757d;
+    margin-top: 3px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 6px;
-    font-size: 10px;
-    flex-wrap: wrap;
+    gap: 4px;
 }
-
-.message-sender {
-    font-weight: 600;
-    color: #075E54;
+.contact-dept i {
     font-size: 10px;
 }
-
-.message-time {
-    color: #667781;
-    font-size: 10px;
-}
-
-.message-tick {
-    font-size: 11px;
-    margin-left: 2px;
-}
-
-.message-tick.sent { color: #8696a0; }
-.message-tick.delivered { color: #25D366; font-weight: bold; }
-.message-tick.read { color: #34B7F1; font-weight: bold; }
-.message-tick.failed { color: #dc3545; }
-
-/* For received messages */
-.message-row.received .message-sender {
-    color: #128C7E;
-}
+    @media (max-width: 768px) { .message-bubble { max-width: 85%; min-width: 50px; padding: 6px 10px; } .composer { padding: 8px 12px; } }
   </style>
 </head>
 <body>
-  <div class="chat-container">
-    <div class="sidebar" id="sidebar">
+<div class="chat-container">
+  <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-  <div class="header-top">
-    <h4 onclick="goToDashboard()" style="cursor: pointer;">
-    <i class="fab fa-whatsapp"></i>PSF Chats
-</h4>
-    <span class="esc-number">
-            {{ agent.level|default:"ESC1" }}
-        </span>
-          <span class="role-name" id="roleName">{{ agent.role|default:"Agent" }}</span>
-
-
-    <div class="user-badge">{{ request.user.username|slice:":2"|upper }}</div>
+      <div class="header-top">
+        <h4 onclick="goToDashboard()"><i class="fab fa-whatsapp"></i> PSF Chats</h4>
+        <span class="esc-number">{{ agent.level|default:"ESC1" }}</span>
+        <span class="role-name">{{ agent.role|default:"Agent" }}</span>
+        <div class="user-badge">{{ request.user.username|slice:":2"|upper }}</div>
+      </div>
+    </div>
+    <div class="chat-tabs">
+      <div class="chat-tab active" data-filter="all" onclick="switchTab('all')">All</div>
+      <div class="chat-tab" data-filter="unread" onclick="switchTab('unread')">
+        Unread <span class="badge" id="unreadCountBadge" style="display: none;">0</span>
+      </div>
+    </div>
+    <div class="search-box"><input type="text" id="searchInput" placeholder="Search contacts..."></div>
+    <div class="contact-list" id="contactList"><div class="loading">Loading contacts...</div></div>
   </div>
 
+  <div class="chat-area" id="chatArea" style="display: none;">
+    <div class="chat-header">
+      <button class="chat-header-back" id="backBtn"><i class="fas fa-arrow-left"></i></button>
+      <div class="chat-header-avatar" id="headerAvatar">👤</div>
+      <div class="chat-header-info">
+        <div class="chat-header-name" id="headerName">Select a chat</div>
+        <div class="chat-header-status" id="headerStatus"></div>
+      </div>
+      <button class="case-panel-btn" id="casePanelBtn" title="View Case Details"><i class="fas fa-folder-open"></i></button>
+    </div>
+    <div class="messages-container" id="messagesContainer"><div class="empty-state">Select a contact to start chatting</div></div>
+    <div class="typing-indicator" id="typingIndicator" style="display: none;">Typing...</div>
+    <div class="composer" style="display: none;">
+      <div class="composer-input">
+        <button id="attachBtn"><i class="fas fa-paperclip"></i></button>
+        <input type="text" id="messageInput" placeholder="Type a message...">
+      </div>
+      <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+      <input type="file" id="mediaInput" style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
+    </div>
+    <div class="file-preview" id="filePreview">
+      <div class="preview-card"><i class="fas fa-file"></i><div class="preview-info">No file selected</div><button class="preview-cancel" onclick="cancelFile()">✖</button></div>
+    </div>
+  </div>
 </div>
-      <div class="chat-tabs">
-        <div class="chat-tab active" data-filter="all" onclick="switchTab('all')">All</div>
-        <div class="chat-tab" data-filter="unread" onclick="switchTab('unread')">
-          Unread
-          <span class="badge" id="unreadCountBadge" style="display: none;">0</span>
-        </div>
-      </div>
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="Search contacts..." autocomplete="off">
-      </div>
-      <div class="contact-list" id="contactList">
-        <div class="loading">Loading contacts...</div>
-      </div>
-    </div>
-
-    <div class="chat-area" id="chatArea" style="display: none;">
-      <div class="chat-header">
-        <button class="chat-header-back" id="backBtn"><i class="fas fa-arrow-left"></i></button>
-        <div class="chat-header-avatar" id="headerAvatar">👤</div>
-        <div class="chat-header-info">
-          <div class="chat-header-name" id="headerName">Select a chat</div>
-          <div class="chat-header-status" id="headerStatus"></div>
-        </div>
-        <button class="case-panel-btn" id="casePanelBtn" title="View Case Details">
-    <i class="fas fa-folder-open"></i>
-  </button>
-      </div>
-
-      <div class="messages-container" id="messagesContainer">
-        <div class="empty-state">Select a contact to start chatting</div>
-      </div>
-
-      <div class="typing-indicator" id="typingIndicator" style="display: none;">Typing...</div>
-
-      <div class="composer" style="display: none;">
-        <div class="composer-input">
-          <button id="attachBtn"><i class="fas fa-paperclip"></i></button>
-          <input type="text" id="messageInput" placeholder="Type a message...">
-        </div>
-        <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
-        <input type="file" id="mediaInput" style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
-      </div>
-
-      <div class="file-preview" id="filePreview">
-        <div class="preview-card">
-          <i class="fas fa-file"></i>
-          <div class="preview-info">No file selected</div>
-          <button class="preview-cancel" onclick="cancelFile()">✖</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <!-- Case Panel Sidebar -->
 <div class="case-sidebar" id="caseSidebar">
-  <div class="case-sidebar-header">
-    <h5><i class="fas fa-folder-open"></i> Case Details</h5>
-    <button class="close-case-sidebar" onclick="closeCaseSidebar()">×</button>
-  </div>
-  <div class="case-sidebar-content" id="caseSidebarContent">
-    <div class="text-center py-4">
-      <div class="loading-spinner"></div>
-      <p class="mt-2">Loading case details...</p>
-    </div>
-  </div>
+  <div class="case-sidebar-header"><h5><i class="fas fa-folder-open"></i> Case Details</h5><button class="close-case-sidebar" onclick="closeCaseSidebar()">×</button></div>
+  <div class="case-sidebar-content" id="caseSidebarContent"><div class="text-center py-4"><div class="loading-spinner"></div><p>Loading case details...</p></div></div>
 </div>
+<div id="mediaModal" class="media-modal"><button class="modal-close" onclick="closeMediaModal()">×</button><div id="mediaContent"></div></div>
 
-  <div id="mediaModal" class="media-modal">
-    <button class="modal-close" onclick="closeMediaModal()">×</button>
-    <div id="mediaContent"></div>
-  </div>
+<script>
+  // ========== CONFIG ==========
+  const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+  let ws = null, selectedMobile = null, contacts = [], messages = [], isLoadingMessages = false, hasMoreMessages = true;
+  let reconnectAttempts = 0, typingTimeout = null, currentFilter = 'all', totalUnreadCount = 0;
+  let contactPage = 1, isLoadingContacts = false, hasMoreContacts = true, lastProcessedPage = 0, isRenderingContacts = false, scrollTimeout = null;
+  let currentCaseData = null;
+  let currentUser = {
+    name: "{{ request.user.username|default:'Agent' }}",
+    role: "{{ agent.role|default:'AGENT' }}",
+    level: "{{ agent.level|default:'ESC1' }}"
+  };
+  let availableGroups = [];
 
-  <script>
-    // ============================================
-    // CONFIGURATION
-    // ============================================
-    const CSRF = document.querySelector('meta[name="csrf-token"]').content;
-    let ws = null;
-    let selectedMobile = null;
-    let contacts = [];
-    let messages = [];
-    let isLoadingMessages = false;
-    let hasMoreMessages = true;
-    let lastMessageId = null;
-    let reconnectAttempts = 0;
-    let typingTimeout = null;
-    let nextCursorDate = null;
-    let initialLoadDone = false;
-    let currentFilter = 'all';
-    let totalUnreadCount = 0;
-    let contactPage = 1;
-    let isLoadingContacts = false;
-    let hasMoreContacts = true;
-    let lastProcessedPage = 0;
-    let isRenderingContacts = false;
-    let scrollTimeout = null;
-    let currentCaseData = null;
-
-    // NEW: User role and ESC level
-    // After getting user data from Django template
-let currentUser = {
-        name: "{{ request.user.username|default:'Agent' }}",
-        role: "{{ agent.role|default:'AGENT' }}",
-        level: "{{ agent.level|default:'ESC1' }}"
-    };
-
-    // Update UI Badge function
-    function updateUIBadge() {
-        const escIcon = document.getElementById('escIcon');
-        const escText = document.getElementById('escText');
-        const userBadge = document.querySelector('.user-badge');
-
-        if (escIcon && escText) {
-            let levelNumber = currentUser.level.replace('ESC', '');
-            escIcon.textContent = levelNumber;
-            escIcon.className = `esc-icon esc-level-${currentUser.level}`;
-
-            const roleNames = {
-                'AGENT': 'Normal Agent',
-                'LEGAL': 'Thumb Team',
-                'LEAD': 'NOC Team',
-                'MANAGER': 'Manager',
-                'ADMIN': 'Administrator'
-            };
-            escText.textContent = `${currentUser.level} - ${roleNames[currentUser.role] || currentUser.role}`;
-        }
-
-        if (userBadge) {
-            const roleColors = {
-                'AGENT': '#4caf50',
-                'LEGAL': '#2196f3',
-                'LEAD': '#ff9800',
-                'MANAGER': '#9c27b0',
-                'ADMIN': '#f44336'
-            };
-            userBadge.style.background = roleColors[currentUser.role] || 'rgba(255,255,255,0.2)';
-        }
+  function updateUIBadge() {
+    const userBadge = document.querySelector('.user-badge');
+    if (userBadge) {
+      const roleColors = { 'AGENT': '#4caf50', 'EXCUTIVE': '#ff9800', 'MANAGER': '#9c27b0', 'ADMIN': '#f44336' };
+      userBadge.style.background = roleColors[currentUser.role] || 'rgba(255,255,255,0.2)';
     }
+  }
+  updateUIBadge();
+  console.log('Current User:', currentUser);
 
-    updateUIBadge();
-    console.log('Current User:', currentUser);
+  const contactListEl = document.getElementById('contactList'), chatArea = document.getElementById('chatArea');
+  const messagesContainer = document.getElementById('messagesContainer'), headerName = document.getElementById('headerName');
+  const headerAvatar = document.getElementById('headerAvatar'), headerStatus = document.getElementById('headerStatus');
+  const composer = document.querySelector('.composer'), messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn'), attachBtn = document.getElementById('attachBtn'), mediaInput = document.getElementById('mediaInput');
+  const searchInput = document.getElementById('searchInput'), typingIndicator = document.getElementById('typingIndicator');
+  const backBtn = document.getElementById('backBtn'), filePreview = document.getElementById('filePreview');
 
-    // DOM Elements
-    const contactListEl = document.getElementById('contactList');
-    const chatArea = document.getElementById('chatArea');
-    const messagesContainer = document.getElementById('messagesContainer');
-    const headerName = document.getElementById('headerName');
-    const headerAvatar = document.getElementById('headerAvatar');
-    const headerStatus = document.getElementById('headerStatus');
-    const composer = document.querySelector('.composer');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const attachBtn = document.getElementById('attachBtn');
-    const mediaInput = document.getElementById('mediaInput');
-    const searchInput = document.getElementById('searchInput');
-    const typingIndicator = document.getElementById('typingIndicator');
-    const backBtn = document.getElementById('backBtn');
-    const filePreview = document.getElementById('filePreview');
-
-    // ============================================
-    // CASE PANEL FUNCTIONS - FIXED
-    // ============================================
-
-    // Open case sidebar
-    function openCaseSidebar() {
-        console.log('📂 openCaseSidebar called, selectedMobile:', selectedMobile);
-
-        if (!selectedMobile) {
-            showNotification('Please select a contact first', 'warning');
-            return;
-        }
-
-        const caseSidebar = document.getElementById('caseSidebar');
-        if (caseSidebar) {
-            caseSidebar.classList.add('show');
-            renderCasePanel();
-        }
-    }
-
-    // Close case sidebar
-    function closeCaseSidebar() {
-        const caseSidebar = document.getElementById('caseSidebar');
-        if (caseSidebar) {
-            caseSidebar.classList.remove('show');
-        }
-    }
-
-
-function goToDashboard() {
+  function goToDashboard() {
     const role = "{{ agent.role|default:'AGENT' }}";
     let url = "";
     switch(role) {
-        case 'AGENT': url = "{% url 'agent_dashboard' %}"; break;
-        case 'LEGAL': url = "{% url 'legal_dashboard' %}"; break;
-        case 'LEAD':  url = "{% url 'lead_dashboard' %}"; break;
-        case 'MANAGER': url = "{% url 'manager_dashboard' %}"; break;
-        default: url = "{% url 'admin_dashboard' %}";
+      case 'AGENT': url = "{% url 'agent_dashboard' %}"; break;
+      case 'EXECUTIVE':  url = "{% url 'executive_dashboard' %}"; break;
+      case 'HEAD':  url = "{% url 'head_dashboard' %}"; break;
+      case 'MANAGER': url = "{% url 'manager_dashboard' %}"; break;
+      default: url = "{% url 'admin_dashboard' %}";
     }
     window.location.href = url;
-}
+  }
 
-    // Render case panel content
-    async function renderCasePanel() {
+  function openCaseSidebar() { if (!selectedMobile) { showNotification('Select a contact first', 'warning'); return; } document.getElementById('caseSidebar').classList.add('show'); renderCasePanel(); }
+  function closeCaseSidebar() { document.getElementById('caseSidebar').classList.remove('show'); }
+
+  async function fetchGroups() {
+    try {
+      const resp = await fetch('/messaging2/api/groups/');
+      const data = await resp.json();
+      availableGroups = data.groups || [];
+    } catch(e) { console.error('Failed to load groups', e); availableGroups = []; }
+  }
+
+  async function renderCasePanel() {
     const content = document.getElementById('caseSidebarContent');
     if (!content) return;
-
     content.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Loading case details...</p></div>';
+    try {
+      const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(selectedMobile)}`);
+      const data = await response.json();
+      if (data.case) {
+        currentCaseData = data.case;
+        const levelColors = { 'ESC0':'secondary','ESC1':'success','ESC2':'info','ESC3':'warning','ESC4':'danger','ESC5':'dark','RESOLVED':'success','CLOSED':'secondary' };
+        let levelIcon = '';
+        if (currentCaseData.current_level === 'RESOLVED') levelIcon = '✅';
+        else if (currentCaseData.current_level === 'CLOSED') levelIcon = '🔒';
+        else if (currentCaseData.current_level === 'ESC1') levelIcon = '📞';
+        else if (currentCaseData.current_level === 'ESC2') levelIcon = '⚖️';
+        else if (currentCaseData.current_level === 'ESC3') levelIcon = '⭐';
+        else if (currentCaseData.current_level === 'ESC4') levelIcon = '📊';
+        else levelIcon = '🔒';
+
+        let groupName = currentCaseData.group_name || 'Not assigned';
+
+        // Determine available escalation levels (higher than current)
+        const allLevels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5'];
+        const currentIdx = allLevels.indexOf(currentCaseData.current_level);
+        let availableLevels = allLevels.slice(currentIdx + 1);
+        let escalateOptions = '';
+        let showEscalate = (currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed' && availableLevels.length > 0);
+        if (showEscalate) {
+          const levelNames = {
+            'ESC1': '📞 Normal (ESC1)',
+            'ESC2': '⚖️ Executive (ESC2)',
+            'ESC3': '⭐ Manager (ESC3)',
+            'ESC4': '📊 Head (ESC4)',
+            'ESC5': '🔒 Admin (ESC5)'
+          };
+          for (let lvl of availableLevels) {
+            escalateOptions += `<option value="${lvl}">${levelNames[lvl]}</option>`;
+          }
+        }
+        let showResolve = (currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed');
+
+        let html = `
+          <div class="case-info-section">
+            <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-info-circle"></i> Case Information</h6>
+            <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(currentCaseData.case_id)}</strong></div>
+            <div class="mb-2"><label>Customer:</label> ${escapeHtml(currentCaseData.customer_name || selectedMobile)}</div>
+            <div class="mb-2"><label>Loan Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.loan_number || 'Not provided')}</span></div>
+            <div class="mb-2"><label>Department:</label> ${escapeHtml(groupName)}</div>
+            <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[currentCaseData.current_level] || 'secondary'}">${levelIcon} ${currentCaseData.current_level}</span></div>
+            <div class="mb-2"><label>Status:</label> <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span></div>
+            <div class="mb-2"><label>Assigned To:</label> ${escapeHtml(currentCaseData.assigned_to_name || 'Unassigned')}</div>
+            <div class="mb-2"><label>Issue:</label> <div class="border rounded p-2 bg-light small">${escapeHtml(currentCaseData.issue_description || 'No description')}</div></div>
+          </div>
+          <hr>
+          <div class="case-actions-section">
+            <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-cogs"></i> Actions</h6>
+        `;
+
+        
+
+        if (showResolve) {
+          html += `
+            <div class="mb-3">
+              <textarea id="resolutionNotesText" class="form-control form-control-sm mb-2" rows="2" placeholder="Resolution notes..."></textarea>
+              <button class="btn btn-success btn-sm w-100" onclick="resolveCurrentCase()">✅ Resolve Case</button>
+            </div>
+          `;
+        }
+
+        html += `
+            <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="viewCaseTimeline()"><i class="fas fa-history"></i> View Timeline</button>
+            <button class="btn btn-outline-secondary btn-sm w-100" onclick="openCreateAnotherCaseForm()"><i class="fas fa-plus"></i> Create Another Case</button>
+          </div>
+        `;
+
+        content.innerHTML = html;
+      } else {
+        // No case: show creation form
+        if (availableGroups.length === 0) await fetchGroups();
+        let groupsHtml = '<select id="newCaseGroup" class="form-select form-select-sm mb-2" required><option value="">Select Department</option>';
+        availableGroups.forEach(g => { groupsHtml += `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`; });
+        groupsHtml += '</select>';
+
+        let escalationOptions = '<option value="">-- No escalation (ESC1) --</option>';
+        const creationLevels = ['ESC2', 'ESC3', 'ESC4', 'ESC5'];
+        const levelNamesShort = { 'ESC2': 'Executive (ESC2)', 'ESC3': 'Manager (ESC3)', 'ESC4': 'Head (ESC4)', 'ESC5': 'Admin (ESC5)' };
+        for (let lvl of creationLevels) {
+          escalationOptions += `<option value="${lvl}">${levelNamesShort[lvl]}</option>`;
+        }
+
+        content.innerHTML = `
+          <div class="text-center py-3">
+            <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+            <p>No active case found. Create a new case:</p>
+            <div class="text-start">
+              <div class="mb-2">
+                <label class="form-label small fw-bold">Customer Name</label>
+                <input type="text" id="newCaseCustomerName" class="form-control form-control-sm" value="${escapeHtml(headerName.textContent)}">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold">Loan Number</label>
+                <input type="text" id="newCaseLoanNumber" class="form-control form-control-sm" placeholder="e.g., LOAN12345">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold">Department (Group)</label>
+                ${groupsHtml}
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold">Escalate To (Optional)</label>
+                <select id="newCaseEscalateTo" class="form-select form-select-sm">${escalationOptions}</select>
+                <small class="text-muted">If selected, case will be created at that level</small>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold">Issue Description</label>
+                <textarea id="newCaseDesc" class="form-control form-control-sm" rows="3" placeholder="Describe the issue..."></textarea>
+              </div>
+              <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> You can create multiple cases for the same customer.</small>
+              <button class="btn btn-primary btn-sm w-100 mt-2" onclick="createCaseFromChat()">➕ Create Case</button>
+            </div>
+          </div>
+        `;
+      }
+    } catch (error) { console.error(error); content.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`; }
+  }
+
+  // Escalate case
+  window.escalateCase = async function() {
+    const level = document.getElementById('escalateLevelSelect')?.value;
+    const reason = document.getElementById('escalateReasonText')?.value;
+    const loan = document.getElementById('escalateLoanNumber')?.value;
+    const name = document.getElementById('escalateCustomerName')?.value;
+    if (!level) { showNotification('Please select escalation level', 'warning'); return; }
+    if (!reason) { showNotification('Please provide a reason for escalation', 'warning'); return; }
+    try {
+      const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/escalate/`, {
+        method: 'POST', headers: { 'Content-Type':'application/json', 'X-CSRFToken':CSRF },
+        body: JSON.stringify({ new_level:level, reason, loan, name, escalated_by:currentUser.name })
+      });
+      const data = await response.json();
+      if (data.success) {
+        showNotification(`Escalated to ${level}`, 'success');
+        closeCaseSidebar();
+        await loadCaseForMobile(selectedMobile);
+        await renderCasePanel();
+      } else {
+        showNotification(data.error || 'Escalation failed', 'error');
+      }
+    } catch(e) { showNotification('Error: ' + e.message, 'error'); }
+  };
+
+  window.resolveCurrentCase = async function() {
+    const notes = document.getElementById('resolutionNotesText')?.value;
+    if (!notes) { showNotification('Please provide resolution notes', 'warning'); return; }
+    try {
+      const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/resolve/`, {
+        method: 'POST', headers: { 'Content-Type':'application/json', 'X-CSRFToken':CSRF },
+        body: JSON.stringify({ resolution_notes:notes, resolved_by:currentUser.name })
+      });
+      const data = await response.json();
+      if (data.success) { showNotification('Case resolved', 'success'); closeCaseSidebar(); await loadCaseForMobile(selectedMobile); await renderCasePanel(); }
+      else showNotification(data.error || 'Resolution failed', 'error');
+    } catch(e) { showNotification('Error: ' + e.message, 'error'); }
+  };
+
+  window.viewCaseTimeline = async function() {
+    if (!currentCaseData) { showNotification('No case data', 'error'); return; }
+    try {
+      const resp = await fetch(`/messaging2/case/${currentCaseData.case_id}/timeline/`);
+      const data = await resp.json();
+      let html = '<div class="mb-3"><label>Timeline:</label><div>';
+      if (data.logs && data.logs.length) {
+        data.logs.forEach(log => { html += `<div class="border-bottom pb-2 mb-2"><small>${new Date(log.created_at).toLocaleString()}</small><div>${log.from_level} → ${log.to_level}</div><div><strong>By:</strong> ${log.escalated_by || 'System'}</div>${log.reason ? `<div class="small text-muted">${escapeHtml(log.reason)}</div>` : ''}</div>`; });
+      } else html += '<div class="text-muted">No timeline history</div>';
+      html += '</div></div><button class="btn btn-sm btn-outline-secondary w-100 mt-3" onclick="renderCasePanel()">← Back</button>';
+      document.getElementById('caseSidebarContent').innerHTML = html;
+    } catch(e) { showNotification('Error loading timeline', 'error'); }
+  };
+
+  window.createCaseFromChat = async function(forceNew = false) {
+    const description = document.getElementById('newCaseDesc')?.value;
+    const groupSelect = document.getElementById('newCaseGroup');
+    const customerNameInput = document.getElementById('newCaseCustomerName');
+    const loanNumberInput = document.getElementById('newCaseLoanNumber');
+    const escalateSelect = document.getElementById('newCaseEscalateTo');
+
+    if (!groupSelect) { showNotification('Group selector missing', 'error'); return; }
+    const groupName = groupSelect.value;
+    const customerName = customerNameInput ? customerNameInput.value.trim() : headerName.textContent;
+    const loanNumber = loanNumberInput ? loanNumberInput.value.trim() : '';
+    const escalateTo = escalateSelect ? escalateSelect.value : '';
+
+    if (!description) { showNotification('Please describe the issue', 'warning'); return; }
+    if (!groupName) { showNotification('Please select a department (group)', 'warning'); return; }
 
     try {
-        const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(selectedMobile)}`);
-        const data = await response.json();
-
-        if (data.case) {
-            currentCaseData = data.case;
-            const levelColors = {
-                'ESC0': 'secondary', 'ESC1': 'success', 'ESC2': 'info',
-                'ESC3': 'warning', 'ESC4': 'danger', 'ESC5': 'dark',
-                'RESOLVED': 'success', 'CLOSED': 'secondary'
-            };
-
-            // ============================================
-            // ADD LEVEL ICON
-            // ============================================
-            let levelIcon = '';
-            if (currentCaseData.current_level === 'RESOLVED') {
-                levelIcon = '✅';
-            } else if (currentCaseData.current_level === 'CLOSED') {
-                levelIcon = '🔒';
-            } else if (currentCaseData.current_level === 'ESC1') {
-                levelIcon = '📞';
-            } else if (currentCaseData.current_level === 'ESC2') {
-                levelIcon = '⚖️';
-            } else if (currentCaseData.current_level === 'ESC3') {
-                levelIcon = '⭐';
-            } else if (currentCaseData.current_level === 'ESC4') {
-                levelIcon = '📊';
-            } else if (currentCaseData.current_level === 'ESC5') {
-                levelIcon = '🔒';
-            } else {
-                levelIcon = '📊';
-            }
-
-            // ============================================
-            // Determine escalation options
-            // ============================================
-            let escalateOptions = '';
-            let showEscalate = false;
-            let showResolve = false;
-
-            // AGENT (ESC1) - Can act on ESC1 cases
-            if (currentUser.role === 'AGENT' && currentCaseData.current_level === 'ESC1') {
-                showEscalate = true;
-                showResolve = true;
-                escalateOptions = '<option value="ESC2">⚖️ Thumb Team (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
-            }
-            // LEGAL (ESC2) - Can act on ESC2 cases
-            else if (currentUser.role === 'LEGAL' && currentCaseData.current_level === 'ESC2') {
-                showEscalate = true;
-                showResolve = true;
-                escalateOptions = '<option value="ESC3">⭐NOC (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option>';
-            }
-            // LEAD (ESC3) - Can act on ESC3 cases
-            else if (currentUser.role === 'LEAD' && currentCaseData.current_level === 'ESC3') {
-                showEscalate = true;
-                showResolve = true;
-                escalateOptions = '<option value="ESC4">📊 Manager (ESC4)</option>';
-            }
-            // MANAGER (ESC4) - Can act on ESC4 cases
-            else if (currentUser.role === 'MANAGER' && currentCaseData.current_level === 'ESC4') {
-                showEscalate = true;
-                showResolve = true;
-                escalateOptions = '<option value="ESC5">🔒 Admin (ESC5)</option>';
-            }
-            // ADMIN - Can act on any case
-            else if (currentUser.role === 'ADMIN') {
-                showEscalate = true;
-                showResolve = true;
-                escalateOptions = '<option value="ESC1">📞 Agent (ESC1)</option><option value="ESC2">⚖️ Thumb (ESC2)</option><option value="ESC3">⭐ NOC Team (ESC3)</option><option value="ESC4">📊 Manager (ESC4)</option><option value="ESC5">🔒 Admin (ESC5)</option>';
-            }
-
-            // Also allow resolve if case is at user's level and not resolved/closed
-            if (!showResolve && currentCaseData.current_level === currentUser.level &&
-                currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed') {
-                showResolve = true;
-            }
-
-            content.innerHTML = `
-                <div class="mb-3">
-                    <label>Case ID:</label>
-                    <h6><strong>${escapeHtml(currentCaseData.case_id)}</strong></h6>
-                </div>
-                <div class="mb-3">
-                    <label>Customer:</label>
-                    <p>${escapeHtml(currentCaseData.customer_name || selectedMobile)}</p>
-                </div>
-                <div class="case-detail-item">
-                    <div class="case-detail-label">Current Level</div>
-                    <div class="case-detail-value">
-                        <span class="badge bg-${levelColors[currentCaseData.current_level] || 'secondary'}">
-                            ${levelIcon} ${currentCaseData.current_level}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label>Status:</label>
-                    <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span>
-                </div>
-                <div class="mb-3">
-                    <label>Assigned To:</label>
-                    <p>${escapeHtml(currentCaseData.assigned_to_name || 'Unassigned - Available for all agents')}</p>
-                </div>
-                <div class="mb-3">
-                    <label>LoanNumber</label>
-                    <div class="border rounded p-2 bg-light small">${escapeHtml(currentCaseData.loan_number || 'No')}</div>
-                </div>
-                <div class="mb-3">
-                    <label>Issue:</label>
-                    <div class="border rounded p-2 bg-light small">${escapeHtml(currentCaseData.issue_description || 'No description')}</div>
-                </div>
-
-                <hr>
-                ${showEscalate ? `
-                <div class="mb-3">
-                    <label>Escalate To:</label>
-                    <select id="escalateLevelSelect" class="form-select form-select-sm mb-2">${escalateOptions}</select>
-                    <input type="text" id="escalateLoanNumber" class="form-control form-control-sm mb-2" placeholder="Enter loan Number">
-                    <input type="text" id="escalateCustomerName" class="form-control form-control-sm mb-2" placeholder="Enter Customer Name">
-
-
-                    <textarea id="escalateReasonText" class="form-control form-control-sm mb-2" rows="2" placeholder="Reason for escalation..."></textarea>
-
-                    <button class="btn btn-warning btn-sm w-100" onclick="escalateCase()">⬆️ Escalate Case</button>
-                </div>
-                ` : ''}
-                ${showResolve ? `
-                <div class="mb-3">
-                    <textarea id="resolutionNotesText" class="form-control form-control-sm mb-2" rows="2" placeholder="Resolution notes..."></textarea>
-                    <button class="btn btn-success btn-sm w-100" onclick="resolveCurrentCase()">✅ Resolve Case</button>
-                </div>
-                ` : ''}
-                <button class="btn btn-outline-primary btn-sm w-100" onclick="viewCaseTimeline()">
-                    <i class="fas fa-history"></i> View Timeline
-                </button>
-            `;
-        } else {
-            content.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
-                    <p>No active case found.</p>
-                    <textarea id="newCaseDesc" class="form-control form-control-sm mb-2" rows="3" placeholder="Describe the issue..."></textarea>
-                    <button class="btn btn-primary btn-sm w-100" onclick="createCaseFromChat()">➕ Create New Case</button>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Render case panel error:', error);
-        content.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-    }
-}
-
-    // ============================================
-    // CASE ACTION FUNCTIONS
-    // ============================================
-
-    // Escalate case
-    window.escalateCase = async function() {
-        console.log('escalateCase called');
-
-        const levelSelect = document.getElementById('escalateLevelSelect');
-        const reasonText = document.getElementById('escalateReasonText');
-        const LoanText = document.getElementById('escalateLoanNumber');
-        const NameText = document.getElementById('escalateCustomerName')
-
-        if (!levelSelect || !reasonText || !LoanText || !NameText) {
-            showNotification('Form elements not found', 'error');
-            return;
-        }
-
-        const level = levelSelect.value;
-        const reason = reasonText.value;
-        const loan = LoanText.value;
-        const name = NameText.value;
-
-        if (!level) {
-            showNotification('Please select escalation level', 'warning');
-            return;
-        }
-        if (!reason) {
-            showNotification('Please provide a reason for escalation', 'warning');
-            return;
-        }
-        if (!loan) {
-            showNotification('Please provide a loan number', 'warning');
-            return;
-        }
-        if (!name) {
-            showNotification('Please provide a customer name', 'warning');
-            return;
-        }
-
-        try {
-            const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/escalate/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF
-                },
-                body: JSON.stringify({
-                    new_level: level,
-                    reason: reason,
-                    loan:loan,
-                    name:name,
-                    escalated_by: currentUser.name
-                })
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                showNotification(`Case escalated to ${level} successfully!`, 'success');
-                closeCaseSidebar();
-                await loadCaseForMobile(selectedMobile);
-                await renderCasePanel();
-            } else {
-                showNotification(data.error || 'Escalation failed', 'error');
-            }
-        } catch (error) {
-            console.error('Escalate error:', error);
-            showNotification('Error escalating case: ' + error.message, 'error');
-        }
-    };
-
-    // Resolve current case
-    window.resolveCurrentCase = async function() {
-        console.log('resolveCurrentCase called');
-
-        const notesText = document.getElementById('resolutionNotesText');
-
-        if (!notesText) {
-            showNotification('Resolution notes field not found', 'error');
-            return;
-        }
-
-        const notes = notesText.value;
-
-        if (!notes) {
-            showNotification('Please provide resolution notes', 'warning');
-            return;
-        }
-
-        try {
-            const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/resolve/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF
-                },
-                body: JSON.stringify({
-                    resolution_notes: notes,
-                    resolved_by: currentUser.name
-                })
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                showNotification('Case resolved successfully!', 'success');
-                closeCaseSidebar();
-                await loadCaseForMobile(selectedMobile);
-                await renderCasePanel();
-            } else {
-                showNotification(data.error || 'Resolution failed', 'error');
-            }
-        } catch (error) {
-            console.error('Resolve error:', error);
-            showNotification('Error resolving case: ' + error.message, 'error');
-        }
-    };
-
-    // View case timeline - FIXED
-    window.viewCaseTimeline = async function() {
-        console.log('viewCaseTimeline called, currentCaseData:', currentCaseData);
-
-        if (!currentCaseData) {
-            showNotification('No case data available', 'error');
-            return;
-        }
-
-        try {
-            const response = await fetch(`/messaging2/case/${currentCaseData.case_id}/timeline/`);
-            const data = await response.json();
-            let timelineHtml = '<div class="mb-3"><label>Timeline:</label><div>';
-
-            if (data.logs && data.logs.length > 0) {
-                data.logs.forEach(log => {
-                    timelineHtml += `
-                        <div class="border-bottom pb-2 mb-2">
-                            <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
-                            <div>${log.from_level} → ${log.to_level}</div>
-                            <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
-                            ${log.reason ? `<div class="small text-muted">${escapeHtml(log.reason)}</div>` : ''}
-                        </div>
-                    `;
-                });
-            } else {
-                timelineHtml += '<div class="text-muted">No timeline history</div>';
-            }
-            timelineHtml += '</div></div><button class="btn btn-sm btn-outline-secondary w-100 mt-3" onclick="renderCasePanel()">← Back</button>';
-
-            document.getElementById('caseSidebarContent').innerHTML = timelineHtml;
-        } catch (error) {
-            console.error('Timeline error:', error);
-            showNotification('Error loading timeline: ' + error.message, 'error');
-        }
-    };
-
-    // Create case from chat
-    window.createCaseFromChat = async function() {
-        const description = document.getElementById('newCaseDesc')?.value;
-        if (!description) {
-            showNotification('Please describe the issue', 'warning');
-            return;
-        }
-
-        try {
-            const response = await fetch('/messaging2/case/create-from-chat/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF
-                },
-                body: JSON.stringify({
-                    mobile: selectedMobile,
-                    customer_name: headerName.textContent ,
-                    agent_name: currentUser.name,
-                    issue_description: description
-                })
-            });
-            const data = await response.json();
-            if (data.success) {
-                showNotification(`Case ${data.case.case_id} created!`, 'success');
-                closeCaseSidebar();
-                await loadCaseForMobile(selectedMobile);
-                renderCasePanel(); // Re-render to show the new case
-            } else {
-                showNotification('Failed to create case', 'error');
-            }
-        } catch (error) {
-            showNotification('Error creating case: ' + error.message, 'error');
-        }
-    };
-
-    // Load case for mobile
-    async function loadCaseForMobile(mobile) {
-        try {
-            const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(mobile)}`);
-            const data = await response.json();
-            currentCaseData = data.case;
-
-            if (currentCaseData) {
-                headerStatus.innerHTML = `<i class="fas fa-folder-open"></i> Case: ${currentCaseData.case_id} | Level: ${currentCaseData.current_level} | Priority: ${currentCaseData.priority}`;
-            } else {
-                headerStatus.innerHTML = '<i class="fas fa-info-circle"></i> No active case';
-                currentCaseData = null;
-            }
-        } catch (error) {
-            console.error('Error loading case:', error);
-            headerStatus.innerHTML = '';
-            currentCaseData = null;
-        }
-    }
-
-
-
-    // ============================================
-    // WEBSOCKET CONNECTION
-    // ============================================
-    function showNotification(message, type = 'info') {
-      const existing = document.querySelector('.notification');
-      if (existing) existing.remove();
-
-      const notification = document.createElement('div');
-      notification.className = `notification ${type}`;
-      notification.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i> ${message}`;
-      document.body.appendChild(notification);
-
-      setTimeout(() => {
-        notification.remove();
-      }, 3000);
-    }
-
-    async function downloadDocument(url, filename, event) {
-      if (event) {
-        event.stopPropagation();
-      }
-
-      try {
-        showNotification(`Downloading ${filename}...`, 'info');
-
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Download failed');
-
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(blobUrl);
-
-        showNotification(`Downloaded ${filename} successfully!`, 'success');
-      } catch (error) {
-        console.error('Download error:', error);
-        window.open(url, '_blank');
-      }
-    }
-
-    function connectWebSocket() {
-      if (ws && ws.readyState === WebSocket.OPEN) return;
-      const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${scheme}://${location.host}/ws/chat2/`);
-
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-        reconnectAttempts = 0;
-        showNotification('Connected to chat server', 'success');
-        lastProcessedPage = 0;
-        contactPage = 1;
-        contacts = [];
-        loadContacts();
-      };
-
-      ws.onmessage = (e) => {
-        try {
-          handleWebSocketMessage(JSON.parse(e.data));
-        } catch (err) {
-          console.error('WebSocket parse error:', err);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        showNotification('Disconnected from server, reconnecting...', 'info');
-
-        setTimeout(() => {
-          if (reconnectAttempts < 10) {
-            reconnectAttempts++;
-            connectWebSocket();
-          }
-        }, 3000);
-      };
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        showNotification('Connection error', 'error');
-      };
-    }
-
-    function sendWS(data) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(data));
-      } else {
-        console.warn('WebSocket not connected');
-      }
-    }
-
-    // ============================================
-    // TAB SWITCH FUNCTION
-    // ============================================
-    function switchTab(filter) {
-      if (currentFilter === filter) return;
-      currentFilter = filter;
-
-      document.querySelectorAll('.chat-tab').forEach(tab => {
-        if (tab.dataset.filter === filter) {
-          tab.classList.add('active');
-        } else {
-          tab.classList.remove('active');
-        }
+      const response = await fetch('/messaging2/case/create-from-chat/', {
+        method: 'POST', headers: { 'Content-Type':'application/json', 'X-CSRFToken':CSRF },
+        body: JSON.stringify({
+          mobile: selectedMobile,
+          customer_name: customerName,
+          agent_name: currentUser.name,
+          issue_description: description,
+          loan_number: loanNumber,
+          group: groupName,
+          escalate_to: escalateTo || null,
+          force_new: forceNew
+        })
       });
-
-      contactPage = 1;
-      contacts = [];
-      hasMoreContacts = true;
-      lastProcessedPage = 0;
-      contactListEl.innerHTML = '<div class="loading">Loading contacts...</div>';
-      loadContacts();
-    }
-
-    // ============================================
-    // CONTACTS WITH INFINITE SCROLL
-    // ============================================
-    function loadContacts(page = 1) {
-      if (isLoadingContacts) {
-        console.log(`⏭️ Already loading contacts, skipping page ${page}`);
-        return;
+      const data = await response.json();
+      if (data.success) {
+        if (data.existing && !forceNew) {
+          const userConfirmed = confirm(data.message + '\nClick OK to create a new case anyway, Cancel to view existing case.');
+          if (userConfirmed) {
+            await createCaseFromChat(true);
+          } else {
+            showNotification(`Existing case: ${data.case.case_id} at level ${data.case.current_level}`, 'info');
+            closeCaseSidebar();
+            await loadCaseForMobile(selectedMobile);
+            renderCasePanel();
+          }
+          return;
+        }
+        showNotification(`Case ${data.case.case_id} created at level ${data.case.current_level}!`, 'success');
+        closeCaseSidebar();
+        await loadCaseForMobile(selectedMobile);
+        renderCasePanel();
+      } else {
+        showNotification(data.error || 'Failed to create case', 'error');
       }
-      if (page <= contactPage && page > 1) {
-        console.log(`⏭️ Page ${page} already loaded`);
-        return;
-      }
-      isLoadingContacts = true;
-      console.log(`📞 Loading contacts page ${page}`);
-      let levelToSend = currentUser.role === 'ADMIN' ? null : currentUser.level;
+    } catch(e) { showNotification('Error: ' + e.message, 'error'); }
+  };
 
-      sendWS({ type: 'get_contacts', page: page, filter: currentFilter, level: levelToSend });
+  async function loadCaseForMobile(mobile) {
+    try {
+      const resp = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(mobile)}`);
+      const data = await resp.json();
+      currentCaseData = data.case;
+      if (currentCaseData) headerStatus.innerHTML = `<i class="fas fa-folder-open"></i> Case: ${currentCaseData.case_id} | Level: ${currentCaseData.current_level} | Priority: ${currentCaseData.priority}`;
+      else headerStatus.innerHTML = '<i class="fas fa-info-circle"></i> No active case';
+    } catch(e) { headerStatus.innerHTML = ''; currentCaseData = null; }
+  }
+
+  function openCreateAnotherCaseForm() {
+    const content = document.getElementById('caseSidebarContent');
+    if (!content) return;
+    if (availableGroups.length === 0) fetchGroups().then(() => showCreationForm(content));
+    else showCreationForm(content);
+  }
+
+  function showCreationForm(content) {
+    let groupsHtml = '<select id="newCaseGroup" class="form-select form-select-sm mb-2" required><option value="">Select Department</option>';
+    availableGroups.forEach(g => { groupsHtml += `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`; });
+    groupsHtml += '</select>';
+
+    let escalationOptions = '<option value="">-- No escalation (ESC1) --</option>';
+    const creationLevels = ['ESC2', 'ESC3', 'ESC4', 'ESC5'];
+    const levelNamesShort = { 'ESC2': 'Executive (ESC2)', 'ESC3': 'Manager (ESC3)', 'ESC4': 'Head (ESC4)', 'ESC5': 'Admin (ESC5)' };
+    for (let lvl of creationLevels) {
+      escalationOptions += `<option value="${lvl}">${levelNamesShort[lvl]}</option>`;
     }
 
-    function searchContacts(query) {
-      contactPage = 1;
-      contacts = [];
-      hasMoreContacts = true;
-      lastProcessedPage = 0;
-      let levelToSend = currentUser.role === 'ADMIN' ? null : currentUser.level;
+    content.innerHTML = `
+      <div class="text-center py-3">
+        <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+        <p>Create another case for ${escapeHtml(headerName.textContent)}:</p>
+        <div class="text-start">
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Customer Name</label>
+            <input type="text" id="newCaseCustomerName" class="form-control form-control-sm" value="${escapeHtml(headerName.textContent)}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Loan Number</label>
+            <input type="text" id="newCaseLoanNumber" class="form-control form-control-sm" placeholder="e.g., LOAN12345">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Department (Group)</label>
+            ${groupsHtml}
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Escalate To (Optional)</label>
+            <select id="newCaseEscalateTo" class="form-select form-select-sm">${escalationOptions}</select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Issue Description</label>
+            <textarea id="newCaseDesc" class="form-control form-control-sm" rows="3" placeholder="Describe the issue..."></textarea>
+          </div>
+          <button class="btn btn-primary btn-sm w-100 mt-2" onclick="createCaseFromChat()">➕ Create Case</button>
+          <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="renderCasePanel()">← Back to current case</button>
+        </div>
+      </div>
+    `;
+  }
 
-      sendWS({ type: 'search_contacts', q: query, filter: currentFilter, level: levelToSend });
-    }
-
-   function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore = false, currentPage = 1) {
-    if (isRenderingContacts) {
-        console.log('⏭️ Already rendering, skipping...');
+  // ========== WEBSOCKET & CHAT FUNCTIONS (compressed but fully functional) ==========
+  function showNotification(message, type='info') {
+    let existing = document.querySelector('.notification'); if(existing) existing.remove();
+    let notification = document.createElement('div'); notification.className = `notification ${type}`;
+    notification.innerHTML = `<i class="fas ${type==='success'?'fa-check-circle':type==='error'?'fa-exclamation-circle':'fa-info-circle'}"></i> ${message}`;
+    document.body.appendChild(notification);
+    setTimeout(()=>notification.remove(),3000);
+  }
+  async function downloadDocument(url, filename, event) { if(event) event.stopPropagation(); try { showNotification(`Downloading ${filename}...`,'info'); let resp=await fetch(url); if(!resp.ok) throw new Error(); let blob=await resp.blob(); let blobUrl=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=blobUrl; a.download=filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(blobUrl); showNotification(`Downloaded ${filename}`,'success'); } catch(e) { window.open(url,'_blank'); } }
+  function connectWebSocket() { if(ws && ws.readyState===WebSocket.OPEN) return; let scheme=location.protocol==='https:'?'wss':'ws'; ws=new WebSocket(`${scheme}://${location.host}/ws/chat2/`); ws.onopen=()=>{ console.log('WebSocket connected'); reconnectAttempts=0; showNotification('Connected','success'); contactPage=1; contacts=[]; loadContacts(); }; ws.onmessage=(e)=>{ try{ handleWebSocketMessage(JSON.parse(e.data)); }catch(err){ console.error(err); } }; ws.onclose=()=>{ console.log('Disconnected'); setTimeout(()=>{ if(reconnectAttempts<10){ reconnectAttempts++; connectWebSocket(); } },3000); }; ws.onerror=error=>{ console.error(error); showNotification('Connection error','error'); }; }
+  function sendWS(data) { if(ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(data)); else console.warn('WS not connected'); }
+  function switchTab(filter) { if(currentFilter===filter) return; currentFilter=filter; document.querySelectorAll('.chat-tab').forEach(tab=>{ if(tab.dataset.filter===filter) tab.classList.add('active'); else tab.classList.remove('active'); }); contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; contactListEl.innerHTML='<div class="loading">Loading contacts...</div>'; loadContacts(); }
+  function loadContacts(page=1) { if(isLoadingContacts||(page<=contactPage&&page>1)) return; isLoadingContacts=true; console.log(`Load contacts page ${page}`); let levelToSend=currentUser.role==='ADMIN'?null:currentUser.level; sendWS({type:'get_contacts',page:page,filter:currentFilter,level:levelToSend}); }
+  function searchContacts(query) { contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; let levelToSend=currentUser.role==='ADMIN'?null:currentUser.level; sendWS({type:'search_contacts',q:query,filter:currentFilter,level:levelToSend}); }
+function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore = false, currentPage = 1) {
+    if (isRenderingContacts || (lastProcessedPage === currentPage && !replace)) {
+        isRenderingContacts = false;
         return;
     }
     isRenderingContacts = true;
     isLoadingContacts = false;
-
-    if (lastProcessedPage === currentPage && !replace) {
-        console.log(`⏭️ Skipping duplicate page ${currentPage}`);
-        isRenderingContacts = false;
-        return;
-    }
     lastProcessedPage = currentPage;
-
-    // ============================================
-    // CRITICAL: Role-based filtering
-    // ============================================
     let filteredContacts = contactsData;
-
-    // Debug: See what levels we received
-    console.log('📋 Received contacts with levels:', contactsData.map(c => ({mobile: c.mobile, level: c.current_level})));
-
-    // Only AGENT and ADMIN see ALL contacts
-    if (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN') {
-        filteredContacts = contactsData.filter(contact => {
-            return contact.current_level === currentUser.level;
-        });
-        console.log(`🔍 ${currentUser.role} (${currentUser.level}) filtered: ${contactsData.length} → ${filteredContacts.length} contacts`);
-    }
-
-    if (replace) {
-        contacts = filteredContacts;
-    } else {
-        const existingMobiles = new Set(contacts.map(c => c.mobile));
-        const newContacts = filteredContacts.filter(c => !existingMobiles.has(c.mobile));
+    if (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN')
+        filteredContacts = contactsData.filter(c => c.current_level === currentUser.level);
+    if (replace) contacts = filteredContacts;
+    else {
+        let existing = new Set(contacts.map(c => c.mobile));
+        let newContacts = filteredContacts.filter(c => !existing.has(c.mobile));
         contacts = [...contacts, ...newContacts];
-        console.log(`📊 Added ${newContacts.length} new contacts, total: ${contacts.length}`);
     }
-
     totalUnreadCount = unreadCount;
-    const badge = document.getElementById('unreadCountBadge');
+    let badge = document.getElementById('unreadCountBadge');
     if (badge) {
         if (totalUnreadCount > 0) {
             badge.style.display = 'inline';
             badge.textContent = totalUnreadCount;
-        } else {
-            badge.style.display = 'none';
-        }
+        } else badge.style.display = 'none';
     }
-
     if (contacts.length === 0) {
-        let emptyMessage = '';
-        if (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN') {
-            emptyMessage = `No chats at ${currentUser.level} level`;
-        } else {
-            emptyMessage = currentFilter === 'unread' ? 'No unread messages' : 'No contacts found';
-        }
-        contactListEl.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+        let msg = '';
+        if (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN')
+            msg = `No chats at ${currentUser.level} level`;
+        else msg = currentFilter === 'unread' ? 'No unread messages' : 'No contacts found';
+        contactListEl.innerHTML = `<div class="empty-state">${msg}</div>`;
         isRenderingContacts = false;
         return;
     }
-
     let html = '';
-    for (const contact of contacts) {
-        if (currentFilter === 'unread' && (!contact.last_msg || contact.last_msg === 'No messages yet' || contact.unread === 0)) {
-            continue;
+    for (let c of contacts) {
+        if (currentFilter === 'unread' && (!c.last_msg || c.unread === 0)) continue;
+        let lastMsg = c.last_msg || 'No messages yet';
+        if (lastMsg.length > 50) lastMsg = lastMsg.substring(0, 47) + '...';
+        let levelClass = c.current_level || 'ESC1';
+        let indicator = '', colorClass = '';
+        if (levelClass === 'RESOLVED') {
+            indicator = '✓';
+            colorClass = 'level-RESOLVED';
+        } else if (levelClass === 'CLOSED') {
+            indicator = '🔒';
+            colorClass = 'level-CLOSED';
+        } else {
+            indicator = levelClass.replace('ESC', '');
+            colorClass = `level-${levelClass}`;
         }
-
-        let lastMsg = contact.last_msg || 'No messages yet';
-        if (lastMsg.length > 50) {
-            lastMsg = lastMsg.substring(0, 47) + '...';
+        let departmentHtml = '';
+        if (c.group_name) {
+            departmentHtml = `<div class="contact-dept"><i class="fas fa-building"></i> ${escapeHtml(c.group_name)}</div>`;
+        } else if (c.current_level) {
+            departmentHtml = `<div class="contact-dept"><i class="fas fa-level-up-alt"></i> Level: ${c.current_level}</div>`;
         }
-
-        const levelClass = contact.current_level || 'ESC1';
-        let levelNumber = '';
-        let indicatorContent = '';
-        let levelColorClass = '';
-        // Handle different level types
-    if (levelClass === 'RESOLVED') {
-        levelNumber = '✓';
-        indicatorContent = '✓';
-        levelColorClass = 'level-RESOLVED';
-    } else if (levelClass === 'CLOSED') {
-        levelNumber = '🔒';
-        indicatorContent = '🔒';
-        levelColorClass = 'level-CLOSED';
-    } else {
-        // ESC1, ESC2, ESC3, ESC4, ESC5
-        levelNumber = levelClass.replace('ESC', '');
-        indicatorContent = levelNumber;
-        levelColorClass = `level-${levelClass}`;
-    }
-
-
-
         html += `
-            <div class="contact-item ${selectedMobile === contact.mobile ? 'active' : ''}"
-                 data-mobile="${contact.mobile}"
-                 onclick="selectContact('${contact.mobile.replace(/'/g, "\\'")}')">
+            <div class="contact-item ${selectedMobile === c.mobile ? 'active' : ''}"
+                 data-mobile="${c.mobile}"
+                 onclick="selectContact('${c.mobile.replace(/'/g, "\\'")}')">
                 <div class="contact-avatar">
-                    ${contact.mobile.slice(-2)}
-                    <div class="esc-level-indicator ${levelColorClass}">${indicatorContent}</div>
+                    ${c.mobile.slice(-2)}
+                    <div class="esc-level-indicator ${colorClass}">${indicator}</div>
                 </div>
                 <div class="contact-info">
                     <div class="contact-name">
-                        ${escapeHtml(contact.mobile)}
-                        ${contact.unread > 0 ? `<span class="unread-badge">${contact.unread}</span>` : ''}
+                        ${escapeHtml(c.mobile)}
+                        ${c.unread > 0 ? `<span class="unread-badge">${c.unread}</span>` : ''}
                     </div>
                     <div class="contact-last-msg">${escapeHtml(lastMsg)}</div>
+                    ${departmentHtml}
                 </div>
                 <div class="contact-meta">
-                    ${contact.last_time ? `<div class="contact-time">${formatTime(contact.last_time)}</div>` : ''}
+                    ${c.last_time ? `<div class="contact-time">${formatTime(c.last_time)}</div>` : ''}
                 </div>
             </div>
         `;
     }
-
     contactListEl.innerHTML = html;
-
-    if (hasMore) {
-        addContactsLoadingIndicator();
-    } else {
-        removeContactsLoadingIndicator();
-    }
-
+    if (hasMore) addContactsLoadingIndicator();
+    else removeContactsLoadingIndicator();
     hasMoreContacts = hasMore;
     contactPage = currentPage;
     isRenderingContacts = false;
 }
-    function addContactsLoadingIndicator() {
-      removeContactsLoadingIndicator();
-      const loader = document.createElement('div');
-      loader.id = 'contactsLoadingIndicator';
-      loader.className = 'contacts-loading';
-      loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading more contacts...';
-      contactListEl.appendChild(loader);
-    }
-
-    function removeContactsLoadingIndicator() {
-      const existing = document.getElementById('contactsLoadingIndicator');
-      if (existing) existing.remove();
-    }
-
-    function handleContactsScroll() {
-      if (!hasMoreContacts || isLoadingContacts) return;
-
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-
-      scrollTimeout = setTimeout(() => {
-        const scrollTop = contactListEl.scrollTop;
-        const scrollHeight = contactListEl.scrollHeight;
-        const clientHeight = contactListEl.clientHeight;
-
-        if (scrollTop + clientHeight >= scrollHeight - 200) {
-          loadContacts(contactPage + 1);
-        }
-      }, 200);
-    }
-
-    function updateContactInList(contact) {
-      const index = contacts.findIndex(c => c.mobile === contact.mobile);
-
-      if (index !== -1) {
-        contacts[index] = { ...contacts[index], ...contact };
-      } else {
-        contacts.push(contact);
-      }
-
-      contacts.sort((a, b) => {
-        if (!a.last_time) return 1;
-        if (!b.last_time) return -1;
-        return new Date(b.last_time) - new Date(a.last_time);
-      });
-
-      renderContacts(contacts, true, totalUnreadCount, hasMoreContacts, contactPage);
-    }
-
-    function updateContactStatus(mobile, status) {
-      const index = contacts.findIndex(c => c.mobile === mobile);
-      if (index !== -1) {
-        contacts[index].last_status = status;
-        renderContacts(contacts, true, totalUnreadCount, hasMoreContacts, contactPage);
-      }
-    }
-
-    // ============================================
-    // SELECT CONTACT
-    // ============================================
-    function selectContact(mobile) {
-      console.log('🟢 ========== SELECT CONTACT ==========');
-      console.log('🟢 Mobile:', mobile);
-      if (selectedMobile === mobile) return;
-      selectedMobile = mobile;
-
-      document.querySelectorAll('.contact-item').forEach(el => {
-        if (el.dataset.mobile === mobile) {
-          el.classList.add('active');
-        } else {
-          el.classList.remove('active');
-        }
-      });
-
-      if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.add('hide');
-      }
-
-      chatArea.style.display = 'flex';
-      composer.style.display = 'flex';
-      headerName.textContent = mobile;
-      headerAvatar.textContent = mobile.slice(-2);
-      loadCaseForMobile(mobile);
-
-
-      messages = [];
-      hasMoreMessages = true;
-      isLoadingMessages = false;
-      nextCursorDate = null;
-      initialLoadDone = false;
-      messagesContainer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading messages...</div>';
-
-      sendWS({ type: 'join', mobile: mobile });
-      console.log('📤 Sending get_messages request for:', mobile);
-      sendWS({ type: 'get_messages', mobile: mobile, limit: 30 });
-      sendWS({ type: 'mark_read', mobile: mobile });
-
-      setTimeout(async () => {
-        if (messages.length === 0 && messagesContainer.innerHTML.includes('Loading')) {
-          console.log('⚠️ No messages via WebSocket, trying REST API...');
-          try {
-            const response = await fetch(`/messaging2/api/contact-messages2/?mobile=${encodeURIComponent(mobile)}`);
-            const data = await response.json();
-            console.log('REST API response:', data);
-            if (data.messages && data.messages.length > 0) {
-              renderMessages(data.messages, false, null, true);
-            }
-          } catch (err) {
-            console.error('REST API failed:', err);
-          }
-        }
-      }, 3000);
-    }
-
-    // ============================================
-    // MESSAGES
-    // ============================================
-
-    function isSameDay(date1, date2) {
-      return date1.getDate() === date2.getDate() &&
-             date1.getMonth() === date2.getMonth() &&
-             date1.getFullYear() === date2.getFullYear();
-    }
-
-    function formatMessageDate(date) {
-      const today = new Date();
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-      const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-      if (msgDate.getTime() === todayDate.getTime()) {
-        return 'Today';
-      } else if (msgDate.getTime() === yesterdayDate.getTime()) {
-        return 'Yesterday';
-      } else {
-        const options = {
-          day: 'numeric',
-          month: 'long',
-          year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
-        };
-        return date.toLocaleDateString('en-IN', options);
-      }
-    }
-
-    function renderMessages(messagesData, hasMore, nextCursorDateParam, isInitial = false) {
-      if (messagesData.length === 0 && messages.length === 0) {
-        messagesContainer.innerHTML = '<div class="empty-state">No messages yet</div>';
-        return;
-      }
-
-      hasMoreMessages = hasMore;
-      nextCursorDate = nextCursorDateParam;
-
-      console.log(`📊 renderMessages - hasMore: ${hasMore}, nextCursorDate: ${nextCursorDate}, messagesCount: ${messagesData.length}, isInitial: ${isInitial}`);
-
-      const sortedMessages = [...messagesData].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
-
-      let newMessages = [];
-
-      if (isInitial || messages.length === 0) {
-        newMessages = sortedMessages;
-      } else {
-        const existingIds = new Set(messages.map(m => m.message_id || m.id));
-        const uniqueNewMessages = sortedMessages.filter(m => !existingIds.has(m.message_id || m.id));
-        newMessages = [...uniqueNewMessages, ...messages];
-      }
-
-      let lastDate = null;
-      let html = '';
-
-      for (const msg of newMessages) {
-        const msgDate = new Date(msg.sent_at);
-        const currentDateLabel = formatMessageDate(msgDate);
-
-        if (lastDate !== currentDateLabel) {
-          html += `<div class="date-separator"><span>${currentDateLabel}</span></div>`;
-          lastDate = currentDateLabel;
-        }
-
-        html += renderMessage(msg);
-      }
-
-      if (isInitial || messages.length === 0) {
-        messages = newMessages;
-        messagesContainer.innerHTML = html;
-        if (hasMoreMessages) {
-          addLoadOlderButton();
-        } else {
-          removeLoadOlderButton();
-        }
-        scrollToBottom();
-      } else {
-        const oldScrollHeight = messagesContainer.scrollHeight;
-        messages = newMessages;
-        messagesContainer.innerHTML = html;
-        const newScrollHeight = messagesContainer.scrollHeight;
-        messagesContainer.scrollTop = newScrollHeight - oldScrollHeight;
-        if (hasMoreMessages) {
-          addLoadOlderButton();
-        } else {
-          removeLoadOlderButton();
-        }
-      }
-      isLoadingMessages = false;
-    }
-
-    function openSecureNoc(id) {
-
-    const url = `/messaging2/secure-document2/${id}/`;
-
-    window.open(
-        url,
-        '_blank',
-        'noopener,noreferrer'
-    );
-}
-
-    function renderMessage(msg) {
-    const isSent = msg.message_type === 'Sent';
-
-    // ============================================
-    // FORMAT TIME
-    // ============================================
-    let timeDisplay = '';
-    let dateDisplay = '';
-    try {
-        const sentDate = new Date(msg.sent_at);
-        if (!isNaN(sentDate.getTime())) {
-            // Format: "21 May 26, 03:15 pm"
-            timeDisplay = sentDate.toLocaleString('en-IN', {
-                day: '2-digit',
-                month: 'short',
-                year: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-            });
-        } else {
-            timeDisplay = 'Just now';
-        }
-    } catch(e) {
-        timeDisplay = 'Just now';
-    }
-
-    // ============================================
-    // GET SENDER NAME
-    // ============================================
-    let senderName = '';
-    if (isSent) {
-        // Sent message - show agent name
-        senderName = msg.sender_name || 'Agent';
-    } else {
-        // Received message - show customer name
-        senderName = msg.sender_name || msg.customer_name || 'Customer';
-    }
-
-    // ============================================
-    // MESSAGE CONTENT
-    // ============================================
-    let contentHtml = '';
-
-    if (msg.content_type === 'image' && msg.media_file) {
-        contentHtml = `
-            <img src="${msg.media_file}" class="message-image" onclick="openMedia('${msg.media_file}', 'image')">
-            ${msg.sent_text_message ? `<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
-        `;
-    }
-    else if (msg.content_type === 'video' && msg.media_file) {
-        contentHtml = `
-            <video class="message-video" onclick="openMedia('${msg.media_file}', 'video')">
-                <source src="${msg.media_file}">
-            </video>
-            ${msg.sent_text_message ? `<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
-        `;
-    }
-    else if (msg.content_type === 'audio' && msg.media_file) {
-        contentHtml = `
-            <audio controls src="${msg.media_file}"></audio>
-            ${msg.sent_text_message ? `<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>` : ''}
-        `;
-    }
-    else if (msg.content_type === 'document' && msg.media_file) {
-        let fileName = msg.media_file.split('/').pop().split('?')[0];
-        fileName = decodeURIComponent(fileName);
-        const isNoc = fileName.toLowerCase().includes('noc');
-
-        let displayName = fileName;
-        if (fileName.length > 30) {
-            const nameParts = fileName.split('.');
-            const ext = nameParts.pop();
-            const name = nameParts.join('.');
-            displayName = name.substring(0, 25) + '...' + ext;
-        }
-
-        const fileExt = fileName.split('.').pop().toLowerCase();
-
-        let fileIcon = 'fa-file-pdf';
-        let iconColor = '#dc4a2c';
-        let fileTypeName = 'PDF';
-
-        const fileTypes = {
-            'doc': { icon: 'fa-file-word', color: '#2b579a', name: 'Word Document' },
-            'docx': { icon: 'fa-file-word', color: '#2b579a', name: 'Word Document' },
-            'xls': { icon: 'fa-file-excel', color: '#1e7145', name: 'Excel Spreadsheet' },
-            'xlsx': { icon: 'fa-file-excel', color: '#1e7145', name: 'Excel Spreadsheet' },
-            'ppt': { icon: 'fa-file-powerpoint', color: '#d35230', name: 'PowerPoint Presentation' },
-            'pptx': { icon: 'fa-file-powerpoint', color: '#d35230', name: 'PowerPoint Presentation' },
-            'jpg': { icon: 'fa-file-image', color: '#f39c12', name: 'Image' },
-            'jpeg': { icon: 'fa-file-image', color: '#f39c12', name: 'Image' },
-            'png': { icon: 'fa-file-image', color: '#f39c12', name: 'Image' },
-            'gif': { icon: 'fa-file-image', color: '#f39c12', name: 'Image' },
-            'mp4': { icon: 'fa-file-video', color: '#27ae60', name: 'Video' },
-            'mov': { icon: 'fa-file-video', color: '#27ae60', name: 'Video' },
-            'mp3': { icon: 'fa-file-audio', color: '#e67e22', name: 'Audio' },
-            'wav': { icon: 'fa-file-audio', color: '#e67e22', name: 'Audio' },
-            'zip': { icon: 'fa-file-archive', color: '#f1c40f', name: 'Archive' },
-            'rar': { icon: 'fa-file-archive', color: '#f1c40f', name: 'Archive' },
-            'pdf': { icon: 'fa-file-pdf', color: '#dc4a2c', name: 'PDF Document' },
-            'txt': { icon: 'fa-file-alt', color: '#3498db', name: 'Text File' }
-        };
-
-        if (fileTypes[fileExt]) {
-            fileIcon = fileTypes[fileExt].icon;
-            iconColor = fileTypes[fileExt].color;
-            fileTypeName = fileTypes[fileExt].name;
-        }
-        if (isNoc) {
-            // NOC Document - NO CLICK/VIEW OPTION (RESTRICTED)
-            contentHtml = `
-                <div class="document-bubble noc-document" data-msg-id="${msg.id}" style="cursor: default; background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%); border-left: 4px solid #dc3545; border-radius: 12px; opacity: 0.7;">
-                    <div class="document-content" style="display: flex; align-items: center; gap: 12px; padding: 12px;">
-                        <div class="document-icon" style="position: relative; flex-shrink: 0; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: #dc3545; border-radius: 12px;">
-                            <i class="fas fa-file-contract" style="color: white; font-size: 22px;"></i>
-                            <i class="fas fa-lock" style="color: white; font-size: 10px; position: absolute; bottom: -2px; right: -2px; background: #721c24; border-radius: 50%; padding: 2px;"></i>
-                        </div>
-                        <div class="document-details" style="flex: 1; min-width: 0;">
-                            <div class="document-filename" style="font-size: 13px; font-weight: 600; color: #dc3545; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;">
-                                🔒 NOC Document (Restricted)
-                            </div>
-                            <div class="document-meta" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <span class="document-type" style="background: #dc3545; color: white; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 500;">
-                                    <i class="fas fa-ban" style="font-size: 10px;"></i> Cannot View
-                                </span>
-                                <span style="font-size: 10px; color: #dc3545;">
-                                    <i class="fas fa-lock"></i> Restricted Access
-                                </span>
-                            </div>
-                        </div>
-                        <div class="document-download" style="flex-shrink: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #dc3545; border-radius: 50%; opacity: 0.5;">
-                            <i class="fas fa-lock" style="color: white; font-size: 12px;"></i>
-                        </div>
-                    </div>
-                </div>
-                ${msg.sent_text_message ? `<div class="doc-text" style="margin-top: 8px; padding: 8px 12px; background: #ffe5e5; border-radius: 8px; font-size: 12px; color: #dc3545; border-left: 3px solid #dc3545;">⚠️ NOC Document: ${escapeHtml(msg.sent_text_message)}</div>` : ''}
-            `;
-        } else {
-            // Enhanced Regular Document UI
-            contentHtml = `
-                <div class="document-bubble" onclick="downloadDocument('${msg.media_file}', '${escapeHtml(fileName)}', event)" style="cursor: pointer; background: white; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s ease;">
-                    <div class="document-content" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px;">
-                        <div class="document-icon" style="flex-shrink: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: ${iconColor}15; border-radius: 10px;">
-                            <i class="fas ${fileIcon}" style="color: ${iconColor}; font-size: 20px;"></i>
-                        </div>
-                        <div class="document-details" style="flex: 1; min-width: 0;">
-                            <div class="document-filename" style="font-size: 13px; font-weight: 500; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">
-                                ${escapeHtml(displayName)}
-                            </div>
-                            <div class="document-meta" style="display: flex; align-items: center; gap: 6px;">
-                                <span class="document-type" style="font-size: 10px; color: #667781;">${fileTypeName}</span>
-                                <span style="font-size: 10px; color: #25D366;">
-                                    <i class="fas fa-download"></i> Click to download
-                                </span>
-                            </div>
-                        </div>
-                        <div class="document-download" style="flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.05); border-radius: 50%; transition: all 0.2s ease;">
-                            <i class="fas fa-download" style="color: ${iconColor}; font-size: 12px;"></i>
-                        </div>
-                    </div>
-                </div>
-                ${msg.sent_text_message ? `<div class="doc-text" style="margin-top: 6px; font-size: 12px; color: #555; line-height: 1.4;">${escapeHtml(msg.sent_text_message)}</div>` : ''}
-            `;
-        }
-    }
-    else {
-        contentHtml = `<div class="message-text">${escapeHtml(msg.sent_text_message || '')}</div>`;
-    }
-    // ============================================
-    // TICK/DELIVERY STATUS (Only for sent messages)
-    // ============================================
-    let tickHtml = '';
-    const messageId = msg.message_id || msg.id;
-
-    if (isSent) {
-    if (msg.status === 'Read')
-      tickHtml = `<span class="message-tick read" data-msg-id="${messageId}">✓✓</span>`;
-    else if (msg.status === 'Delivered')
-      tickHtml = `<span class="message-tick delivered" data-msg-id="${messageId}">✓✓</span>`;
-    else if (msg.status === 'Failed' || msg.status === 'Blocked' || msg.status === 'Invalid' ||
-             msg.status === 'Re-engagement Required')
-      tickHtml = `<span class="message-tick failed" data-msg-id="${messageId}" title="${msg.status}">❌</span>`;
-    else
-      tickHtml = `<span class="message-tick sent" data-msg-id="${messageId}">✓</span>`;
-  }
-      // ============================================
-    // FINAL RENDER - Message on top, Name and Time below (right-aligned)
-    // ============================================
-    return `
-        <div class="message-row ${isSent ? 'sent' : 'received'}" data-msg-id="${messageId}">
-            <div class="message-bubble ${isSent ? 'sent' : 'received'}">
-                ${contentHtml}
-                <div class="message-footer">
-                    <span class="message-sender">${escapeHtml(senderName)}</span>
-                    <span class="message-time">${timeDisplay}</span>
-                    ${tickHtml}
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-    function appendMessage(msg) {
-      const wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 100;
-
-      let needDateSeparator = false;
-      let newDateLabel = null;
-
-      if (messages.length > 0) {
-        const lastMsg = messages[messages.length - 1];
-        const lastMsgDate = new Date(lastMsg.sent_at);
-        const newMsgDate = new Date(msg.sent_at);
-
-        if (!isSameDay(lastMsgDate, newMsgDate)) {
-          needDateSeparator = true;
-          newDateLabel = formatMessageDate(newMsgDate);
-        }
-      } else {
-        needDateSeparator = true;
-        newDateLabel = formatMessageDate(new Date(msg.sent_at));
-      }
-
-      messages.push(msg);
-
-      let newHtml = '';
-      if (needDateSeparator) {
-        newHtml = `<div class="date-separator"><span>${newDateLabel}</span></div>`;
-      }
-      newHtml += renderMessage(msg);
-
-      messagesContainer.insertAdjacentHTML('beforeend', newHtml);
-
-      if (wasAtBottom) {
-        scrollToBottom();
-      }
-    }
-
-    function updateMessageTickImproved(messageId, status) {
-      // Ignore fake delivery updates (empty message_id)
-if (!messageId || messageId === "") {
-    console.warn("⚠️ Ignoring delivery.update with empty message_id (not a real read receipt)");
-    return;
-}
-  console.log(`🔄 Updating tick for messageId: ${messageId}, status: ${status}`);
-
-  // ============================================
-  // FOR FAILED/BLOCKED/INVALID STATUSES
-  // ============================================
-  if (status === 'Failed' || status === 'Blocked' || status === 'Invalid' ||
-      status === 'Template Required' || status === 'Template Failed' ||
-      status === 'Re-engagement Required' || status === 'Rate Limited' ||
-      status === 'Auth Failed') {
-
-    console.log('⚠️ Failed status detected - will update most recent sent message');
-
-    let updatedMessageIndex = -1;
-
-    // Update in messages array (find the most recent sent message without a final status)
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].message_type === 'Sent' &&
-          (messages[i].status === 'Sent' || messages[i].status === 'Pending' ||
-           messages[i].status === 'Sending' || messages[i].status === 'Delivered' ||
-           messages[i].status === 'Read')) {
-        // Skip if already has a final status (Delivered, Read, or Failed)
-        if (messages[i].status === 'Delivered' || messages[i].status === 'Read') {
-          continue;
-        }
-        messages[i].status = status;
-        if (messageId && messageId !== '') {
-          messages[i].message_id = messageId;
-        }
-        updatedMessageIndex = i;
-        console.log(`✅ Updated message at index ${i} to ${status}`);
-        break;
-      }
-    }
-
-    // Find the newest sent message in DOM that can be marked as failed
-    const sentMessages = document.querySelectorAll('.message-row.sent');
-    let updated = false;
-
-    for (let i = sentMessages.length - 1; i >= 0; i--) {
-      const tick = sentMessages[i].querySelector('.message-tick');
-      // Only update if it doesn't already have a final status
-      if (tick && !tick.classList.contains('delivered') &&
-          !tick.classList.contains('read') &&
-          !tick.classList.contains('failed')) {
-
-        // Update this one - it's the failed message
-        tick.innerHTML = '❌';
-        tick.className = 'message-tick failed';
-        tick.style.color = '#dc3545';
-        tick.style.fontSize = '12px';
-        tick.style.fontWeight = 'bold';
-        tick.title = status;
-
-        // Add shake animation
-        tick.style.animation = 'none';
-        tick.offsetHeight;
-        tick.style.animation = 'shake 0.3s ease-in-out';
-
-        // Store the message ID if we have it
-        if (messageId && messageId !== '') {
-          tick.setAttribute('data-msg-id', messageId);
-          const parentRow = tick.closest('.message-row');
-          if (parentRow) {
-            parentRow.setAttribute('data-msg-id', messageId);
-          }
-        }
-
-        console.log('✅ Updated most recent message to FAILED');
-        updated = true;
-        break;
-      }
-    }
-
-    if (!updated) {
-      console.warn('⚠️ Could not find any sent message to mark as failed');
-      const lastMessageRow = document.querySelector('.message-row.sent:last-child');
-      if (lastMessageRow) {
-        const tick = lastMessageRow.querySelector('.message-tick');
-        if (tick && !tick.classList.contains('failed')) {
-          tick.innerHTML = '❌';
-          tick.className = 'message-tick failed';
-          tick.style.color = '#dc3545';
-          tick.title = status;
-          console.log('✅ Updated last message as fallback');
-        }
-      }
-    }
-
-    // Show notification for failed message
-    showNotification(`Message ${status.toLowerCase()}`, 'error');
-    return;
-  }
-
-  // ============================================
-  // FOR SENT, DELIVERED, READ STATUSES
-  // ============================================
-
-  // First, try to find the message by message_id in the array
-  let messageFound = false;
-  let targetIndex = -1;
-
-  for (let i = 0; i < messages.length; i++) {
-    if (messages[i].message_id === messageId) {
-      messages[i].status = status;
-      messageFound = true;
-      targetIndex = i;
-      console.log(`✅ Updated message at index ${i} to status ${status} (by message_id match)`);
-      break;
-    }
-  }
-
-  // If not found, look for the message by position (most recent without final status)
-  if (!messageFound && messageId && messageId !== '') {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].message_type === 'Sent' &&
-          messages[i].status !== 'Read' &&
-          messages[i].status !== 'Delivered' &&
-          !messages[i].status.includes('Failed') &&
-          !messages[i].status.includes('Re-engagement') &&
-          !messages[i].status.includes('Blocked')) {
-        // This is likely the message we're updating
-        messages[i].message_id = messageId;
-        messages[i].status = status;
-        messageFound = true;
-        targetIndex = i;
-        console.log(`✅ Assigned message_id ${messageId} to message at index ${i} and set status to ${status}`);
-        break;
-      }
-    }
-  }
-
-  // Find the tick span in DOM
-  let tickSpan = null;
-
-  // Method 1: By data attribute
-  if (messageId && messageId !== '') {
-    tickSpan = document.querySelector(`.message-tick[data-msg-id="${messageId}"]`);
-  }
-
-  // Method 2: By parent row data attribute
-  if (!tickSpan && messageId && messageId !== '') {
-    const messageRow = document.querySelector(`.message-row[data-msg-id="${messageId}"]`);
-    if (messageRow) {
-      tickSpan = messageRow.querySelector('.message-tick');
-      if (tickSpan) {
-        console.log('✅ Found tick span by message row data attribute');
-      }
-    }
-  }
-
-  // Method 3: Search by HTML content (only if we have a messageId)
-  if (!tickSpan && messageId && messageId !== '') {
-    const allRows = document.querySelectorAll('.message-row');
-    for (const row of allRows) {
-      if (row.innerHTML.includes(messageId)) {
-        tickSpan = row.querySelector('.message-tick');
-        if (tickSpan) {
-          tickSpan.setAttribute('data-msg-id', messageId);
-          row.setAttribute('data-msg-id', messageId);
-          console.log('✅ Found tick span by searching HTML content');
-          break;
-        }
-      }
-    }
-  }
-
-  // Method 4: If we have a target index from the array, find that message in DOM
-  if (!tickSpan && targetIndex !== -1) {
-    const allSentRows = document.querySelectorAll('.message-row.sent');
-    // Messages array and DOM should be in same order
-    if (targetIndex < allSentRows.length) {
-      tickSpan = allSentRows[targetIndex].querySelector('.message-tick');
-      if (tickSpan) {
-        console.log(`✅ Found tick span by array index ${targetIndex}`);
-        if (messageId && messageId !== '') {
-          tickSpan.setAttribute('data-msg-id', messageId);
-          allSentRows[targetIndex].setAttribute('data-msg-id', messageId);
-        }
-      }
-    }
-  }
-
-  // Method 5: Fallback - use the most recent sent message that matches the expected status
-  if (!tickSpan) {
-    const sentRows = document.querySelectorAll('.message-row.sent');
-    if (sentRows.length > 0) {
-      // For READ status, find the message that was Delivered or Sent
-      if (status === 'Read') {
-        for (let i = sentRows.length - 1; i >= 0; i--) {
-          const tick = sentRows[i].querySelector('.message-tick');
-          if (tick && (tick.classList.contains('delivered') || tick.classList.contains('sent'))) {
-            tickSpan = tick;
-            console.log('⚠️ Using delivered/sent message for READ update');
-            break;
-          }
-        }
-      }
-      // For DELIVERED status, find the message that was Sent
-      else if (status === 'Delivered') {
-        for (let i = sentRows.length - 1; i >= 0; i--) {
-          const tick = sentRows[i].querySelector('.message-tick');
-          if (tick && tick.classList.contains('sent') && !tick.classList.contains('delivered')) {
-            tickSpan = tick;
-            console.log('⚠️ Using sent message for DELIVERED update');
-            break;
-          }
-        }
-      }
-
-      // Ultimate fallback
-      if (!tickSpan) {
-        tickSpan = sentRows[sentRows.length - 1].querySelector('.message-tick');
-        console.log('⚠️ Using newest sent message as final fallback');
-      }
-    }
-  }
-
-  // Update the tick if found
-  if (tickSpan) {
-    // Don't update if it's already failed (prevent overwriting)
-    if (tickSpan.classList.contains('failed')) {
-      console.log('⚠️ Skipping update - message already marked as failed');
-      return;
-    }
-
-    // Clear existing classes
-    tickSpan.className = 'message-tick';
-
-    if (status === 'Read') {
-      tickSpan.textContent = '✓✓';
-      tickSpan.classList.add('read');
-      tickSpan.style.color = '#34B7F1';
-      tickSpan.style.fontWeight = 'bold';
-      console.log('✅ Updated tick to READ (blue double tick)');
-    }
-    else if (status === 'Delivered') {
-      tickSpan.textContent = '✓✓';
-      tickSpan.classList.add('delivered');
-      tickSpan.style.color = '#25D366';
-      tickSpan.style.fontWeight = 'bold';
-      console.log('✅ Updated tick to DELIVERED (green double tick)');
-    }
-    else if (status === 'Sent') {
-      tickSpan.textContent = '✓';
-      tickSpan.classList.add('sent');
-      tickSpan.style.color = '#8696a0';
-      tickSpan.style.fontWeight = 'normal';
-      console.log('✅ Updated tick to SENT (single tick)');
-    }
-
-    // Store the message ID for future updates
-    if (messageId && messageId !== '') {
-      tickSpan.setAttribute('data-msg-id', messageId);
-      const parentRow = tickSpan.closest('.message-row');
-      if (parentRow) {
-        parentRow.setAttribute('data-msg-id', messageId);
-      }
-    }
-  } else {
-    console.error(`❌ Could not find tick span for message ${messageId}`);
-  }
-}
-
-
-    function addLoadOlderButton() {
-      removeLoadOlderButton();
-      const loadButton = document.createElement('div');
-      loadButton.id = 'loadOlderButton';
-      loadButton.className = 'load-older-container';
-      loadButton.innerHTML = `<div class="load-older-btn"><i class="fas fa-chevron-up"></i><span>Load Older Messages</span></div>`;
-      loadButton.onclick = loadOlderMessages;
-
-      if (messagesContainer.firstChild) {
-        messagesContainer.insertBefore(loadButton, messagesContainer.firstChild);
-      } else {
-        messagesContainer.appendChild(loadButton);
-      }
-    }
-
-    function removeLoadOlderButton() {
-      const existing = document.getElementById('loadOlderButton');
-      if (existing) existing.remove();
-    }
-
-    function loadOlderMessages() {
-      if (isLoadingMessages || !hasMoreMessages) {
-        console.log(`⏭️ Cannot load older - loading: ${isLoadingMessages}, hasMore: ${hasMoreMessages}`);
-        return;
-      }
-
-      isLoadingMessages = true;
-
-      if (messages.length > 0) {
-        const oldestMessage = messages[0];
-        const beforeDate = oldestMessage.sent_at;
-
-        console.log(`📜 Loading older messages, before_date: ${beforeDate}`);
-
-        const loadButton = document.getElementById('loadOlderButton');
-        if (loadButton) {
-          loadButton.innerHTML = `<div class="load-older-btn loading"><i class="fas fa-spinner fa-spin"></i><span>Loading...</span></div>`;
-          loadButton.onclick = null;
-        }
-
-        sendWS({
-          type: 'get_messages',
-          mobile: selectedMobile,
-          before_date: beforeDate,
-          limit: 30
-        });
-      } else {
-        console.log('❌ No messages to load older from');
-        isLoadingMessages = false;
-      }
-    }
-
-    function scrollToBottom() {
-      setTimeout(() => messagesContainer.scrollTop = messagesContainer.scrollHeight, 100);
-    }
-
-    // ============================================
-    // SEND MESSAGE
-    // ============================================
-   async function sendMessage() {
-    const text = messageInput.value.trim();
-    const file = mediaInput.files[0];
-
-    if (!selectedMobile) {
-        showNotification('Select a contact first', 'error');
-        return;
-    }
-    if (!text && !file) {
-        showNotification('Enter a message or select a file', 'error');
-        return;
-    }
-
-    // File size validation
-    if (file) {
-        const fileSizeMB = file.size / (1024 * 1024);
-        const fileType = file.type.split('/')[0];
-        let maxSize = 16;
-        if (fileType === 'image') maxSize = 5;
-        if (fileType === 'video') maxSize = 16;
-        if (fileType === 'audio') maxSize = 16;
-        if (fileSizeMB > maxSize) {
-            showNotification(`File too large! Max ${maxSize}MB. Yours: ${fileSizeMB.toFixed(2)}MB`, 'error');
-            mediaInput.value = '';
-            cancelFile();
-            return;
-        }
-    }
-
-    const originalBtnHtml = sendBtn.innerHTML;
-    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    sendBtn.disabled = true;
-
-    try {
-        if (file) {
-            const formData = new FormData();
-            formData.append('mobile', selectedMobile);
-            formData.append('text', text);
-            formData.append('media', file);
-            showNotification(`Uploading ${file.name}...`, 'info');
-
-            const response = await fetch('/messaging2/api/send-reply2/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': CSRF },
-                body: formData
-            });
-            const result = await response.json();
-            if (result.status === 'ok') {
-                // The server will broadcast via WebSocket – no manual addition needed
-                showNotification('Message sent successfully!', 'success');
-                messageInput.value = '';
-                mediaInput.value = '';
-                cancelFile();
-            } else {
-                showNotification('Failed to send', 'error');
-            }
-        }
-        else if (text) {
-            // Only send via WebSocket – server will broadcast the message
-            sendWS({
-                type: 'send_message',
-                mobile: selectedMobile,
-                text: text,
-                content_type: 'text'
-            });
-            messageInput.value = '';
-            showNotification('Message sent!', 'success');
-            // No optimistic addition – rely on WebSocket broadcast
-        }
-    } catch (error) {
-        console.error('Send error:', error);
-        showNotification(`Error: ${error.message}`, 'error');
-    } finally {
-        sendBtn.innerHTML = originalBtnHtml;
-        sendBtn.disabled = false;
-    }
-}
-    function onTyping() {
-      if (!selectedMobile) return;
-      sendWS({ type: 'typing', mobile: selectedMobile, state: true });
-      clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => {
-        sendWS({ type: 'typing', mobile: selectedMobile, state: false });
-      }, 1000);
-    }
-
-    function cancelFile() {
-      mediaInput.value = '';
-      filePreview.classList.remove('show');
-      document.querySelector('.preview-info').textContent = 'No file selected';
-    }
-
-    // ============================================
-    // MEDIA & UTILITIES
-    // ============================================
-
-    let zoomLevel = 1;
-
-    function openMedia(src, type) {
-      const modal = document.getElementById('mediaModal');
-      const content = document.getElementById('mediaContent');
-
-      if (type === 'image') {
-        content.innerHTML = `
-          <img id="modalImage" src="${src}"
-            style="max-width: 100%; max-height: 90vh; object-fit: contain; transform: scale(1); transition: transform 0.2s; cursor: zoom-in;">
-        `;
-
-        zoomLevel = 1;
-
-        const img = document.getElementById('modalImage');
-
-        img.style.pointerEvents = "auto";
-
-        img.onwheel = function(e) {
-          e.preventDefault();
-
-          if (e.deltaY < 0) {
-            zoomLevel += 0.1;
-          } else {
-            zoomLevel -= 0.1;
-          }
-
-          zoomLevel = Math.max(0.5, Math.min(zoomLevel, 3));
-          img.style.transform = `scale(${zoomLevel})`;
-        };
-
-        img.ondblclick = function() {
-          zoomLevel = zoomLevel === 1 ? 2 : 1;
-          img.style.transform = `scale(${zoomLevel})`;
-        };
-
-      } else {
-        content.innerHTML = `
-          <video src="${src}" controls autoplay
-            style="max-width: 100%; max-height: 90vh;">
-          </video>
-        `;
-      }
-
-      modal.classList.add('show');
-    }
-
-    function closeMediaModal() {
-      document.getElementById('mediaModal').classList.remove('show');
-      document.getElementById('mediaContent').innerHTML = '';
-      zoomLevel = 1;
-    }
-
-    function escapeHtml(text) {
-      if (!text) return '';
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    function formatTime(isoString) {
-      const date = new Date(isoString);
-      const now = new Date();
-      const diff = now - date;
-      if (diff < 86400000) {
-        return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-      } else if (diff < 604800000) {
-        return date.toLocaleDateString('en-IN', { weekday: 'short' });
-      } else {
-        return date.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit' });
-      }
-    }
-
-    // ============================================
-    // HANDLE WEBSOCKET MESSAGES
-    // ============================================
-    function handleWebSocketMessage(data) {
-      console.log('📨 WebSocket message received:', data.type);
-
-      switch (data.type) {
-        case 'contacts.page':
-          renderContacts(data.contacts, data.page === 1, data.unread_count, data.has_more, data.page);
-          break;
-
-        case 'messages.page':
-          console.log('📥 ========== MESSAGES.PAGE RECEIVED ==========');
-          console.log('📥 Mobile from server:', data.mobile);
-          console.log('📥 Current selected:', selectedMobile);
-          console.log('📥 Messages count:', data.messages ? data.messages.length : 0);
-          console.log('📥 Debug count:', data.debug_count);
-          console.log('📥 Has more:', data.has_more);
-          console.log('📥 Full data:', data);
-
-          if (data.messages && data.messages.length > 0) {
-            console.log('📥 First message:', data.messages[0]);
-          }
-
-          if (data.mobile === selectedMobile) {
-            console.log('✅ Mobile matches, rendering messages...');
-            if (data.messages && data.messages.length > 0) {
-              renderMessages(data.messages, data.has_more, data.next_cursor_date, data.is_initial === true || messages.length === 0);
-            } else {
-              console.log('⚠️ No messages in response');
-              messagesContainer.innerHTML = '<div class="empty-state">No messages found (but DB has data - check console)</div>';
-            }
-          } else {
-            console.log('❌ Mobile mismatch! Server:', data.mobile, 'Selected:', selectedMobile);
-          }
-          break;
-
-        case 'new.message':
-          if (data.message.mobile === selectedMobile) {
-            appendMessage(data.message);
-          }
-          updateContactInList(data.message);
-          break;
-
-        case 'delivery.update':
-          console.log('📬 Delivery update received:', data.message_id, data.status);
-          updateMessageTickImproved(data.message_id, data.status);
-          if (data.mobile) updateContactStatus(data.mobile, data.status);
-          break;
-
-        case 'unread.update':
-          if (data.unread_count !== undefined) {
-            totalUnreadCount = data.unread_count;
-            const badge = document.getElementById('unreadCountBadge');
-            if (badge) {
-              if (totalUnreadCount > 0) {
-                badge.style.display = 'inline';
-                badge.textContent = totalUnreadCount;
-              } else {
-                badge.style.display = 'none';
-              }
-            }
-            if (currentFilter === 'unread') loadContacts(1);
-          }
-          break;
-
-        case 'contact.update':
-          if (data.contact) {
-            const existingContact = contacts.find(c => c.mobile === data.contact.mobile);
-            if (existingContact && !data.contact.last_time) {
-              data.contact.last_time = existingContact.last_time;
-            }
-            updateContactInList(data.contact);
-          }
-          break;
-
-        case 'typing':
-          if (data.mobile === selectedMobile) {
-            typingIndicator.style.display = data.state ? 'block' : 'none';
-          }
-          break;
-
-        case 'joined':
-          console.log('Joined chat:', data.mobile);
-          break;
-
-        case 'marked_read':
-          console.log('Marked read:', data.mobile);
-          break;
-
-        case 'error':
-          console.error('WebSocket error:', data.message);
-          showNotification(data.message, 'error');
-          break;
-      }
-    }
-
-    // ============================================
-    // EVENT LISTENERS
-    // ============================================
-    sendBtn.onclick = sendMessage;
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
-    messageInput.addEventListener('input', onTyping);
-    attachBtn.onclick = () => mediaInput.click();
-    backBtn.onclick = () => {
-        document.getElementById('sidebar').classList.remove('hide');
-        chatArea.style.display = 'none';
-    };
-
-    mediaInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            filePreview.classList.add('show');
-            document.querySelector('.preview-info').textContent = file.name;
-        }
-    });
-
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(window.searchTimeout);
-        window.searchTimeout = setTimeout(() => {
-            if (e.target.value.trim()) {
-                searchContacts(e.target.value.trim());
-            } else {
-                contactPage = 1;
-                contacts = [];
-                hasMoreContacts = true;
-                lastProcessedPage = 0;
-                loadContacts(1);
-            }
-        }, 300);
-    });
-
-    contactListEl.addEventListener('scroll', handleContactsScroll);
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeMediaModal();
-    });
-
-    document.getElementById('mediaModal').addEventListener('click', function(e) {
-        if (e.target === this) closeMediaModal();
-    });
-
-    // ESC Button Event Listener - FIXED with debug
-    const casePanelBtn = document.getElementById('casePanelBtn');
-    if (casePanelBtn) {
-        console.log('✅ Case panel button found');
-        casePanelBtn.onclick = function(e) {
-            e.preventDefault();
-            console.log('🔘 ESC Button clicked!');
-            openCaseSidebar();
-        };
-    } else {
-        console.log('❌ Case panel button NOT found - check HTML');
-    }
-
-    connectWebSocket();
-
-    document.addEventListener('contextmenu', function(event) {
-        event.preventDefault();
-        showNotification('Right-click is disabled on this page', 'warning');
-        return false;
-    });
-
-    // ============================================
-    // INITIALIZATION - Load ESC info
-    // ============================================
-
-  </script>
+  function addContactsLoadingIndicator() { removeContactsLoadingIndicator(); let loader=document.createElement('div'); loader.id='contactsLoadingIndicator'; loader.className='contacts-loading'; loader.innerHTML='<i class="fas fa-spinner fa-spin"></i> Loading more...'; contactListEl.appendChild(loader); }
+  function removeContactsLoadingIndicator() { let existing=document.getElementById('contactsLoadingIndicator'); if(existing) existing.remove(); }
+  function handleContactsScroll() { if(!hasMoreContacts||isLoadingContacts) return; if(scrollTimeout) clearTimeout(scrollTimeout); scrollTimeout=setTimeout(()=>{ if(contactListEl.scrollTop+contactListEl.clientHeight>=contactListEl.scrollHeight-200) loadContacts(contactPage+1); },200); }
+  function updateContactInList(contact) { let index=contacts.findIndex(c=>c.mobile===contact.mobile); if(index!==-1) contacts[index]={...contacts[index],...contact}; else contacts.push(contact); contacts.sort((a,b)=>{ if(!a.last_time) return 1; if(!b.last_time) return -1; return new Date(b.last_time)-new Date(a.last_time); }); renderContacts(contacts,true,totalUnreadCount,hasMoreContacts,contactPage); }
+  function updateContactStatus(mobile,status) { let index=contacts.findIndex(c=>c.mobile===mobile); if(index!==-1){ contacts[index].last_status=status; renderContacts(contacts,true,totalUnreadCount,hasMoreContacts,contactPage); } }
+  function selectContact(mobile) { if(selectedMobile===mobile) return; selectedMobile=mobile; document.querySelectorAll('.contact-item').forEach(el=>{ if(el.dataset.mobile===mobile) el.classList.add('active'); else el.classList.remove('active'); }); if(window.innerWidth<=768) document.getElementById('sidebar').classList.add('hide'); chatArea.style.display='flex'; composer.style.display='flex'; headerName.textContent=mobile; headerAvatar.textContent=mobile.slice(-2); loadCaseForMobile(mobile); messages=[]; hasMoreMessages=true; isLoadingMessages=false; messagesContainer.innerHTML='<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading messages...</div>'; sendWS({type:'join',mobile:mobile}); sendWS({type:'get_messages',mobile:mobile,limit:30}); sendWS({type:'mark_read',mobile:mobile}); setTimeout(async()=>{ if(messages.length===0&&messagesContainer.innerHTML.includes('Loading')){ try{ let resp=await fetch(`/messaging2/api/contact-messages2/?mobile=${encodeURIComponent(mobile)}`); let data=await resp.json(); if(data.messages&&data.messages.length) renderMessages(data.messages,false,null,true); }catch(e){ console.error(e); } } },3000); }
+  function isSameDay(d1,d2){ return d1.getDate()===d2.getDate()&&d1.getMonth()===d2.getMonth()&&d1.getFullYear()===d2.getFullYear(); }
+  function formatMessageDate(date){ let today=new Date(); let yesterday=new Date(today); yesterday.setDate(yesterday.getDate()-1); let todayDate=new Date(today.getFullYear(),today.getMonth(),today.getDate()); let yesterdayDate=new Date(yesterday.getFullYear(),yesterday.getMonth(),yesterday.getDate()); let msgDate=new Date(date.getFullYear(),date.getMonth(),date.getDate()); if(msgDate.getTime()===todayDate.getTime()) return 'Today'; if(msgDate.getTime()===yesterdayDate.getTime()) return 'Yesterday'; let options={day:'numeric',month:'long'}; if(date.getFullYear()!==today.getFullYear()) options.year='numeric'; return date.toLocaleDateString('en-IN',options); }
+  function renderMessages(messagesData,hasMore,nextCursorDateParam,isInitial=false){ if(messagesData.length===0&&messages.length===0){ messagesContainer.innerHTML='<div class="empty-state">No messages yet</div>'; return; } hasMoreMessages=hasMore; let sorted=[...messagesData].sort((a,b)=>new Date(a.sent_at)-new Date(b.sent_at)); let newMessages=[]; if(isInitial||messages.length===0) newMessages=sorted; else{ let existingIds=new Set(messages.map(m=>m.message_id||m.id)); newMessages=[...sorted.filter(m=>!existingIds.has(m.message_id||m.id)),...messages]; } let lastDate=null,html=''; for(let msg of newMessages){ let msgDate=new Date(msg.sent_at); let currentLabel=formatMessageDate(msgDate); if(lastDate!==currentLabel){ html+=`<div class="date-separator"><span>${currentLabel}</span></div>`; lastDate=currentLabel; } html+=renderMessage(msg); } if(isInitial||messages.length===0){ messages=newMessages; messagesContainer.innerHTML=html; if(hasMoreMessages) addLoadOlderButton(); else removeLoadOlderButton(); scrollToBottom(); } else{ let oldHeight=messagesContainer.scrollHeight; messages=newMessages; messagesContainer.innerHTML=html; messagesContainer.scrollTop=messagesContainer.scrollHeight-oldHeight; if(hasMoreMessages) addLoadOlderButton(); else removeLoadOlderButton(); } isLoadingMessages=false; }
+  function renderMessage(msg){ let isSent=msg.message_type==='Sent'; let timeDisplay=''; try{ let d=new Date(msg.sent_at); if(!isNaN(d.getTime())) timeDisplay=d.toLocaleString('en-IN',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}); else timeDisplay='Just now'; }catch(e){ timeDisplay='Just now'; } let senderName=''; if(isSent) senderName=msg.sender_name||'Agent'; else senderName=msg.sender_name||msg.customer_name||'Customer'; let contentHtml=''; if(msg.content_type==='image'&&msg.media_file) contentHtml=`<img src="${msg.media_file}" class="message-image" onclick="openMedia('${msg.media_file}','image')">${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='video'&&msg.media_file) contentHtml=`<video class="message-video" onclick="openMedia('${msg.media_file}','video')"><source src="${msg.media_file}"></video>${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='audio'&&msg.media_file) contentHtml=`<audio controls src="${msg.media_file}"></audio>${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='document'&&msg.media_file){ let fileName=decodeURIComponent(msg.media_file.split('/').pop().split('?')[0]); let isNoc=fileName.toLowerCase().includes('noc'); let displayName=fileName.length>30?fileName.substring(0,25)+'...'+fileName.split('.').pop():fileName; let fileExt=fileName.split('.').pop().toLowerCase(); let fileIcon='fa-file-pdf',iconColor='#dc4a2c',fileTypeName='PDF'; let types={doc:{icon:'fa-file-word',color:'#2b579a',name:'Word'},docx:{icon:'fa-file-word',color:'#2b579a',name:'Word'},xls:{icon:'fa-file-excel',color:'#1e7145',name:'Excel'},xlsx:{icon:'fa-file-excel',color:'#1e7145',name:'Excel'},pdf:{icon:'fa-file-pdf',color:'#dc4a2c',name:'PDF'},jpg:{icon:'fa-file-image',color:'#f39c12',name:'Image'},png:{icon:'fa-file-image',color:'#f39c12',name:'Image'},mp4:{icon:'fa-file-video',color:'#27ae60',name:'Video'}}; if(types[fileExt]){ fileIcon=types[fileExt].icon; iconColor=types[fileExt].color; fileTypeName=types[fileExt].name; } if(isNoc) contentHtml=`<div class="document-bubble noc-document" style="cursor:default;background:#f5f5f5;border-left:4px solid #dc3545;opacity:0.7;"><div class="document-content" style="display:flex;padding:10px;"><div class="document-icon" style="background:#dc3545;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-file-contract" style="color:white;"></i><i class="fas fa-lock" style="color:white;font-size:10px;position:absolute;margin-left:14px;margin-top:14px;"></i></div><div class="document-details"><div class="document-filename" style="color:#dc3545;">🔒 NOC Restricted</div><div class="document-meta"><span class="document-type" style="background:#dc3545;color:white;padding:2px 6px;border-radius:10px;font-size:10px;">Cannot View</span></div></div></div></div>${msg.sent_text_message?`<div class="doc-text" style="margin-top:6px;padding:6px;background:#ffe5e5;border-left:3px solid #dc3545;font-size:12px;">⚠️ ${escapeHtml(msg.sent_text_message)}</div>`:''}`; else contentHtml=`<div class="document-bubble" onclick="downloadDocument('${msg.media_file}','${escapeHtml(fileName)}',event)" style="cursor:pointer;background:white;border-radius:12px;"><div class="document-content" style="display:flex;gap:12px;padding:10px;"><div class="document-icon" style="background:${iconColor}15;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;"><i class="fas ${fileIcon}" style="color:${iconColor};font-size:20px;"></i></div><div class="document-details"><div class="document-filename">${escapeHtml(displayName)}</div><div class="document-meta"><span>${fileTypeName}</span><span><i class="fas fa-download"></i> Click to download</span></div></div><div class="document-download"><i class="fas fa-download" style="color:${iconColor};"></i></div></div></div>${msg.sent_text_message?`<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; } else contentHtml=`<div class="message-text">${escapeHtml(msg.sent_text_message||'')}</div>`; let tickHtml=''; let messageId=msg.message_id||msg.id; if(isSent){ if(msg.status==='Read') tickHtml=`<span class="message-tick read" data-msg-id="${messageId}">✓✓</span>`; else if(msg.status==='Delivered') tickHtml=`<span class="message-tick delivered" data-msg-id="${messageId}">✓✓</span>`; else if(msg.status==='Failed'||msg.status==='Blocked'||msg.status==='Invalid'||msg.status==='Re-engagement Required') tickHtml=`<span class="message-tick failed" data-msg-id="${messageId}" title="${msg.status}">❌</span>`; else tickHtml=`<span class="message-tick sent" data-msg-id="${messageId}">✓</span>`; } return `<div class="message-row ${isSent?'sent':'received'}" data-msg-id="${messageId}"><div class="message-bubble ${isSent?'sent':'received'}">${contentHtml}<div class="message-footer"><span class="message-sender">${escapeHtml(senderName)}</span><span class="message-time">${timeDisplay}</span>${tickHtml}</div></div></div>`; }
+  function appendMessage(msg){ let wasAtBottom=messagesContainer.scrollHeight-messagesContainer.scrollTop-messagesContainer.clientHeight<100; let needSeparator=false,newLabel=null; if(messages.length>0){ let lastDate=new Date(messages[messages.length-1].sent_at),newDate=new Date(msg.sent_at); if(!isSameDay(lastDate,newDate)){ needSeparator=true; newLabel=formatMessageDate(newDate); } } else{ needSeparator=true; newLabel=formatMessageDate(new Date(msg.sent_at)); } messages.push(msg); let newHtml=''; if(needSeparator) newHtml=`<div class="date-separator"><span>${newLabel}</span></div>`; newHtml+=renderMessage(msg); messagesContainer.insertAdjacentHTML('beforeend',newHtml); if(wasAtBottom) scrollToBottom(); }
+  function updateMessageTickImproved(messageId,status){ if(!messageId||messageId===''){ console.warn('Ignoring empty message_id'); return; } console.log(`Update tick ${messageId} -> ${status}`); if(['Failed','Blocked','Invalid','Re-engagement Required','Rate Limited','Auth Failed'].some(s=>status.includes(s))){ let sentMsgs=document.querySelectorAll('.message-row.sent'); let updated=false; for(let i=sentMsgs.length-1;i>=0;i--){ let tick=sentMsgs[i].querySelector('.message-tick'); if(tick&&!tick.classList.contains('delivered')&&!tick.classList.contains('read')&&!tick.classList.contains('failed')){ tick.innerHTML='❌'; tick.className='message-tick failed'; tick.style.color='#dc3545'; tick.title=status; if(messageId) tick.setAttribute('data-msg-id',messageId); updated=true; break; } } if(!updated){ let lastRow=document.querySelector('.message-row.sent:last-child'); if(lastRow){ let tick=lastRow.querySelector('.message-tick'); if(tick){ tick.innerHTML='❌'; tick.className='message-tick failed'; tick.title=status; } } } showNotification(`Message ${status.toLowerCase()}`,'error'); return; } let tickSpan=null; if(messageId) tickSpan=document.querySelector(`.message-tick[data-msg-id="${messageId}"]`); if(!tickSpan&&messageId){ let row=document.querySelector(`.message-row[data-msg-id="${messageId}"]`); if(row) tickSpan=row.querySelector('.message-tick'); } if(!tickSpan){ let rows=document.querySelectorAll('.message-row.sent'); if(rows.length) tickSpan=rows[rows.length-1].querySelector('.message-tick'); } if(tickSpan&&!tickSpan.classList.contains('failed')){ tickSpan.className='message-tick'; if(status==='Read'){ tickSpan.textContent='✓✓'; tickSpan.classList.add('read'); tickSpan.style.color='#34B7F1'; } else if(status==='Delivered'){ tickSpan.textContent='✓✓'; tickSpan.classList.add('delivered'); tickSpan.style.color='#25D366'; } else if(status==='Sent'){ tickSpan.textContent='✓'; tickSpan.classList.add('sent'); tickSpan.style.color='#8696a0'; } if(messageId) tickSpan.setAttribute('data-msg-id',messageId); } }
+  function addLoadOlderButton(){ removeLoadOlderButton(); let btn=document.createElement('div'); btn.id='loadOlderButton'; btn.className='load-older-container'; btn.innerHTML='<div class="load-older-btn"><i class="fas fa-chevron-up"></i><span>Load Older Messages</span></div>'; btn.onclick=loadOlderMessages; if(messagesContainer.firstChild) messagesContainer.insertBefore(btn,messagesContainer.firstChild); else messagesContainer.appendChild(btn); }
+  function removeLoadOlderButton(){ let existing=document.getElementById('loadOlderButton'); if(existing) existing.remove(); }
+  function loadOlderMessages(){ if(isLoadingMessages||!hasMoreMessages) return; isLoadingMessages=true; if(messages.length>0){ let beforeDate=messages[0].sent_at; let loadBtn=document.getElementById('loadOlderButton'); if(loadBtn) loadBtn.innerHTML='<div class="load-older-btn loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>'; sendWS({type:'get_messages',mobile:selectedMobile,before_date:beforeDate,limit:30}); } else isLoadingMessages=false; }
+  function scrollToBottom(){ setTimeout(()=>messagesContainer.scrollTop=messagesContainer.scrollHeight,100); }
+  async function sendMessage(){ let text=messageInput.value.trim(); let file=mediaInput.files[0]; if(!selectedMobile){ showNotification('Select a contact first','error'); return; } if(!text&&!file){ showNotification('Enter message or select file','error'); return; } if(file){ let sizeMB=file.size/(1024*1024); let type=file.type.split('/')[0]; let max=16; if(type==='image') max=5; if(sizeMB>max){ showNotification(`File too large (max ${max}MB)`,'error'); mediaInput.value=''; cancelFile(); return; } } let originalHtml=sendBtn.innerHTML; sendBtn.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; sendBtn.disabled=true; try{ if(file){ let fd=new FormData(); fd.append('mobile',selectedMobile); fd.append('text',text); fd.append('media',file); let resp=await fetch('/messaging2/api/send-reply2/',{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd}); let result=await resp.json(); if(result.status==='ok'){ showNotification('Sent!','success'); messageInput.value=''; mediaInput.value=''; cancelFile(); } else showNotification('Failed to send','error'); } else if(text){ sendWS({type:'send_message',mobile:selectedMobile,text:text,content_type:'text'}); messageInput.value=''; showNotification('Sent!','success'); } } catch(e){ showNotification('Error: '+e.message,'error'); } finally{ sendBtn.innerHTML=originalHtml; sendBtn.disabled=false; } }
+  function onTyping(){ if(!selectedMobile) return; sendWS({type:'typing',mobile:selectedMobile,state:true}); clearTimeout(typingTimeout); typingTimeout=setTimeout(()=>{ sendWS({type:'typing',mobile:selectedMobile,state:false}); },1000); }
+  function cancelFile(){ mediaInput.value=''; filePreview.classList.remove('show'); document.querySelector('.preview-info').textContent='No file selected'; }
+  let zoomLevel=1; function openMedia(src,type){ let modal=document.getElementById('mediaModal'); let content=document.getElementById('mediaContent'); if(type==='image'){ content.innerHTML=`<img id="modalImage" src="${src}" style="max-width:100%;max-height:90vh;object-fit:contain;transform:scale(1);cursor:zoom-in;">`; zoomLevel=1; let img=document.getElementById('modalImage'); img.onwheel=function(e){ e.preventDefault(); zoomLevel+=e.deltaY<0?0.1:-0.1; zoomLevel=Math.max(0.5,Math.min(zoomLevel,3)); img.style.transform=`scale(${zoomLevel})`; }; img.ondblclick=function(){ zoomLevel=zoomLevel===1?2:1; img.style.transform=`scale(${zoomLevel})`; }; } else content.innerHTML=`<video src="${src}" controls autoplay style="max-width:100%;max-height:90vh;"></video>`; modal.classList.add('show'); }
+  function closeMediaModal(){ document.getElementById('mediaModal').classList.remove('show'); document.getElementById('mediaContent').innerHTML=''; zoomLevel=1; }
+  function escapeHtml(text){ if(!text) return ''; let div=document.createElement('div'); div.textContent=text; return div.innerHTML; }
+  function formatTime(iso){ let d=new Date(iso),now=new Date(),diff=now-d; if(diff<86400000) return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); if(diff<604800000) return d.toLocaleDateString('en-IN',{weekday:'short'}); return d.toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit'}); }
+  function handleWebSocketMessage(data){ console.log('WS msg:',data.type); switch(data.type){ case 'contacts.page': renderContacts(data.contacts,data.page===1,data.unread_count,data.has_more,data.page); break; case 'messages.page': if(data.mobile===selectedMobile){ if(data.messages&&data.messages.length) renderMessages(data.messages,data.has_more,data.next_cursor_date,data.is_initial||messages.length===0); else messagesContainer.innerHTML='<div class="empty-state">No messages</div>'; } break; case 'new.message': if(data.message.mobile===selectedMobile) appendMessage(data.message); updateContactInList(data.message); break; case 'delivery.update': updateMessageTickImproved(data.message_id,data.status); if(data.mobile) updateContactStatus(data.mobile,data.status); break; case 'unread.update': totalUnreadCount=data.unread_count; let badge=document.getElementById('unreadCountBadge'); if(badge){ if(totalUnreadCount>0){ badge.style.display='inline'; badge.textContent=totalUnreadCount; } else badge.style.display='none'; } if(currentFilter==='unread') loadContacts(1); break; case 'contact.update': if(data.contact){ let existing=contacts.find(c=>c.mobile===data.contact.mobile); if(existing&&!data.contact.last_time) data.contact.last_time=existing.last_time; updateContactInList(data.contact); } break; case 'typing': if(data.mobile===selectedMobile) typingIndicator.style.display=data.state?'block':'none'; break; case 'error': showNotification(data.message,'error'); break; } }
+  sendBtn.onclick=sendMessage; messageInput.addEventListener('keypress',e=>{if(e.key==='Enter') sendMessage();}); messageInput.addEventListener('input',onTyping); attachBtn.onclick=()=>mediaInput.click(); backBtn.onclick=()=>{document.getElementById('sidebar').classList.remove('hide'); chatArea.style.display='none';}; mediaInput.addEventListener('change',e=>{if(e.target.files[0]){ filePreview.classList.add('show'); document.querySelector('.preview-info').textContent=e.target.files[0].name; }}); searchInput.addEventListener('input',e=>{clearTimeout(window.searchTimeout); window.searchTimeout=setTimeout(()=>{if(e.target.value.trim()) searchContacts(e.target.value.trim()); else{ contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; loadContacts(1); }},300);}); contactListEl.addEventListener('scroll',handleContactsScroll); document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMediaModal();}); document.getElementById('mediaModal').addEventListener('click',function(e){if(e.target===this) closeMediaModal();}); let casePanelBtn=document.getElementById('casePanelBtn'); if(casePanelBtn) casePanelBtn.onclick=function(e){ e.preventDefault(); openCaseSidebar(); }; document.addEventListener('contextmenu',e=>{e.preventDefault(); showNotification('Right-click disabled','warning'); return false;});
+  connectWebSocket();
+  fetchGroups();
+</script>
 </body>
 </html>
-

@@ -1,0 +1,256 @@
+<!-- Case View Modal -->
+<div class="modal fade" id="caseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-folder-open"></i> Case Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="caseModalBody">
+                <div class="text-center"><div class="spinner-border"></div><p>Loading...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Escalate Modal -->
+<div class="modal fade" id="escalateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-arrow-up"></i> Escalate Case</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="escalateCaseId">
+                <div class="mb-3">
+                    <label>Escalate To:</label>
+                    <select id="escalateLevel" class="form-select">
+                        <!-- Options will be set dynamically based on case level -->
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label>Loan Number (update if needed)</label>
+                    <input type="text" id="escalateLoanNumber" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label>Reason for Escalation:</label>
+                    <textarea id="escalateReason" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" onclick="submitEscalation()">Escalate</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resolve Modal -->
+<div class="modal fade" id="resolveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle"></i> Resolve Case</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="resolveCaseId">
+                <div class="mb-3">
+                    <label>Resolution Notes:</label>
+                    <textarea id="resolutionNotes" class="form-control" rows="4"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitResolution()">Resolve Case</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Helper: add ?app= to any URL
+const urlParams = new URLSearchParams(window.location.search);
+const currentApp = urlParams.get('app') || 'psf';
+function addAppParam(url) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}app=${currentApp}`;
+}
+
+let currentCaseData = null;
+
+// View Case Details
+function viewCase(caseId) {
+    $('#caseModal').modal('show');
+    document.getElementById('caseModalBody').innerHTML = '<div class="text-center"><div class="spinner-border"></div><p>Loading...</p></div>';
+    
+    fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderCaseDetail(data.case);
+            } else {
+                document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        });
+}
+
+function renderCaseDetail(caseData) {
+    currentCaseData = caseData;
+    const levelBadges = { 'ESC1':'primary','ESC2':'warning','ESC3':'info','ESC4':'danger','ESC5':'dark','RESOLVED':'success','CLOSED':'secondary' };
+    const priorityBadges = { 'Low':'secondary','Medium':'info','High':'warning','Urgent':'danger' };
+    
+    const html = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6><i class="fas fa-info-circle"></i> Case Information</h6>
+                <table class="table table-sm">
+                    <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td></tr>
+                    <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
+                    <tr><th>Mobile:</th><td>${caseData.mobile}</small></td>
+                    <tr><th>Loan Number:</th><td>${caseData.loan_number || '-'}</small></td>
+                    <tr><th>Department:</th><td>${caseData.group_name || 'Not assigned'}</small></td>
+                    <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level]}">${caseData.current_level}</span></small></td>
+                    <tr><th>Priority:</th><td><span class="badge bg-${priorityBadges[caseData.priority]}">${caseData.priority}</span></small></td>
+                    <tr><th>Status:</th><td><span class="badge bg-${caseData.status === 'Resolved' ? 'success' : 'primary'}">${caseData.status}</span></small></td>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6><i class="fas fa-users"></i> Assignment</h6>
+                <table class="table table-sm">
+                    <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
+                    <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
+                    <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
+                    ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td>` : ''}
+                </table>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
+                <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description')}</div>
+            </div>
+        </div>
+        ${caseData.resolution_notes ? `
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6><i class="fas fa-check-circle"></i> Resolution Notes</h6>
+                <div class="border rounded p-3 bg-light">${escapeHtml(caseData.resolution_notes)}</div>
+            </div>
+        </div>` : ''}
+        <div class="row mt-3">
+            <div class="col-12">
+                <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
+                <div id="timelineContent" class="border rounded p-3" style="max-height:300px; overflow-y:auto;">Loading...</div>
+            </div>
+        </div>
+    `;
+    document.getElementById('caseModalBody').innerHTML = html;
+    loadTimeline(caseData.case_id);
+    
+    // Populate escalate modal based on current level
+    const allLevels = ['ESC1','ESC2','ESC3','ESC4','ESC5'];
+    const currentIdx = allLevels.indexOf(caseData.current_level);
+    const higherLevels = allLevels.slice(currentIdx + 1);
+    const levelNames = { 'ESC1':'Normal (ESC1)', 'ESC2':'Executive (ESC2)', 'ESC3':'Manager (ESC3)', 'ESC4':'Head (ESC4)', 'ESC5':'Admin (ESC5)' };
+    let options = '';
+    higherLevels.forEach(lvl => { options += `<option value="${lvl}">${levelNames[lvl]}</option>`; });
+    document.getElementById('escalateLevel').innerHTML = options;
+}
+
+function loadTimeline(caseId) {
+    fetch(addAppParam(`/messaging2/case/${caseId}/timeline/`))
+        .then(response => response.json())
+        .then(data => {
+            const html = data.logs.map(log => `
+                <div class="border-bottom pb-2 mb-2">
+                    <small>${new Date(log.created_at).toLocaleString()}</small>
+                    <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
+                    <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
+                    ${log.reason ? `<div class="small text-muted">${escapeHtml(log.reason)}</div>` : ''}
+                </div>
+            `).join('');
+            document.getElementById('timelineContent').innerHTML = html || '<div class="text-muted">No timeline history</div>';
+        })
+        .catch(error => {
+            document.getElementById('timelineContent').innerHTML = `<div class="alert alert-danger">Error loading timeline</div>`;
+        });
+}
+
+// Escalate Case
+function escalateCase(caseId) {
+    document.getElementById('escalateCaseId').value = caseId;
+    document.getElementById('escalateReason').value = '';
+    document.getElementById('escalateLoanNumber').value = currentCaseData?.loan_number || '';
+    $('#escalateModal').modal('show');
+}
+
+function submitEscalation() {
+    const caseId = document.getElementById('escalateCaseId').value;
+    const newLevel = document.getElementById('escalateLevel').value;
+    const reason = document.getElementById('escalateReason').value;
+    const loan = document.getElementById('escalateLoanNumber').value;
+    
+    if (!newLevel) { alert('Please select escalation level'); return; }
+    if (!reason) { alert('Please provide a reason'); return; }
+    
+    fetch(addAppParam(`/messaging2/case/${caseId}/escalate/`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ new_level: newLevel, reason: reason, loan: loan, name: '' })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case escalated successfully!');
+            $('#escalateModal').modal('hide');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+// Resolve Case
+function resolveCase(caseId) {
+    document.getElementById('resolveCaseId').value = caseId;
+    document.getElementById('resolutionNotes').value = '';
+    $('#resolveModal').modal('show');
+}
+
+function submitResolution() {
+    const caseId = document.getElementById('resolveCaseId').value;
+    const notes = document.getElementById('resolutionNotes').value;
+    
+    if (!notes) { alert('Please provide resolution notes'); return; }
+    
+    fetch(addAppParam(`/messaging2/case/${caseId}/resolve/`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ resolution_notes: notes })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case resolved successfully!');
+            $('#resolveModal').modal('hide');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>

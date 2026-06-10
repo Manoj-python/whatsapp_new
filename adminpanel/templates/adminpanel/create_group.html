@@ -1,0 +1,11 @@
+<!-- templates/adminpanel/create_group.html -->
+
+<h2>Create Group</h2>
+
+<form method="POST">
+  {% csrf_token %}
+
+  <input type="text" name="name" placeholder="Enter group name" required>
+
+  <button type="submit">Create</button>
+</form>

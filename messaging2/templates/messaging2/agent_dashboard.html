@@ -17,337 +17,145 @@
         </div>
     </div>
 
-    <!-- Stats Cards -->
+    <!-- All‑time Stats -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card text-white bg-primary">
                 <div class="card-body">
-                    <h5 class="card-title">My Assigned Cases</h5>
-                    <h2>{{ stats.my_cases }}</h2>
+                    <h6 class="card-title"><i class="fas fa-folder-open"></i> All Time Cases Created (in your dept)</h6>
+                    <h2>{{ stats.total_cases_created }}</h2>
+                    <small>All ESC1 cases in your departments</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-info">
+        <div class="col-md-4">
+            <div class="card text-white bg-warning">
                 <div class="card-body">
-                    <h5 class="card-title">Available Cases</h5>
-                    <h2>{{ stats.available_cases }}</h2>
+                    <h6 class="card-title"><i class="fas fa-arrow-up"></i> All Time Escalated by You</h6>
+                    <h2>{{ stats.total_escalated }}</h2>
+                    <small>Every escalation you ever made</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card text-white bg-success">
                 <div class="card-body">
-                    <h5 class="card-title">Resolved by Me</h5>
+                    <h6 class="card-title"><i class="fas fa-check-circle"></i> All Time Resolved by You</h6>
                     <h2>{{ stats.resolved }}</h2>
+                    <small>Cases you marked resolved</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-secondary">
+    </div>
+
+    <!-- Today’s Activity -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-white bg-info">
                 <div class="card-body">
-                    <h5 class="card-title">Total Handled</h5>
-                    <h2>{{ stats.total_handled }}</h2>
+                    <h6 class="card-title"><i class="fas fa-calendar-day"></i> Cases Created Today (in your dept)</h6>
+                    <h2>{{ stats.created_today }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="fas fa-arrow-up"></i> Escalated Today</h6>
+                    <h2>{{ stats.escalated_today }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="fas fa-check-circle"></i> Resolved Today</h6>
+                    <h2>{{ stats.resolved_today }}</h2>
                 </div>
             </div>
         </div>
     </div>
 
-</div>
-
-<!-- Case View Modal -->
-<div class="modal fade" id="caseModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-folder-open"></i> Case Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="caseModalBody">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p>Loading case details...</p>
-                </div>
-            </div>
+    <!-- Case Tabs -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4><i class="fas fa-tasks"></i> Cases</h4>
         </div>
-    </div>
-</div>
-
-<!-- Escalate Modal -->
-<div class="modal fade" id="escalateModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title"><i class="fas fa-arrow-up"></i> Escalate Case</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="escalateCaseId">
-                <div class="mb-3">
-                    <label>Escalate To:</label>
-                    <select id="escalateLevel" class="form-select">
-                        <option value="ESC2">⚖️ ESC2 - Thumb Team</option>
-                        <option value="ESC3">⭐ ESC3 - NOC Team</option>
-                        <option value="ESC4">📊 ESC4 - Manager</option>
-                    </select>
+        <div class="card-body">
+            <ul class="nav nav-tabs mb-3" id="agentCaseTabs">
+                <li class="nav-item"><a class="nav-link active" data-tab="assigned" onclick="loadCaseTab('assigned')">My Assigned Cases</a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="today_created" onclick="loadCaseTab('today_created')">Today’s Created Cases</a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="resolved_by_me" onclick="loadCaseTab('resolved_by_me')">Resolved by Me (All Time)</a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="escalated_by_me" onclick="loadCaseTab('escalated_by_me')">Escalated by Me</a></li>
+            </ul>
+            <div id="casesContainer">
+                <!-- initial load: assigned cases -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Status</th><th>Created</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for case in assigned_cases %}
+                            <tr>
+                                <td>{{ case.loan_number|default:"-" }}</small></td>
+                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
+                                <td>{{ case.mobile }}</small></td>
+                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
+                                <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
+                                <td>{{ case.created_at|date:"d/m/Y H:i" }}</small></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
+                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check-circle"></i></button>
+                                </small></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="8">No assigned cases</small></td>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-                <div class="mb-3">
-                    <label>Loan Number</label>
-                    <input type="text" id="LoanNumber" class="form-control" placeholder="Enter the loan number">
-                </div>
-                <div class="mb-3">
-                    <label>Reason for Escalation:</label>
-                    <textarea id="escalateReason" class="form-control" rows="3" placeholder="Explain why this case needs escalation..."></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-warning" onclick="submitEscalation()">Escalate</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Resolve Modal -->
-<div class="modal fade" id="resolveModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title"><i class="fas fa-check-circle"></i> Resolve Case</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="resolveCaseId">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Resolving this case will mark it as <strong>RESOLVED</strong>. 
-                    Admin will review and close it.
-                </div>
-                <div class="mb-3">
-                    <label>Resolution Notes:</label>
-                    <textarea id="resolutionNotes" class="form-control" rows="4" placeholder="Describe how this case was resolved..."></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" onclick="submitResolution()">Resolve Case</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-let currentCaseId = null;
-
-function viewCase(caseId) {
-    currentCaseId = caseId;
-    $('#caseModal').modal('show');
-    
-    // Get current app from URL parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const app = urlParams.get('app') || 'psf';
-    fetch(`/messaging2/case/${caseId}/detail/?app=${app}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                renderCaseDetail(data.case);
-            } else {
-                document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-            }
-        })
-        .catch(error => {
-            document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error loading case: ${error.message}</div>`;
-        });
+function loadCaseTab(tab) {
+    document.querySelectorAll('#agentCaseTabs .nav-link').forEach(link => link.classList.remove('active'));
+    document.querySelector(`#agentCaseTabs .nav-link[data-tab="${tab}"]`).classList.add('active');
+    fetch(`/messaging2/agent-case-list/?tab=${tab}&app={{ current_app }}`)
+        .then(res => res.json())
+        .then(data => renderCaseTable(data.cases))
+        .catch(err => console.error(err));
 }
-
-function renderCaseDetail(caseData) {
-    const levelBadges = {
-        'ESC1': 'primary', 'ESC2': 'warning', 'ESC3': 'info', 
-        'ESC4': 'danger', 'ESC5': 'dark', 'RESOLVED': 'success', 'CLOSED': 'secondary'
-    };
-    const priorityBadges = {
-        'Low': 'secondary', 'Medium': 'info', 'High': 'warning', 'Urgent': 'danger'
-    };
-    
-    const html = `
-        <div class="row">
-            <div class="col-md-6">
-                <h6><i class="fas fa-info-circle"></i> Case Information</h6>
-                <table class="table table-sm">
-                    <tr><th>Case ID:</th><td><strong>${caseData.case_id}</strong></td></tr>
-                    <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
-                    <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
-                    <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level] || 'secondary'}">${caseData.current_level}</span></td></tr>
-                    <tr><th>Priority:</th><td><span class="badge bg-${priorityBadges[caseData.priority] || 'secondary'}">${caseData.priority}</span></td></tr>
-                    <tr><th>Status:</th><td><span class="badge bg-${caseData.status === 'Resolved' ? 'success' : 'primary'}">${caseData.status}</span></td></tr>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <h6><i class="fas fa-users"></i> Assignment</h6>
-                <table class="table table-sm">
-                    <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td></tr>
-                    <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td></tr>
-                    <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td></tr>
-                    ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td></tr>` : ''}
-                    ${caseData.reopen_count > 0 ? `<tr><th>Reopened:</th><td>${caseData.reopen_count} times</td></tr>` : ''}
-                </table>
-            </div>
-        </div>
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
-                <div class="border rounded p-3 bg-light">
-                    ${escapeHtml(caseData.issue_description || 'No description provided')}
-                </div>
-            </div>
-        </div>
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-file-alt"></i> Loan Number</h6>
-                <div class="border rounded p-3 bg-light">
-                    ${escapeHtml(caseData.loan_number || 'Not provided')}
-                </div>
-            </div>
-        </div>
-        ${caseData.resolution_notes ? `
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-check-circle text-success"></i> Resolution Notes</h6>
-                <div class="border rounded p-3 bg-light">
-                    ${escapeHtml(caseData.resolution_notes)}
-                </div>
-            </div>
-        </div>
-        ` : ''}
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
-                <div id="timelineContent" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
-                    <div class="text-center">Loading timeline...</div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.getElementById('caseModalBody').innerHTML = html;
-    loadTimeline(caseData.case_id);
-}
-
-function loadTimeline(caseId) {
-    const urlParams = new URLSearchParams(window.location.search);
-    const app = urlParams.get('app') || 'psf';
-    fetch(`/messaging2/case/${caseId}/timeline/?app=${app}`)
-        .then(response => response.json())
-        .then(data => {
-            const timelineHtml = data.logs.map(log => `
-                <div class="timeline-item mb-2 pb-2 border-bottom">
-                    <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
-                    <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
-                    <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
-                    ${log.reason ? `<div><strong>Reason:</strong> ${escapeHtml(log.reason)}</div>` : ''}
-                </div>
-            `).join('');
-            document.getElementById('timelineContent').innerHTML = timelineHtml || '<div class="text-center text-muted">No escalation history</div>';
-        })
-        .catch(error => {
-            document.getElementById('timelineContent').innerHTML = `<div class="alert alert-danger">Error loading timeline: ${error.message}</div>`;
-        });
-}
-
-function escalateCase(caseId) {
-    document.getElementById('escalateCaseId').value = caseId;
-    document.getElementById('escalateReason').value = '';
-    document.getElementById('LoanNumber').value = '';
-    $('#escalateModal').modal('show');
-}
-
-function submitEscalation() {
-    const caseId = document.getElementById('escalateCaseId').value;
-    const newLevel = document.getElementById('escalateLevel').value;
-    const reason = document.getElementById('escalateReason').value;
-    const loan = document.getElementById('LoanNumber').value;
-    
-    if (!reason) {
-        alert('Please provide a reason for escalation');
+function renderCaseTable(cases) {
+    const container = document.getElementById('casesContainer');
+    if (!cases || cases.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No cases found</div>';
         return;
     }
-    if (!loan) {
-        alert('Please provide a loan number');
-        return;
+    let html = `<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>`;
+    for (let c of cases) {
+        html += `<tr>
+            <td>${c.loan_number || '-'}</td>
+            <td>${escapeHtml(c.customer_name || c.mobile)}</td>
+            <td>${c.mobile}</td>
+            <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>
+            <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></td>
+            <td>${new Date(c.created_at).toLocaleString()}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>
+                <button class="btn btn-sm btn-warning" onclick="escalateCase('${c.case_id}')"><i class="fas fa-arrow-up"></i></button>
+                <button class="btn btn-sm btn-success" onclick="resolveCase('${c.case_id}')"><i class="fas fa-check-circle"></i></button>
+            </td>
+        </tr>`;
     }
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const app = urlParams.get('app') || 'psf';
-    
-    fetch(`/messaging2/case/${caseId}/escalate/?app=${app}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({
-            new_level: newLevel,
-            reason: reason,
-            loan: loan
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Case escalated successfully!');
-            $('#escalateModal').modal('hide');
-            location.reload();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => alert('Error: ' + error.message));
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
 }
-
-function resolveCase(caseId) {
-    document.getElementById('resolveCaseId').value = caseId;
-    document.getElementById('resolutionNotes').value = '';
-    $('#resolveModal').modal('show');
-}
-
-function submitResolution() {
-    const caseId = document.getElementById('resolveCaseId').value;
-    const notes = document.getElementById('resolutionNotes').value;
-    
-    if (!notes) {
-        alert('Please provide resolution notes');
-        return;
-    }
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const app = urlParams.get('app') || 'psf';
-    
-    fetch(`/messaging2/case/${caseId}/resolve/?app=${app}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({
-            resolution_notes: notes
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            $('#resolveModal').modal('hide');
-            location.reload();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => alert('Error: ' + error.message));
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+function escapeHtml(text) { if(!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 </script>
+{% include "messaging2/_case_modals.html" %}
 {% endblock %}

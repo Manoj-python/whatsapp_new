@@ -1,0 +1,69 @@
+{% extends "messaging2/base_dashboard.html" %}
+{% block title %}Executive Dashboard - ESC2{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group">
+                {% for key, cfg in app_list %}
+                <a href="?app={{ key }}" class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    {{ cfg.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-white bg-warning">
+                <div class="card-body"><h6>Pending Cases</h6><h2>{{ stats.pending }}</h2></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-success">
+                <div class="card-body"><h6>Resolved</h6><h2>{{ stats.resolved }}</h2></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-info">
+                <div class="card-body"><h6>Escalated</h6><h2>{{ stats.escalated }}</h2></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4><i class="fas fa-chart-line"></i> Executive Cases (ESC2)</h4>
+        </div>
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Priority</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for case in cases %}
+                    <tr>
+                        <td>{{ case.loan_number|default:"-" }}</small></td>
+                        <td>{{ case.customer_name|default:case.mobile }}</small></td>
+                        <td>{{ case.mobile }}</small></td>
+                        <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
+                        <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></small></td>
+                        <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+                            <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
+                            <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check-circle"></i></button>
+                         </small></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center">No ESC2 cases in your departments.{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% include "messaging2/_case_modals.html" %}
+{% endblock %}

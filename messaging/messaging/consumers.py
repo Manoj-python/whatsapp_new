@@ -36,61 +36,99 @@ def ws_group_name(mobile: str) -> str:
 # Database Queries
 # -------------------------
 @sync_to_async
-def get_contacts_page(page=1, size=30, q="", filter_type="all"):
+def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None):
     """
     Get contacts with pagination and filtering
-    filter_type: 'all', 'unread', 'groups'
+    filter_type: 'all', 'unread', 'assigned'
+    level: 'ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5' - for role-based filtering
     """
+
     qs = ChatContact.objects.all()
+
+    # Apply role-based level filter FIRST
+    if level and level != 'ESC1':
+        qs = qs.filter(current_level=level)
     
-    # Apply filters
+    # Apply additional filters
     if filter_type == "unread":
         qs = qs.filter(unread__gt=0)
-    elif filter_type == "groups":
-        # For WhatsApp-like groups (if you have group chat functionality)
-        # qs = qs.filter(is_group=True)
-        pass
-    
+        qs = qs.exclude(last_msg__icontains="No messages yet")
+        qs = qs.exclude(last_msg="")
+        qs = qs.exclude(last_msg__isnull=True)
+    elif filter_type == "assigned":
+        if level:
+            qs = qs.filter(current_level=level)
+        qs = qs.exclude(last_msg__icontains="No messages yet")
+
     # Search filter
     if q:
         raw_q = q.strip()
         digits = re.sub(r"\D", "", raw_q)
-        
+
         filters = Q()
         if digits:
             filters |= Q(mobile__icontains=digits)
         filters |= Q(last_msg__icontains=raw_q)
         qs = qs.filter(filters)
-    
-    # Order by last_time DESC (newest first)
+
     qs = qs.order_by('-last_time')
-    
-    # Pagination
+
     total = qs.count()
     start = (page - 1) * size
     end = start + size
     contacts_qs = qs[start:end]
-    
+
     contacts = []
     for c in contacts_qs:
+        last_msg = c.last_msg or ""
+        if last_msg == "" or last_msg == "No messages yet":
+            latest_msg = SmsWhatsAppLog.objects.filter(mobile=c.mobile).order_by('-sent_at').first()
+            if latest_msg:
+                last_msg = latest_msg.sent_text_message or "[Media]"
+                ChatContact.objects.filter(mobile=c.mobile).update(last_msg=last_msg)
+            else:
+                if filter_type == "unread":
+                    continue
+                last_msg = "No messages yet"
+
+        # ✅ Fetch the latest case for this mobile to get the group name
+        group_name = None
+        latest_case = Case.objects.filter(mobile=c.mobile).order_by('-created_at').first()
+        if latest_case and latest_case.group:
+            group_name = latest_case.group.name
+
         contacts.append({
             "mobile": c.mobile,
-            "last_msg": c.last_msg or "",
-            "last_type": c.last_type,
-            "last_status": c.last_status,
+            "last_msg": last_msg,
+            "last_type": c.last_type or "",
+            "last_status": c.last_status or "",
             "unread": c.unread,
             "last_time": c.last_time.isoformat() if c.last_time else None,
+            "current_level": c.current_level or "ESC1",
+            "group_name": group_name,   # 🔥 NEW FIELD
         })
+
     total_pages = (total + size - 1) // size
+    
+    # Calculate unread count for agent/admin
+    unread_count = 0
+    if not level or level == 'ESC1':
+        unread_count = ChatContact.objects.filter(
+            unread__gt=0
+        ).exclude(
+            last_msg__icontains="No messages yet"
+        ).exclude(
+            last_msg=""
+        ).count()
+
     return {
         "contacts": contacts,
         "total_pages": total_pages,
         "current_page": page,
         "total": total,
         "has_more": page < total_pages,
-        "unread_count": ChatContact.objects.filter(unread__gt=0).count()  # For badge
+        "unread_count": unread_count
     }
-
 # messaging/consumers.py - Update get_messages_page_from_db function
 
 from datetime import datetime, timedelta

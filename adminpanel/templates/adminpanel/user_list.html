@@ -410,7 +410,7 @@
 
 
                         <th><i class="fas fa-tag"></i> Role / Team</th>
-                        <th><i class="fas fa-chart-line"></i> Level</th>
+                        <th><i class="fas fa-chart-line"></i>Group</th>
                         <th><i class="fas fa-shield-alt"></i> Staff</th>
                         <th><i class="fas fa-cog"></i> Actions</th>
                     </tr>
@@ -456,6 +456,17 @@
                                 -
                             {% endif %}
                         </td>
+                       <td>
+    {% if user_data.agent %}
+        {% for group in user_data.agent.groups.all %}
+            <span class="badge bg-secondary me-1">{{ group.name }}</span>
+        {% empty %}
+            <span class="text-muted">No groups</span>
+        {% endfor %}
+    {% else %}
+        <span class="text-muted">No agent profile</span>
+    {% endif %}
+</td>
                         <td>
                             {% if user_data.user.is_staff %}
                                 <span class="badge bg-success"><i class="fas fa-check"></i> Yes</span>

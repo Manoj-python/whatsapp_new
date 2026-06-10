@@ -5,7 +5,7 @@ from django.conf.urls.static import static
 from adminpanel.views import edit_case_api
 
 urlpatterns = [
-    # Bulk upload + WhatsApp sending
+    # Bulk upload + WhatsApp send
     path('', views.upload_and_send2, name='upload_and_send2'),
 
     # Job status and reports
@@ -22,7 +22,7 @@ urlpatterns = [
     path("logout/", views.messaging2_logout, name="messaging2_logout"),
     path("api/mark-read/<str:mobile>/", views.mark_read2, name="mark_read2"),
     path('api/contact-messages2/', views.get_contact_messages2, name='get_contact_messages2'),
-
+    path('agent-case-list/', views.agent_case_list_api, name='agent_case_list_api'),
 
 
 
@@ -32,10 +32,10 @@ urlpatterns = [
     #path('export/received/', views.export_received_messages_to_excel2, name='export_received2'),
 
 
-    path('agent_dashboard/', views.agent_dashboard2, name='agent_dashboard'),
-    path('legal_dashboard/', views.legal_dashboard2, name='legal_dashboard'),
-    path('lead_dashboard/', views.lead_dashboard2, name='lead_dashboard'),
-    path('manager_dashboard/', views.manager_dashboard2, name='manager_dashboard'),
+   path('agent-dashboard/', views.agent_dashboard2, name='agent_dashboard'),
+path('executive-dashboard/', views.executive_dashboard2, name='executive_dashboard'),
+path('manager-dashboard/', views.manager_dashboard2, name='manager_dashboard'),
+path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
     # path('admin_dashboard/', admin_dashboard, name='admin_dashboard'),
     
     # ============================================
@@ -60,9 +60,10 @@ urlpatterns = [
     path('api/user-role/', views.get_user_role_api2, name='user_role_api'),
     path('case/<str:case_id>/edit/', edit_case_api, name='edit_case_api'),
 
+    path('api/groups/', views.get_groups_api, name='get_groups_api'),
 
-
-
+    path('manager-cases/', views.manager_cases_api, name='manager_cases_api'),
+    path('head-cases/', views.head_cases_api, name='head_cases_api'),
 
 
      # -----------------------------

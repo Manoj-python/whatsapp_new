@@ -98,7 +98,7 @@ class BulkJob2(models.Model):
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-
+from adminpanel.models import SupportGroup
 # ============================================
 # EXISTING MODELS (Dealer_TA_Balances, Auction, Write_Off, Ledger, etc.)
 # Keep all your existing models here
@@ -110,38 +110,39 @@ from django.utils import timezone
 class Agent(models.Model):
     """
     Agent Model - Manages all team members and their roles
+    Levels: ESC1 (Normal), ESC2 (Executive), ESC3 (Manager), ESC4 (Head), ESC5 (Admin)
     """
     
     ROLE_CHOICES = [
-        ('AGENT', '🟢 Normal Agent - Chat Support (ESC1)'),
-        ('LEGAL', '⚖️ Legal Team (ESC2)'),
-        ('LEAD', '⭐ Team Lead (ESC3)'),
-        ('MANAGER', '📊 Manager (ESC4)'),
+        ('AGENT', '🟢 Normal Agent (ESC1)'),
+        ('EXECUTIVE', '⚖️ Executive (ESC2)'),
+        ('MANAGER', '📊 Manager (ESC3)'),
+        ('HEAD', '👔 Head (ESC4)'),
         ('ADMIN', '🔒 Administrator (ESC5)'),
     ]
     
     LEVEL_MAPPING = {
         'AGENT': 'ESC1',
-        'LEGAL': 'ESC2',
-        'LEAD': 'ESC3',
-        'MANAGER': 'ESC4',
+        'EXECUTIVE': 'ESC2',
+        'MANAGER': 'ESC3',
+        'HEAD': 'ESC4',
         'ADMIN': 'ESC5',
     }
     
     DASHBOARD_MAPPING = {
         'AGENT': 'agent_dashboard',
-        'LEGAL': 'legal_dashboard',
-        'LEAD': 'lead_dashboard',
+        'EXECUTIVE': 'executive_dashboard',   # create this view if needed
         'MANAGER': 'manager_dashboard',
+        'HEAD': 'head_dashboard',             # create this view if needed
         'ADMIN': 'admin_dashboard',
     }
     
     ESCALATION_MATRIX = {
-        'AGENT': ['ESC2', 'ESC3', 'ESC4'],
-        'LEGAL': ['ESC3', 'ESC4'],
-        'LEAD': ['ESC4'],
-        'MANAGER': ['ESC5'],
-        'ADMIN': ['ESC1', 'ESC2', 'ESC3', 'ESC4'],
+        'AGENT': ['ESC2', 'ESC3', 'ESC4', 'ESC5'],   # can escalate to any higher level
+        'EXECUTIVE': ['ESC3', 'ESC4', 'ESC5'],
+        'MANAGER': ['ESC4', 'ESC5'],
+        'HEAD': ['ESC5'],
+        'ADMIN': ['ESC1', 'ESC2', 'ESC3', 'ESC4'],   # can reassign downwards
     }
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_profile')
@@ -153,6 +154,7 @@ class Agent(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_activity = models.DateTimeField(auto_now=True)
+    groups = models.ManyToManyField(SupportGroup, blank=True)
     
     total_cases_handled = models.IntegerField(default=0)
     total_cases_resolved = models.IntegerField(default=0)
@@ -184,8 +186,16 @@ class Agent(models.Model):
     def can_view_case(self, case):
         if self.role == 'ADMIN':
             return True
-        return case.current_level == self.level
+        # Agent sees only cases at their own level AND belonging to their groups
+        return (case.current_level == self.level and
+                case.group in self.groups.all())
     
+    def assign_to_agent(self, agent, assigned_by=None):
+        self.assigned_to = agent
+        self.status = 'ASSIGNED'
+        self.last_assigned_at = timezone.now()
+        self.save(update_fields=['assigned_to', 'status', 'last_assigned_at'])
+        
     def increment_cases_handled(self):
         self.total_cases_handled += 1
         self.save(update_fields=['total_cases_handled'])
@@ -202,8 +212,7 @@ class Agent(models.Model):
         return f"{self.name} ({self.get_role_display()})"
     
     class Meta:
-        ordering = ['name']
-
+        ordering = ['-id']
 
 class CaseEscalationLog(models.Model):
     """Track all case escalations, resolutions, and closures"""
@@ -252,10 +261,9 @@ class Case(models.Model):
     ESCALATION_CHOICES = [
         ('ESC0', '🆕 New Case - Unassigned'),
         ('ESC1', '📞 Level 1 - Normal Agent'),
-        ('ESC2', '⚖️ Level 2 - Legal Team'),
-        ('ESC3', '⭐ Level 3 - Team Lead'),
-        ('ESC4', '📊 Level 4 - Manager'),
-        ('ESC5', '🔒 Level 5 - Admin'),
+        ('ESC2', '⭐ Level 2 - Team Lead'),
+        ('ESC3', '📊 Level 3 - Manager'),
+        ('ESC4', '🔒 Level 4 - Admin'),
         ('RESOLVED', '✅ Resolved - Awaiting Closure'),
         ('CLOSED', '🔒 Closed - Final'),
     ]
@@ -286,8 +294,13 @@ class Case(models.Model):
     
     # Issue Details
     issue_description = models.TextField(blank=True, null=True)
-    category = models.CharField(max_length=100, blank=True, null=True)
-    
+    group = models.ForeignKey(
+    SupportGroup,
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name='cases'
+)    
     # Escalation
     current_level = models.CharField(max_length=20, choices=ESCALATION_CHOICES, default='ESC0')
     previous_level = models.CharField(max_length=20, blank=True, null=True)
@@ -370,6 +383,22 @@ class Case(models.Model):
             agent.increment_escalations()
         
         return True
+    
+    def get_available_escalation_levels(self):
+        """Return list of levels that are higher than current level."""
+        all_levels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5']
+        try:
+            current_index = all_levels.index(self.current_level)
+            return all_levels[current_index + 1:]
+        except ValueError:
+            return []
+
+
+    def assign_to_agent(self, agent, assigned_by=None):
+        self.assigned_to = agent
+        self.status = 'ASSIGNED'
+        self.last_assigned_at = timezone.now()
+        self.save(update_fields=['assigned_to', 'status', 'last_assigned_at'])
     
     def resolve(self, agent, resolution_notes=None):
         """

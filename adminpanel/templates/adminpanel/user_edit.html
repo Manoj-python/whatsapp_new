@@ -95,21 +95,28 @@
                                    value="{{ user_agent.mobile|default:'' }}" placeholder="+91XXXXXXXXXX">
                         </div>
 
-                        <div class="mb-4">
-                            <label for="role" class="form-label">Role *</label>
-                            <select class="form-select" id="role" name="role" required>
-                                {% for value, label in role_choices %}
-                                <option value="{{ value }}" {% if user_agent and user_agent.role == value %}selected{% endif %}>
-                                    {{ label }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <div class="form-text mt-1">
-                                <i class="fas fa-info-circle"></i> 
-                                Role determines dashboard access and escalation permissions.
-                                <br>Staff status (Admin/Manager) will be set automatically.
-                            </div>
-                        </div>
+                         <select name="role">
+        {% for val, label in role_choices %}
+            <option value="{{ val }}"
+                {% if user_agent.role == val %}selected{% endif %}>
+                {{ label }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <!-- ✅ MULTI SELECT WITH PRESELECT -->
+    <label>Groups</label>
+    <select name="groups" multiple>
+        {% for group in groups %}
+            <option value="{{ group.id }}"
+                {% if user_agent and group in user_agent.groups.all %}
+                    selected
+                {% endif %}
+            >
+                {{ group.name }}
+            </option>
+        {% endfor %}
+    </select>
 
                         <!-- Current info summary -->
                         <div class="info-box">

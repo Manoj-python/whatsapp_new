@@ -5,7 +5,6 @@
 
 {% block extra_css %}
 <style>
-    /* Your existing CSS styles (unchanged) */
     :root {
         --primary: #4361ee;
         --primary-dark: #3a0ca3;
@@ -29,7 +28,6 @@
         overflow: hidden;
         cursor: pointer;
     }
-    
     .stat-card::before {
         content: '';
         position: absolute;
@@ -39,12 +37,10 @@
         height: 4px;
         background: linear-gradient(90deg, var(--primary), var(--secondary));
     }
-    
     .stat-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 30px rgba(0,0,0,0.1);
     }
-    
     .stat-icon {
         width: 50px;
         height: 50px;
@@ -55,24 +51,9 @@
         justify-content: center;
         margin-bottom: 15px;
     }
-    
-    .stat-icon i {
-        font-size: 24px;
-        color: var(--primary);
-    }
-    
-    .stat-number {
-        font-size: 32px;
-        font-weight: 800;
-        color: var(--dark);
-        line-height: 1;
-    }
-    
-    .stat-label {
-        color: #6c757d;
-        font-size: 13px;
-        margin-top: 8px;
-    }
+    .stat-icon i { font-size: 24px; color: var(--primary); }
+    .stat-number { font-size: 32px; font-weight: 800; color: var(--dark); line-height: 1; }
+    .stat-label { color: #6c757d; font-size: 13px; margin-top: 8px; }
     
     .level-badge {
         display: inline-flex;
@@ -83,7 +64,6 @@
         font-weight: 600;
         gap: 8px;
     }
-    
     .level-ESC1 { background: #4caf50; color: white; }
     .level-ESC2 { background: #2196f3; color: white; }
     .level-ESC3 { background: #ff9800; color: white; }
@@ -99,7 +79,6 @@
         margin-bottom: 25px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
-    
     .section-title {
         font-size: 18px;
         font-weight: 700;
@@ -112,66 +91,30 @@
         align-items: center;
     }
     
-    .nav-tabs-custom {
-        border-bottom: 2px solid #e9ecef;
-        margin-bottom: 20px;
-    }
-    
-    .nav-tabs-custom .nav-link {
-        border: none;
-        color: #6c757d;
-        font-weight: 600;
-        padding: 12px 24px;
-        transition: all 0.3s;
+    .filter-card {
+        background: white;
+        border-radius: 15px;
+        padding: 15px;
+        margin-bottom: 15px;
         cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid #e9ecef;
     }
-    
-    .nav-tabs-custom .nav-link:hover {
-        color: var(--primary);
+    .filter-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
-    
-    .nav-tabs-custom .nav-link.active {
-        color: var(--primary);
-        border-bottom: 2px solid var(--primary);
-        background: transparent;
+    .filter-card.active {
+        border-left: 4px solid var(--primary);
+        background: #f8f9fa;
     }
-    
-    .btn-gradient {
-        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-        color: white;
-        border: none;
-        padding: 8px 20px;
-        border-radius: 10px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-    
-    .btn-gradient:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(67, 97, 238, 0.4);
-        color: white;
-    }
-    
-    .btn-outline-gradient {
-        background: transparent;
-        border: 2px solid var(--primary);
-        color: var(--primary);
-        padding: 6px 18px;
-        border-radius: 10px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-    
-    .btn-outline-gradient:hover {
-        background: var(--primary);
-        color: white;
-    }
+    .filter-card h4 { margin: 0; font-size: 24px; font-weight: 700; }
+    .filter-card p { margin: 0; color: #6c757d; font-size: 12px; }
     
     .modern-table {
         width: 100%;
         border-collapse: collapse;
     }
-    
     .modern-table thead th {
         background: #f8f9fa;
         padding: 12px 15px;
@@ -179,25 +122,13 @@
         color: var(--dark);
         border-bottom: 2px solid #e9ecef;
     }
-    
     .modern-table tbody tr {
         border-bottom: 1px solid #e9ecef;
         transition: all 0.2s;
     }
+    .modern-table tbody tr:hover { background: #f8f9fa; }
+    .modern-table td { padding: 12px 15px; vertical-align: middle; }
     
-    .modern-table tbody tr:hover {
-        background: #f8f9fa;
-    }
-    
-    .modern-table td {
-        padding: 12px 15px;
-        vertical-align: middle;
-    }
-    
-    .priority-urgent { background: #f44336; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
-    .priority-high { background: #ff9800; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
-    .priority-medium { background: #2196f3; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
-    .priority-low { background: #4caf50; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
     
     .status-badge {
         display: inline-block;
@@ -206,7 +137,6 @@
         font-size: 11px;
         font-weight: 600;
     }
-    
     .status-open { background: #2196f3; color: white; }
     .status-in-progress { background: #ff9800; color: white; }
     .status-resolved { background: #4caf50; color: white; }
@@ -222,96 +152,21 @@
         border-radius: 50%;
         animation: spin 1s linear infinite;
     }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
+    .chart-container { position: relative; height: 250px; margin: 20px 0; }
+    .action-btn { padding: 5px 10px; margin: 2px; border-radius: 8px; font-size: 12px; transition: all 0.2s; }
+    .action-btn:hover { transform: translateY(-1px); }
     
-    .chart-container {
-        position: relative;
-        height: 250px;
-        margin: 20px 0;
-    }
-    
-    .quick-action {
-        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-        color: white;
-        border-radius: 15px;
-        padding: 20px;
-        text-align: center;
-        transition: all 0.3s;
-        cursor: pointer;
-        height: 100%;
-    }
-    
-    .quick-action:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
-    
-    .quick-action i {
-        font-size: 32px;
-        margin-bottom: 10px;
-    }
-    
-    .action-btn {
-        padding: 5px 10px;
-        margin: 2px;
-        border-radius: 8px;
-        font-size: 12px;
-        transition: all 0.2s;
-    }
-    
-    .action-btn:hover {
-        transform: translateY(-1px);
-    }
-    
-    /* App switcher style */
-    .app-switcher {
-        display: flex;
-        gap: 8px;
-        margin-right: 20px;
-    }
-    .app-btn {
-        padding: 6px 16px;
-        border-radius: 30px;
-        font-size: 13px;
-        font-weight: 600;
-        border: 1px solid #ddd;
-        background: white;
-        transition: all 0.2s;
-    }
-    .app-btn.active {
-        background: var(--primary);
-        border-color: var(--primary);
-        color: white;
-    }
-    .app-btn:hover:not(.active) {
-        background: #f0f2f5;
-    }
+    .app-switcher { display: flex; gap: 8px; margin-right: 20px; }
+    .app-btn { padding: 6px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; border: 1px solid #ddd; background: white; transition: all 0.2s; }
+    .app-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+    .app-btn:hover:not(.active) { background: #f0f2f5; }
     
     @media (max-width: 768px) {
-        .stat-number {
-            font-size: 24px;
-        }
-        .nav-tabs-custom .nav-link {
-            padding: 8px 12px;
-            font-size: 12px;
-        }
-        .section-card {
-            padding: 15px;
-        }
-        .quick-action {
-            margin-bottom: 15px;
-        }
-        .app-switcher {
-            margin-right: 10px;
-        }
-        .app-btn {
-            padding: 4px 10px;
-            font-size: 11px;
-        }
+        .stat-number { font-size: 24px; }
+        .filter-card h4 { font-size: 18px; }
+        .app-btn { padding: 4px 10px; font-size: 11px; }
     }
 </style>
 {% endblock %}
@@ -322,184 +177,140 @@
     <div class="section-card mb-4" style="background: linear-gradient(135deg, #4361ee, #3f37c9); color: white;">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h2 class="mb-2">
-                    <i class="fas fa-chart-line"></i> Welcome back, {{ request.user.username }}!
-                </h2>
-                <p class="mb-0 opacity-75">Here's what's happening with your <strong>{{ app_name }}</strong> cases today.</p>
+                <h2 class="mb-2"><i class="fas fa-chart-line"></i> Welcome back, {{ request.user.username }}!</h2>
+                <p class="mb-0 opacity-75">Admin Dashboard – Manage all cases across departments</p>
             </div>
-            <div>
-                <i class="fas fa-chart-pie fa-3x opacity-50"></i>
-            </div>
+            <div><i class="fas fa-chart-pie fa-3x opacity-50"></i></div>
         </div>
     </div>
     
-    <!-- Statistics Cards -->
-    <div class="row" id="statsCards">
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="stat-card" onclick="switchTab('all')">
+    <!-- Summary Stats (Global) -->
+    <div class="row mb-4" id="globalStats">
+        <div class="col-md-2 col-sm-4 mb-3">
+            <div class="stat-card" onclick="filterByAll()">
                 <div class="stat-icon"><i class="fas fa-folder-open"></i></div>
-                <div class="stat-number" id="totalCases">{{ stats.total_cases|default:"0" }}</div>
+                <div class="stat-number" id="totalCases">0</div>
                 <div class="stat-label">Total Cases</div>
             </div>
         </div>
-        
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="stat-card" onclick="switchTab('open')">
+        <div class="col-md-2 col-sm-4 mb-3">
+            <div class="stat-card" onclick="filterByStatus('Open')">
                 <div class="stat-icon"><i class="fas fa-play-circle"></i></div>
-                <div class="stat-number" id="openCases">{{ stats.open_cases|default:"0" }}</div>
+                <div class="stat-number" id="openCases">0</div>
                 <div class="stat-label">Open Cases</div>
             </div>
         </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="stat-card" onclick="switchTab('open')">
+        <div class="col-md-2 col-sm-4 mb-3">
+            <div class="stat-card" onclick="filterByStatus('In Progress')">
                 <div class="stat-icon"><i class="fas fa-spinner"></i></div>
-                <div class="stat-number" id="inProgressCases">{{ stats.in_progress_cases|default:"0" }}</div>
+                <div class="stat-number" id="inProgressCases">0</div>
                 <div class="stat-label">In Progress</div>
             </div>
         </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="stat-card" onclick="switchTab('resolved')">
+        <div class="col-md-2 col-sm-4 mb-3">
+            <div class="stat-card" onclick="filterByStatus('Resolved')">
                 <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
-                <div class="stat-number" id="resolvedCases">{{ stats.resolved_cases|default:"0" }}</div>
-                <div class="stat-label">Resolved</div>
+                <div class="stat-number" id="resolvedCases">0</div>
+                <div class="stat-label">Resolved (Pending Close)</div>
             </div>
         </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="stat-card" onclick="switchTab('closed')">
+        <div class="col-md-2 col-sm-4 mb-3">
+            <div class="stat-card" onclick="filterByStatus('Closed')">
                 <div class="stat-icon"><i class="fas fa-lock"></i></div>
-                <div class="stat-number" id="closedCases">{{ stats.closed_cases|default:"0" }}</div>
+                <div class="stat-number" id="closedCases">0</div>
                 <div class="stat-label">Closed</div>
             </div>
         </div>
-        <div class="col-xl-2 col-md-4 mb-3">
+        <div class="col-md-2 col-sm-4 mb-3">
             <div class="stat-card" onclick="window.location.href='/adminpanel/users/'">
                 <div class="stat-icon"><i class="fas fa-users"></i></div>
-                <div class="stat-number" id="totalAgents">{{ stats.total_agents|default:"0" }}</div>
+                <div class="stat-number" id="totalAgents">0</div>
                 <div class="stat-label">Team Members</div>
             </div>
         </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="stat-card" onclick="window.location.href='/adminpanel/users/'">
-                <div class="stat-icon"><i class="fas fa-users"></i></div>
-                <div class="stat-number" id="reopenedCases">{{ stats.reopened_cases|default:"0" }}</div>
-                <div class="stat-label">Reopened</div>
-            </div>
-        </div>
     </div>
     
-    <!-- Charts Row -->
-    <div class="row">
-        <div class="col-md-6">
-            <div class="section-card">
-                <div class="section-title">
-                    <span><i class="fas fa-chart-pie"></i> Cases by Escalation Level</span>
-                    <button class="btn btn-sm btn-outline-gradient" onclick="refreshLevelChart()">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
-                </div>
-                <div class="chart-container">
-                    <canvas id="levelChart"></canvas>
-                </div>
-                <div class="row text-center mt-3">
-                    <div class="col">
-                        <span class="level-badge level-ESC1">ESC1: {{ stats.esc1|default:"0" }}</span>
-                    </div>
-                    <div class="col">
-                        <span class="level-badge level-ESC2">ESC2: {{ stats.esc2|default:"0" }}</span>
-                    </div>
-                    <div class="col">
-                        <span class="level-badge level-ESC3">ESC3: {{ stats.esc3|default:"0" }}</span>
-                    </div>
-                    <div class="col">
-                        <span class="level-badge level-ESC4">ESC4: {{ stats.esc4|default:"0" }}</span>
-                    </div>
-                    <div class="col">
-                        <span class="level-badge level-ESC5">ESC5: {{ stats.esc5|default:"0" }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="section-card">
-                <div class="section-title">
-                    <span><i class="fas fa-chart-line"></i> Weekly Case Trend (Last 7 Days)</span>
-                    <button class="btn btn-sm btn-outline-gradient" onclick="refreshTrendChart()">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
-                </div>
-                <div class="chart-container">
-                    <canvas id="trendChart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Cases Management Tabs -->
+    <!-- Level-wise Filter Cards -->
     <div class="section-card">
         <div class="section-title">
-            <span><i class="fas fa-tasks"></i> Case Management</span>
+            <span><i class="fas fa-chart-pie"></i> Filter by Escalation Level</span>
+            <button class="btn btn-sm btn-outline-gradient" onclick="refreshLevelCounts()"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+        <div class="row" id="levelCards">
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-level="ESC1" onclick="filterByLevel('ESC1')">
+                    <h4 id="esc1Count">0</h4>
+                    <p>ESC1 - Agent</p>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-level="ESC2" onclick="filterByLevel('ESC2')">
+                    <h4 id="esc2Count">0</h4>
+                    <p>ESC2 - Executive</p>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-level="ESC3" onclick="filterByLevel('ESC3')">
+                    <h4 id="esc3Count">0</h4>
+                    <p>ESC3 - Manager</p>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-level="ESC4" onclick="filterByLevel('ESC4')">
+                    <h4 id="esc4Count">0</h4>
+                    <p>ESC4 - Head</p>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-level="ESC5" onclick="filterByLevel('ESC5')">
+                    <h4 id="esc5Count">0</h4>
+                    <p>ESC5 - Admin</p>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-level="RESOLVED" onclick="filterByLevel('RESOLVED')">
+                    <h4 id="resolvedLevelCount">0</h4>
+                    <p>Resolved</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Department-wise Filter Cards -->
+    <div class="section-card">
+        <div class="section-title">
+            <span><i class="fas fa-building"></i> Filter by Department</span>
+        </div>
+        <div class="row" id="deptCards">
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-dept="all" onclick="filterByDepartment('all')">
+                    <h4 id="allDeptCount">0</h4>
+                    <p>All Departments</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cases Table with Search -->
+    <div class="section-card">
+        <div class="section-title">
+            <span><i class="fas fa-tasks"></i> Cases 
+                <span id="activeFilterBadge" class="badge bg-primary ms-2">All Cases</span>
+            </span>
             <div>
                 <div class="input-group input-group-sm" style="width: 300px;">
-                    <input type="text" id="searchInput" class="form-control" placeholder="Search by Case ID or Loan Number..." aria-label="Search">
-                    <button class="btn btn-primary" type="button" onclick="searchCases()">
-                        <i class="fas fa-search"></i> Search
-                    </button>
-                    <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
-                        <i class="fas fa-times"></i>
-                    </button>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search by Case ID or Loan Number...">
+                    <button class="btn btn-primary" type="button" onclick="searchCases()"><i class="fas fa-search"></i> Search</button>
+                    <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()"><i class="fas fa-times"></i></button>
                 </div>
-                <button class="btn btn-sm btn-outline-gradient ms-2" onclick="refreshCases()">
-                    <i class="fas fa-sync-alt"></i> Refresh
-                </button>
+                <button class="btn btn-sm btn-outline-gradient ms-2" onclick="refreshCases()"><i class="fas fa-sync-alt"></i> Refresh</button>
                 <button id="exportEsc3Btn" class="btn btn-sm btn-success ms-2" onclick="exportESC3()" style="display: none;">
                     <i class="fas fa-file-excel"></i> Export ESC3 to Excel
                 </button>
             </div>
         </div>
-        
-        <ul class="nav nav-tabs-custom" id="caseTabs">
-            <li class="nav-item">
-                <a class="nav-link active" data-tab="open" role="button" onclick="switchTab('open'); return false;">
-                    <i class="fas fa-folder-open"></i> Open Cases
-                    <span class="badge bg-primary ms-1" id="openCount">{{ stats.open_cases|default:"0" }}</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-tab="resolved" role="button" onclick="switchTab('resolved'); return false;">
-                    <i class="fas fa-check-circle"></i> Resolved (Pending Close)
-                    <span class="badge bg-success ms-1" id="resolvedCount">{{ stats.resolved_cases|default:"0" }}</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-tab="esc5" role="button" onclick="switchTab('esc5'); return false;">
-                    <i class="fas fa-exclamation-triangle"></i> ESC5 - Admin Review
-                    <span class="badge bg-danger ms-1" id="esc5Count">{{ stats.esc5|default:"0" }}</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-tab="esc3" role="button" onclick="switchTab('esc3'); return false;">
-                    <i class="fas fa-chart-line"></i> NOC Cases (ESC3)
-                    <span class="badge bg-warning ms-1" id="esc3Count">{{ stats.esc3|default:"0" }}</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-tab="closed" role="button" onclick="switchTab('closed'); return false;">
-                    <i class="fas fa-archive"></i> Closed Cases
-                    <span class="badge bg-secondary ms-1" id="closedCount">{{ stats.closed_cases|default:"0" }}</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-tab="all" role="button" onclick="switchTab('all'); return false;">
-                    <i class="fas fa-list"></i> All Cases
-                </a>
-            </li>
-        </ul>
-        
         <div id="casesTableContainer">
-            <div class="text-center py-4">
-                <div class="loading-spinner"></div>
-                <p class="mt-2">Loading cases...</p>
-            </div>
+            <div class="text-center py-4"><div class="loading-spinner"></div><p>Loading cases...</p></div>
         </div>
     </div>
 </div>
@@ -513,10 +324,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="caseModalBody">
-                <div class="text-center py-4">
-                    <div class="loading-spinner"></div>
-                    <p>Loading case details...</p>
-                </div>
+                <div class="text-center py-4"><div class="loading-spinner"></div><p>Loading...</p></div>
             </div>
         </div>
     </div>
@@ -534,12 +342,12 @@
                 <input type="hidden" id="closeCaseId">
                 <div class="mb-3">
                     <label>Closure Reason:</label>
-                    <textarea id="closeReason" class="form-control" rows="3" placeholder="Enter reason for closing this case..."></textarea>
+                    <textarea id="closeReason" class="form-control" rows="3"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" onclick="submitCloseCase()">Close Case</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-success" onclick="submitCloseCase()">Close Case</button>
             </div>
         </div>
     </div>
@@ -558,20 +366,20 @@
                 <div class="mb-3">
                     <label>Reopen To Level:</label>
                     <select id="reopenLevel" class="form-select">
-                        <option value="ESC1">ESC1 - Agent Level</option>
-                        <option value="ESC2">ESC2 - Thumb Team</option>
-                        <option value="ESC3">ESC3 - NOC Team</option>
-                        <option value="ESC4">ESC4 - Manager</option>
+                        <option value="ESC1">ESC1 - Agent</option>
+                        <option value="ESC2">ESC2 - Executive</option>
+                        <option value="ESC3">ESC3 - Manager</option>
+                        <option value="ESC4">ESC4 - Head</option>
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label>Reason for Reopening:</label>
-                    <textarea id="reopenReason" class="form-control" rows="3" placeholder="Why is this case being reopened?"></textarea>
+                    <label>Reason:</label>
+                    <textarea id="reopenReason" class="form-control" rows="3"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-warning" onclick="submitReopenCase()">Reopen Case</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-warning" onclick="submitReopenCase()">Reopen Case</button>
             </div>
         </div>
     </div>
@@ -587,27 +395,17 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editCaseId">
-                <div class="mb-3">
-                    <label>Loan Number</label>
-                    <input type="text" id="editLoanNumber" class="form-control">
-                </div>
-                <div class="mb-3">
-                    <label>Customer Name</label>
-                    <textarea id="editName" class="form-control" rows="3"></textarea>
-                </div>
-                <div class="mb-3">
-                    <label>Issue Description</label>
-                    <textarea id="editIssueDescription" class="form-control" rows="3"></textarea>
-                </div>
+                <div class="mb-3"><label>Loan Number</label><input type="text" id="editLoanNumber" class="form-control"></div>
+                <div class="mb-3"><label>Customer Name</label><textarea id="editName" class="form-control" rows="2"></textarea></div>
+                <div class="mb-3"><label>Issue Description</label><textarea id="editIssueDescription" class="form-control" rows="3"></textarea></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="submitEditCase()">Save Changes</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="submitEditCase()">Save Changes</button>
             </div>
         </div>
     </div>
 </div>
-
 
 <!-- Escalate Modal -->
 <div class="modal fade" id="escalateModal" tabindex="-1">
@@ -620,12 +418,16 @@
             <div class="modal-body">
                 <input type="hidden" id="escalateCaseId">
                 <div class="mb-3">
+                    <label>Department (Group):</label>
+                    <input type="text" id="escalateGroupName" class="form-control" readonly disabled>
+                </div>
+                <div class="mb-3">
                     <label>Escalate To Level:</label>
                     <select id="escalateLevelSelect" class="form-select">
                         <option value="ESC1">ESC1 - Agent</option>
-                        <option value="ESC2">ESC2 - Thumb Team</option>
-                        <option value="ESC3">ESC3 - NOC Team</option>
-                        <option value="ESC4">ESC4 - Manager</option>
+                        <option value="ESC2">ESC2 - Executive</option>
+                        <option value="ESC3">ESC3 - Manager</option>
+                        <option value="ESC4">ESC4 - Head</option>
                         <option value="ESC5">ESC5 - Admin</option>
                     </select>
                 </div>
@@ -643,8 +445,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-info" onclick="submitEscalation()">Escalate</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-info" onclick="submitEscalation()">Escalate</button>
             </div>
         </div>
     </div>
@@ -652,238 +454,113 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    let levelChart = null;
-    let trendChart = null;
-    let currentTab = 'open';
     let csrftoken = '{{ csrf_token }}';
-    let currentApp = '{{ current_app }}';   // from context (psf, sms, spl)
+    let currentApp = '{{ current_app }}';
+    let currentFilter = { type: 'all', value: null };  // type: 'all', 'status', 'level', 'dept'
     
-    // ============================================
-    // APP SWITCHER – add to top navbar
-    // ============================================
-    function initAppSwitcher() {
-        const topNavbar = document.querySelector('.top-navbar .user-dropdown');
-        if (!topNavbar) return;
-        
-        const switcherHtml = `
-            <div class="app-switcher">
-                {% for key, name in app_list %}
-                <button class="app-btn {% if key == current_app %}active{% endif %}" data-app="{{ key }}" onclick="switchApp('{{ key }}')">
-                    {{ name }}
-                </button>
-                {% endfor %}
-            </div>
-        `;
-        topNavbar.insertAdjacentHTML('beforebegin', switcherHtml);
-    }
-    
-    function switchApp(appKey) {
-        // Reload dashboard with selected app
-        const url = new URL(window.location.href);
-        url.searchParams.set('app', appKey);
-        window.location.href = url.toString();
-    }
-    
-    // ============================================
-    // UTILITIES – add ?app= to fetch URLs
-    // ============================================
+    // Helper: build URL with app param
     function buildUrl(baseUrl) {
         const separator = baseUrl.includes('?') ? '&' : '?';
         return `${baseUrl}${separator}app=${currentApp}`;
     }
     
-    // ============================================
-    // CHARTS (with app parameter)
-    // ============================================
+    // ========== Load Global Stats ==========
+    async function loadGlobalStats() {
+        try {
+            const resp = await fetch(buildUrl('/adminpanel/api/level-distribution/'));
+            const data = await resp.json();
+            document.getElementById('esc1Count').innerText = data.esc1 || 0;
+            document.getElementById('esc2Count').innerText = data.esc2 || 0;
+            document.getElementById('esc3Count').innerText = data.esc3 || 0;
+            document.getElementById('esc4Count').innerText = data.esc4 || 0;
+            document.getElementById('esc5Count').innerText = data.esc5 || 0;
+            document.getElementById('resolvedLevelCount').innerText = data.resolved || 0;
+            
+            const statsResp = await fetch(buildUrl('/adminpanel/api/stats/'));
+            const stats = await statsResp.json();
+            document.getElementById('totalCases').innerText = stats.total_cases || 0;
+            document.getElementById('openCases').innerText = stats.open_cases || 0;
+            document.getElementById('inProgressCases').innerText = stats.in_progress_cases || 0;
+            document.getElementById('resolvedCases').innerText = stats.resolved_cases || 0;
+            document.getElementById('closedCases').innerText = stats.closed_cases || 0;
+            document.getElementById('totalAgents').innerText = stats.total_agents || 0;
+        } catch(e) { console.error('Stats error:', e); }
+    }
     
-    function initLevelChart() {
-        const ctx = document.getElementById('levelChart').getContext('2d');
-        if (levelChart) levelChart.destroy();
-        
-        levelChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['ESC1 - Agent', 'ESC2 - Thumb', 'ESC3 - Noc', 'ESC4 - Manager', 'ESC5 - Admin', 'Resolved', 'Closed'],
-                datasets: [{
-                    data: [
-                        {{ stats.esc1|default:"0" }},
-                        {{ stats.esc2|default:"0" }},
-                        {{ stats.esc3|default:"0" }},
-                        {{ stats.esc4|default:"0" }},
-                        {{ stats.esc5|default:"0" }},
-                        {{ stats.resolved_cases|default:"0" }},
-                        {{ stats.closed_cases|default:"0" }}
-                    ],
-                    backgroundColor: ['#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#f44336', '#4caf50', '#6c757d'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { 
-                    legend: { position: 'bottom' },
-                    tooltip: { callbacks: { label: function(context) { return context.label + ': ' + context.raw; } } }
-                }
+    // ========== Load Department-wise counts ==========
+    async function loadDepartmentStats() {
+        try {
+            const resp = await fetch(buildUrl('/adminpanel/api/department-stats/'));
+            const data = await resp.json();
+            const deptContainer = document.getElementById('deptCards');
+            let html = `
+                <div class="col-md-2 col-sm-4 mb-2">
+                    <div class="filter-card text-center" data-dept="all" onclick="filterByDepartment('all')">
+                        <h4>${data.total_all || 0}</h4>
+                        <p>All Departments</p>
+                    </div>
+                </div>
+            `;
+            for (let dept of data.departments) {
+                html += `
+                    <div class="col-md-2 col-sm-4 mb-2">
+                        <div class="filter-card text-center" data-dept="${dept.name}" onclick="filterByDepartment('${dept.name}')">
+                            <h4>${dept.count}</h4>
+                            <p>${dept.name}</p>
+                        </div>
+                    </div>
+                `;
             }
-        });
+            deptContainer.innerHTML = html;
+        } catch(e) { console.error('Dept stats error:', e); }
     }
     
-    function refreshLevelChart() {
-        fetch(buildUrl('/adminpanel/api/level-distribution/'))
-            .then(response => response.json())
-            .then(data => {
-                if (levelChart) {
-                    levelChart.data.datasets[0].data = [
-                        data.esc1 || 0, data.esc2 || 0, data.esc3 || 0, 
-                        data.esc4 || 0, data.esc5 || 0, data.resolved || 0, data.closed || 0
-                    ];
-                    levelChart.update();
-                }
-                // Update the stat badges in the row (optional)
-                document.querySelectorAll('.level-badge').forEach(badge => {
-                    if (badge.innerText.includes('ESC1')) badge.innerText = `ESC1: ${data.esc1 || 0}`;
-                    if (badge.innerText.includes('ESC2')) badge.innerText = `ESC2: ${data.esc2 || 0}`;
-                    if (badge.innerText.includes('ESC3')) badge.innerText = `ESC3: ${data.esc3 || 0}`;
-                    if (badge.innerText.includes('ESC4')) badge.innerText = `ESC4: ${data.esc4 || 0}`;
-                    if (badge.innerText.includes('ESC5')) badge.innerText = `ESC5: ${data.esc5 || 0}`;
-                });
-            })
-            .catch(error => console.error('Error refreshing chart:', error));
-    }
-    
-    function initTrendChart() {
-        const ctx = document.getElementById('trendChart').getContext('2d');
-        if (trendChart) trendChart.destroy();
+    // ========== Load Cases with current filters ==========
+    async function loadCases() {
+        const container = document.getElementById('casesTableContainer');
+        container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Loading cases...</p></div>';
         
-        fetch(buildUrl('/adminpanel/api/weekly-trend/'))
-            .then(response => response.json())
-            .then(data => {
-                trendChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.labels || [],
-                        datasets: [
-                            {
-                                label: 'New Cases',
-                                data: data.new_cases || [],
-                                borderColor: '#2196f3',
-                                backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                                fill: true,
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Resolved',
-                                data: data.resolved || [],
-                                borderColor: '#4caf50',
-                                backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                                fill: true,
-                                tension: 0.4
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: { legend: { position: 'bottom' } }
-                    }
-                });
-            })
-            .catch(error => console.error('Error loading trend chart:', error));
-    }
-    
-    function refreshTrendChart() {
-        fetch(buildUrl('/adminpanel/api/weekly-trend/'))
-            .then(response => response.json())
-            .then(data => {
-                if (trendChart) {
-                    trendChart.data.labels = data.labels;
-                    trendChart.data.datasets[0].data = data.new_cases;
-                    trendChart.data.datasets[1].data = data.resolved;
-                    trendChart.update();
-                } else {
-                    initTrendChart();
-                }
-            });
-    }
-    
-    // ============================================
-    // CASE MANAGEMENT (with app parameter)
-    // ============================================
-    
-    function switchTab(tab) {
-        currentTab = tab;
-        document.querySelectorAll('.nav-tabs-custom .nav-link').forEach(link => {
-            link.classList.remove('active');
-        });
-        document.querySelector(`.nav-tabs-custom .nav-link[data-tab="${tab}"]`).classList.add('active');
-        loadCases(tab);
+        let url = buildUrl('/adminpanel/api/cases/');
+        if (currentFilter.type === 'status' && currentFilter.value) {
+            url = buildUrl(`/adminpanel/api/cases/?status=${currentFilter.value}`);
+        } else if (currentFilter.type === 'level' && currentFilter.value) {
+            url = buildUrl(`/adminpanel/api/cases/?level=${currentFilter.value}`);
+        } else if (currentFilter.type === 'dept' && currentFilter.value && currentFilter.value !== 'all') {
+            url = buildUrl(`/adminpanel/api/cases/?department=${encodeURIComponent(currentFilter.value)}`);
+        }
         
-        // Show/hide export ESC3 button
-        const exportBtn = document.getElementById('exportEsc3Btn');
-        if (exportBtn) {
-            exportBtn.style.display = (tab === 'esc3') ? 'inline-block' : 'none';
+        try {
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data.success) {
+                renderCasesTable(data.cases);
+            } else {
+                container.innerHTML = '<div class="alert alert-info">No cases found</div>';
+            }
+        } catch(e) {
+            console.error(e);
+            container.innerHTML = '<div class="alert alert-danger">Error loading cases</div>';
         }
     }
     
-    function loadCases(tab) {
+    function renderCasesTable(cases) {
         const container = document.getElementById('casesTableContainer');
-        container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p class="mt-2">Loading cases...</p></div>';
-        
-        let url = '';
-        if (tab === 'open') url = '/adminpanel/api/open-cases/';
-        else if (tab === 'resolved') url = '/adminpanel/api/resolved-cases/';
-        else if (tab === 'closed') url = '/adminpanel/api/closed-cases/';
-        else if (tab === 'esc5') url = '/adminpanel/api/esc5-cases/';
-        else if (tab === 'all') url = '/adminpanel/api/cases/';
-        else if (tab === 'esc3') url = '/adminpanel/api/esc3-cases/';
-        else url = '/adminpanel/api/cases/';
-        
-        fetch(buildUrl(url))
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    renderCasesTable(data.cases, tab);
-                } else {
-                    container.innerHTML = '<div class="alert alert-info">No cases found</div>';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                container.innerHTML = '<div class="alert alert-danger">Error loading cases. Please check if server is running.</div>';
-            });
-    }
-    
-    function renderCasesTable(cases, tab) {
-        const container = document.getElementById('casesTableContainer');
-        
         if (!cases || cases.length === 0) {
             container.innerHTML = '<div class="alert alert-info">No cases found</div>';
             return;
         }
-        
         let html = `
             <div class="table-responsive">
                 <table class="modern-table">
                     <thead>
                         <tr>
-                            <th>Case ID</th>
-                            <th>Customer</th>
-                            <th>Mobile</th>
-                            <th>LoanNumber</th>
-                            <th>Status</th>
-                            <th>Created</th>
-                            <th>Actions</th>
+                            <th>Case ID</th><th>Customer</th><th>Mobile</th><th>Loan Number</th>
+                            <th>Department</th><th>Level</th><th>Status</th><th>Created</th><th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
         `;
-        
-        for (const c of cases) {
-            const priorityClass = c.priority === 'Urgent' ? 'priority-urgent' : 
-                                 c.priority === 'High' ? 'priority-high' : 
-                                 c.priority === 'Medium' ? 'priority-medium' : 'priority-low';
-            
+        for (let c of cases) {
             const statusClass = c.status === 'Open' ? 'status-open' :
                                 c.status === 'In Progress' ? 'status-in-progress' :
                                 c.status === 'Resolved' ? 'status-resolved' :
@@ -891,56 +568,100 @@
             
             html += `
                 <tr>
-                    <td><strong>${escapeHtml(c.case_id)}</strong></td>
-                    <td>${escapeHtml(c.customer_name || c.mobile)}</td>
-                    <td>${c.mobile}</td>
-                    <td>${c.loan_number || ''}</td>
-                    <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></td>
-                    <td><small>${new Date(c.created_at).toLocaleString()}</small></td>
+                    <td><strong>${escapeHtml(c.case_id)}</strong></small></td>
+                    <td>${escapeHtml(c.customer_name || c.mobile)}</small></td>
+                    <td>${c.mobile}</small></td>
+                    <td>${c.loan_number || ''}</small></td>
+                    <td><span class="badge bg-secondary">${escapeHtml(c.group_name || '-')}</span></small></td>
+                    <td><span class="badge bg-${c.current_level === 'ESC1' ? 'success' : c.current_level === 'ESC2' ? 'info' : c.current_level === 'ESC3' ? 'warning' : c.current_level === 'ESC4' ? 'danger' : 'dark'}">${c.current_level}</span></small></td>
+                    <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></small></td>
+                    <td><small>${new Date(c.created_at).toLocaleString()}</small></small></td>
                     <td>
-                        <button class="btn btn-sm btn-primary action-btn" onclick="viewCase('${c.case_id}')" title="View Details">
-                            <i class="fas fa-eye"></i>
-                        </button>
+                        <button class="btn btn-sm btn-primary action-btn" onclick="viewCase('${c.case_id}')" title="View"><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-sm btn-info action-btn" onclick="showEscalateModal('${c.case_id}')" title="Escalate"><i class="fas fa-arrow-up"></i></button>
+                        <button class="btn btn-sm btn-warning action-btn" onclick="openEditCaseModal('${c.case_id}')" title="Edit"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-success action-btn" onclick="showCloseModal('${c.case_id}')" title="Close"><i class="fas fa-lock"></i></button>
+                        <button class="btn btn-sm btn-secondary action-btn" onclick="showReopenModal('${c.case_id}')" title="Reopen"><i class="fas fa-undo"></i></button>
+                    </small></td>
+                </tr>
             `;
-            
-            if (tab === 'resolved') {
-                html += `
-                        <button class="btn btn-sm btn-success action-btn" onclick="showCloseModal('${c.case_id}')" title="Close Case">
-                            <i class="fas fa-lock"></i>
-                        </button>
-                        <button class="btn btn-sm btn-warning action-btn" onclick="showReopenModal('${c.case_id}')" title="Reopen Case">
-                            <i class="fas fa-undo"></i>
-                        </button>
-                `;
-            } else if (tab === 'closed') {
-                html += `
-                        <button class="btn btn-sm btn-warning action-btn" onclick="showReopenModal('${c.case_id}')" title="Reopen Case">
-                            <i class="fas fa-undo"></i>
-                        </button>
-                `;
-            } else if (tab === 'esc5') {
-                html += `
-                        <button class="btn btn-sm btn-success action-btn" onclick="resolveCaseManually('${c.case_id}')" title="Resolve Case">
-                            <i class="fas fa-check"></i>
-                        </button>
-                `;
-            }
-            
-            html += `</td>
-                </tr>`;
         }
-        
-        html += `</tbody>
-                </table>
-            </div>`;
+        html += `</tbody></table></div>`;
         container.innerHTML = html;
     }
     
+    // ========== Filter Functions ==========
+    function filterByAll() {
+        currentFilter = { type: 'all', value: null };
+        document.getElementById('activeFilterBadge').innerText = 'All Cases';
+        loadCases();
+        // Remove active class from all filter cards
+        document.querySelectorAll('.filter-card').forEach(c => c.classList.remove('active'));
+    }
+    
+    function filterByStatus(status) {
+        currentFilter = { type: 'status', value: status };
+        document.getElementById('activeFilterBadge').innerText = `Status: ${status}`;
+        loadCases();
+        // Highlight active status card (by using global stats cards)
+        document.querySelectorAll('#globalStats .stat-card').forEach(card => {
+            card.classList.remove('active');
+            if (card.querySelector('.stat-label')?.innerText === `${status} Cases`) card.classList.add('active');
+        });
+    }
+    
+    function filterByLevel(level) {
+        currentFilter = { type: 'level', value: level };
+        document.getElementById('activeFilterBadge').innerText = `Level: ${level}`;
+        loadCases();
+        document.querySelectorAll('#levelCards .filter-card').forEach(card => {
+            card.classList.remove('active');
+            if (card.getAttribute('data-level') === level) card.classList.add('active');
+        });
+    }
+    
+    function filterByDepartment(dept) {
+        if (dept === 'all') {
+            currentFilter = { type: 'all', value: null };
+            document.getElementById('activeFilterBadge').innerText = 'All Cases';
+        } else {
+            currentFilter = { type: 'dept', value: dept };
+            document.getElementById('activeFilterBadge').innerText = `Dept: ${dept}`;
+        }
+        loadCases();
+        document.querySelectorAll('#deptCards .filter-card').forEach(card => {
+            card.classList.remove('active');
+            if (card.getAttribute('data-dept') === dept) card.classList.add('active');
+        });
+    }
+    
+    function refreshCases() { loadCases(); }
+    function refreshLevelCounts() { loadGlobalStats(); }
+    
+    // ========== Search ==========
+    async function searchCases() {
+        const query = document.getElementById('searchInput').value.trim();
+        if (!query) { loadCases(); return; }
+        const container = document.getElementById('casesTableContainer');
+        container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Searching...</p></div>';
+        try {
+            const resp = await fetch(buildUrl(`/adminpanel/api/search/?q=${encodeURIComponent(query)}`));
+            const data = await resp.json();
+            if (data.success) renderCasesTable(data.cases);
+            else container.innerHTML = '<div class="alert alert-warning">No results</div>';
+        } catch(e) { container.innerHTML = '<div class="alert alert-danger">Error</div>'; }
+    }
+    function clearSearch() { document.getElementById('searchInput').value = ''; loadCases(); }
+    
+    function exportESC3() {
+        window.location.href = buildUrl('/adminpanel/export-esc3-cases/');
+    }
+    
+    // ========== Case Actions (Modals) ==========
     function viewCase(caseId) {
         $('#caseModal').modal('show');
-        
         fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     renderCaseDetail(data.case);
@@ -949,338 +670,182 @@
                     document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
                 }
             })
-            .catch(error => {
-                document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error loading case: ${error.message}</div>`;
-            });
+            .catch(err => document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`);
     }
     
     function renderCaseDetail(caseData) {
         const html = `
-            <div class="d-flex justify-content-end mb-2">
-                <button class="btn btn-sm btn-warning" onclick="openEditCaseModal('${caseData.case_id}')">
-                    <i class="fas fa-edit"></i> Edit Case
-                </button>
-
- <button class="btn btn-sm btn-info" onclick="showEscalateModal('${caseData.case_id}')">
-        <i class="fas fa-arrow-up"></i> Escalate
-    </button>
-            </div>
             <div class="row">
                 <div class="col-md-6">
                     <h6><i class="fas fa-info-circle"></i> Case Information</h6>
                     <table class="table table-sm">
-                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td></tr>
-                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
-                        <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
-                        <tr><th>Loan No:</th><td>${caseData.loan_number || ''}</td></tr>
-                        <tr><th>Status:</th><td>${caseData.status}</td></tr>
+                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></small></td>
+                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</small></td>
+                        <tr><th>Mobile:</th><td>${caseData.mobile}</small></td>
+                        <td><th>Loan No:</th><td>${caseData.loan_number || ''}</small></td>
+                        <tr><th>Group (Dept):</th><td>${escapeHtml(caseData.group_name || 'Not assigned')}</small></td>
+                        <tr><th>Current Level:</th><td>${caseData.current_level}</small></td>
+                        <tr><th>Status:</th><td>${caseData.status}</small></td>
                     </table>
                 </div>
                 <div class="col-md-6">
                     <h6><i class="fas fa-users"></i> Assignment</h6>
                     <table class="table table-sm">
-                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td></tr>
-                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td></tr>
-                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td></tr>
-                        ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td></tr>` : ''}
+                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
+                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
+                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
+                        ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td>` : ''}
                     </table>
                 </div>
             </div>
             <div class="row mt-3">
                 <div class="col-12">
                     <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
-                    <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description provided')}</div>
+                    <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description')}</div>
                 </div>
             </div>
-            ${caseData.resolution_notes ? `
-            <div class="row mt-3">
-                <div class="col-12">
-                    <h6><i class="fas fa-check-circle text-success"></i> Resolution Notes</h6>
-                    <div class="border rounded p-3 bg-light">${escapeHtml(caseData.resolution_notes)}</div>
-                </div>
-            </div>
-            ` : ''}
-            <div class="row mt-3">
-                <div class="col-12">
-                    <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
-                    <div id="timelineContainer" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
-                        Loading...
-                    </div>
-                </div>
-            </div>
+            ${caseData.resolution_notes ? `<div class="row mt-3"><div class="col-12"><h6>Resolution Notes</h6><div class="border rounded p-3 bg-light">${escapeHtml(caseData.resolution_notes)}</div></div></div>` : ''}
+            <div class="row mt-3"><div class="col-12"><h6>Timeline</h6><div id="timelineContainer" class="border rounded p-3" style="max-height:300px;overflow-y:auto;">Loading...</div></div></div>
         `;
         document.getElementById('caseModalBody').innerHTML = html;
     }
     
     function loadCaseTimeline(caseId) {
         fetch(buildUrl(`/adminpanel/case/${caseId}/timeline/`))
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 const timelineHtml = data.logs.map(log => `
                     <div class="mb-2 pb-2 border-bottom">
-                        <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
+                        <small>${new Date(log.created_at).toLocaleString()}</small>
                         <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
                         <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
-                        ${log.reason ? `<div><strong>Reason:</strong> ${escapeHtml(log.reason)}</div>` : ''}
+                        ${log.reason ? `<div class="small text-muted">${escapeHtml(log.reason)}</div>` : ''}
                     </div>
                 `).join('');
-                document.getElementById('timelineContainer').innerHTML = timelineHtml || '<div class="text-center text-muted">No timeline history</div>';
+                document.getElementById('timelineContainer').innerHTML = timelineHtml || '<div class="text-muted">No timeline history</div>';
             });
-    }
-    
-    function openEditCaseModal(caseId) {
-        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const caseData = data.case;
-                    document.getElementById('editCaseId').value = caseData.case_id;
-                    document.getElementById('editLoanNumber').value = caseData.loan_number || '';
-                    document.getElementById('editName').value = caseData.customer_name || '';
-                    document.getElementById('editIssueDescription').value = caseData.issue_description || '';
-                    $('#editCaseModal').modal('show');
-                } else {
-                    alert('Error loading case details');
-                }
-            })
-            .catch(error => alert('Error: ' + error.message));
-    }
-    
-    function submitEditCase() {
-        const caseId = document.getElementById('editCaseId').value;
-        const loanNumber = document.getElementById('editLoanNumber').value;
-        const customerName = document.getElementById('editName').value;
-        
-        fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify({
-                loan_number: loanNumber,
-                customer_name: customerName
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Case updated successfully!');
-                $('#editCaseModal').modal('hide');
-                $('#caseModal').modal('hide');
-                viewCase(caseId);
-                loadCases(currentTab);
-            } else {
-                alert('Error: ' + data.error);
-            }
-        })
-        .catch(error => alert('Error: ' + error.message));
     }
     
     function showCloseModal(caseId) {
         document.getElementById('closeCaseId').value = caseId;
-        document.getElementById('closeReason').value = '';
         $('#closeModal').modal('show');
     }
-    
     function submitCloseCase() {
         const caseId = document.getElementById('closeCaseId').value;
         const reason = document.getElementById('closeReason').value;
-        
         fetch(buildUrl(`/adminpanel/case/${caseId}/close/`), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ close_reason: reason })
         })
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert('Case closed successfully!');
+                alert('Case closed successfully');
                 $('#closeModal').modal('hide');
-                loadCases(currentTab);
-                setTimeout(() => { location.reload(); }, 500);
-            } else {
-                alert('Error: ' + data.error);
-            }
+                loadCases();
+                loadGlobalStats();
+            } else alert('Error: ' + data.error);
         });
     }
     
     function showReopenModal(caseId) {
         document.getElementById('reopenCaseId').value = caseId;
-        document.getElementById('reopenReason').value = '';
         $('#reopenModal').modal('show');
     }
-    
     function submitReopenCase() {
         const caseId = document.getElementById('reopenCaseId').value;
         const reason = document.getElementById('reopenReason').value;
         const level = document.getElementById('reopenLevel').value;
-        
         fetch(buildUrl(`/adminpanel/case/${caseId}/reopen/`), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify({
-                reopen_reason: reason,
-                target_level: level
-            })
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ reopen_reason: reason, target_level: level })
         })
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert('Case reopened successfully!');
+                alert('Case reopened');
                 $('#reopenModal').modal('hide');
-                loadCases(currentTab);
-                setTimeout(() => { location.reload(); }, 500);
-            } else {
-                alert('Error: ' + data.error);
-            }
+                loadCases();
+                loadGlobalStats();
+            } else alert('Error: ' + data.error);
         });
     }
     
-    function resolveCaseManually(caseId) {
-        const notes = prompt('Enter resolution notes:', 'Case resolved at admin level');
-        if (notes === null) return;
-        
-        fetch(buildUrl(`/adminpanel/case/${caseId}/resolve/`), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify({ resolution_notes: notes })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Case resolved successfully!');
-                loadCases(currentTab);
-                setTimeout(() => { location.reload(); }, 500);
-            } else {
-                alert('Error: ' + data.error);
-            }
-        });
-    }
-
-function showEscalateModal(caseId) {
-    document.getElementById('escalateCaseId').value = caseId;
-    document.getElementById('escalateReason').value = '';
-    document.getElementById('escalateLoanNumber').value = '';
-    document.getElementById('escalateCustomerName').value = '';
-    $('#escalateModal').modal('show');
-}
-
-function submitEscalation() {
-    const caseId = document.getElementById('escalateCaseId').value;
-    const newLevel = document.getElementById('escalateLevelSelect').value;
-    const reason = document.getElementById('escalateReason').value;
-    const loan = document.getElementById('escalateLoanNumber').value;
-    const name = document.getElementById('escalateCustomerName').value;
-
-    if (!reason) {
-        alert('Please provide a reason for escalation');
-        return;
-    }
-
-    // Use messaging2 endpoint instead of adminpanel
-    fetch(`/messaging2/case/${caseId}/escalate/?app=${currentApp}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({
-            new_level: newLevel,
-            reason: reason,
-            loan: loan,
-            name: name
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(`Case escalated to ${newLevel} successfully!`);
-            $('#escalateModal').modal('hide');
-            refreshCases();  // reload current tab
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => alert('Error: ' + error.message));
-}
-    
-    function searchCases() {
-        const query = document.getElementById('searchInput').value.trim();
-        if (query.length === 0) {
-            alert('Please enter a Case ID or Loan Number');
-            return;
-        }
-        
-        const container = document.getElementById('casesTableContainer');
-        container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Searching...</p></div>';
-        
-        fetch(buildUrl(`/adminpanel/api/search/?q=${encodeURIComponent(query)}`))
-            .then(response => response.json())
+    function openEditCaseModal(caseId) {
+        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    renderCasesTable(data.cases, 'search');
-                    // Remove any existing search alert
-                    const oldAlert = document.querySelector('.search-alert');
-                    if (oldAlert) oldAlert.remove();
-                    const searchAlert = document.createElement('div');
-                    searchAlert.className = 'alert alert-info mt-3 search-alert';
-                    searchAlert.innerHTML = `<i class="fas fa-search"></i> Search results for: <strong>${escapeHtml(query)}</strong> <button class="btn btn-sm btn-link" onclick="clearSearch()">Clear search</button>`;
-                    container.parentNode.insertBefore(searchAlert, container.nextSibling);
-                } else {
-                    container.innerHTML = `<div class="alert alert-warning">No cases found for "${escapeHtml(query)}"</div>`;
-                }
-            })
-            .catch(error => {
-                console.error('Search error:', error);
-                container.innerHTML = '<div class="alert alert-danger">Error performing search</div>';
+                    document.getElementById('editCaseId').value = caseId;
+                    document.getElementById('editLoanNumber').value = data.case.loan_number || '';
+                    document.getElementById('editName').value = data.case.customer_name || '';
+                    document.getElementById('editIssueDescription').value = data.case.issue_description || '';
+                    $('#editCaseModal').modal('show');
+                } else alert('Error loading case');
             });
     }
-    
-    function clearSearch() {
-        document.getElementById('searchInput').value = '';
-        const searchAlert = document.querySelector('.search-alert');
-        if (searchAlert) searchAlert.remove();
-        loadCases(currentTab);
+    function submitEditCase() {
+        const caseId = document.getElementById('editCaseId').value;
+        const loanNumber = document.getElementById('editLoanNumber').value;
+        const customerName = document.getElementById('editName').value;
+        const issueDesc = document.getElementById('editIssueDescription').value;
+        fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ loan_number: loanNumber, customer_name: customerName, issue_description: issueDesc })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Case updated');
+                $('#editCaseModal').modal('hide');
+                loadCases();
+            } else alert('Error: ' + data.error);
+        });
     }
     
-    function refreshCases() {
-        loadCases(currentTab);
+    function showEscalateModal(caseId) {
+        document.getElementById('escalateCaseId').value = caseId;
+        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('escalateGroupName').value = data.case.group_name || 'Not assigned';
+                    document.getElementById('escalateLoanNumber').value = data.case.loan_number || '';
+                    document.getElementById('escalateCustomerName').value = data.case.customer_name || '';
+                }
+            });
+        $('#escalateModal').modal('show');
     }
     
-    function exportESC3() {
-        // Export ESC3 cases for current app
-        window.location.href = buildUrl('/adminpanel/export-esc3-cases/');
+    function submitEscalation() {
+        const caseId = document.getElementById('escalateCaseId').value;
+        const newLevel = document.getElementById('escalateLevelSelect').value;
+        const reason = document.getElementById('escalateReason').value;
+        const loan = document.getElementById('escalateLoanNumber').value;
+        const name = document.getElementById('escalateCustomerName').value;
+        if (!reason) { alert('Please provide a reason'); return; }
+        fetch(`/messaging2/case/${caseId}/escalate/?app=${currentApp}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ new_level: newLevel, reason, loan, name })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Escalated to ${newLevel}`);
+                $('#escalateModal').modal('hide');
+                loadCases();
+                loadGlobalStats();
+            } else alert('Error: ' + data.error);
+        });
     }
     
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+    function escapeHtml(text) { if(!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
     
-    // Initialize on page load
+    // ========== Initialize ==========
     document.addEventListener('DOMContentLoaded', function() {
-        initAppSwitcher();
-        initLevelChart();
-        initTrendChart();
-        loadCases('open');
-        
-        // Set export button visibility based on initial tab
-        const exportBtn = document.getElementById('exportEsc3Btn');
-        if (exportBtn) {
-            exportBtn.style.display = (currentTab === 'esc3') ? 'inline-block' : 'none';
-        }
+        loadGlobalStats();
+        loadDepartmentStats();
+        loadCases();
     });
 </script>
 {% endblock %}

@@ -1028,118 +1028,145 @@ def view_secure_document2(request, log_id):
 # =============================== Escalation views =======================================================
 
 
+
 # ============================================
 # ESCALATION DASHBOARDS (APP-AWARE)
 # ============================================
 
+from .models import Agent
+
+def auto_assign(case):
+    agents = Agent.objects.filter(
+        groups__id=case.group.id,
+        role='AGENT',
+        is_active=True
+    )
+
+    agent = agents.first()
+
+    if agent:
+        case.assign_to_agent(agent, assigned_by="System")
+
+from django.utils import timezone
+from datetime import timedelta
+from .models import CaseEscalationLog
+
 @messaging2_required
 def agent_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
-    ContactModel = get_contact_model_for_app(request)
     agent = get_agent_from_user(request.user)
-    cases = CaseModel.objects.filter(
-        Q(assigned_to=agent) | Q(current_level='ESC1', assigned_to__isnull=True),
-        status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
+    
+    # Base queryset: all ESC1 cases that belong to agent's groups (used for "total cases created" stats)
+    all_dept_cases = CaseModel.objects.filter(
+        current_level='ESC1',
+        group__in=agent.groups.all()
+    )
+    
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Statistics
+    total_cases_created = all_dept_cases.count()
+    created_today = all_dept_cases.filter(created_at__gte=today_start).count()
+    
+    total_escalated = CaseEscalationLog.objects.filter(escalated_by=agent.name).count()
+    escalated_today = CaseEscalationLog.objects.filter(
+        escalated_by=agent.name, created_at__gte=today_start
+    ).count()
+    
+    resolved = CaseModel.objects.filter(resolved_by=agent.name).count()
+    resolved_today = CaseModel.objects.filter(
+        resolved_by=agent.name, resolved_at__gte=today_start
+    ).count()
+    
+    # For case lists (used in initial load)
+    assigned_cases = all_dept_cases.filter(assigned_to=agent, status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
+    available_cases = all_dept_cases.filter(assigned_to__isnull=True, status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
+    
     stats = {
-        'my_cases': cases.filter(assigned_to=agent).count(),
-        'available_cases': cases.filter(assigned_to__isnull=True).count(),
-        'resolved': CaseModel.objects.filter(resolved_by=agent.name).count(),
-        'total_handled': CaseModel.objects.filter(assigned_to=agent).count(),
+        'total_cases_created': total_cases_created,
+        'created_today': created_today,
+        'total_escalated': total_escalated,
+        'escalated_today': escalated_today,
+        'resolved': resolved,
+        'resolved_today': resolved_today,
+        'my_cases': assigned_cases.count(),
+        'available_cases': available_cases.count(),
     }
-    current_app = request.GET.get('app', 'psf')
-    return render(request, 'messaging2/agent_dashboard.html', {
-        'cases': cases,
+    
+    context = {
+        'cases': assigned_cases,   # fallback
+        'assigned_cases': assigned_cases,
         'stats': stats,
         'agent': agent,
-        'current_app': current_app,
+        'current_app': request.GET.get('app', 'psf'),
         'app_list': APP_CONFIG.items(),
-    })
+    }
+    return render(request, 'messaging2/agent_dashboard.html', context)
+
+from django.utils import timezone
 
 @messaging2_required
-def legal_dashboard2(request):
+def agent_case_list_api(request):
+    agent = get_agent_from_user(request.user)
+    CaseModel = get_case_model_for_app(request)
+    tab = request.GET.get('tab', 'assigned')
+    
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    base_qs = CaseModel.objects.filter(group__in=agent.groups.all())
+    
+    if tab == 'assigned':
+        cases = base_qs.filter(assigned_to=agent, current_level='ESC1', status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
+    elif tab == 'available':
+        cases = base_qs.filter(assigned_to__isnull=True, current_level='ESC1', status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
+    elif tab == 'today_created':
+        cases = base_qs.filter(created_at__gte=today_start)
+    elif tab == 'resolved_by_me':
+        cases = CaseModel.objects.filter(resolved_by=agent.name).order_by('-resolved_at')
+    elif tab == 'escalated_by_me':
+        escalated_case_ids = CaseEscalationLog.objects.filter(escalated_by=agent.name).values_list('case_id', flat=True).distinct()
+        cases = CaseModel.objects.filter(id__in=escalated_case_ids).order_by('-created_at')
+    else:
+        cases = base_qs.none()
+    
+    case_list = [{
+        'case_id': c.case_id,
+        'customer_name': c.customer_name,
+        'mobile': c.mobile,
+        'loan_number': c.loan_number,
+        'group_name': c.group.name if c.group else None,
+        'priority': c.priority,
+        'status': c.status,
+        'created_at': c.created_at.isoformat(),
+    } for c in cases]
+    return JsonResponse({'cases': case_list})
+# Executive Dashboard (ESC2)
+@messaging2_required
+def executive_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
-    if agent.role != 'LEGAL':
+    if agent.role != 'EXECUTIVE':
         return redirect('agent_dashboard')
+    
     cases = CaseModel.objects.filter(
         current_level='ESC2',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
+    ).exclude(status='Closed')
+    cases = cases.filter(group__in=agent.groups.all()).order_by('-created_at')
+    
     stats = {
         'pending': cases.count(),
         'resolved': CaseModel.objects.filter(resolved_at_level='ESC2').count(),
         'escalated': CaseModel.objects.filter(previous_level='ESC2').count(),
     }
     current_app = request.GET.get('app', 'psf')
-    return render(request, 'messaging2/legal_dashboard.html', {
-        'cases': cases,
-        'stats': stats,
-        'agent': agent,
-        'current_app': current_app,
-        'app_list': APP_CONFIG.items(),
+    return render(request, 'messaging2/executive_dashboard.html', {
+        'cases': cases, 'stats': stats, 'agent': agent,
+        'current_app': current_app, 'app_list': APP_CONFIG.items(),
     })
 
-@messaging2_required
-def lead_dashboard2(request):
-    CaseModel = get_case_model_for_app(request)
-    agent = get_agent_from_user(request.user)
-    if agent.role != 'LEAD':
-        return redirect('agent_dashboard')
-    cases = CaseModel.objects.filter(
-        current_level='ESC3',
-        status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
-    agents = Agent.objects.filter(role='AGENT', is_active=True)
-    total_cases = CaseModel.objects.filter(current_level='ESC3').count()
-    open_cases = CaseModel.objects.filter(current_level='ESC3', status='Open').count()
-    start_of_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    resolved_this_month = CaseModel.objects.filter(
-        resolved_at_level='ESC3',
-        resolved_at__gte=start_of_month
-    ).count()
-    priority_counts = {
-        'urgent': CaseModel.objects.filter(current_level='ESC3', priority='Urgent').count(),
-        'high': CaseModel.objects.filter(current_level='ESC3', priority='High').count(),
-        'medium': CaseModel.objects.filter(current_level='ESC3', priority='Medium').count(),
-        'low': CaseModel.objects.filter(current_level='ESC3', priority='Low').count(),
-    }
-    weekly_labels = []
-    weekly_new_cases = []
-    weekly_resolved_cases = []
-    for i in range(6, -1, -1):
-        date = timezone.now().date() - timedelta(days=i)
-        weekly_labels.append(date.strftime('%a, %b %d'))
-        start_of_day = timezone.make_aware(datetime.combine(date, datetime.min.time()))
-        end_of_day = start_of_day + timedelta(days=1)
-        weekly_new_cases.append(CaseModel.objects.filter(
-            current_level='ESC3',
-            created_at__gte=start_of_day,
-            created_at__lt=end_of_day
-        ).count())
-        weekly_resolved_cases.append(CaseModel.objects.filter(
-            resolved_at_level='ESC3',
-            resolved_at__gte=start_of_day,
-            resolved_at__lt=end_of_day
-        ).count())
-    current_app = request.GET.get('app', 'psf')
-    return render(request, 'messaging2/lead_dashboard.html', {
-        'cases': cases,
-        'agents': agents,
-        'agent': agent,
-        'total_cases': total_cases,
-        'open_cases': open_cases,
-        'resolved_this_month': resolved_this_month,
-        'priority_urgent': priority_counts['urgent'],
-        'priority_high': priority_counts['high'],
-        'priority_medium': priority_counts['medium'],
-        'priority_low': priority_counts['low'],
-        'weekly_labels': weekly_labels,
-        'weekly_new_cases': weekly_new_cases,
-        'weekly_resolved_cases': weekly_resolved_cases,
-        'current_app': current_app,
-        'app_list': APP_CONFIG.items(),
-    })
+# Manager Dashboard (ESC3)
+from django.utils import timezone
+from datetime import datetime
 
 @messaging2_required
 def manager_dashboard2(request):
@@ -1147,23 +1174,155 @@ def manager_dashboard2(request):
     agent = get_agent_from_user(request.user)
     if agent.role != 'MANAGER':
         return redirect('agent_dashboard')
-    cases = CaseModel.objects.filter(
+    
+    # Get all groups the manager belongs to
+    manager_groups = agent.groups.all()
+    
+    # Base queryset for ESC3 cases
+    base_qs = CaseModel.objects.filter(
+        current_level='ESC3',
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed').filter(group__in=manager_groups)
+    
+    # Stats
+    stats = {
+        'pending': base_qs.count(),
+        'resolved': CaseModel.objects.filter(resolved_at_level='ESC3').count(),
+        'escalated': CaseModel.objects.filter(previous_level='ESC3').count(),
+    }
+    
+    # Department-wise stats (for cards)
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    dept_stats = []
+    for group in manager_groups:
+        dept_cases = base_qs.filter(group=group)
+        dept_today = dept_cases.filter(created_at__gte=today_start).count()
+        dept_stats.append({
+            'name': group.name,
+            'pending': dept_cases.count(),
+            'today': dept_today,
+        })
+    
+    # List of agents for assign dropdown (only active agents)
+    from .models import Agent
+    agents_list = Agent.objects.filter(is_active=True).values('id', 'name', 'role')
+    
+    context = {
+        'cases': base_qs.order_by('-priority', '-created_at'),
+        'stats': stats,
+        'dept_stats': dept_stats,
+        'agents_list': agents_list,
+        'today_date': timezone.now().date().isoformat(),
+        'agent': agent,
+        'current_app': request.GET.get('app', 'psf'),
+        'app_list': APP_CONFIG.items(),
+    }
+    return render(request, 'messaging2/manager_dashboard.html', context)
+
+
+@messaging2_required
+def manager_cases_api(request):
+    agent = get_agent_from_user(request.user)
+    CaseModel = get_case_model_for_app(request)
+    department = request.GET.get('dept', 'all')
+    
+    base_qs = CaseModel.objects.filter(
+        current_level='ESC3',
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed').filter(group__in=agent.groups.all())
+    
+    if department != 'all':
+        base_qs = base_qs.filter(group__name=department)
+    
+    cases = base_qs.order_by('-priority', '-created_at')
+    
+    case_list = [{
+        'case_id': c.case_id,
+        'customer_name': c.customer_name,
+        'mobile': c.mobile,
+        'loan_number': c.loan_number,
+        'group_name': c.group.name if c.group else None,
+        'priority': c.priority,
+        'status': c.status,
+        'created_at': c.created_at.isoformat(),
+    } for c in cases]
+    
+    return JsonResponse({'cases': case_list})
+
+# Head Dashboard (ESC4)
+@messaging2_required
+def head_dashboard2(request):
+    CaseModel = get_case_model_for_app(request)
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'HEAD':
+        return redirect('agent_dashboard')
+    
+    manager_groups = agent.groups.all()
+    base_qs = CaseModel.objects.filter(
         current_level='ESC4',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').order_by('-priority', '-created_at')
+    ).exclude(status='Closed').filter(group__in=manager_groups)
+    
     stats = {
-        'pending': cases.count(),
+        'pending': base_qs.count(),
         'resolved': CaseModel.objects.filter(resolved_at_level='ESC4').count(),
         'escalated_to_admin': CaseModel.objects.filter(current_level='ESC5').count(),
     }
-    current_app = request.GET.get('app', 'psf')
-    return render(request, 'messaging2/manager_dashboard.html', {
-        'cases': cases,
+    
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    dept_stats = []
+    for group in manager_groups:
+        dept_cases = base_qs.filter(group=group)
+        dept_today = dept_cases.filter(created_at__gte=today_start).count()
+        dept_stats.append({
+            'name': group.name,
+            'pending': dept_cases.count(),
+            'today': dept_today,
+        })
+    
+    from .models import Agent
+    agents_list = Agent.objects.filter(is_active=True).values('id', 'name', 'role')
+    
+    context = {
+        'cases': base_qs.order_by('-priority', '-created_at'),
         'stats': stats,
+        'dept_stats': dept_stats,
+        'agents_list': agents_list,
+        'today_date': timezone.now().date().isoformat(),
         'agent': agent,
-        'current_app': current_app,
+        'current_app': request.GET.get('app', 'psf'),
         'app_list': APP_CONFIG.items(),
-    })
+    }
+    return render(request, 'messaging2/head_dashboard.html', context)
+
+@messaging2_required
+def head_cases_api(request):
+    agent = get_agent_from_user(request.user)
+    CaseModel = get_case_model_for_app(request)
+    department = request.GET.get('dept', 'all')
+    
+    base_qs = CaseModel.objects.filter(
+        current_level='ESC4',
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed').filter(group__in=agent.groups.all())
+    
+    if department != 'all':
+        base_qs = base_qs.filter(group__name=department)
+    
+    cases = base_qs.order_by('-priority', '-created_at')
+    
+    case_list = [{
+        'case_id': c.case_id,
+        'customer_name': c.customer_name,
+        'mobile': c.mobile,
+        'loan_number': c.loan_number,
+        'group_name': c.group.name if c.group else None,
+        'priority': c.priority,
+        'status': c.status,
+        'created_at': c.created_at.isoformat(),
+    } for c in cases]
+    
+    return JsonResponse({'cases': case_list})
 
 import json
 import uuid
@@ -1186,7 +1345,10 @@ from .models import *
 # AUTHENTICATION VIEWS
 # ============================================
 
-
+@login_required
+def get_groups_api(request):
+    groups = SupportGroup.objects.all().values('id', 'name')
+    return JsonResponse({'groups': list(groups)})
 
 def get_case_detail_api2(request, case_id):
     CaseModel = get_case_model_for_app(request)
@@ -1226,28 +1388,47 @@ def escalate_case_api2(request, case_id):
         CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
         agent = get_agent_from_user(request.user)
         case = CaseModel.objects.get(case_id=case_id)
+
+        # Check group membership
+        if not agent.can_view_case(case) and agent.role != 'ADMIN':
+            return JsonResponse({'error': 'You do not have permission to view or escalate this case'}, status=403)
+
         data = json.loads(request.body)
         new_level = data.get('new_level')
         reason = data.get('reason', '')
         loan = data.get('loan', '')
         name = data.get('name', '')
+
         if not new_level:
             return JsonResponse({'error': 'New level required'}, status=400)
-        if not case.can_escalate(agent, new_level):
-            return JsonResponse({'error': 'You cannot escalate to this level'}, status=403)
+
+        # Only allow higher levels within the same department
+        available_levels = case.get_available_escalation_levels()
+        if new_level not in available_levels:
+            return JsonResponse({'error': f'Cannot escalate from {case.current_level} to {new_level}. Allowed: {available_levels}'}, status=400)
+
+        # Update loan and customer name if provided
+        if loan:
+            case.loan_number = loan
+        if name:
+            case.customer_name = name
+
         mobile = case.mobile
         case.escalate(new_level, agent, reason, loan, name)
         ContactModel.objects.filter(mobile=mobile).update(current_level=new_level)
+
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             channel_group,
             {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": new_level}}
         )
         return JsonResponse({'success': True, 'message': f'Case escalated to {new_level}', 'new_level': new_level})
+
     except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    
 
 @csrf_exempt
 def resolve_case_api2(request, case_id):
@@ -1257,8 +1438,14 @@ def resolve_case_api2(request, case_id):
         CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
         agent = get_agent_from_user(request.user)
         case = CaseModel.objects.get(case_id=case_id)
-        if not case.can_resolve(agent):
-            return JsonResponse({'error': f'Cannot resolve case in {case.status} status'}, status=400)
+
+        # Anyone who can view can resolve
+        if not agent.can_view_case(case) and agent.role != 'ADMIN':
+            return JsonResponse({'error': 'You do not have permission to resolve this case'}, status=403)
+
+        if case.status in ['Resolved', 'Closed']:
+            return JsonResponse({'error': f'Case already {case.status}'}, status=400)
+
         data = json.loads(request.body)
         resolution_notes = data.get('resolution_notes', '')
         case.resolve(agent, resolution_notes)
@@ -1332,16 +1519,34 @@ def assign_case_api2(request, case_id):
     try:
         CaseModel = get_case_model_for_app(request)
         agent = get_agent_from_user(request.user)
-        if agent.role not in ['LEAD', 'ADMIN']:
-            return JsonResponse({'error': 'Only Team Lead or Admin can assign cases'}, status=403)
+        if agent.role not in ['MANAGER', 'ADMIN']:
+            return JsonResponse({'error': 'Only Manager or Admin can assign cases'}, status=403)
+        
         case = CaseModel.objects.get(case_id=case_id)
         data = json.loads(request.body)
-        agent_id = data.get('agent_id')
-        target_agent = Agent.objects.get(id=agent_id)
-        case.assign_to_agent(target_agent, agent.name, data.get('notes', ''))
+        target_agent_id = data.get('agent_id')
+        notes = data.get('notes', '')
+        
+        target_agent = Agent.objects.get(id=target_agent_id)
+        # Check if target agent belongs to the same group as the case
+        if case.group not in target_agent.groups.all():
+            return JsonResponse({'error': f'Agent must be a member of {case.group.name} department'}, status=400)
+        
+        case.assigned_to = target_agent
+        case.assigned_to_name = target_agent.name
+        case.status = 'In Progress'
+        case.save()
+        
+        # Log assignment
+        from .models import CaseAssignmentLog
+        CaseAssignmentLog.objects.create(
+            case=case,
+            assigned_to=target_agent,
+            assigned_by=agent.name,
+            reason=notes
+        )
+        
         return JsonResponse({'success': True})
-    except CaseModel.DoesNotExist:
-        return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1449,13 +1654,14 @@ def get_case_by_mobile2(request):
         return JsonResponse({'error': 'Mobile required'}, status=400)
     mobile = format_mobile2(mobile)
     CaseModel = get_case_model_for_app(request)
-    case = CaseModel.objects.filter(mobile=mobile).order_by('-created_at').first()
+    case = CaseModel.objects.select_related('group').filter(mobile=mobile).order_by('-created_at').first()
     if case:
         return JsonResponse({
             'case': {
                 'case_id': case.case_id,
                 'customer_name': case.customer_name or mobile,
                 'loan_number': case.loan_number,
+                'group_name': case.group.name if case.group else 'No group',
                 'created_by': case.created_by or 'System',
                 'assigned_to_name': case.assigned_to_name or 'Unassigned',
                 'current_level': case.current_level,
@@ -1467,55 +1673,114 @@ def get_case_by_mobile2(request):
         })
     return JsonResponse({'case': None})
 
+from .models import SupportGroup
+
 @csrf_exempt
 def create_case_from_chat_api2(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
+
     try:
         data = json.loads(request.body)
-        mobile = data.get('mobile', '')
-        customer_name = data.get('customer_name', '')
+        mobile = format_mobile2(data.get('mobile', ''))
+        customer_name = data.get('customer_name') or mobile
         agent_name = data.get('agent_name', 'Agent')
         issue_description = data.get('issue_description', '')
-        mobile = format_mobile2(mobile)
-        if not customer_name or customer_name.strip() == "":
-            customer_name = mobile
+        loan_number = data.get('loan_number', '')
+        group_name = data.get('group', 'Collections')
+        escalate_to = data.get('escalate_to', None)  # e.g., "ESC2", "ESC3", "ESC4", "ESC5"
+        force_new = data.get('force_new', False)
+
         CaseModel, ContactModel, _, _ = get_models_for_app(request)
-        existing_case = CaseModel.objects.filter(mobile=mobile, status__in=['Open', 'In Progress', 'Resolved']).first()
-        if existing_case:
-            return JsonResponse({
-                'success': True,
-                'case': {
-                    'case_id': existing_case.case_id,
-                    'customer_name': existing_case.customer_name,
-                    'created_by': existing_case.created_by,
-                    'assigned_to_name': existing_case.assigned_to_name or 'Unassigned',
-                    'current_level': existing_case.current_level,
-                    'status': existing_case.status,
-                    'priority': existing_case.priority,
-                    'issue_description': existing_case.issue_description or '',
-                },
-                'existing': True
-            })
+        group_obj = SupportGroup.objects.filter(name=group_name).first()
+        if not group_obj:
+            return JsonResponse({'error': 'Invalid group'}, status=400)
+
+        # Check existing case if not forcing new
+        if not force_new:
+            existing_case = CaseModel.objects.filter(
+                mobile=mobile,
+                status__in=['Open', 'In Progress', 'Resolved']
+            ).first()
+            if existing_case:
+                return JsonResponse({
+                    'success': True,
+                    'case': {
+                        'case_id': existing_case.case_id,
+                        'customer_name': existing_case.customer_name,
+                        'assigned_to_name': existing_case.assigned_to_name or 'Unassigned',
+                        'current_level': existing_case.current_level,
+                        'status': existing_case.status,
+                    },
+                    'existing': True,
+                    'message': 'An active case already exists. Create new anyway?'
+                })
+
+        # Determine initial level
+        initial_level = 'ESC1'
+        if escalate_to and escalate_to.startswith('ESC') and escalate_to != 'ESC1':
+            initial_level = escalate_to
+
+        # Create case
         case_id = f"CASE-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         case = CaseModel.objects.create(
             case_id=case_id,
             customer_name=customer_name,
             mobile=mobile,
+            loan_number=loan_number,
             issue_description=issue_description[:500],
             source='WhatsApp',
-            current_level='ESC1',
+            current_level=initial_level,
             status='Open',
             priority='Medium',
             created_by=agent_name,
+            group=group_obj,
             assigned_to=None,
             assigned_to_name=None,
-            loan_number=data.get('loan_number', ''),
         )
-        ContactModel.objects.update_or_create(mobile=mobile, defaults={'current_level': case.current_level})
-        return JsonResponse({'success': True, 'case': {'case_id': case.case_id, 'customer_name': case.customer_name, 'current_level': case.current_level, 'status': case.status}, 'existing': False})
+
+        # Auto-assign only for ESC1
+        if initial_level == 'ESC1':
+            auto_assign(case)
+            if case.assigned_to:
+                case.assigned_to_name = case.assigned_to.name
+                case.save(update_fields=['assigned_to_name'])
+        else:
+            # Log escalation from ESC1 to target level
+            from .models import CaseEscalationLog
+            CaseEscalationLog.objects.create(
+                case=case,
+                from_level='ESC1',
+                to_level=initial_level,
+                escalated_by=agent_name,
+                reason='Created directly at this level'
+            )
+            ContactModel.objects.update_or_create(
+                mobile=mobile,
+                defaults={'current_level': initial_level}
+            )
+
+        ContactModel.objects.update_or_create(
+            mobile=mobile,
+            defaults={'current_level': case.current_level}
+        )
+
+        return JsonResponse({
+            'success': True,
+            'case': {
+                'case_id': case.case_id,
+                'customer_name': case.customer_name,
+                'loan_number': case.loan_number,
+                'assigned_to_name': case.assigned_to_name or 'Unassigned',
+                'current_level': case.current_level,
+                'status': case.status,
+            },
+            'existing': False
+        })
+
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    
 
 @messaging2_required
 def get_user_role_api2(request):
@@ -1530,6 +1795,3 @@ def get_user_role_api2(request):
         return JsonResponse({'success': False, 'error': 'Agent profile not found'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-
-

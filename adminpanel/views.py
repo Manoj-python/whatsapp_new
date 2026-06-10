@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-
+from .models import *
 # Models from three apps
 from messaging2.models import Agent, Case as psfCase, ChatContact2, SmsWhatsAppLog2
 from messaging.models import Case as smsCase, ChatContact, SmsWhatsAppLog
@@ -90,6 +90,114 @@ def get_app_from_request(request):
         app = 'psf'
     return app
 
+from messaging2.views import auto_assign
+import uuid 
+@csrf_exempt
+def create_case_from_chat_api2(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        mobile = data.get('mobile', '')
+        customer_name = data.get('customer_name') or mobile
+        agent_name = data.get('agent_name', 'Agent')
+        issue_description = data.get('issue_description', '')
+        loan_number = data.get('loan_number', '')
+        group_name = data.get('group', 'Collections')
+        escalate_to = data.get('escalate_to', None)
+        force_new = data.get('force_new', False)   # frontend flag
+
+        CaseModel, ContactModel, _, _ = get_app_from_request(request)
+        group_obj = SupportGroup.objects.filter(name=group_name).first()
+        if not group_obj:
+            return JsonResponse({'error': 'Invalid group'}, status=400)
+
+        # Check existing cases (optional, for information)
+        existing_case = CaseModel.objects.filter(
+            mobile=mobile,
+            status__in=['Open', 'In Progress', 'Resolved']
+        ).first()
+
+        # If force_new is False and an existing case exists, return it with a flag
+        if not force_new and existing_case:
+            return JsonResponse({
+                'success': True,
+                'case': {
+                    'case_id': existing_case.case_id,
+                    'customer_name': existing_case.customer_name,
+                    'assigned_to_name': existing_case.assigned_to_name or 'Unassigned',
+                    'current_level': existing_case.current_level,
+                    'status': existing_case.status,
+                },
+                'existing': True,
+                'message': 'An active case already exists. Create new anyway?'
+            })
+
+        # Determine initial level
+        initial_level = 'ESC1'
+        if escalate_to and escalate_to.startswith('ESC') and escalate_to != 'ESC1':
+            initial_level = escalate_to
+
+        # Create new case
+        case_id = f"CASE-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        case = CaseModel.objects.create(
+            case_id=case_id,
+            customer_name=customer_name,
+            mobile=mobile,
+            loan_number=loan_number,
+            issue_description=issue_description[:500],
+            source='WhatsApp',
+            current_level=initial_level,
+            status='Open',
+            priority='Medium',
+            created_by=agent_name,
+            group=group_obj,
+            assigned_to=None,
+            assigned_to_name=None,
+        )
+
+        # Auto-assign only for ESC1
+        if initial_level == 'ESC1':
+            auto_assign(case)
+            if case.assigned_to:
+                case.assigned_to_name = case.assigned_to.name
+                case.save(update_fields=['assigned_to_name'])
+        else:
+            # Log escalation from ESC1 to target level
+            from .models import CaseEscalationLog
+            CaseEscalationLog.objects.create(
+                case=case,
+                from_level='ESC1',
+                to_level=initial_level,
+                escalated_by=agent_name,
+                reason='Created directly at this level'
+            )
+            ContactModel.objects.update_or_create(
+                mobile=mobile,
+                defaults={'current_level': initial_level}
+            )
+
+        ContactModel.objects.update_or_create(
+            mobile=mobile,
+            defaults={'current_level': case.current_level}
+        )
+
+        return JsonResponse({
+            'success': True,
+            'case': {
+                'case_id': case.case_id,
+                'customer_name': case.customer_name,
+                'loan_number': case.loan_number,
+                'assigned_to_name': case.assigned_to_name or 'Unassigned',
+                'current_level': case.current_level,
+                'status': case.status,
+            },
+            'existing': False
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 # ============================================
 # AUTHENTICATION VIEWS
@@ -106,16 +214,16 @@ def login_view(request):
             request.session["messaging2_user"] = user.id
             request.session["messaging3_user"] = user.id
 
-
             agent = get_agent_from_user(user)
             if agent.role == 'ADMIN':
                 return redirect('admin_dashboard')
             elif agent.role == 'MANAGER':
                 return redirect('manager_dashboard')
-            elif agent.role == 'LEAD':
-                return redirect('lead_dashboard')
-            elif agent.role == 'LEGAL':
-                return redirect('legal_dashboard')
+            elif agent.role == 'EXECUTIVE':
+                return redirect('executive_dashboard')
+            elif agent.role == 'HEAD':
+                return redirect('head_dashboard')
+            # LEGAL removed
             else:
                 return redirect('agent_dashboard')
         else:
@@ -126,6 +234,29 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('admin_login')
+
+
+# views.py
+
+@login_required
+def create_group(request):
+    agent = get_agent_from_user(request.user)
+
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('agent_dashboard')
+
+    if request.method == "POST":
+        name = request.POST.get('name')
+
+        if SupportGroup.objects.filter(name=name).exists():
+            messages.error(request, "Group already exists")
+        else:
+            SupportGroup.objects.create(name=name)
+            messages.success(request, "Group created successfully")
+            return HttpResponse('created')
+
+    return render(request, 'adminpanel/create_group.html')
 
 
 # ============================================
@@ -187,6 +318,73 @@ def dashboard(request):
 # ============================================
 # API ENDPOINTS (app-aware)
 # ============================================
+
+# NEW: Global stats for admin dashboard
+@login_required
+def get_stats_api(request):
+    """Return global case counts and agent count"""
+    app_key = get_app_from_request(request)
+    CaseModel = APP_CONFIG[app_key]['case_model']
+    return JsonResponse({
+        'total_cases': CaseModel.objects.count(),
+        'open_cases': CaseModel.objects.filter(status='Open').count(),
+        'in_progress_cases': CaseModel.objects.filter(status='In Progress').count(),
+        'resolved_cases': CaseModel.objects.filter(status='Resolved').count(),
+        'closed_cases': CaseModel.objects.filter(status='Closed').count(),
+        'total_agents': Agent.objects.filter(is_active=True).count(),
+    })
+
+# NEW: Department-wise case counts
+@login_required
+def get_department_stats_api(request):
+    """Return case counts per department (group)"""
+    app_key = get_app_from_request(request)
+    CaseModel = APP_CONFIG[app_key]['case_model']
+    groups = SupportGroup.objects.all()
+    dept_stats = []
+    total_all = CaseModel.objects.count()
+    for group in groups:
+        count = CaseModel.objects.filter(group=group).count()
+        dept_stats.append({'name': group.name, 'count': count})
+    return JsonResponse({'departments': dept_stats, 'total_all': total_all})
+
+# NEW: Enhanced case listing with filters (status, level, department)
+@login_required
+def get_filtered_cases_api(request):
+    """Return cases with optional filters: ?status=, ?level=, ?department="""
+    app_key = get_app_from_request(request)
+    CaseModel = APP_CONFIG[app_key]['case_model']
+    queryset = CaseModel.objects.select_related('group').all().order_by('-created_at')
+    
+    status = request.GET.get('status')
+    if status:
+        queryset = queryset.filter(status=status)
+    
+    level = request.GET.get('level')
+    if level:
+        queryset = queryset.filter(current_level=level)
+    
+    department = request.GET.get('department')
+    if department and department != 'all':
+        queryset = queryset.filter(group__name=department)
+    
+    cases = queryset[:200]  # limit for performance
+    
+    case_list = [{
+        'case_id': c.case_id,
+        'customer_name': c.customer_name,
+        'mobile': c.mobile,
+        'loan_number': c.loan_number,
+        'group_name': c.group.name if c.group else None,
+        'priority': c.priority,
+        'current_level': c.current_level,
+        'status': c.status,
+        'created_at': c.created_at.isoformat(),
+    } for c in cases]
+    
+    return JsonResponse({'success': True, 'cases': case_list})
+
+# Keep original endpoints for backward compatibility
 @login_required
 def search_cases_api(request):
     app_key = get_app_from_request(request)
@@ -256,6 +454,7 @@ def get_open_cases_api(request):
             'current_level': c.current_level,
             'status': c.status,
             'created_at': timezone.localtime(c.created_at).isoformat(),
+            'group_name': c.group.name if c.group else None,
         } for c in cases]
     })
 
@@ -275,6 +474,7 @@ def get_resolved_cases_api(request):
             'current_level': c.current_level,
             'status': c.status,
             'created_at': timezone.localtime(c.created_at).isoformat(),
+            'group_name': c.group.name if c.group else None,
         } for c in cases]
     })
 
@@ -294,6 +494,7 @@ def get_closed_cases_api(request):
             'current_level': c.current_level,
             'status': c.status,
             'created_at': timezone.localtime(c.created_at).isoformat(),
+            'group_name': c.group.name if c.group else None,
         } for c in cases]
     })
 
@@ -316,6 +517,7 @@ def get_esc5_cases_api(request):
             'current_level': c.current_level,
             'status': c.status,
             'created_at': timezone.localtime(c.created_at).isoformat(),
+            'group_name': c.group.name if c.group else None,
         } for c in cases]
     })
 
@@ -335,6 +537,7 @@ def get_all_cases_api(request):
             'current_level': c.current_level,
             'status': c.status,
             'created_at': timezone.localtime(c.created_at).isoformat(),
+            'group_name': c.group.name if c.group else None,
         } for c in cases]
     })
 
@@ -364,6 +567,7 @@ def get_case_detail_api(request, case_id):
             'issue_description': case.issue_description,
             'resolution_notes': case.resolution_notes,
             'reopen_count': case.reopen_count,
+            'group_name': case.group.name if case.group else None,
         }
     })
 
@@ -568,125 +772,125 @@ def user_list(request):
 @login_required
 def user_create(request):
     agent = get_agent_from_user(request.user)
+
     if agent.role != 'ADMIN':
         messages.error(request, "Access denied. Admin only.")
         return redirect('agent_dashboard')
+
+    groups = SupportGroup.objects.all()
 
     if request.method == "POST":
         username = request.POST['username']
         password = request.POST['password']
         email = request.POST.get('email', '')
         role = request.POST.get('role', 'AGENT')
-        mobile = request.POST.get('mobile', '')          # corrected field name
-        display_name = request.POST.get('name', '')     # display name for Agent
+        mobile = request.POST.get('mobile', '')
+        display_name = request.POST.get('name', '')
+
+        selected_groups = request.POST.getlist('groups')  # ✅ MULTI SELECT
 
         if User.objects.filter(username=username).exists():
             messages.error(request, "Username already exists")
         else:
             with transaction.atomic():
+
                 is_staff = role in ['ADMIN', 'MANAGER']
+
                 user = User.objects.create_user(
                     username=username,
                     password=password,
                     email=email,
-                    is_staff=is_staff
+                    is_staff=is_staff,
+                    # selected_groups=groups
+                    
                 )
-                # Use the correct Agent fields
-                Agent.objects.create(
+
+                agent_obj = Agent.objects.create(
                     user=user,
                     agent_id=f"AGT-{user.id}",
-                    name=display_name or username,      # Agent's display name
-                    email=email or f"{username}@example.com",
-                    mobile=mobile,                       # field name is 'mobile'
+                    name=display_name or username,
+                    email=email,
+                    mobile=mobile,
                     role=role,
-                    is_active=True
+                    # groups=selected_groups
                 )
-                group_map = {
-                    'AGENT': 'Support Agents',
-                    'LEGAL': 'Legal Team',
-                    'LEAD': 'Team Leads',
-                    'MANAGER': 'Managers',
-                    'ADMIN': 'Administrators',
-                }
-                group_name = group_map.get(role, 'Support Agents')
-                group, _ = Group.objects.get_or_create(name=group_name)
-                user.groups.add(group)
-                messages.success(request, f"User '{username}' created with role: {get_role_display_name(role)}")
+
+                # ✅ ASSIGN MULTIPLE GROUPS
+                agent_obj.groups.set(selected_groups)
+
+                messages.success(request, f"User '{username}' created successfully")
                 return redirect('admin_user_list')
 
-    return render(request, 'adminpanel/user_create.html', {'role_choices': Agent.ROLE_CHOICES})
-
+    return render(request, 'adminpanel/user_create.html', {
+        'role_choices': Agent.ROLE_CHOICES,
+        'groups': groups
+    })
 
 @login_required
 def user_edit(request, user_id):
     agent = get_agent_from_user(request.user)
+
     if agent.role != 'ADMIN':
-        messages.error(request, "Access denied. Admin only.")
+        messages.error(request, "Access denied.")
         return redirect('agent_dashboard')
 
     user = get_object_or_404(User, id=user_id)
     user_agent = Agent.objects.filter(user=user).first()
 
+    groups = SupportGroup.objects.all()  # ✅ IMPORTANT
+
     if request.method == "POST":
         username = request.POST['username']
         email = request.POST.get('email', '')
         role = request.POST.get('role', 'AGENT')
-        mobile = request.POST.get('mobile', '')          # consistent with create view
-        display_name = request.POST.get('name', '')     # display name for Agent
+        mobile = request.POST.get('mobile', '')
+        display_name = request.POST.get('name', '')
 
-        # Staff status based on role
-        is_staff = role in ['ADMIN', 'MANAGER']
+        selected_groups = request.POST.getlist('groups')  # ✅ IMPORTANT
 
-        # Update User fields
+        # Update user
         user.username = username
         user.email = email
-        user.is_staff = is_staff
+        user.is_staff = role in ['ADMIN', 'MANAGER']
 
-        # Change password only if provided
         pwd = request.POST.get('password')
         if pwd:
             user.set_password(pwd)
 
         user.save()
 
-        # Update or create Agent
+        # Update agent
         if user_agent:
             user_agent.role = role
             user_agent.name = display_name or username
-            user_agent.email = email or f"{username}@example.com"
+            user_agent.email = email
             user_agent.mobile = mobile
             user_agent.save()
+
+            # ✅ UPDATE GROUPS
+            user_agent.groups.set(selected_groups)
+
         else:
-            Agent.objects.create(
+            user_agent = Agent.objects.create(
                 user=user,
                 agent_id=f"AGT-{user.id}",
                 name=display_name or username,
-                email=email or f"{username}@example.com",
+                email=email,
                 mobile=mobile,
                 role=role,
                 is_active=True
             )
 
-        # Update Django groups
-        group_map = {
-            'AGENT': 'Support Agents',
-            'LEGAL': 'Legal Team',
-            'LEAD': 'Team Leads',
-            'MANAGER': 'Managers',
-            'ADMIN': 'Administrators',
-        }
-        group_name = group_map.get(role, 'Support Agents')
-        group, _ = Group.objects.get_or_create(name=group_name)
-        user.groups.clear()
-        user.groups.add(group)
+            user_agent.groups.set(selected_groups)
 
-        messages.success(request, f"User '{username}' updated with role: {get_role_display_name(role)}")
+        messages.success(request, "User updated")
         return redirect('admin_user_list')
 
     return render(request, 'adminpanel/user_edit.html', {
         'user': user,
         'user_agent': user_agent,
-        'role_choices': Agent.ROLE_CHOICES
+        'role_choices': Agent.ROLE_CHOICES,
+        'groups': groups  # ✅ IMPORTANT
     })
 
 
