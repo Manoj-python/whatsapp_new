@@ -64,7 +64,8 @@ path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
 
     path('manager-cases/', views.manager_cases_api, name='manager_cases_api'),
     path('head-cases/', views.head_cases_api, name='head_cases_api'),
-
+    path('export-cases-excel/', views.export_cases_excel, name='export_cases_excel'),
+path('export-group-cases/', views.export_group_cases_excel, name='export_group_cases_excel'),
 
      # -----------------------------
     # Real-time Chat Features (App2)

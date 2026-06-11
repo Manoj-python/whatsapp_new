@@ -237,7 +237,7 @@ ASGI_APPLICATION = "whatsapp_sender.asgi.application"
 #     "default": {
 #         "BACKEND": "channels_redis.core.RedisChannelLayer",
 #         "CONFIG": {
-#             "hosts": [("127.0.0.1", 6379, 1)],
+#             "hosts": [("127.0.0.1", 6379, 2)],
 #         },
 #     },
 # }
@@ -262,7 +262,9 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [("127.0.0.1", 6379, 2)],  # ← ADD ,2 at the end
+            "capacity": 1500,
+            "expiry": 60,
         },
     },
 }

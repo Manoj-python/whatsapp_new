@@ -1093,6 +1093,10 @@ def agent_dashboard2(request):
         'available_cases': available_cases.count(),
     }
     
+    # ✅ Add all groups (departments) for the dropdown
+    from adminpanel.models import SupportGroup
+    all_groups = SupportGroup.objects.all().order_by('name')
+    
     context = {
         'cases': assigned_cases,   # fallback
         'assigned_cases': assigned_cases,
@@ -1100,8 +1104,11 @@ def agent_dashboard2(request):
         'agent': agent,
         'current_app': request.GET.get('app', 'psf'),
         'app_list': APP_CONFIG.items(),
+        'all_groups': all_groups,   # ✅ pass to template
     }
     return render(request, 'messaging2/agent_dashboard.html', context)
+
+
 
 from django.utils import timezone
 
@@ -1178,20 +1185,26 @@ def manager_dashboard2(request):
     # Get all groups the manager belongs to
     manager_groups = agent.groups.all()
     
-    # Base queryset for ESC3 cases
+    # Base queryset for ESC3 cases (already group-filtered)
     base_qs = CaseModel.objects.filter(
         current_level='ESC3',
         status__in=['Open', 'In Progress', 'Reopened']
     ).exclude(status='Closed').filter(group__in=manager_groups)
     
-    # Stats
+    # ✅ Fixed stats: apply group filter to resolved and escalated as well
     stats = {
         'pending': base_qs.count(),
-        'resolved': CaseModel.objects.filter(resolved_at_level='ESC3').count(),
-        'escalated': CaseModel.objects.filter(previous_level='ESC3').count(),
+        'resolved': CaseModel.objects.filter(
+            resolved_at_level='ESC3',
+            group__in=manager_groups
+        ).count(),
+        'escalated': CaseModel.objects.filter(
+            previous_level='ESC3',
+            group__in=manager_groups
+        ).count(),
     }
     
-    # Department-wise stats (for cards)
+    # Department-wise stats (for cards) – already correct
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     dept_stats = []
     for group in manager_groups:
@@ -1219,7 +1232,6 @@ def manager_dashboard2(request):
     }
     return render(request, 'messaging2/manager_dashboard.html', context)
 
-
 @messaging2_required
 def manager_cases_api(request):
     agent = get_agent_from_user(request.user)
@@ -1245,6 +1257,7 @@ def manager_cases_api(request):
         'priority': c.priority,
         'status': c.status,
         'created_at': c.created_at.isoformat(),
+        'issue_description': c.issue_description or '',
     } for c in cases]
     
     return JsonResponse({'cases': case_list})
@@ -1440,7 +1453,7 @@ def resolve_case_api2(request, case_id):
         case = CaseModel.objects.get(case_id=case_id)
 
         # Anyone who can view can resolve
-        if not agent.can_view_case(case) and agent.role != 'ADMIN':
+        if not agent.can_view_case(case):
             return JsonResponse({'error': 'You do not have permission to resolve this case'}, status=403)
 
         if case.status in ['Resolved', 'Closed']:
@@ -1795,3 +1808,100 @@ def get_user_role_api2(request):
         return JsonResponse({'success': False, 'error': 'Agent profile not found'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+import pandas as pd
+from io import BytesIO
+from django.http import HttpResponse
+from django.utils import timezone
+
+@messaging2_required
+def export_cases_excel(request):
+    """Export cases from the current agent tab (assigned, today_created, resolved_by_me, escalated_by_me)"""
+    agent = get_agent_from_user(request.user)
+    CaseModel = get_case_model_for_app(request)
+    tab = request.GET.get('tab', 'assigned')
+    
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    base_qs = CaseModel.objects.filter(group__in=agent.groups.all())
+    
+    if tab == 'assigned':
+        cases = base_qs.filter(assigned_to=agent, current_level='ESC1', status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
+    elif tab == 'today_created':
+        cases = base_qs.filter(created_at__gte=today_start)
+    elif tab == 'resolved_by_me':
+        cases = CaseModel.objects.filter(resolved_by=agent.name).order_by('-resolved_at')
+    elif tab == 'escalated_by_me':
+        escalated_case_ids = CaseEscalationLog.objects.filter(escalated_by=agent.name).values_list('case_id', flat=True).distinct()
+        cases = CaseModel.objects.filter(id__in=escalated_case_ids).order_by('-created_at')
+    else:
+        cases = base_qs.none()
+    
+    data = []
+    for case in cases:
+        data.append({
+            'Case ID': case.case_id,
+            'Customer Name': case.customer_name or '',
+            'Mobile': case.mobile,
+            'Loan Number': case.loan_number or '',
+            'Department': case.group.name if case.group else '',
+            'Status': case.status,
+            'Created At': case.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        })
+    
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Cases')
+    output.seek(0)
+    
+    response = HttpResponse(output.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="cases_{tab}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+    return response
+
+
+@messaging2_required
+def export_group_cases_excel(request):
+    """Export all cases from a specific group (department) that the agent belongs to"""
+    agent = get_agent_from_user(request.user)
+    group_id = request.GET.get('group_id')
+    
+    # ✅ Move this line to the top
+    CaseModel = get_case_model_for_app(request)
+    
+    if not group_id:
+        return JsonResponse({'error': 'Group ID required'}, status=400)
+    
+    # Allow "all" to export all groups combined
+    if group_id == 'all':
+        cases = CaseModel.objects.filter(group__in=agent.groups.all()).order_by('-created_at')
+        group_name = 'All_Departments'
+    else:
+        # Verify the agent belongs to this group
+        if not agent.groups.filter(id=group_id).exists():
+            return JsonResponse({'error': 'You do not belong to this group'}, status=403)
+        cases = CaseModel.objects.filter(group_id=group_id).order_by('-created_at')
+        group_name = agent.groups.get(id=group_id).name
+    
+    data = []
+    for case in cases:
+        data.append({
+            'Case ID': case.case_id,
+            'Customer Name': case.customer_name or '',
+            'Mobile': case.mobile,
+            'Loan Number': case.loan_number or '',
+            'Department': case.group.name if case.group else '',
+            'Current Level': case.current_level,
+            'Status': case.status,
+            'Created At': case.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        })
+    
+    import pandas as pd
+    from io import BytesIO
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Group Cases')
+    output.seek(0)
+    
+    response = HttpResponse(output.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="{group_name}_all_cases_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+    return response
