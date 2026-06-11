@@ -329,7 +329,7 @@ class Case(models.Model):
     
     # Metadata
     source = models.CharField(max_length=100, default='WhatsApp', blank=True, null=True)
-    source_app = models.CharField(max_length=20, default='app1', choices=[
+    source_app = models.CharField(max_length=20, default='app2', choices=[
         ('app1', 'App 1 - messaging'),
         ('app2', 'App 2 - messaging2'),
         ('app3', 'App 3 - splcase'),

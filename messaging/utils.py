@@ -795,6 +795,16 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     {"type": "text", "text": format_whatsapp_date(row.get("vehicle_number", ""))},  # {{3}}
                 ],
                 ),
+
+                "36": (
+                "new_loans_te",
+                "te",
+                [    {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
+            
+                ],
+                ),
+
+
     }
 
 

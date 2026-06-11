@@ -659,12 +659,10 @@ def send_reply_api(request):
 
 
 # =============================================
-# WHATSAPP WEBHOOK - COMPLETE FIXED VERSION
+# WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
 # =============================================
 @csrf_exempt
 def whatsapp_webhook(request):
-    # print("🔥 WEBHOOK HIT")
-
     from channels.layers import get_channel_layer
     from asgiref.sync import async_to_sync
     from django.db import transaction
@@ -700,77 +698,220 @@ def whatsapp_webhook(request):
                         mobile = format_mobile(msg.get("from", ""))
 
                         if msg_id and SmsWhatsAppLog.objects.filter(message_id=msg_id).exists():
-                            # print(f"⏭️ Duplicate message: {msg_id}")
                             continue
 
                         msg_type = msg.get("type", "text")
                         text_body = ""
                         content_type = "text"
                         media_file_data = None
+                        button_response = ""
 
+                        # ======================================
+                        # TEXT MESSAGES (with Quick Reply button detection)
+                        # ======================================
                         if msg_type == "text":
-                            text_body = msg["text"].get("body", "")
-                            # print(f"📝 Text from {mobile}: {text_body[:50]}")
+                            # Get the raw text from WhatsApp
+                            raw_text = msg["text"].get("body", "").strip()
+                            
+                            print(f"📝 Raw text from {mobile}: '{raw_text}'")
+                            
+                            # Quick Reply button values from your template
+                            quick_reply_values = ["Interested", "Not Interested", "Call Now"]
+                            
+                            # Check if this is a Quick Reply button click
+                            if raw_text in quick_reply_values:
+                                content_type = "interactive"
+                                
+                                # Get context (which template this reply is for)
+                                context_id = None
+                                if msg.get("context"):
+                                    context = msg.get("context", {})
+                                    context_id = context.get("id")
+                                    print(f"  └─ Context message ID: {context_id}")
+                                
+                                button_response = json.dumps({
+                                    "type": "quick_reply",
+                                    "button_title": raw_text,
+                                    "button_text": raw_text,
+                                    "context_message_id": context_id,
+                                    "source": "quick_reply",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+                                
+                                # Format the display message
+                                text_body = f"[Button Click] {raw_text}"
+                                
+                                print(f"🔘 Quick Reply captured: {text_body} from {mobile}")
+                            else:
+                                # Regular text message (not a button)
+                                text_body = raw_text
+                                print(f"📝 Regular text from {mobile}: {text_body[:50]}")
 
+                        # ======================================
+                        # INTERACTIVE MESSAGES (BUTTONS & LISTS)
+                        # ======================================
                         elif msg_type == "interactive":
                             interactive = msg.get("interactive", {})
                             content_type = "interactive"
-                            if interactive.get("type") == "button":
-                                text_body = interactive["button"].get("text", "")
-                            elif interactive.get("type") == "list_reply":
-                                text_body = interactive["list_reply"].get("title", "")
+                            interactive_type = interactive.get("type")
+                            
+                            print(f"🎯 Interactive message from {mobile}: {interactive_type}")
+                            
+                            # Handle Button Clicks (Format 1: button_reply)
+                            if interactive_type == "button_reply" or "button_reply" in interactive:
+                                button_reply = interactive.get("button_reply", {})
+                                button_id = button_reply.get("id", "")
+                                button_title = button_reply.get("title", "")
+                                
+                                button_response = json.dumps({
+                                    "type": "button_click",
+                                    "button_id": button_id,
+                                    "button_title": button_title,
+                                    "source": "interactive_button_reply",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+                                text_body = f"[Button Click] {button_title}"
+                                print(f"🔘 Button clicked (button_reply): {button_title} from {mobile}")
+                            
+                            # Handle Button Clicks (Format 2: button)
+                            elif interactive_type == "button" or "button" in interactive:
+                                button_data = interactive.get("button", {})
+                                button_id = button_data.get("id", "")
+                                button_title = button_data.get("text", "")
+                                
+                                button_response = json.dumps({
+                                    "type": "button_click",
+                                    "button_id": button_id,
+                                    "button_title": button_title,
+                                    "source": "interactive_button",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+                                text_body = f"[Button Click] {button_title}"
+                                print(f"🔘 Button clicked (button): {button_title} from {mobile}")
+                            
+                            # Handle List Selections
+                            elif interactive_type == "list_reply" or "list_reply" in interactive:
+                                list_reply = interactive.get("list_reply", {})
+                                list_id = list_reply.get("id", "")
+                                list_title = list_reply.get("title", "")
+                                
+                                button_response = json.dumps({
+                                    "type": "list_selection",
+                                    "list_id": list_id,
+                                    "list_title": list_title,
+                                    "source": "interactive_list",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+                                text_body = f"[List Selection] {list_title}"
+                                print(f"📋 List selected: {list_title} from {mobile}")
+                            
+                            # Handle Call to Action buttons
+                            elif interactive_type == "cta_url" or "cta_url" in interactive:
+                                cta_data = interactive.get("cta_url", {})
+                                button_title = cta_data.get("title", "")
+                                
+                                button_response = json.dumps({
+                                    "type": "cta_click",
+                                    "button_title": button_title,
+                                    "source": "interactive_cta",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+                                text_body = f"[CTA Click] {button_title}"
+                                print(f"🔗 CTA clicked: {button_title} from {mobile}")
+                            
+                            # Handle other interactive types (fallback)
+                            else:
+                                # Try to extract any button data from the interactive object
+                                button_found = False
+                                for key in ["button_reply", "button", "list_reply", "cta_url"]:
+                                    if key in interactive:
+                                        btn_data = interactive.get(key, {})
+                                        btn_title = btn_data.get("title") or btn_data.get("text", "")
+                                        if btn_title:
+                                            button_response = json.dumps({
+                                                "type": "button_click",
+                                                "button_title": btn_title,
+                                                "source": f"interactive_{key}",
+                                                "timestamp": timezone.now().isoformat()
+                                            })
+                                            text_body = f"[Button Click] {btn_title}"
+                                            button_found = True
+                                            print(f"🔘 Button found in {key}: {btn_title} from {mobile}")
+                                            break
+                                
+                                if not button_found:
+                                    text_body = f"[Interactive] {interactive_type}"
+                                    button_response = json.dumps({
+                                        "type": "unknown_interactive",
+                                        "interactive_type": interactive_type,
+                                        "raw_data": interactive,
+                                        "timestamp": timezone.now().isoformat()
+                                    })
+                                    print(f"⚠️ Unknown interactive type: {interactive_type} from {mobile}")
 
+                        # ======================================
+                        # MEDIA MESSAGES
+                        # ======================================
                         elif msg_type in ("image", "video", "audio", "document"):
                             media_id = msg[msg_type].get("id")
                             content_type = msg_type
                             text_body = f"[{msg_type.title()}]"
-                            # print(f"📎 {msg_type} from {mobile}, media_id: {media_id}")
                             media_file_data = download_whatsapp_media(media_id)
-                            if media_file_data:
-                                pass
-                                # print(f"✅ Downloaded {msg_type}")
-                            else:
-                                pass
-                                # print(f"❌ Failed to download {msg_type}")
+                            print(f"📎 Media message: {msg_type} from {mobile}")
 
+                        # ======================================
+                        # UNSUPPORTED MESSAGES
+                        # ======================================
                         elif msg_type == "unsupported":
                             error = msg.get("errors", [{}])[0].get("message", "Unknown")
-                            # print(f"⚠️ Unsupported: {error}")
+                            print(f"⚠️ Unsupported message from {mobile}: {error}")
                             continue
+
+                        # ======================================
+                        # GET CUSTOMER NAME
+                        # ======================================
                         customer_name = ""
                         contacts_data = value.get("contacts", [])
                         if contacts_data:
                             customer_name = contacts_data[0].get("profile", {}).get("name", "")
-                            print(f"📛 Customer name: {customer_name}")  # Debug print
+                            print(f"📛 Customer name: {customer_name}")
 
-
-                        # Save message
+                        # ======================================
+                        # SAVE MESSAGE TO DATABASE
+                        # ======================================
+                        # Ensure text_body is not empty for button clicks
+                        if not text_body and button_response:
+                            text_body = "[Button Click]"
+                            
                         with transaction.atomic():
                             log = SmsWhatsAppLog.objects.create(
-                                customer_name="",
+                                customer_name=customer_name,
                                 mobile=mobile,
                                 template_name="incoming",
-                                sent_text_message=text_body,
+                                sent_text_message=text_body if text_body else "[Empty Message]",
                                 status="Unread",
                                 message_type="Received",
                                 message_id=msg_id,
                                 content_type=content_type,
+                                button_response=button_response,
                             )
                             clear_chat_cache(mobile)
-
 
                             if media_file_data:
                                 filename, content = media_file_data
                                 log.media_file.save(filename, ContentFile(content))
                                 log.save()
-                                # print(f"💾 Saved media: {filename}")
 
-                        # Update contact
+                        print(f"💾 Saved message {log.id} from {mobile}: {text_body[:50] if text_body else 'Empty'}")
+
+                        # ======================================
+                        # UPDATE CONTACT
+                        # ======================================
                         obj, created = ChatContact.objects.get_or_create(
                             mobile=mobile,
                             defaults={
                                 "last_time": timezone.now(),
-                                "last_msg": text_body or "",
+                                "last_msg": text_body if text_body else "[Button Click]",
                                 "last_type": "Received",
                                 "last_status": "Unread",
                                 "unread": 1,
@@ -779,50 +920,63 @@ def whatsapp_webhook(request):
                         if not created:
                             ChatContact.objects.filter(mobile=mobile).update(
                                 last_time=timezone.now(),
-                                last_msg=text_body or "",
+                                last_msg=text_body if text_body else "[Button Click]",
                                 last_type="Received",
                                 last_status="Unread",
                                 unread=F("unread") + 1
                             )
 
-                        # WebSocket broadcast
+                        # ======================================
+                        # WEBSOCKET BROADCAST - CHAT GROUP
+                        # ======================================
                         gm = ws_group(mobile)
                         if gm:
+                            ws_message = {
+                                "id": log.id,
+                                "mobile": mobile,
+                                "sent_text_message": log.sent_text_message,
+                                "content_type": log.content_type,
+                                "media_file": log.media_file.url if log.media_file else "",
+                                "sent_at": timezone.localtime(log.sent_at).isoformat(),
+                                "message_type": "Received",
+                                "message_id": log.message_id,
+                                "status": log.status,
+                                "sender_name": customer_name
+                            }
+                            
+                            if button_response:
+                                try:
+                                    btn_data = json.loads(button_response)
+                                    ws_message["button_title"] = btn_data.get("button_title") or btn_data.get("list_title")
+                                    ws_message["interaction_type"] = btn_data.get("type")
+                                except:
+                                    pass
+                            
                             async_to_sync(channel_layer.group_send)(
                                 f"chat_{gm}",
-                                {
-                                    "type": "new_message",
-                                    "message": {
-                                        "id": log.id,
-                                        "mobile": mobile,
-                                        "sent_text_message": log.sent_text_message,
-                                        "content_type": log.content_type,
-                                        "media_file": log.media_file.url if log.media_file else "",
-                                        "sent_at": timezone.localtime(log.sent_at).isoformat(),
-                                        "message_type": "Received",
-                                        "message_id": log.message_id,
-                                        "status": log.status,
-                                        "sender_name": customer_name
-                                    }
-                                }
+                                {"type": "new_message", "message": ws_message}
                             )
 
+                        # ======================================
+                        # WEBSOCKET BROADCAST - GLOBAL CONTACTS
+                        # ======================================
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts",
                             {
                                 "type": "contact.update",
                                 "contact": {
                                     "mobile": mobile,
-                                    "last_msg": text_body or "",
+                                    "last_msg": text_body if text_body else "[Button Click]",
                                     "last_type": "Received",
                                     "last_status": "Unread",
                                     "unread": obj.unread if created else obj.unread + 1,
-                                    #"last_time": timezone.now().isoformat(),
                                 }
                             }
                         )
 
-                        # print(f"✅ Saved incoming {msg_type} from {mobile}")
+                        if button_response:
+                            print(f"✅ Button response saved for {mobile}")
+
                     # ======================================
                     # PROCESS STATUS UPDATES
                     # ======================================
@@ -833,28 +987,20 @@ def whatsapp_webhook(request):
                         if not msg_id:
                             continue
 
-                        # print(f"📨 Status update: {msg_id} -> {status_type}")
-
-                        # Message should already exist with real ID
                         obj = SmsWhatsAppLog.objects.filter(message_id=msg_id).first()
-                        # If not found, try to find by partial match (temp ID might still be there)
                         if not obj and len(msg_id) > 30:
-                            # Try to find by the real ID pattern in any message
                             partial = msg_id[:30]
                             obj = SmsWhatsAppLog.objects.filter(message_id__startswith=partial).first()
                             if obj:
-                                # print(f"✅ Found by partial match, updating full ID")
                                 SmsWhatsAppLog.objects.filter(id=obj.id).update(message_id=msg_id)
                                 obj.refresh_from_db()
-                        # Also try to find by looking for messages with status "Sending"
+                        
                         if not obj:
-                            # print(f"❌ Message not found: {msg_id}")
                             continue
 
                         mobile = obj.mobile
-                        #error handling
-                        errors = status.get("errors",[])
-                        
+                        errors = status.get("errors", [])
+
                         if status_type == "sent":
                             norm = "Sent"
                         elif status_type == "delivered":
@@ -866,92 +1012,49 @@ def whatsapp_webhook(request):
                             if errors:
                                 err = errors[0]
                                 code = int(err.get("code", 0))
-                                
-                                # Map each error code to specific status (matching tasks.py ERROR_MAP)
-                                if code == 131047:
-                                    norm = "24H_WINDOW_EXPIRED"
-                                elif code == 131026:
-                                    norm = "NOT_ON_WHATSAPP"
-                                elif code == 131051:
-                                    norm = "UNSUPPORTED_MESSAGE_TYPE"
-                                elif code == 131011:
-                                    norm = "BLOCKED_BY_USER"
-                                elif code == 130403:
-                                    norm = "BLOCKED_BY_BUSINESS"
-                                elif code == 131050:
-                                    norm = "OPTED_OUT"
-                                elif code == 190:
-                                    norm = "TOKEN_ERROR"
-                                elif code == 131009:
-                                    norm = "INVALID_PARAMETER"
-                                elif code == 131000:
-                                    norm = "UNKNOWN_ERROR"
-                                elif code == 131045:
-                                    norm = "REGISTRATION_ERROR"
-                                elif code == 132000:
-                                    norm = "TEMPLATE_PARAM_ERROR"
-                                elif code == 132001:
-                                    norm = "TEMPLATE_NOT_FOUND"
-                                elif code == 132015:
-                                    norm = "TEMPLATE_PAUSED"
-                                elif code == 132016:
-                                    norm = "TEMPLATE_DISABLED"
-                                elif code == 130429:
-                                    norm = "RATE_LIMIT"
-                                elif code == 131056:
-                                    norm = "TOO_MANY_MESSAGES"
-                                elif code in [10, 200]:
-                                    norm = "AUTH_FAILED"
-                                else:
-                                    norm = f"Failed_{code}"
+
+                                error_map = {
+                                    131047: "24H_WINDOW_EXPIRED", 131026: "NOT_ON_WHATSAPP",
+                                    131051: "UNSUPPORTED_MESSAGE_TYPE", 131011: "BLOCKED_BY_USER",
+                                    130403: "BLOCKED_BY_BUSINESS", 131050: "OPTED_OUT",
+                                    190: "TOKEN_ERROR", 131009: "INVALID_PARAMETER",
+                                    131000: "UNKNOWN_ERROR", 131045: "REGISTRATION_ERROR",
+                                    132000: "TEMPLATE_PARAM_ERROR", 132001: "TEMPLATE_NOT_FOUND",
+                                    132015: "TEMPLATE_PAUSED", 132016: "TEMPLATE_DISABLED",
+                                    130429: "RATE_LIMIT", 131056: "TOO_MANY_MESSAGES",
+                                }
+                                norm = error_map.get(code, f"Failed_{code}")
                         else:
                             continue
 
-                        # Update database
                         SmsWhatsAppLog.objects.filter(message_id=msg_id).update(
-                            status=norm,
-                            error_message=json.dumps(errors) if errors else "")
+                            status=norm, error_message=json.dumps(errors) if errors else ""
+                        )
                         ChatContact.objects.filter(mobile=mobile).update(last_status=norm)
 
-                        # WebSocket update
                         gm = ws_group(mobile)
                         if gm:
                             async_to_sync(channel_layer.group_send)(
                                 f"chat_{gm}",
-                                {
-                                    "type": "delivery.update",
-                                    "message_id": msg_id,
-                                    "status": norm,
-                                    "mobile": mobile
-                                }
+                                {"type": "delivery.update", "message_id": msg_id, "status": norm, "mobile": mobile}
                             )
+                        
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts",
-                            {
-                                "type": "contact.update",
-                                "contact": {
-                                    "mobile": mobile,
-                                    "last_status": norm
-                                }
-                            }
+                            {"type": "contact.update", "contact": {"mobile": mobile, "last_status": norm}}
+                        )
+
+                        total_unread = ChatContact.objects.filter(unread__gt=0).count()
+                        async_to_sync(channel_layer.group_send)(
+                            "global_contacts", {"type": "unread.update", "unread_count": total_unread}
                         )
 
                         print(f"✅ Updated {msg_id} to {norm}")
-                        total_unread = ChatContact.objects.filter(unread__gt=0).count()
-                        async_to_sync(channel_layer.group_send)(
-                            "global_contacts",
-                            {
-                                "type": "unread.update",
-                                "unread_count": total_unread
-                            }
-                        )
-
-                        # print(f"✅ Updated {msg_id} to {norm}")
 
             return JsonResponse({"status": "received"})
 
         except Exception as e:
-            # print(f"WEBHOOK ERROR: {e}")
+            print(f"❌ WEBHOOK ERROR: {e}")
             traceback.print_exc()
             return JsonResponse({"error": str(e)}, status=400)
 
@@ -959,12 +1062,6 @@ def whatsapp_webhook(request):
 
 
 
-
-# -----------------------------------------------------
-# Contacts API (for sidebar)
-# -----------------------------------------------------
-# Mark messages read
-# -----------------------------------------------------
 
 
 

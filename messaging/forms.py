@@ -34,7 +34,8 @@ TEMPLATE_CHOICES = [
     ("32", "guarantor_registration_pdf_english-[32]"),
     ("33", "registration_notice_borrower_pdf_english-[33]"),
     ("34", "apologize english-[34]"),
-    ("35", "due_notice_borrower (English)-[35]")
+    ("35", "due_notice_borrower (English)-[35]"),
+    ("36", "new_loans_te (Telugu)-[36]")
 
 
 ]

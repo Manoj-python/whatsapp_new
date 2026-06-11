@@ -1055,33 +1055,46 @@ from .models import CaseEscalationLog
 def agent_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
-    
-    # Base queryset: all ESC1 cases that belong to agent's groups (used for "total cases created" stats)
-    all_dept_cases = CaseModel.objects.filter(
-        current_level='ESC1',
-        group__in=agent.groups.all()
-    )
-    
+
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Statistics
-    total_cases_created = all_dept_cases.count()
-    created_today = all_dept_cases.filter(created_at__gte=today_start).count()
-    
+
+    # ----- AGENT PERSONAL STATS (no department) -----
+    total_cases_created = CaseModel.objects.filter(created_by=agent.name).count()
+    created_today = CaseModel.objects.filter(
+        created_by=agent.name,
+        created_at__gte=today_start
+    ).count()
+
     total_escalated = CaseEscalationLog.objects.filter(escalated_by=agent.name).count()
     escalated_today = CaseEscalationLog.objects.filter(
-        escalated_by=agent.name, created_at__gte=today_start
+        escalated_by=agent.name,
+        created_at__gte=today_start
     ).count()
-    
+
     resolved = CaseModel.objects.filter(resolved_by=agent.name).count()
     resolved_today = CaseModel.objects.filter(
-        resolved_by=agent.name, resolved_at__gte=today_start
+        resolved_by=agent.name,
+        resolved_at__gte=today_start
     ).count()
-    
-    # For case lists (used in initial load)
-    assigned_cases = all_dept_cases.filter(assigned_to=agent, status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
-    available_cases = all_dept_cases.filter(assigned_to__isnull=True, status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
-    
+
+    # Cases assigned to this agent (department‑wide, but scoped to agent)
+    assigned_cases = CaseModel.objects.filter(
+        assigned_to=agent,
+        current_level='ESC1',
+        status__in=['Open', 'In Progress', 'Reopened']
+    ).exclude(status='Closed')
+
+    # Available cases – still uses groups if agent has any, otherwise empty
+    if agent.groups.exists():
+        available_cases = CaseModel.objects.filter(
+            current_level='ESC1',
+            group__in=agent.groups.all(),
+            assigned_to__isnull=True,
+            status__in=['Open', 'In Progress', 'Reopened']
+        ).exclude(status='Closed')
+    else:
+        available_cases = CaseModel.objects.none()
+
     stats = {
         'total_cases_created': total_cases_created,
         'created_today': created_today,
@@ -1092,22 +1105,20 @@ def agent_dashboard2(request):
         'my_cases': assigned_cases.count(),
         'available_cases': available_cases.count(),
     }
-    
-    # ✅ Add all groups (departments) for the dropdown
+
     from adminpanel.models import SupportGroup
     all_groups = SupportGroup.objects.all().order_by('name')
-    
+
     context = {
-        'cases': assigned_cases,   # fallback
+        'cases': assigned_cases,
         'assigned_cases': assigned_cases,
         'stats': stats,
         'agent': agent,
         'current_app': request.GET.get('app', 'psf'),
         'app_list': APP_CONFIG.items(),
-        'all_groups': all_groups,   # ✅ pass to template
+        'all_groups': all_groups,
     }
     return render(request, 'messaging2/agent_dashboard.html', context)
-
 
 
 from django.utils import timezone
@@ -1452,9 +1463,8 @@ def resolve_case_api2(request, case_id):
         agent = get_agent_from_user(request.user)
         case = CaseModel.objects.get(case_id=case_id)
 
-        # Anyone who can view can resolve
-        if not agent.can_view_case(case):
-            return JsonResponse({'error': 'You do not have permission to resolve this case'}, status=403)
+        # ✅ No permission restriction – any authenticated agent can resolve
+        # (case.group can be None – that's fine)
 
         if case.status in ['Resolved', 'Closed']:
             return JsonResponse({'error': f'Case already {case.status}'}, status=400)
@@ -1468,7 +1478,8 @@ def resolve_case_api2(request, case_id):
             channel_group,
             {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'RESOLVED'}}
         )
-        return JsonResponse({'success': True, 'message': 'Case resolved successfully', 'case': {'case_id': case.case_id, 'status': case.status, 'current_level': case.current_level}})
+        return JsonResponse({'success': True, 'message': 'Case resolved successfully', 
+                             'case': {'case_id': case.case_id, 'status': case.status, 'current_level': case.current_level}})
     except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
@@ -1696,6 +1707,9 @@ def create_case_from_chat_api2(request):
     try:
         data = json.loads(request.body)
         mobile = format_mobile2(data.get('mobile', ''))
+        # Only allow case creation if this number has at least one message in PSF
+        if not SmsWhatsAppLog2.objects.filter(mobile=mobile).exists():
+            return JsonResponse({'error': 'This number has no WhatsApp messages in PSF. Cannot create case here.'}, status=400)
         customer_name = data.get('customer_name') or mobile
         agent_name = data.get('agent_name', 'Agent')
         issue_description = data.get('issue_description', '')
@@ -1860,27 +1874,27 @@ def export_cases_excel(request):
 
 @messaging2_required
 def export_group_cases_excel(request):
-    """Export all cases from a specific group (department) that the agent belongs to"""
+    """Export all cases from a specific group (department) - NO RESTRICTIONS"""
     agent = get_agent_from_user(request.user)
     group_id = request.GET.get('group_id')
-    
-    # ✅ Move this line to the top
     CaseModel = get_case_model_for_app(request)
-    
+
     if not group_id:
         return JsonResponse({'error': 'Group ID required'}, status=400)
-    
-    # Allow "all" to export all groups combined
+
+    # ✅ No group membership check – anyone can export any group
     if group_id == 'all':
-        cases = CaseModel.objects.filter(group__in=agent.groups.all()).order_by('-created_at')
+        cases = CaseModel.objects.filter(group__isnull=False).order_by('-created_at')
         group_name = 'All_Departments'
     else:
-        # Verify the agent belongs to this group
-        if not agent.groups.filter(id=group_id).exists():
-            return JsonResponse({'error': 'You do not belong to this group'}, status=403)
+        # Get the group name even if agent is not a member
+        try:
+            group = SupportGroup.objects.get(id=group_id)
+            group_name = group.name
+        except SupportGroup.DoesNotExist:
+            return JsonResponse({'error': 'Group not found'}, status=404)
         cases = CaseModel.objects.filter(group_id=group_id).order_by('-created_at')
-        group_name = agent.groups.get(id=group_id).name
-    
+
     data = []
     for case in cases:
         data.append({
@@ -1893,7 +1907,7 @@ def export_group_cases_excel(request):
             'Status': case.status,
             'Created At': case.created_at.strftime('%Y-%m-%d %H:%M:%S'),
         })
-    
+
     import pandas as pd
     from io import BytesIO
     df = pd.DataFrame(data)
@@ -1901,7 +1915,7 @@ def export_group_cases_excel(request):
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Group Cases')
     output.seek(0)
-    
+
     response = HttpResponse(output.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="{group_name}_all_cases_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
     return response
