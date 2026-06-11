@@ -86,7 +86,7 @@
                             <th>Customer</th>
                             <th>Mobile</th>
                             <th>Department</th>
-                            <th>Priority</th>
+                            <th>Description</th>
                             <th>Status</th>
                             <th>Created</th>
                             <th>Actions</th>
@@ -99,7 +99,7 @@
                             <td>{{ case.customer_name|default:case.mobile }}</small></td>
                             <td>{{ case.mobile }}</small></td>
                             <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
-                            <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></small></td>
+                            <td>{{ case.issue_description }}</td>
                             <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
                             <td>{{ case.created_at|date:"d/m/Y H:i" }}</small></td>
                             <td>
@@ -196,7 +196,7 @@ function renderCaseTable(cases) {
                 <td>${escapeHtml(c.customer_name || c.mobile)}</small></td>
                 <td>${c.mobile}</small></td>
                 <td><span class="badge bg-secondary">${c.group_name || '-'}</span></small></td>
-                <td><span class="badge bg-${c.priority.toLowerCase()}">${c.priority}</span></small></td>
+                <td>${c.issue_description || '-'}</small></td>
                 <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></small></td>
                 <td>${new Date(c.created_at).toLocaleString()}</small></td>
                 <td>

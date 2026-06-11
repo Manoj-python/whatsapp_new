@@ -52,5 +52,5 @@ urlpatterns = [
     path("employee-report/", views.download_employee_report, name="employee_report"),
     path("employee-monthly-attendance/", views.employee_monthly_attendance, name="employee_monthly_attendance"),
     # Add this to your urlpatterns
-   
+
 ]

@@ -3,33 +3,45 @@
 <head>
     <title>Feedback List</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         .table-responsive-horizontal { overflow-x: auto; white-space: nowrap; }
         td.remarks-col { white-space: normal !important; max-width: 400px; }
         .remarks-box { white-space: pre-wrap; }
+        .btn-all { 
+            background-color: #6c757d; 
+            color: white; 
+            border: none;
+            margin-left: 5px;
+            padding: 2px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+        .btn-all:hover { 
+            background-color: #5a6268; 
+            color: white; 
+        }
+        .filter-badge {
+            background-color: #e3f2fd;
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 
 <body class="bg-light">
 
-
-<!-- 🚀 RESPONSIVE NAVBAR -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
     <div class="container-fluid">
-
         <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
-
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
-
         <div class="collapse navbar-collapse" id="navbarNav">
-
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'upload_loan_data' %}active{% endif %}"
-                       href="{% url 'upload_loan_data' %}">Upload File</a>
+                    <a class="nav-link" href="{% url 'upload_loan_data' %}">Upload File</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{% url 'lcc_list' %}">LCC Data</a>
@@ -38,53 +50,60 @@
                     <a class="nav-link" href="{% url 'feedback_create' %}">Add Feedback</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'feedback_list' %}">Feedback List</a>
+                    <a class="nav-link active" href="{% url 'feedback_list' %}">Feedback List</a>
                 </li>
                 <li class="nav-item">
-                <a class="nav-link" href="{% url 'executive_visit_schedule_list' %}">
-                 Executive Visit Schedule
-                 </a>
-                 </li>
-
-                             <!-- 👤 EXECUTIVE VIEW (NEW) -->
-                 <li class="nav-item">
-                  <a class="nav-link {% if request.resolver_match.url_name == 'executive_my_visits' %}active{% endif %}"
-                  href="{% url 'executive_my_visits' %}">
-                  My Visit Schedules
-                 </a>
-                 </li>
-
-                 </ul>
-
+                    <a class="nav-link" href="{% url 'executive_visit_schedule_list' %}">Executive Visit Schedule</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'executive_my_visits' %}">My Visit Schedules</a>
+                </li>
+            </ul>
             <div class="d-flex align-items-center">
                 <span class="text-white me-3">👤 {{ request.user.username }}</span>
                 <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
             </div>
-
         </div>
     </div>
 </nav>
 
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-5 pt-3">
 
-    <div class="d-flex justify-content-between mb-3">
+    <div class="d-flex justify-content-between mb-3 align-items-center">
         <h3>Feedback Records</h3>
-        <a href="{% url 'feedback_create' %}" class="btn btn-primary">Add Feedback</a>
+        <div>
+            <a href="{% url 'feedback_create' %}" class="btn btn-primary me-2">
+                <i class="bi bi-plus-circle"></i> Add Feedback
+            </a>
+            <button type="button" id="exportExcelBtn" class="btn btn-success">
+                <i class="bi bi-file-excel"></i> Download Excel
+            </button>
+        </div>
     </div>
 
     <!-- FILTER FORM -->
     <div class="card mb-3">
         <div class="card-body">
-            <form method="GET" class="row g-3">
+            <form method="GET" id="filterForm" class="row g-3">
 
-                <div class="col-md-3">
+                <div class="col-md-12">
                     <label class="form-label fw-bold">Search anything</label>
                     <input type="text" name="search" value="{{ filters.search }}" class="form-control" placeholder="Loan / Name / Vehicle / Remarks">
                 </div>
 
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">Employee</label>
-                    <input type="text" name="emp" value="{{ filters.emp }}" class="form-control">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">
+                        Employee ID
+                        <button type="button" class="btn-all" id="selectAllEmp">
+                            <i class="bi bi-check2-all"></i> All
+                        </button>
+                    </label>
+                    <div class="input-group">
+                        <input type="text" name="emp" id="empInput" value="{{ filters.emp }}" class="form-control" placeholder="Enter Employee ID">
+                        <button type="button" class="btn btn-outline-secondary" id="clearEmp">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="col-md-2">
@@ -92,9 +111,14 @@
                     <input type="date" name="date" value="{{ filters.date }}" class="form-control">
                 </div>
 
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">Feedback Type</label>
-                    <select name="ftype" class="form-control">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">
+                        Feedback Type
+                        <button type="button" class="btn-all" id="selectAllFtype">
+                            <i class="bi bi-check2-all"></i> All
+                        </button>
+                    </label>
+                    <select name="ftype" id="ftypeSelect" class="form-control">
                         <option value="">Select</option>
                         {% for val,label in FTYPES %}
                         <option value="{{ val }}" {% if filters.ftype == val %}selected{% endif %}>{{ label }}</option>
@@ -138,22 +162,47 @@
 
                 <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
-                    <button class="btn btn-primary w-100">Apply</button>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel"></i> Apply Filter
+                    </button>
                 </div>
 
                 <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
-                    <a href="{% url 'feedback_list' %}" class="btn btn-secondary w-100">Reset</a>
+                    <a href="{% url 'feedback_list' %}" class="btn btn-secondary w-100">
+                        <i class="bi bi-arrow-repeat"></i> Reset
+                    </a>
                 </div>
 
             </form>
         </div>
     </div>
 
+    <!-- Active Filters Display -->
+    <div class="filter-badge">
+        <strong>Active Filters:</strong>
+        <span id="filterDisplay">
+            {% if filters.emp and filters.emp != 'all' %}
+                <span class="badge bg-primary">Employee: {{ filters.emp }}</span>
+            {% endif %}
+            {% if filters.date %}
+                <span class="badge bg-primary">Date: {{ filters.date }}</span>
+            {% endif %}
+            {% if filters.ftype and filters.ftype != 'all' %}
+                <span class="badge bg-primary">Type: {{ filters.ftype }}</span>
+            {% endif %}
+            {% if not filters.emp and not filters.date and not filters.ftype and not filters.search %}
+                <span class="text-muted">No filters applied</span>
+            {% endif %}
+        </span>
+        <span class="float-end">
+            <strong>Total Records: {{ data.paginator.count }}</strong>
+        </span>
+    </div>
+
     <!-- TABLE -->
     <div class="card shadow-sm">
         <div class="card-body">
-
             <div class="table-responsive-horizontal">
                 <table class="table table-bordered table-striped">
                     <thead class="table-dark">
@@ -174,7 +223,6 @@
                             <th>Created</th>
                         </tr>
                     </thead>
-
                     <tbody>
                         {% for f in data %}
                         <tr>
@@ -193,6 +241,10 @@
                             <td>{{ f.visit_date }}</td>
                             <td>{{ f.created_at }}</td>
                         </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="14" class="text-center">No feedback records found</td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -210,7 +262,7 @@
                     {% for num in data.paginator.page_range %}
                         {% if num == data.number %}
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                        {% else %}
+                        {% elif num > data.number|add:'-5' and num < data.number|add:'5' %}
                             <li class="page-item"><a class="page-link" href="?page={{ num }}&{{ query_string }}">{{ num }}</a></li>
                         {% endif %}
                     {% endfor %}
@@ -222,11 +274,44 @@
                     {% endif %}
                 </ul>
             </nav>
-
         </div>
     </div>
-
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Select All Employees - clears the filter and submits
+    document.getElementById('selectAllEmp').addEventListener('click', function() {
+        document.getElementById('empInput').value = '';
+        document.getElementById('filterForm').submit();
+    });
+    
+    // Clear Employee button
+    document.getElementById('clearEmp').addEventListener('click', function() {
+        document.getElementById('empInput').value = '';
+    });
+    
+    // Select All Feedback Types - clears the filter and submits
+    document.getElementById('selectAllFtype').addEventListener('click', function() {
+        document.getElementById('ftypeSelect').value = '';
+        document.getElementById('filterForm').submit();
+    });
+    
+    // Export to Excel - adds export parameter to current URL
+    document.getElementById('exportExcelBtn').addEventListener('click', function() {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('export', 'excel');
+        window.location.href = currentUrl.toString();
+    });
+    
+    // Auto-submit when Enter key pressed in search
+    document.querySelector('input[name="search"]').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('filterForm').submit();
+        }
+    });
+</script>
 
 </body>
 </html>

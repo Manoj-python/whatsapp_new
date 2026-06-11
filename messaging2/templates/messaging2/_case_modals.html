@@ -26,7 +26,7 @@
                 <div class="mb-3">
                     <label>Escalate To:</label>
                     <select id="escalateLevel" class="form-select">
-                        <!-- Options will be set dynamically based on case level -->
+                        <!-- Options will be set dynamically -->
                     </select>
                 </div>
                 <div class="mb-3">
@@ -84,7 +84,7 @@ let currentCaseData = null;
 function viewCase(caseId) {
     $('#caseModal').modal('show');
     document.getElementById('caseModalBody').innerHTML = '<div class="text-center"><div class="spinner-border"></div><p>Loading...</p></div>';
-    
+
     fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
         .then(response => response.json())
         .then(data => {
@@ -102,8 +102,7 @@ function viewCase(caseId) {
 function renderCaseDetail(caseData) {
     currentCaseData = caseData;
     const levelBadges = { 'ESC1':'primary','ESC2':'warning','ESC3':'info','ESC4':'danger','ESC5':'dark','RESOLVED':'success','CLOSED':'secondary' };
-    const priorityBadges = { 'Low':'secondary','Medium':'info','High':'warning','Urgent':'danger' };
-    
+
     const html = `
         <div class="row">
             <div class="col-md-6">
@@ -115,7 +114,6 @@ function renderCaseDetail(caseData) {
                     <tr><th>Loan Number:</th><td>${caseData.loan_number || '-'}</small></td>
                     <tr><th>Department:</th><td>${caseData.group_name || 'Not assigned'}</small></td>
                     <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level]}">${caseData.current_level}</span></small></td>
-                    <tr><th>Priority:</th><td><span class="badge bg-${priorityBadges[caseData.priority]}">${caseData.priority}</span></small></td>
                     <tr><th>Status:</th><td><span class="badge bg-${caseData.status === 'Resolved' ? 'success' : 'primary'}">${caseData.status}</span></small></td>
                 </table>
             </div>
@@ -151,7 +149,7 @@ function renderCaseDetail(caseData) {
     `;
     document.getElementById('caseModalBody').innerHTML = html;
     loadTimeline(caseData.case_id);
-    
+
     // Populate escalate modal based on current level
     const allLevels = ['ESC1','ESC2','ESC3','ESC4','ESC5'];
     const currentIdx = allLevels.indexOf(caseData.current_level);
@@ -181,11 +179,128 @@ function loadTimeline(caseId) {
         });
 }
 
-// Escalate Case
+// ============================================
+// IMPROVED MESSAGE TICK UPDATE (handles all error codes)
+// ============================================
+function updateMessageTickImproved(messageId, status) {
+    if (!messageId || messageId === '') {
+        console.warn('⚠️ Ignoring delivery.update with empty message_id');
+        return;
+    }
+    console.log(`🔄 Updating tick for messageId: ${messageId}, status: ${status}`);
+
+    const failureStatuses = [
+        'Failed', 'Blocked', 'Invalid', 'Template Required', 'Template Failed',
+        'Re-engagement Required', 'Rate Limited', 'Auth Failed',
+        '24H_WINDOW_EXPIRED', 'NOT_ON_WHATSAPP', 'BLOCKED_BY_USER', 'BLOCKED_BY_BUSINESS',
+        'OPTED_OUT', 'TOKEN_ERROR', 'INVALID_PARAMETER', 'UNKNOWN_ERROR',
+        'REGISTRATION_ERROR', 'UNSUPPORTED_MESSAGE_TYPE', 'TEMPLATE_PARAM_ERROR',
+        'TEMPLATE_NOT_FOUND', 'TEMPLATE_PAUSED', 'TEMPLATE_DISABLED', 'RATE_LIMIT',
+        'TOO_MANY_MESSAGES'
+    ];
+    const isFailure = failureStatuses.some(s => status.includes(s));
+
+    if (isFailure) {
+        const sentMessages = document.querySelectorAll('.message-row.sent');
+        let updated = false;
+        for (let i = sentMessages.length - 1; i >= 0; i--) {
+            const tick = sentMessages[i].querySelector('.message-tick');
+            if (tick && !tick.classList.contains('delivered') &&
+                !tick.classList.contains('read') && !tick.classList.contains('failed')) {
+                tick.innerHTML = '❌';
+                tick.className = 'message-tick failed';
+                tick.style.color = '#dc3545';
+                tick.style.fontWeight = 'bold';
+                tick.title = status;
+                if (messageId) tick.setAttribute('data-msg-id', messageId);
+                updated = true;
+                console.log('✅ Marked message as FAILED');
+                break;
+            }
+        }
+        if (!updated) {
+            console.warn('⚠️ Could not find any sent message to mark as failed');
+        }
+        if (typeof showNotification === 'function') {
+            showNotification(`Message ${status.toLowerCase()}`, 'error');
+        } else {
+            console.log(`❌ Message failed: ${status}`);
+        }
+        return;
+    }
+
+    let tickSpan = null;
+    if (messageId) tickSpan = document.querySelector(`.message-tick[data-msg-id="${messageId}"]`);
+    if (!tickSpan && messageId) {
+        const row = document.querySelector(`.message-row[data-msg-id="${messageId}"]`);
+        if (row) tickSpan = row.querySelector('.message-tick');
+    }
+    if (!tickSpan) {
+        const lastSent = document.querySelector('.message-row.sent:last-child');
+        if (lastSent) tickSpan = lastSent.querySelector('.message-tick');
+    }
+    if (tickSpan && !tickSpan.classList.contains('failed')) {
+        tickSpan.className = 'message-tick';
+        if (status === 'Read') {
+            tickSpan.textContent = '✓✓';
+            tickSpan.classList.add('read');
+            tickSpan.style.color = '#34B7F1';
+        } else if (status === 'Delivered') {
+            tickSpan.textContent = '✓✓';
+            tickSpan.classList.add('delivered');
+            tickSpan.style.color = '#25D366';
+        } else if (status === 'Sent') {
+            tickSpan.textContent = '✓';
+            tickSpan.classList.add('sent');
+            tickSpan.style.color = '#8696a0';
+        }
+        if (messageId) tickSpan.setAttribute('data-msg-id', messageId);
+        console.log(`✅ Updated tick to ${status}`);
+    } else {
+        console.error(`❌ Could not find tick for message ${messageId}`);
+    }
+}
+
+// Escalate Case (populates dropdown dynamically)
 function escalateCase(caseId) {
     document.getElementById('escalateCaseId').value = caseId;
     document.getElementById('escalateReason').value = '';
-    document.getElementById('escalateLoanNumber').value = currentCaseData?.loan_number || '';
+
+    fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const caseData = data.case;
+                document.getElementById('escalateLoanNumber').value = caseData.loan_number || '';
+
+                const allLevels = ['ESC1','ESC2','ESC3','ESC4','ESC5'];
+                const levelNames = {
+                    'ESC1': 'Normal (ESC1)',
+                    'ESC2': 'Executive (ESC2)',
+                    'ESC3': 'Manager (ESC3)',
+                    'ESC4': 'Head (ESC4)',
+                    'ESC5': 'Admin (ESC5)'
+                };
+                const currentIdx = allLevels.indexOf(caseData.current_level);
+                const higherLevels = allLevels.slice(currentIdx + 1);
+                let options = '';
+                if (higherLevels.length === 0) {
+                    options = '<option disabled>No higher levels available</option>';
+                } else {
+                    higherLevels.forEach(lvl => {
+                        options += `<option value="${lvl}">${levelNames[lvl]}</option>`;
+                    });
+                }
+                document.getElementById('escalateLevel').innerHTML = options;
+            } else {
+                alert('Could not load case details');
+            }
+        })
+        .catch(error => {
+            console.error(error);
+            alert('Error loading case details');
+        });
+
     $('#escalateModal').modal('show');
 }
 
@@ -194,10 +309,10 @@ function submitEscalation() {
     const newLevel = document.getElementById('escalateLevel').value;
     const reason = document.getElementById('escalateReason').value;
     const loan = document.getElementById('escalateLoanNumber').value;
-    
+
     if (!newLevel) { alert('Please select escalation level'); return; }
     if (!reason) { alert('Please provide a reason'); return; }
-    
+
     fetch(addAppParam(`/messaging2/case/${caseId}/escalate/`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
@@ -216,7 +331,6 @@ function submitEscalation() {
     .catch(error => alert('Error: ' + error.message));
 }
 
-// Resolve Case
 function resolveCase(caseId) {
     document.getElementById('resolveCaseId').value = caseId;
     document.getElementById('resolutionNotes').value = '';
@@ -226,9 +340,9 @@ function resolveCase(caseId) {
 function submitResolution() {
     const caseId = document.getElementById('resolveCaseId').value;
     const notes = document.getElementById('resolutionNotes').value;
-    
+
     if (!notes) { alert('Please provide resolution notes'); return; }
-    
+
     fetch(addAppParam(`/messaging2/case/${caseId}/resolve/`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },

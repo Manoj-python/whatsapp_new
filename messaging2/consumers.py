@@ -34,11 +34,12 @@ def ws_group_name2(mobile: str) -> str:
 # Database Queries
 # -------------------------
 @sync_to_async
-def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None):
+def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, group_ids=None):
     """
-    Get contacts with pagination and filtering
-    filter_type: 'all', 'unread', 'assigned'
-    level: 'ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5' - for role-based filtering
+    Get contacts with pagination and filtering.
+    - filter_type: 'all', 'unread', 'assigned'
+    - level: ESC1..ESC5 for role‑based filtering
+    - group_ids: list of group IDs the user belongs to (only for non‑agents)
     """
     from .models import ChatContact2, SmsWhatsAppLog2, Case
 
@@ -47,7 +48,7 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None):
     # Apply role-based level filter FIRST
     if level and level != 'ESC1':
         qs = qs.filter(current_level=level)
-    
+
     # Apply additional filters
     if filter_type == "unread":
         qs = qs.filter(unread__gt=0)
@@ -63,13 +64,13 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None):
     if q:
         raw_q = q.strip()
         digits = re.sub(r"\D", "", raw_q)
-
         filters = Q()
         if digits:
             filters |= Q(mobile__icontains=digits)
         filters |= Q(last_msg__icontains=raw_q)
         qs = qs.filter(filters)
 
+    # Order by last_time DESC
     qs = qs.order_by('-last_time')
 
     total = qs.count()
@@ -90,11 +91,19 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None):
                     continue
                 last_msg = "No messages yet"
 
-        # ✅ Fetch the latest case for this mobile to get the group name
+        # Fetch the latest case for this mobile to get the group name and ID
         group_name = None
+        group_id = None
         latest_case = Case.objects.filter(mobile=c.mobile).order_by('-created_at').first()
         if latest_case and latest_case.group:
             group_name = latest_case.group.name
+            group_id = latest_case.group.id
+
+        # 🔥 GROUP FILTER: skip this contact if user belongs to specific groups (non‑agent)
+        #    and the case's group is not in the user's group list.
+        if group_ids and level and level != 'ESC1':
+            if group_id not in group_ids:
+                continue
 
         contacts.append({
             "mobile": c.mobile,
@@ -104,11 +113,16 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None):
             "unread": c.unread,
             "last_time": c.last_time.isoformat() if c.last_time else None,
             "current_level": c.current_level or "ESC1",
-            "group_name": group_name,   # 🔥 NEW FIELD
+            "group_name": group_name,
         })
 
-    total_pages = (total + size - 1) // size
-    
+    # Recalculate total after filtering (because we skipped some)
+    total = len(contacts)
+    # Restore pagination slice (contacts already filtered)
+    contacts = contacts[start:end]
+
+    total_pages = (total + size - 1) // size if total > 0 else 1
+
     # Calculate unread count for agent/admin
     unread_count = 0
     if not level or level == 'ESC1':
@@ -128,6 +142,8 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None):
         "has_more": page < total_pages,
         "unread_count": unread_count
     }
+
+
 # messaging/consumers.py - Update get_messages_page_from_db2 function
 
 from datetime import datetime, timedelta

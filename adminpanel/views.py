@@ -55,6 +55,12 @@ APP_CONFIG = {
 # ============================================
 # HELPER FUNCTIONS
 # ============================================
+
+def get_models_for_app(request):
+    app_key = get_app_from_request(request)
+    cfg = APP_CONFIG[app_key]
+    return cfg['case_model'], cfg['contact_model'], cfg['log_model'], cfg['channel_group']
+
 def get_role_display_name(role):
     role_names = {
         'AGENT': '🟢 Normal Agent (ESC1)',
@@ -108,7 +114,7 @@ def create_case_from_chat_api2(request):
         escalate_to = data.get('escalate_to', None)
         force_new = data.get('force_new', False)   # frontend flag
 
-        CaseModel, ContactModel, _, _ = get_app_from_request(request)
+        CaseModel, ContactModel, _, _ = get_models_for_app(request)
         group_obj = SupportGroup.objects.filter(name=group_name).first()
         if not group_obj:
             return JsonResponse({'error': 'Invalid group'}, status=400)
@@ -268,10 +274,10 @@ def dashboard(request):
     if agent.role != 'ADMIN':
         if agent.role == 'MANAGER':
             return redirect('manager_dashboard')
-        elif agent.role == 'LEAD':
-            return redirect('lead_dashboard')
-        elif agent.role == 'LEGAL':
-            return redirect('legal_dashboard')
+        elif agent.role == 'HEAD':
+            return redirect('head_dashboard')
+        elif agent.role == 'EXCUTIVE':
+            return redirect('executive_dashboard')
         else:
             return redirect('agent_dashboard')
 

@@ -1,4 +1,5 @@
 # messaging/models.py
+# messaging/models.py
 from django.db import models
 from django.utils import timezone
 
@@ -17,7 +18,8 @@ class SmsWhatsAppLog(models.Model):
     error_message = models.TextField(blank=True, default='')
     customer_name = models.CharField(max_length=255, blank=True, default='')  # Customer name (for received)
     sender_name = models.CharField(max_length=255, blank=True, default='')  # Customer name (for received)
-
+    error_code = models.IntegerField(null=True, blank=True, help_text="WhatsApp API error code")
+    error_reason = models.TextField(blank=True, help_text="Detailed error reason")
 
     
     class Meta:
@@ -32,7 +34,6 @@ class SmsWhatsAppLog(models.Model):
     
     def __str__(self):
         return f"{self.mobile} - {self.message_type} - {self.sent_at}"
-
 class ChatContact(models.Model):
     mobile = models.CharField(max_length=20, unique=True, db_index=True)
     last_msg = models.TextField(blank=True, default='')
@@ -83,52 +84,55 @@ class BulkJob(models.Model):
     failed_count = models.IntegerField(default=0)
     status = models.CharField(max_length=50, default='Pending', db_index=True)
     excel_file = models.CharField(max_length=500, blank=True, default='')
-    success_report = models.FileField(upload_to="reports/", blank=True, null=True)
-    failed_report = models.FileField(upload_to="reports/", blank=True, null=True)
+    success_report = models.FileField(upload_to="reports/", blank=True, null=True, max_length=500)
+    failed_report = models.FileField(upload_to="reports/", blank=True, null=True, max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
-    started_at = models.DateTimeField(default=timezone.now)
+    started_at = models.DateTimeField(null=True, blank=True,default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
-  
-
-    
     
     class Meta:
         ordering = ['-created_at']
-
-
 # ============================================
 # CASE MANAGEMENT MODELS (shared with messaging2)
 # ============================================
 
 from messaging2.models import Agent  # reuse Agent from PSF app
-
+from adminpanel.models import SupportGroup
 class CaseEscalationLog(models.Model):
-    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='escalation_logs')
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='app1_escalation_logs')
     from_level = models.CharField(max_length=20)
     to_level = models.CharField(max_length=20)
     escalated_by = models.CharField(max_length=255, blank=True, null=True)
     reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    class Meta: 
+
+    class Meta:
         ordering = ['-created_at']
 
+    def __str__(self):
+        return f"{self.case.case_id}: {self.from_level} → {self.to_level}"
+
+
 class CaseAssignmentLog(models.Model):
-    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='assignment_logs')
-    assigned_to = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='sms_assignments')   # unique
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='app1_assignment_logs')
+    assigned_to = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='app1_assignments')
     assigned_by = models.CharField(max_length=255, blank=True, null=True)
     reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    class Meta: 
+
+    class Meta:
         ordering = ['-created_at']
 
+
 class CaseComment(models.Model):
-    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='comments')
-    agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name='sms_case_comments')   # unique
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='app1_comments')
+    agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True,related_name='app1_agent')
     agent_name = models.CharField(max_length=255, blank=True, null=True)
     comment = models.TextField()
     is_internal = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    class Meta: 
+
+    class Meta:
         ordering = ['created_at']
 
 
@@ -137,10 +141,10 @@ class Case(models.Model):
     
     ESCALATION_CHOICES = [
         ('ESC0', '🆕 New Case - Unassigned'),
-        ('ESC1', '📞 Level 1 - Normal Agent'),
-        ('ESC2', '⚖️ Level 2 - Legal Team'),
-        ('ESC3', '⭐ Level 3 - Team Lead'),
-        ('ESC4', '📊 Level 4 - Manager'),
+        ('ESC1', '📞 Level 1 - Agent'),
+        ('ESC2', '⭐ Level 2 - Executive'),
+        ('ESC3', '📊 Level 3 - Manager'),
+        ('ESC4', '👔 Level 4 - Head'),
         ('ESC5', '🔒 Level 5 - Admin'),
         ('RESOLVED', '✅ Resolved - Awaiting Closure'),
         ('CLOSED', '🔒 Closed - Final'),
@@ -173,6 +177,7 @@ class Case(models.Model):
     # Issue Details
     issue_description = models.TextField(blank=True, null=True)
     category = models.CharField(max_length=100, blank=True, null=True)
+    group = models.ForeignKey(SupportGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='app1_cases')
     
     # Escalation
     current_level = models.CharField(max_length=20, choices=ESCALATION_CHOICES, default='ESC0')
@@ -187,7 +192,7 @@ class Case(models.Model):
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
     
     # Assignment
-    assigned_to = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name='sms_assigned_cases')
+    assigned_to = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name='app1_assigned_cases')
     assigned_to_name = models.CharField(max_length=255, blank=True, null=True)
     
     # Timestamps
@@ -228,6 +233,15 @@ class Case(models.Model):
     
     def __str__(self):
         return f"{self.case_id} - {self.current_level} - {self.status}"
+    
+    def get_available_escalation_levels(self):
+        """Return list of levels that are higher than current level."""
+        all_levels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5']
+        try:
+            current_index = all_levels.index(self.current_level)
+            return all_levels[current_index + 1:]
+        except ValueError:
+            return []
     
     def escalate(self, new_level, agent, reason=None, loan=None, name=None):
         if self.status in ['Resolved', 'Closed']:
@@ -351,7 +365,11 @@ class Case(models.Model):
         raise ValueError(f"Cannot reopen case in {self.status} status. Only resolved or closed cases can be reopened.")
     
     def can_resolve(self, agent):
-        return agent.is_active and self.status not in ['Resolved', 'Closed']
+        if self.status == 'Closed':
+            return False
+        if self.status == 'Resolved':
+            return False
+        return agent.is_active
     
     def can_close(self, agent):
         return agent.role == 'ADMIN' and self.status == 'Resolved'

@@ -33,6 +33,7 @@ def ws_group_name(mobile: str) -> str:
 # -------------------------
 # Database Queries
 # -------------------------
+
 @sync_to_async
 def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None):
     """
@@ -44,8 +45,7 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None):
     qs = ChatContact.objects.all()
 
     # Apply role-based level filter FIRST
-    if level and level != 'ESC1':  # Only filter non-agent roles
-        # Non-agents should ONLY see chats at their level
+    if level and level != 'ESC1':
         qs = qs.filter(current_level=level)
     
     # Apply additional filters
@@ -55,7 +55,6 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None):
         qs = qs.exclude(last_msg="")
         qs = qs.exclude(last_msg__isnull=True)
     elif filter_type == "assigned":
-        # For LEGAL, LEAD, MANAGER - show only their level chats
         if level:
             qs = qs.filter(current_level=level)
         qs = qs.exclude(last_msg__icontains="No messages yet")
@@ -71,10 +70,8 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None):
         filters |= Q(last_msg__icontains=raw_q)
         qs = qs.filter(filters)
 
-    # Order by last_time DESC
     qs = qs.order_by('-last_time')
 
-    # Pagination
     total = qs.count()
     start = (page - 1) * size
     end = start + size
@@ -93,6 +90,12 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None):
                     continue
                 last_msg = "No messages yet"
 
+        # ✅ Fetch the latest case for this mobile to get the group name
+        group_name = None
+        latest_case = Case.objects.filter(mobile=c.mobile).order_by('-created_at').first()
+        if latest_case and latest_case.group:
+            group_name = latest_case.group.name
+
         contacts.append({
             "mobile": c.mobile,
             "last_msg": last_msg,
@@ -101,13 +104,14 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None):
             "unread": c.unread,
             "last_time": c.last_time.isoformat() if c.last_time else None,
             "current_level": c.current_level or "ESC1",
+            "group_name": group_name,   # 🔥 NEW FIELD
         })
 
     total_pages = (total + size - 1) // size
     
     # Calculate unread count for agent/admin
     unread_count = 0
-    if not level or level == 'ESC1':  # Only for agents/admins
+    if not level or level == 'ESC1':
         unread_count = ChatContact.objects.filter(
             unread__gt=0
         ).exclude(

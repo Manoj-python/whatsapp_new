@@ -794,18 +794,44 @@ import datetime
 @financehub_required
 def feedback_list(request):
 
-    def clean(v):
-        return v.strip() if v and v != "None" else None
-
-    emp       = clean(request.GET.get("emp"))
-    date_str  = clean(request.GET.get("date"))
-    ftype     = clean(request.GET.get("ftype"))
-    ctype     = clean(request.GET.get("ctype"))
-    visiting  = clean(request.GET.get("visiting"))
-    executive = clean(request.GET.get("executive"))
-    ptp       = clean(request.GET.get("ptp"))
-    vdate     = clean(request.GET.get("vdate"))
-    search    = clean(request.GET.get("search"))
+    # Get filter values - handle 'all' as empty
+    emp = request.GET.get('emp', '')
+    if emp == 'all' or emp == '':
+        emp = None
+    
+    date_str = request.GET.get('date', '')
+    if date_str == '':
+        date_str = None
+    
+    ftype = request.GET.get('ftype', '')
+    if ftype == 'all' or ftype == '':
+        ftype = None
+    
+    ctype = request.GET.get('ctype', '')
+    if ctype == '':
+        ctype = None
+    
+    visiting = request.GET.get('visiting', '')
+    if visiting == '':
+        visiting = None
+    
+    executive = request.GET.get('executive', '')
+    if executive == '':
+        executive = None
+    
+    ptp = request.GET.get('ptp', '')
+    if ptp == '':
+        ptp = None
+    
+    vdate = request.GET.get('vdate', '')
+    if vdate == '':
+        vdate = None
+    
+    search = request.GET.get('search', '')
+    if search == '':
+        search = None
+    
+    export_excel = request.GET.get('export')
 
     qs = Feedback.objects.all().order_by("-id")
 
@@ -819,41 +845,110 @@ def feedback_list(request):
             Q(EmpID__icontains=search)
         )
 
-    # Filters
+    # Employee filter
     if emp:
         qs = qs.filter(EmpID__iexact=emp)
 
+    # Date filter
     if date_str:
         try:
-            qs = qs.filter(Date=datetime.datetime.strptime(date_str, "%Y-%m-%d"))
+            qs = qs.filter(Date=datetime.datetime.strptime(date_str, "%Y-%m-%d").date())
         except:
             pass
 
+    # Feedback type filter
     if ftype:
         qs = qs.filter(Dropdown=ftype)
 
+    # Contact type filter
     if ctype:
         qs = qs.filter(feedback_dropdwon=ctype)
 
+    # Visiting required filter
     if visiting:
         qs = qs.filter(visiting_required=(visiting == "yes"))
 
+    # Executive filter
     if executive:
         qs = qs.filter(executive_id=executive)
 
+    # PTP Date filter
     if ptp:
         try:
-            qs = qs.filter(PTPDate=datetime.datetime.strptime(ptp, "%Y-%m-%d"))
+            qs = qs.filter(PTPDate=datetime.datetime.strptime(ptp, "%Y-%m-%d").date())
         except:
             pass
 
+    # Visit Date filter
     if vdate:
         try:
-            qs = qs.filter(visit_date=datetime.datetime.strptime(vdate, "%Y-%m-%d"))
+            qs = qs.filter(visit_date=datetime.datetime.strptime(vdate, "%Y-%m-%d").date())
         except:
             pass
 
-    # Pagination
+    # Check if export is requested
+    if export_excel == "excel":
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Feedback Data"
+        
+        headers = [
+            "ID", "Employee ID", "Loan Number", "Date", "Customer Name", 
+            "Vehicle No", "Feedback Type", "Contact Type", "PTP Date", 
+            "Remarks", "Visiting Required", "Executive ID", "Visit Date", "Created At"
+        ]
+        
+        # Style headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Add data
+        for row_idx, f in enumerate(qs, 2):
+            ws.cell(row=row_idx, column=1, value=f.id)
+            ws.cell(row=row_idx, column=2, value=f.EmpID or "")
+            ws.cell(row=row_idx, column=3, value=f.LoanNO or "")
+            ws.cell(row=row_idx, column=4, value=f.Date.strftime("%Y-%m-%d") if f.Date else "")
+            ws.cell(row=row_idx, column=5, value=f.customer_name or "")
+            ws.cell(row=row_idx, column=6, value=f.vehicle_no or "")
+            ws.cell(row=row_idx, column=7, value=f.Dropdown or "")
+            ws.cell(row=row_idx, column=8, value=f.feedback_dropdwon or "")
+            ws.cell(row=row_idx, column=9, value=f.PTPDate.strftime("%Y-%m-%d") if f.PTPDate else "")
+            ws.cell(row=row_idx, column=10, value=f.Remarks or "")
+            ws.cell(row=row_idx, column=11, value="Yes" if f.visiting_required else "No")
+            ws.cell(row=row_idx, column=12, value=f.executive_id or "")
+            ws.cell(row=row_idx, column=13, value=f.visit_date.strftime("%Y-%m-%d") if f.visit_date else "")
+            ws.cell(row=row_idx, column=14, value=f.created_at.strftime("%Y-%m-%d %H:%M:%S") if f.created_at else "")
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"feedback_export_{timestamp}.xlsx"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        
+        wb.save(response)
+        return response
+
+    # Normal view - return HTML
     paginator = Paginator(qs, 1000)
     page_obj = paginator.get_page(request.GET.get("page"))
 
@@ -861,9 +956,9 @@ def feedback_list(request):
     params.pop("page", None)
 
     filters = {
-        "emp": emp or "",
+        "emp": request.GET.get("emp", ""),
         "date": date_str or "",
-        "ftype": ftype or "",
+        "ftype": request.GET.get("ftype", ""),
         "ctype": ctype or "",
         "visiting": visiting or "",
         "executive": executive or "",
@@ -879,9 +974,6 @@ def feedback_list(request):
         "FTYPES": Feedback.DROPDOWN_CHOICES,
         "CTYPES": Feedback.FEEDBACK_CHOICES,
     })
-
-
-
 
 
 # ---------------------------------------------------------------

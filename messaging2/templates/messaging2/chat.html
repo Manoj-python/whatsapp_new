@@ -654,8 +654,84 @@ function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore =
   function formatMessageDate(date){ let today=new Date(); let yesterday=new Date(today); yesterday.setDate(yesterday.getDate()-1); let todayDate=new Date(today.getFullYear(),today.getMonth(),today.getDate()); let yesterdayDate=new Date(yesterday.getFullYear(),yesterday.getMonth(),yesterday.getDate()); let msgDate=new Date(date.getFullYear(),date.getMonth(),date.getDate()); if(msgDate.getTime()===todayDate.getTime()) return 'Today'; if(msgDate.getTime()===yesterdayDate.getTime()) return 'Yesterday'; let options={day:'numeric',month:'long'}; if(date.getFullYear()!==today.getFullYear()) options.year='numeric'; return date.toLocaleDateString('en-IN',options); }
   function renderMessages(messagesData,hasMore,nextCursorDateParam,isInitial=false){ if(messagesData.length===0&&messages.length===0){ messagesContainer.innerHTML='<div class="empty-state">No messages yet</div>'; return; } hasMoreMessages=hasMore; let sorted=[...messagesData].sort((a,b)=>new Date(a.sent_at)-new Date(b.sent_at)); let newMessages=[]; if(isInitial||messages.length===0) newMessages=sorted; else{ let existingIds=new Set(messages.map(m=>m.message_id||m.id)); newMessages=[...sorted.filter(m=>!existingIds.has(m.message_id||m.id)),...messages]; } let lastDate=null,html=''; for(let msg of newMessages){ let msgDate=new Date(msg.sent_at); let currentLabel=formatMessageDate(msgDate); if(lastDate!==currentLabel){ html+=`<div class="date-separator"><span>${currentLabel}</span></div>`; lastDate=currentLabel; } html+=renderMessage(msg); } if(isInitial||messages.length===0){ messages=newMessages; messagesContainer.innerHTML=html; if(hasMoreMessages) addLoadOlderButton(); else removeLoadOlderButton(); scrollToBottom(); } else{ let oldHeight=messagesContainer.scrollHeight; messages=newMessages; messagesContainer.innerHTML=html; messagesContainer.scrollTop=messagesContainer.scrollHeight-oldHeight; if(hasMoreMessages) addLoadOlderButton(); else removeLoadOlderButton(); } isLoadingMessages=false; }
   function renderMessage(msg){ let isSent=msg.message_type==='Sent'; let timeDisplay=''; try{ let d=new Date(msg.sent_at); if(!isNaN(d.getTime())) timeDisplay=d.toLocaleString('en-IN',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}); else timeDisplay='Just now'; }catch(e){ timeDisplay='Just now'; } let senderName=''; if(isSent) senderName=msg.sender_name||'Agent'; else senderName=msg.sender_name||msg.customer_name||'Customer'; let contentHtml=''; if(msg.content_type==='image'&&msg.media_file) contentHtml=`<img src="${msg.media_file}" class="message-image" onclick="openMedia('${msg.media_file}','image')">${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='video'&&msg.media_file) contentHtml=`<video class="message-video" onclick="openMedia('${msg.media_file}','video')"><source src="${msg.media_file}"></video>${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='audio'&&msg.media_file) contentHtml=`<audio controls src="${msg.media_file}"></audio>${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='document'&&msg.media_file){ let fileName=decodeURIComponent(msg.media_file.split('/').pop().split('?')[0]); let isNoc=fileName.toLowerCase().includes('noc'); let displayName=fileName.length>30?fileName.substring(0,25)+'...'+fileName.split('.').pop():fileName; let fileExt=fileName.split('.').pop().toLowerCase(); let fileIcon='fa-file-pdf',iconColor='#dc4a2c',fileTypeName='PDF'; let types={doc:{icon:'fa-file-word',color:'#2b579a',name:'Word'},docx:{icon:'fa-file-word',color:'#2b579a',name:'Word'},xls:{icon:'fa-file-excel',color:'#1e7145',name:'Excel'},xlsx:{icon:'fa-file-excel',color:'#1e7145',name:'Excel'},pdf:{icon:'fa-file-pdf',color:'#dc4a2c',name:'PDF'},jpg:{icon:'fa-file-image',color:'#f39c12',name:'Image'},png:{icon:'fa-file-image',color:'#f39c12',name:'Image'},mp4:{icon:'fa-file-video',color:'#27ae60',name:'Video'}}; if(types[fileExt]){ fileIcon=types[fileExt].icon; iconColor=types[fileExt].color; fileTypeName=types[fileExt].name; } if(isNoc) contentHtml=`<div class="document-bubble noc-document" style="cursor:default;background:#f5f5f5;border-left:4px solid #dc3545;opacity:0.7;"><div class="document-content" style="display:flex;padding:10px;"><div class="document-icon" style="background:#dc3545;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-file-contract" style="color:white;"></i><i class="fas fa-lock" style="color:white;font-size:10px;position:absolute;margin-left:14px;margin-top:14px;"></i></div><div class="document-details"><div class="document-filename" style="color:#dc3545;">🔒 NOC Restricted</div><div class="document-meta"><span class="document-type" style="background:#dc3545;color:white;padding:2px 6px;border-radius:10px;font-size:10px;">Cannot View</span></div></div></div></div>${msg.sent_text_message?`<div class="doc-text" style="margin-top:6px;padding:6px;background:#ffe5e5;border-left:3px solid #dc3545;font-size:12px;">⚠️ ${escapeHtml(msg.sent_text_message)}</div>`:''}`; else contentHtml=`<div class="document-bubble" onclick="downloadDocument('${msg.media_file}','${escapeHtml(fileName)}',event)" style="cursor:pointer;background:white;border-radius:12px;"><div class="document-content" style="display:flex;gap:12px;padding:10px;"><div class="document-icon" style="background:${iconColor}15;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;"><i class="fas ${fileIcon}" style="color:${iconColor};font-size:20px;"></i></div><div class="document-details"><div class="document-filename">${escapeHtml(displayName)}</div><div class="document-meta"><span>${fileTypeName}</span><span><i class="fas fa-download"></i> Click to download</span></div></div><div class="document-download"><i class="fas fa-download" style="color:${iconColor};"></i></div></div></div>${msg.sent_text_message?`<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; } else contentHtml=`<div class="message-text">${escapeHtml(msg.sent_text_message||'')}</div>`; let tickHtml=''; let messageId=msg.message_id||msg.id; if(isSent){ if(msg.status==='Read') tickHtml=`<span class="message-tick read" data-msg-id="${messageId}">✓✓</span>`; else if(msg.status==='Delivered') tickHtml=`<span class="message-tick delivered" data-msg-id="${messageId}">✓✓</span>`; else if(msg.status==='Failed'||msg.status==='Blocked'||msg.status==='Invalid'||msg.status==='Re-engagement Required') tickHtml=`<span class="message-tick failed" data-msg-id="${messageId}" title="${msg.status}">❌</span>`; else tickHtml=`<span class="message-tick sent" data-msg-id="${messageId}">✓</span>`; } return `<div class="message-row ${isSent?'sent':'received'}" data-msg-id="${messageId}"><div class="message-bubble ${isSent?'sent':'received'}">${contentHtml}<div class="message-footer"><span class="message-sender">${escapeHtml(senderName)}</span><span class="message-time">${timeDisplay}</span>${tickHtml}</div></div></div>`; }
-  function appendMessage(msg){ let wasAtBottom=messagesContainer.scrollHeight-messagesContainer.scrollTop-messagesContainer.clientHeight<100; let needSeparator=false,newLabel=null; if(messages.length>0){ let lastDate=new Date(messages[messages.length-1].sent_at),newDate=new Date(msg.sent_at); if(!isSameDay(lastDate,newDate)){ needSeparator=true; newLabel=formatMessageDate(newDate); } } else{ needSeparator=true; newLabel=formatMessageDate(new Date(msg.sent_at)); } messages.push(msg); let newHtml=''; if(needSeparator) newHtml=`<div class="date-separator"><span>${newLabel}</span></div>`; newHtml+=renderMessage(msg); messagesContainer.insertAdjacentHTML('beforeend',newHtml); if(wasAtBottom) scrollToBottom(); }
-  function updateMessageTickImproved(messageId,status){ if(!messageId||messageId===''){ console.warn('Ignoring empty message_id'); return; } console.log(`Update tick ${messageId} -> ${status}`); if(['Failed','Blocked','Invalid','Re-engagement Required','Rate Limited','Auth Failed'].some(s=>status.includes(s))){ let sentMsgs=document.querySelectorAll('.message-row.sent'); let updated=false; for(let i=sentMsgs.length-1;i>=0;i--){ let tick=sentMsgs[i].querySelector('.message-tick'); if(tick&&!tick.classList.contains('delivered')&&!tick.classList.contains('read')&&!tick.classList.contains('failed')){ tick.innerHTML='❌'; tick.className='message-tick failed'; tick.style.color='#dc3545'; tick.title=status; if(messageId) tick.setAttribute('data-msg-id',messageId); updated=true; break; } } if(!updated){ let lastRow=document.querySelector('.message-row.sent:last-child'); if(lastRow){ let tick=lastRow.querySelector('.message-tick'); if(tick){ tick.innerHTML='❌'; tick.className='message-tick failed'; tick.title=status; } } } showNotification(`Message ${status.toLowerCase()}`,'error'); return; } let tickSpan=null; if(messageId) tickSpan=document.querySelector(`.message-tick[data-msg-id="${messageId}"]`); if(!tickSpan&&messageId){ let row=document.querySelector(`.message-row[data-msg-id="${messageId}"]`); if(row) tickSpan=row.querySelector('.message-tick'); } if(!tickSpan){ let rows=document.querySelectorAll('.message-row.sent'); if(rows.length) tickSpan=rows[rows.length-1].querySelector('.message-tick'); } if(tickSpan&&!tickSpan.classList.contains('failed')){ tickSpan.className='message-tick'; if(status==='Read'){ tickSpan.textContent='✓✓'; tickSpan.classList.add('read'); tickSpan.style.color='#34B7F1'; } else if(status==='Delivered'){ tickSpan.textContent='✓✓'; tickSpan.classList.add('delivered'); tickSpan.style.color='#25D366'; } else if(status==='Sent'){ tickSpan.textContent='✓'; tickSpan.classList.add('sent'); tickSpan.style.color='#8696a0'; } if(messageId) tickSpan.setAttribute('data-msg-id',messageId); } }
+  function updateMessageTickImproved(messageId, status) {
+    if (!messageId || messageId === '') {
+        console.warn('⚠️ Ignoring delivery.update with empty message_id');
+        return;
+    }
+    console.log(`🔄 Updating tick for messageId: ${messageId}, status: ${status}`);
+
+    // All possible failure statuses (from webhook and tasks.py)
+    const failureStatuses = [
+        'Failed', 'Blocked', 'Invalid', 'Template Required', 'Template Failed',
+        'Re-engagement Required', 'Rate Limited', 'Auth Failed',
+        '24H_WINDOW_EXPIRED', 'NOT_ON_WHATSAPP', 'BLOCKED_BY_USER', 'BLOCKED_BY_BUSINESS',
+        'OPTED_OUT', 'TOKEN_ERROR', 'INVALID_PARAMETER', 'UNKNOWN_ERROR',
+        'REGISTRATION_ERROR', 'UNSUPPORTED_MESSAGE_TYPE', 'TEMPLATE_PARAM_ERROR',
+        'TEMPLATE_NOT_FOUND', 'TEMPLATE_PAUSED', 'TEMPLATE_DISABLED', 'RATE_LIMIT',
+        'TOO_MANY_MESSAGES'
+    ];
+    const isFailure = failureStatuses.some(s => status.includes(s));
+
+    if (isFailure) {
+        // Find the most recent sent message without a final status
+        const sentMessages = document.querySelectorAll('.message-row.sent');
+        let updated = false;
+        for (let i = sentMessages.length - 1; i >= 0; i--) {
+            const tick = sentMessages[i].querySelector('.message-tick');
+            if (tick && !tick.classList.contains('delivered') &&
+                !tick.classList.contains('read') && !tick.classList.contains('failed')) {
+                tick.innerHTML = '❌';
+                tick.className = 'message-tick failed';
+                tick.style.color = '#dc3545';
+                tick.style.fontWeight = 'bold';
+                tick.title = status;
+                if (messageId) tick.setAttribute('data-msg-id', messageId);
+                updated = true;
+                console.log('✅ Marked message as FAILED');
+                break;
+            }
+        }
+        if (!updated) {
+            console.warn('⚠️ Could not find any sent message to mark as failed');
+        }
+        showNotification(`Message ${status.toLowerCase()}`, 'error');
+        return;
+    }
+
+    // For non-failure statuses (Sent, Delivered, Read)
+    let tickSpan = null;
+    if (messageId) tickSpan = document.querySelector(`.message-tick[data-msg-id="${messageId}"]`);
+    if (!tickSpan && messageId) {
+        const row = document.querySelector(`.message-row[data-msg-id="${messageId}"]`);
+        if (row) tickSpan = row.querySelector('.message-tick');
+    }
+    if (!tickSpan) {
+        const lastSent = document.querySelector('.message-row.sent:last-child');
+        if (lastSent) tickSpan = lastSent.querySelector('.message-tick');
+    }
+    if (tickSpan && !tickSpan.classList.contains('failed')) {
+        tickSpan.className = 'message-tick';
+        if (status === 'Read') {
+            tickSpan.textContent = '✓✓';
+            tickSpan.classList.add('read');
+            tickSpan.style.color = '#34B7F1';
+        } else if (status === 'Delivered') {
+            tickSpan.textContent = '✓✓';
+            tickSpan.classList.add('delivered');
+            tickSpan.style.color = '#25D366';
+        } else if (status === 'Sent') {
+            tickSpan.textContent = '✓';
+            tickSpan.classList.add('sent');
+            tickSpan.style.color = '#8696a0';
+        }
+        if (messageId) tickSpan.setAttribute('data-msg-id', messageId);
+        console.log(`✅ Updated tick to ${status}`);
+    } else {
+        console.error(`❌ Could not find tick for message ${messageId}`);
+    }
+}  
+function appendMessage(msg){ let wasAtBottom=messagesContainer.scrollHeight-messagesContainer.scrollTop-messagesContainer.clientHeight<100; let needSeparator=false,newLabel=null; if(messages.length>0){ let lastDate=new Date(messages[messages.length-1].sent_at),newDate=new Date(msg.sent_at); if(!isSameDay(lastDate,newDate)){ needSeparator=true; newLabel=formatMessageDate(newDate); } } else{ needSeparator=true; newLabel=formatMessageDate(new Date(msg.sent_at)); } messages.push(msg); let newHtml=''; if(needSeparator) newHtml=`<div class="date-separator"><span>${newLabel}</span></div>`; newHtml+=renderMessage(msg); messagesContainer.insertAdjacentHTML('beforeend',newHtml); if(wasAtBottom) scrollToBottom(); }
   function addLoadOlderButton(){ removeLoadOlderButton(); let btn=document.createElement('div'); btn.id='loadOlderButton'; btn.className='load-older-container'; btn.innerHTML='<div class="load-older-btn"><i class="fas fa-chevron-up"></i><span>Load Older Messages</span></div>'; btn.onclick=loadOlderMessages; if(messagesContainer.firstChild) messagesContainer.insertBefore(btn,messagesContainer.firstChild); else messagesContainer.appendChild(btn); }
   function removeLoadOlderButton(){ let existing=document.getElementById('loadOlderButton'); if(existing) existing.remove(); }
   function loadOlderMessages(){ if(isLoadingMessages||!hasMoreMessages) return; isLoadingMessages=true; if(messages.length>0){ let beforeDate=messages[0].sent_at; let loadBtn=document.getElementById('loadOlderButton'); if(loadBtn) loadBtn.innerHTML='<div class="load-older-btn loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>'; sendWS({type:'get_messages',mobile:selectedMobile,before_date:beforeDate,limit:30}); } else isLoadingMessages=false; }
