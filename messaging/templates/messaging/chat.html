@@ -446,7 +446,7 @@
     if (!groupName) { showNotification('Please select a department (group)', 'warning'); return; }
 
     try {
-      const response = await fetch('/messaging2/case/create-from-chat/', {
+      const response = await fetch('/messaging2/case/create-from-chat/?app=sms', {
         method: 'POST', headers: { 'Content-Type':'application/json', 'X-CSRFToken':CSRF },
         body: JSON.stringify({
           mobile: selectedMobile,

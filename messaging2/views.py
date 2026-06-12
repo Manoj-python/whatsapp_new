@@ -1707,23 +1707,29 @@ def create_case_from_chat_api2(request):
     try:
         data = json.loads(request.body)
         mobile = format_mobile2(data.get('mobile', ''))
-        # Only allow case creation if this number has at least one message in PSF
-        if not SmsWhatsAppLog2.objects.filter(mobile=mobile).exists():
-            return JsonResponse({'error': 'This number has no WhatsApp messages in PSF. Cannot create case here.'}, status=400)
+
+        # Get app‑aware models (case, contact, log)
+        CaseModel, ContactModel, LogModel, _ = get_models_for_app(request)
+
+        # ✅ Dynamic log check – uses correct app's log table
+        if not LogModel.objects.filter(mobile=mobile).exists():
+            app_key = request.GET.get('app', 'psf')
+            return JsonResponse({
+                'error': f'This number has no WhatsApp messages in the {app_key} app. Cannot create case here.'
+            }, status=400)
+
         customer_name = data.get('customer_name') or mobile
         agent_name = data.get('agent_name', 'Agent')
         issue_description = data.get('issue_description', '')
         loan_number = data.get('loan_number', '')
         group_name = data.get('group', 'Collections')
-        escalate_to = data.get('escalate_to', None)  # e.g., "ESC2", "ESC3", "ESC4", "ESC5"
+        escalate_to = data.get('escalate_to', None)
         force_new = data.get('force_new', False)
 
-        CaseModel, ContactModel, _, _ = get_models_for_app(request)
         group_obj = SupportGroup.objects.filter(name=group_name).first()
         if not group_obj:
             return JsonResponse({'error': 'Invalid group'}, status=400)
 
-        # Check existing case if not forcing new
         if not force_new:
             existing_case = CaseModel.objects.filter(
                 mobile=mobile,
@@ -1743,12 +1749,10 @@ def create_case_from_chat_api2(request):
                     'message': 'An active case already exists. Create new anyway?'
                 })
 
-        # Determine initial level
         initial_level = 'ESC1'
         if escalate_to and escalate_to.startswith('ESC') and escalate_to != 'ESC1':
             initial_level = escalate_to
 
-        # Create case
         case_id = f"CASE-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         case = CaseModel.objects.create(
             case_id=case_id,
@@ -1766,17 +1770,14 @@ def create_case_from_chat_api2(request):
             assigned_to_name=None,
         )
 
-        # Auto-assign only for ESC1
         if initial_level == 'ESC1':
             auto_assign(case)
             if case.assigned_to:
                 case.assigned_to_name = case.assigned_to.name
                 case.save(update_fields=['assigned_to_name'])
         else:
-            # Log escalation from ESC1 to target level
-            from .models import CaseEscalationLog
-            CaseEscalationLog.objects.create(
-                case=case,
+            # ✅ Use reverse relation – no import needed
+            case.escalation_logs.create(
                 from_level='ESC1',
                 to_level=initial_level,
                 escalated_by=agent_name,
@@ -1807,7 +1808,7 @@ def create_case_from_chat_api2(request):
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-    
+
 
 @messaging2_required
 def get_user_role_api2(request):

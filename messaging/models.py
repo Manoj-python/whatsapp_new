@@ -99,7 +99,7 @@ class BulkJob(models.Model):
 from messaging2.models import Agent  # reuse Agent from PSF app
 from adminpanel.models import SupportGroup
 class CaseEscalationLog(models.Model):
-    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='app1_escalation_logs')
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='escalation_logs')
     from_level = models.CharField(max_length=20)
     to_level = models.CharField(max_length=20)
     escalated_by = models.CharField(max_length=255, blank=True, null=True)
@@ -114,7 +114,7 @@ class CaseEscalationLog(models.Model):
 
 
 class CaseAssignmentLog(models.Model):
-    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='app1_assignment_logs')
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='assignment_logs')
     assigned_to = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='app1_assignments')
     assigned_by = models.CharField(max_length=255, blank=True, null=True)
     reason = models.TextField(blank=True, null=True)
@@ -125,7 +125,7 @@ class CaseAssignmentLog(models.Model):
 
 
 class CaseComment(models.Model):
-    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='app1_comments')
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='comments')
     agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True,related_name='app1_agent')
     agent_name = models.CharField(max_length=255, blank=True, null=True)
     comment = models.TextField()

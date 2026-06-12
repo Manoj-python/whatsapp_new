@@ -658,6 +658,7 @@ def send_reply_api(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
 # =============================================
@@ -707,62 +708,104 @@ def whatsapp_webhook(request):
                         button_response = ""
 
                         # ======================================
-                        # TEXT MESSAGES (with Quick Reply button detection)
+                        # DEBUG - SEE EXACT META PAYLOAD
                         # ======================================
-                        if msg_type == "text":
-                            # Get the raw text from WhatsApp
-                            raw_text = msg["text"].get("body", "").strip()
-                            
-                            print(f"📝 Raw text from {mobile}: '{raw_text}'")
-                            
-                            # Quick Reply button values from your template
-                            quick_reply_values = ["Interested", "Not Interested", "Call Now"]
-                            
-                            # Check if this is a Quick Reply button click
-                            if raw_text in quick_reply_values:
-                                content_type = "interactive"
-                                
-                                # Get context (which template this reply is for)
-                                context_id = None
-                                if msg.get("context"):
-                                    context = msg.get("context", {})
-                                    context_id = context.get("id")
-                                    print(f"  └─ Context message ID: {context_id}")
-                                
-                                button_response = json.dumps({
-                                    "type": "quick_reply",
-                                    "button_title": raw_text,
-                                    "button_text": raw_text,
-                                    "context_message_id": context_id,
-                                    "source": "quick_reply",
-                                    "timestamp": timezone.now().isoformat()
-                                })
-                                
-                                # Format the display message
-                                text_body = f"[Button Click] {raw_text}"
-                                
-                                print(f"🔘 Quick Reply captured: {text_body} from {mobile}")
-                            else:
-                                # Regular text message (not a button)
-                                text_body = raw_text
-                                print(f"📝 Regular text from {mobile}: {text_body[:50]}")
+                        print("=" * 80)
+                        print("RAW WHATSAPP MESSAGE")
+                        print(json.dumps(msg, indent=2))
+                        print("=" * 80)
 
                         # ======================================
-                        # INTERACTIVE MESSAGES (BUTTONS & LISTS)
+                        # TEXT MESSAGES
+                        # ======================================
+                        if msg_type == "text":
+
+                            text_body = msg.get("text", {}).get("body", "").strip()
+
+                            print(f"📝 Raw text from {mobile}: '{text_body}'")
+
+                            quick_reply_values = [
+                                "Interested",
+                                "Not Interested",
+                                "Call Now"
+                            ]
+
+                            if text_body in quick_reply_values:
+
+                                content_type = "interactive"
+
+                                context_id = None
+                                if msg.get("context"):
+                                    context_id = msg.get("context", {}).get("id")
+
+                                button_response = json.dumps({
+                                    "type": "quick_reply_text",
+                                    "button_title": text_body,
+                                    "button_text": text_body,
+                                    "context_message_id": context_id,
+                                    "source": "text_quick_reply",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+
+                                text_body = f"[Button Click] {text_body}"
+
+                                print(f"🔘 Quick Reply captured via TEXT: {text_body}")
+
+                            else:
+                                print(f"📝 Regular text from {mobile}: {text_body}")
+
+
+                        # ======================================
+                        # TEMPLATE QUICK REPLY BUTTONS
+                        # ======================================
+                        elif msg_type == "button":
+
+                            button = msg.get("button", {})
+
+                            button_text = button.get("text", "")
+                            button_payload = button.get("payload", "")
+
+                            content_type = "button"
+
+                            button_response = json.dumps({
+                                "type": "template_quick_reply",
+                                "button_text": button_text,
+                                "button_payload": button_payload,
+                                "source": "button",
+                                "timestamp": timezone.now().isoformat()
+                            })
+
+                            text_body = f"[Button Click] {button_text}"
+
+                            print(
+                                f"🔘 Template Button Clicked: "
+                                f"text={button_text}, payload={button_payload}"
+                            )
+
+
+                        # ======================================
+                        # INTERACTIVE MESSAGES
                         # ======================================
                         elif msg_type == "interactive":
+
                             interactive = msg.get("interactive", {})
                             content_type = "interactive"
+
                             interactive_type = interactive.get("type")
-                            
-                            print(f"🎯 Interactive message from {mobile}: {interactive_type}")
-                            
-                            # Handle Button Clicks (Format 1: button_reply)
-                            if interactive_type == "button_reply" or "button_reply" in interactive:
+
+                            print(
+                                f"🎯 Interactive message from "
+                                f"{mobile}: {interactive_type}"
+                            )
+
+                            # BUTTON REPLY
+                            if interactive_type == "button_reply":
+
                                 button_reply = interactive.get("button_reply", {})
+
                                 button_id = button_reply.get("id", "")
                                 button_title = button_reply.get("title", "")
-                                
+
                                 button_response = json.dumps({
                                     "type": "button_click",
                                     "button_id": button_id,
@@ -770,31 +813,22 @@ def whatsapp_webhook(request):
                                     "source": "interactive_button_reply",
                                     "timestamp": timezone.now().isoformat()
                                 })
+
                                 text_body = f"[Button Click] {button_title}"
-                                print(f"🔘 Button clicked (button_reply): {button_title} from {mobile}")
-                            
-                            # Handle Button Clicks (Format 2: button)
-                            elif interactive_type == "button" or "button" in interactive:
-                                button_data = interactive.get("button", {})
-                                button_id = button_data.get("id", "")
-                                button_title = button_data.get("text", "")
-                                
-                                button_response = json.dumps({
-                                    "type": "button_click",
-                                    "button_id": button_id,
-                                    "button_title": button_title,
-                                    "source": "interactive_button",
-                                    "timestamp": timezone.now().isoformat()
-                                })
-                                text_body = f"[Button Click] {button_title}"
-                                print(f"🔘 Button clicked (button): {button_title} from {mobile}")
-                            
-                            # Handle List Selections
-                            elif interactive_type == "list_reply" or "list_reply" in interactive:
+
+                                print(
+                                    f"🔘 Button Reply: "
+                                    f"id={button_id}, title={button_title}"
+                                )
+
+                            # LIST REPLY
+                            elif interactive_type == "list_reply":
+
                                 list_reply = interactive.get("list_reply", {})
+
                                 list_id = list_reply.get("id", "")
                                 list_title = list_reply.get("title", "")
-                                
+
                                 button_response = json.dumps({
                                     "type": "list_selection",
                                     "list_id": list_id,
@@ -802,53 +836,48 @@ def whatsapp_webhook(request):
                                     "source": "interactive_list",
                                     "timestamp": timezone.now().isoformat()
                                 })
+
                                 text_body = f"[List Selection] {list_title}"
-                                print(f"📋 List selected: {list_title} from {mobile}")
-                            
-                            # Handle Call to Action buttons
-                            elif interactive_type == "cta_url" or "cta_url" in interactive:
-                                cta_data = interactive.get("cta_url", {})
-                                button_title = cta_data.get("title", "")
-                                
+
+                                print(
+                                    f"📋 List selected: "
+                                    f"id={list_id}, title={list_title}"
+                                )
+
+                            # CTA URL
+                            elif interactive_type == "cta_url":
+
+                                cta = interactive.get("cta_url", {})
+
+                                button_title = cta.get("title", "")
+
                                 button_response = json.dumps({
                                     "type": "cta_click",
                                     "button_title": button_title,
                                     "source": "interactive_cta",
                                     "timestamp": timezone.now().isoformat()
                                 })
-                                text_body = f"[CTA Click] {button_title}"
-                                print(f"🔗 CTA clicked: {button_title} from {mobile}")
-                            
-                            # Handle other interactive types (fallback)
-                            else:
-                                # Try to extract any button data from the interactive object
-                                button_found = False
-                                for key in ["button_reply", "button", "list_reply", "cta_url"]:
-                                    if key in interactive:
-                                        btn_data = interactive.get(key, {})
-                                        btn_title = btn_data.get("title") or btn_data.get("text", "")
-                                        if btn_title:
-                                            button_response = json.dumps({
-                                                "type": "button_click",
-                                                "button_title": btn_title,
-                                                "source": f"interactive_{key}",
-                                                "timestamp": timezone.now().isoformat()
-                                            })
-                                            text_body = f"[Button Click] {btn_title}"
-                                            button_found = True
-                                            print(f"🔘 Button found in {key}: {btn_title} from {mobile}")
-                                            break
-                                
-                                if not button_found:
-                                    text_body = f"[Interactive] {interactive_type}"
-                                    button_response = json.dumps({
-                                        "type": "unknown_interactive",
-                                        "interactive_type": interactive_type,
-                                        "raw_data": interactive,
-                                        "timestamp": timezone.now().isoformat()
-                                    })
-                                    print(f"⚠️ Unknown interactive type: {interactive_type} from {mobile}")
 
+                                text_body = f"[CTA Click] {button_title}"
+
+                                print(f"🔗 CTA clicked: {button_title}")
+
+                            # FALLBACK
+                            else:
+
+                                text_body = f"[Interactive] {interactive_type}"
+
+                                button_response = json.dumps({
+                                    "type": "unknown_interactive",
+                                    "interactive_type": interactive_type,
+                                    "raw_data": interactive,
+                                    "timestamp": timezone.now().isoformat()
+                                })
+
+                                print(
+                                    f"⚠️ Unknown interactive type: "
+                                    f"{interactive_type}"
+                                )
                         # ======================================
                         # MEDIA MESSAGES
                         # ======================================
@@ -879,10 +908,6 @@ def whatsapp_webhook(request):
                         # ======================================
                         # SAVE MESSAGE TO DATABASE
                         # ======================================
-                        # Ensure text_body is not empty for button clicks
-                        if not text_body and button_response:
-                            text_body = "[Button Click]"
-                            
                         with transaction.atomic():
                             log = SmsWhatsAppLog.objects.create(
                                 customer_name=customer_name,
@@ -1059,8 +1084,6 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
-
-
 
 
 
