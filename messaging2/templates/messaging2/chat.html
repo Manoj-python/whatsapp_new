@@ -251,131 +251,155 @@
     } catch(e) { console.error('Failed to load groups', e); availableGroups = []; }
   }
 
-  async function renderCasePanel() {
+async function renderCasePanel() {
     const content = document.getElementById('caseSidebarContent');
     if (!content) return;
     content.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Loading case details...</p></div>';
     try {
-      const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(selectedMobile)}`);
-      const data = await response.json();
-      if (data.case) {
-        currentCaseData = data.case;
-        const levelColors = { 'ESC0':'secondary','ESC1':'success','ESC2':'info','ESC3':'warning','ESC4':'danger','ESC5':'dark','RESOLVED':'success','CLOSED':'secondary' };
-        let levelIcon = '';
-        if (currentCaseData.current_level === 'RESOLVED') levelIcon = '✅';
-        else if (currentCaseData.current_level === 'CLOSED') levelIcon = '🔒';
-        else if (currentCaseData.current_level === 'ESC1') levelIcon = '📞';
-        else if (currentCaseData.current_level === 'ESC2') levelIcon = '⚖️';
-        else if (currentCaseData.current_level === 'ESC3') levelIcon = '⭐';
-        else if (currentCaseData.current_level === 'ESC4') levelIcon = '📊';
-        else levelIcon = '🔒';
+        const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(selectedMobile)}`);
+        const data = await response.json();
+        if (data.case) {
+            currentCaseData = data.case;
+            const levelColors = { 'ESC0':'secondary','ESC1':'success','ESC2':'info','ESC3':'warning','ESC4':'danger','ESC5':'dark','RESOLVED':'success','CLOSED':'secondary' };
+            let levelIcon = '';
+            if (currentCaseData.current_level === 'RESOLVED') levelIcon = '✅';
+            else if (currentCaseData.current_level === 'CLOSED') levelIcon = '🔒';
+            else if (currentCaseData.current_level === 'ESC1') levelIcon = '📞';
+            else if (currentCaseData.current_level === 'ESC2') levelIcon = '⚖️';
+            else if (currentCaseData.current_level === 'ESC3') levelIcon = '⭐';
+            else if (currentCaseData.current_level === 'ESC4') levelIcon = '📊';
+            else levelIcon = '🔒';
 
-        let groupName = currentCaseData.group_name || 'Not assigned';
+            let groupName = currentCaseData.group_name || 'Not assigned';
 
-        // Determine available escalation levels (higher than current)
-        const allLevels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5'];
-        const currentIdx = allLevels.indexOf(currentCaseData.current_level);
-        let availableLevels = allLevels.slice(currentIdx + 1);
-        let escalateOptions = '';
-        let showEscalate = (currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed' && availableLevels.length > 0);
-        if (showEscalate) {
-          const levelNames = {
-            'ESC1': '📞 Normal (ESC1)',
-            'ESC2': '⚖️ Executive (ESC2)',
-            'ESC3': '⭐ Manager (ESC3)',
-            'ESC4': '📊 Head (ESC4)',
-            'ESC5': '🔒 Admin (ESC5)'
-          };
-          for (let lvl of availableLevels) {
-            escalateOptions += `<option value="${lvl}">${levelNames[lvl]}</option>`;
-          }
+            // Determine available escalation levels (higher than current)
+            const allLevels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5'];
+            const currentIdx = allLevels.indexOf(currentCaseData.current_level);
+            let availableLevels = allLevels.slice(currentIdx + 1);
+            let showEscalate = (currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed' && availableLevels.length > 0);
+            
+            // Build escalation dropdown options
+            let escalateOptions = '';
+            if (showEscalate) {
+                const levelNames = {
+                    'ESC1': '📞 Normal (ESC1)',
+                    'ESC2': '⚖️ Executive (ESC2)',
+                    'ESC3': '⭐ Manager (ESC3)',
+                    'ESC4': '📊 Head (ESC4)',
+                    'ESC5': '🔒 Admin (ESC5)'
+                };
+                for (let lvl of availableLevels) {
+                    escalateOptions += `<option value="${lvl}">${levelNames[lvl]}</option>`;
+                }
+            }
+
+            let showResolve = (currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed');
+
+            let html = `
+                <div class="case-info-section">
+                    <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-info-circle"></i> Case Information</h6>
+                    <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(currentCaseData.case_id)}</strong></div>
+                    <div class="mb-2"><label>Customer:</label> ${escapeHtml(currentCaseData.customer_name || selectedMobile)}</div>
+                    <div class="mb-2"><label>Loan Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.loan_number || 'Not provided')}</span></div>
+                    <div class="mb-2"><label>Department:</label> ${escapeHtml(groupName)}</div>
+                    <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[currentCaseData.current_level] || 'secondary'}">${levelIcon} ${currentCaseData.current_level}</span></div>
+                    <div class="mb-2"><label>Status:</label> <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span></div>
+                    <div class="mb-2"><label>Assigned To:</label> ${escapeHtml(currentCaseData.assigned_to_name || 'Unassigned')}</div>
+                    <div class="mb-2"><label>Issue:</label> <div class="border rounded p-2 bg-light small">${escapeHtml(currentCaseData.issue_description || 'No description')}</div></div>
+                </div>
+                <hr>
+                <div class="case-actions-section">
+                    <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-cogs"></i> Actions</h6>
+            `;
+
+            // Escalation UI (only if possible)
+            if (showEscalate) {
+                html += `
+                    <div class="mb-3 escalation-section">
+                        <label class="form-label small fw-bold">Escalate To:</label>
+                        <select id="escalateLevelSelect" class="form-select form-select-sm mb-2">${escalateOptions}</select>
+                        <textarea id="escalateReasonText" class="form-control form-control-sm mb-2" rows="2" placeholder="Reason for escalation..."></textarea>
+                        <div class="row mb-2">
+                            <div class="col">
+                                <input type="text" id="escalateLoanNumber" class="form-control form-control-sm" placeholder="Loan number (optional)">
+                            </div>
+                            <div class="col">
+                                <input type="text" id="escalateCustomerName" class="form-control form-control-sm" placeholder="Customer name" value="${escapeHtml(currentCaseData.customer_name || '')}">
+                            </div>
+                        </div>
+                        <button class="btn btn-warning btn-sm w-100" onclick="escalateCase()">⬆️ Escalate Case</button>
+                    </div>
+                `;
+            }
+
+            // Resolve UI
+            if (showResolve) {
+                html += `
+                    <div class="mb-3">
+                        <textarea id="resolutionNotesText" class="form-control form-control-sm mb-2" rows="2" placeholder="Resolution notes..."></textarea>
+                        <button class="btn btn-success btn-sm w-100" onclick="resolveCurrentCase()">✅ Resolve Case</button>
+                    </div>
+                `;
+            }
+
+            html += `
+                    <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="viewCaseTimeline()"><i class="fas fa-history"></i> View Timeline</button>
+                    <button class="btn btn-outline-secondary btn-sm w-100" onclick="openCreateAnotherCaseForm()"><i class="fas fa-plus"></i> Create Another Case</button>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        } else {
+            // No case: show creation form (unchanged)
+            if (availableGroups.length === 0) await fetchGroups();
+            let groupsHtml = '<select id="newCaseGroup" class="form-select form-select-sm mb-2" required><option value="">Select Department</option>';
+            availableGroups.forEach(g => { groupsHtml += `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`; });
+            groupsHtml += '</select>';
+
+            let escalationOptions = '<option value="">-- No escalation (ESC1) --</option>';
+            const creationLevels = ['ESC2', 'ESC3', 'ESC4', 'ESC5'];
+            const levelNamesShort = { 'ESC2': 'Executive (ESC2)', 'ESC3': 'Manager (ESC3)', 'ESC4': 'Head (ESC4)', 'ESC5': 'Admin (ESC5)' };
+            for (let lvl of creationLevels) {
+                escalationOptions += `<option value="${lvl}">${levelNamesShort[lvl]}</option>`;
+            }
+
+            content.innerHTML = `
+                <div class="text-center py-3">
+                    <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                    <p>No active case found. Create a new case:</p>
+                    <div class="text-start">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Customer Name</label>
+                            <input type="text" id="newCaseCustomerName" class="form-control form-control-sm" value="${escapeHtml(headerName.textContent)}">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Loan Number</label>
+                            <input type="text" id="newCaseLoanNumber" class="form-control form-control-sm" placeholder="e.g., LOAN12345">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Department (Group)</label>
+                            ${groupsHtml}
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Escalate To (Optional)</label>
+                            <select id="newCaseEscalateTo" class="form-select form-select-sm">${escalationOptions}</select>
+                            <small class="text-muted">If selected, case will be created at that level</small>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Issue Description</label>
+                            <textarea id="newCaseDesc" class="form-control form-control-sm" rows="3" placeholder="Describe the issue..."></textarea>
+                        </div>
+                        <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> You can create multiple cases for the same customer.</small>
+                        <button class="btn btn-primary btn-sm w-100 mt-2" onclick="createCaseFromChat()">➕ Create Case</button>
+                    </div>
+                </div>
+            `;
         }
-        let showResolve = (currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed');
-
-        let html = `
-          <div class="case-info-section">
-            <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-info-circle"></i> Case Information</h6>
-            <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(currentCaseData.case_id)}</strong></div>
-            <div class="mb-2"><label>Customer:</label> ${escapeHtml(currentCaseData.customer_name || selectedMobile)}</div>
-            <div class="mb-2"><label>Loan Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.loan_number || 'Not provided')}</span></div>
-            <div class="mb-2"><label>Department:</label> ${escapeHtml(groupName)}</div>
-            <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[currentCaseData.current_level] || 'secondary'}">${levelIcon} ${currentCaseData.current_level}</span></div>
-            <div class="mb-2"><label>Status:</label> <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span></div>
-            <div class="mb-2"><label>Assigned To:</label> ${escapeHtml(currentCaseData.assigned_to_name || 'Unassigned')}</div>
-            <div class="mb-2"><label>Issue:</label> <div class="border rounded p-2 bg-light small">${escapeHtml(currentCaseData.issue_description || 'No description')}</div></div>
-          </div>
-          <hr>
-          <div class="case-actions-section">
-            <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-cogs"></i> Actions</h6>
-        `;
-
-        
-
-        if (showResolve) {
-          html += `
-            <div class="mb-3">
-              <textarea id="resolutionNotesText" class="form-control form-control-sm mb-2" rows="2" placeholder="Resolution notes..."></textarea>
-              <button class="btn btn-success btn-sm w-100" onclick="resolveCurrentCase()">✅ Resolve Case</button>
-            </div>
-          `;
-        }
-
-        html += `
-            <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="viewCaseTimeline()"><i class="fas fa-history"></i> View Timeline</button>
-            <button class="btn btn-outline-secondary btn-sm w-100" onclick="openCreateAnotherCaseForm()"><i class="fas fa-plus"></i> Create Another Case</button>
-          </div>
-        `;
-
-        content.innerHTML = html;
-      } else {
-        // No case: show creation form
-        if (availableGroups.length === 0) await fetchGroups();
-        let groupsHtml = '<select id="newCaseGroup" class="form-select form-select-sm mb-2" required><option value="">Select Department</option>';
-        availableGroups.forEach(g => { groupsHtml += `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`; });
-        groupsHtml += '</select>';
-
-        let escalationOptions = '<option value="">-- No escalation (ESC1) --</option>';
-        const creationLevels = ['ESC2', 'ESC3', 'ESC4', 'ESC5'];
-        const levelNamesShort = { 'ESC2': 'Executive (ESC2)', 'ESC3': 'Manager (ESC3)', 'ESC4': 'Head (ESC4)', 'ESC5': 'Admin (ESC5)' };
-        for (let lvl of creationLevels) {
-          escalationOptions += `<option value="${lvl}">${levelNamesShort[lvl]}</option>`;
-        }
-
-        content.innerHTML = `
-          <div class="text-center py-3">
-            <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
-            <p>No active case found. Create a new case:</p>
-            <div class="text-start">
-              <div class="mb-2">
-                <label class="form-label small fw-bold">Customer Name</label>
-                <input type="text" id="newCaseCustomerName" class="form-control form-control-sm" value="${escapeHtml(headerName.textContent)}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label small fw-bold">Loan Number</label>
-                <input type="text" id="newCaseLoanNumber" class="form-control form-control-sm" placeholder="e.g., LOAN12345">
-              </div>
-              <div class="mb-2">
-                <label class="form-label small fw-bold">Department (Group)</label>
-                ${groupsHtml}
-              </div>
-              <div class="mb-2">
-                <label class="form-label small fw-bold">Escalate To (Optional)</label>
-                <select id="newCaseEscalateTo" class="form-select form-select-sm">${escalationOptions}</select>
-                <small class="text-muted">If selected, case will be created at that level</small>
-              </div>
-              <div class="mb-2">
-                <label class="form-label small fw-bold">Issue Description</label>
-                <textarea id="newCaseDesc" class="form-control form-control-sm" rows="3" placeholder="Describe the issue..."></textarea>
-              </div>
-              <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> You can create multiple cases for the same customer.</small>
-              <button class="btn btn-primary btn-sm w-100 mt-2" onclick="createCaseFromChat()">➕ Create Case</button>
-            </div>
-          </div>
-        `;
-      }
-    } catch (error) { console.error(error); content.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`; }
-  }
-
+    } catch (error) {
+        console.error(error);
+        content.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+    }
+}
   // Escalate case
   window.escalateCase = async function() {
     const level = document.getElementById('escalateLevelSelect')?.value;

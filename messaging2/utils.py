@@ -778,7 +778,20 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             
             ],
         ),
+    
+          
+         "43": (
+                "new_loans_te",
+                "te",
+                [    {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
+            
+                ],
+            ),
+
+
     }
+
+
 
     template_name, lang, parameters = templates.get(choice, templates["8"])
     mobile = format_mobile2(

@@ -29,112 +29,135 @@ def digits_only(x: str) -> str:
 
 def ws_group_name2(mobile: str) -> str:
     return digits_only(mobile)
+import hashlib
+from django.core.cache import cache
 
+def contacts_cache_key(page, size, q, filter_type, level, group_ids):
+    key_data = f"{page}:{size}:{q}:{filter_type}:{level}:{group_ids}"
+    return f"contacts_page_{hashlib.md5(key_data.encode()).hexdigest()}"
 # -------------------------
 # Database Queries
 # -------------------------
-@sync_to_async
-def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, group_ids=None):
-    from .models import ChatContact2, SmsWhatsAppLog2, Case
-    from django.db.models import Q, OuterRef, Subquery
 
-    # Subquery to get the latest case for each mobile
-    latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
-    # Annotate group_id and group_name
-    qs = ChatContact2.objects.annotate(
-        latest_group_id=Subquery(latest_case.values('group_id')[:1]),
-        latest_group_name=Subquery(latest_case.values('group__name')[:1])
-    )
-
-    # Apply level filter (based on current_level on ChatContact2)
-    if level and level != 'ESC1':
-        qs = qs.filter(current_level=level)
-
-    # Apply unread/assigned filters
-    if filter_type == "unread":
-        qs = qs.filter(unread__gt=0)
-        qs = qs.exclude(last_msg__icontains="No messages yet")
-        qs = qs.exclude(last_msg="")
-        qs = qs.exclude(last_msg__isnull=True)
-    elif filter_type == "assigned":
-        if level:
-            qs = qs.filter(current_level=level)
-        qs = qs.exclude(last_msg__icontains="No messages yet")
-
-    # Search filter (mobile, last_msg, and group name from annotation)
-    if q:
-        raw_q = q.strip()
-        digits = re.sub(r"\D", "", raw_q)
-        filters = Q()
-        if digits:
-            filters |= Q(mobile__icontains=digits)
-        filters |= Q(last_msg__icontains=raw_q)
-        # Also search in the annotated group name
-        filters |= Q(latest_group_name__icontains=raw_q)
-        qs = qs.filter(filters)
-
-    # Group filter (if user is non‑agent and non‑admin)
-    if group_ids and level and level != 'ESC1' and level != 'ESC5':
-        qs = qs.filter(latest_group_id__in=group_ids)
-
-    # Order by last_time DESC (already indexed)
-    qs = qs.order_by('-last_time')
-
-    # Paginate in the database
-    total = qs.count()
-    start = (page - 1) * size
-    end = start + size
-    contacts_qs = qs[start:end]
-
-    # Build the contact list (only paginated contacts, no extra queries)
-    contacts = []
-    for c in contacts_qs:
-        last_msg = c.last_msg or ""
-        if last_msg == "" or last_msg == "No messages yet":
-            # Only fetch latest message if needed (optional, but could be optimized further)
-            latest_msg = SmsWhatsAppLog2.objects.filter(mobile=c.mobile).order_by('-sent_at').first()
-            if latest_msg:
-                last_msg = latest_msg.sent_text_message or "[Media]"
-                # Async update (optional, but fine)
-                ChatContact2.objects.filter(mobile=c.mobile).update(last_msg=last_msg)
-            else:
-                if filter_type == "unread":
-                    continue
-                last_msg = "No messages yet"
-
-        contacts.append({
-            "mobile": c.mobile,
-            "last_msg": last_msg,
-            "last_type": c.last_type or "",
-            "last_status": c.last_status or "",
-            "unread": c.unread,
-            "last_time": c.last_time.isoformat() if c.last_time else None,
-            "current_level": c.current_level or "ESC1",
-            "group_name": c.latest_group_name,
-        })
-
-    total_pages = (total + size - 1) // size if total > 0 else 1
-
-    # Unread count (only for agents/admins)
-    unread_count = 0
-    if not level or level in ['ESC1', 'ESC5']:
-        unread_count = ChatContact2.objects.filter(
-            unread__gt=0
-        ).exclude(
-            last_msg__icontains="No messages yet"
-        ).exclude(
-            last_msg=""
+def get_cached_unread_count():
+    count = cache.get("global_unread_count")
+    if count is None:
+        count = ChatContact2.objects.filter(unread__gt=0).exclude(
+            Q(last_msg__icontains="No messages yet") | Q(last_msg="")
         ).count()
+        cache.set("global_unread_count", count, timeout=3)
+    return count
+
+from channels.db import database_sync_to_async
+@database_sync_to_async
+def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, group_ids=None):
+    offset = (page - 1) * size
+    limit = size
+    params = []
+
+    # Derived table: latest message per mobile (single scan)
+    sql = """
+    SELECT 
+        c.mobile,
+        COALESCE(lm.sent_text_message, c.last_msg, 'No messages yet') AS last_msg,
+        c.last_type,
+        c.last_status,
+        c.unread,
+        c.last_time,
+        c.current_level,
+        NULL AS group_name
+    FROM messaging2_chatcontact2 c
+    LEFT JOIN (
+        SELECT l.mobile, l.sent_text_message
+        FROM messaging2_smswhatsapplog2 l
+        JOIN (
+            SELECT mobile, MAX(sent_at) AS max_sent
+            FROM messaging2_smswhatsapplog2
+            GROUP BY mobile
+        ) latest ON l.mobile = latest.mobile AND l.sent_at = latest.max_sent
+    ) lm ON c.mobile = lm.mobile
+    WHERE 1=1
+    """
+
+    if level and level != 'ESC1':
+        sql += " AND c.current_level = %s"
+        params.append(level)
+
+    if filter_type == "unread":
+        sql += " AND c.unread > 0"
+        sql += " AND c.last_msg NOT LIKE 'No messages yet' AND c.last_msg != ''"
+
+    if q:
+        digits = re.sub(r"\D", "", q)
+        sql += " AND ("
+        conditions = []
+        if digits:
+            conditions.append("c.mobile LIKE %s")
+            params.append(f"%{digits}%")
+        conditions.append("c.last_msg LIKE %s")
+        params.append(f"%{q}%")
+        sql += " OR ".join(conditions) + ")"
+
+    # Group filter – uncomment if you have group_id column
+    # if group_ids and level and level not in ('ESC1','ESC5'):
+    #     placeholders = ','.join(['%s'] * len(group_ids))
+    #     sql += f" AND c.group_id IN ({placeholders})"
+    #     params.extend(group_ids)
+
+    sql += " ORDER BY c.last_time DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+    # Count query (same filters)
+    count_sql = """
+    SELECT COUNT(*)
+    FROM messaging2_chatcontact2 c
+    WHERE 1=1
+    """
+    count_params = []
+    if level and level != 'ESC1':
+        count_sql += " AND c.current_level = %s"
+        count_params.append(level)
+    if filter_type == "unread":
+        count_sql += " AND c.unread > 0 AND c.last_msg NOT LIKE 'No messages yet' AND c.last_msg != ''"
+    if q:
+        digits = re.sub(r"\D", "", q)
+        count_sql += " AND ("
+        conds = []
+        if digits:
+            conds.append("c.mobile LIKE %s")
+            count_params.append(f"%{digits}%")
+        conds.append("c.last_msg LIKE %s")
+        count_params.append(f"%{q}%")
+        count_sql += " OR ".join(conds) + ")"
+    with connection.cursor() as cursor:
+        cursor.execute(count_sql, count_params)
+        total = cursor.fetchone()[0]
+
+    contacts = []
+    for row in rows:
+        contacts.append({
+            "mobile": row[0],
+            "last_msg": row[1] or "",
+            "last_type": row[2] or "",
+            "last_status": row[3] or "",
+            "unread": row[4],
+            "last_time": row[5].isoformat() if row[5] else None,
+            "current_level": row[6] or "ESC1",
+            "group_name": row[7] or "",
+        })
 
     return {
         "contacts": contacts,
-        "total_pages": total_pages,
+        "total_pages": (total + size - 1) // size if total > 0 else 1,
         "current_page": page,
         "total": total,
-        "has_more": page < total_pages,
-        "unread_count": unread_count
+        "has_more": page * size < total,
+        "unread_count": get_cached_unread_count()
     }
-
 # messaging/consumers.py - Update get_messages_page_from_db2 function
 
 from datetime import datetime, timedelta
@@ -315,6 +338,7 @@ def create_outgoing_log2(mobile: str, text: str, message_id: str, content_type: 
             "unread": 0
         }
     )
+    cache.delete("global_unread_count")
 
     return {
         "id": log.id,
@@ -339,6 +363,7 @@ def mark_messages_read_db2(mobile: str):
     ).update(status="Read")
 
     ChatContact2.objects.filter(mobile=format_mobile2(mobile)).update(unread=0)
+    cache.delete("global_unread_count")
     return updated
 
 @sync_to_async
@@ -515,15 +540,11 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
                                 group_ids = await sync_to_async(lambda: list(agent.groups.values_list('id', flat=True)))()
                     except Exception:
                         pass
-
-            res = await get_contacts_page2(
-            page=page,
-            size=size,
-            q=q,
-            filter_type=filter_type,
-            level=level,
-            group_ids=group_ids   # ← now correctly passed
-        )
+            cache_key = contacts_cache_key(page, size, q, filter_type, level, str(group_ids))
+            res = cache.get(cache_key)
+            if res is None:
+                res = await get_contacts_page2(page, size, q, filter_type, level, group_ids)
+                cache.set(cache_key, res, timeout=5)
 
             if self.connection_active:
                 await self.send_json({
@@ -682,7 +703,7 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
             created["sender_name"] = agent_name
 
             # Clear cache
-            cache.clear()
+            cache.delete("global_unread_count")
 
             # Real-time contact update
             await self.channel_layer.group_send(

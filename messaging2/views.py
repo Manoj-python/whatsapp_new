@@ -652,9 +652,9 @@ def send_reply_api2(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-# =============================================
-# WHATSAPP WEBHOOK - COMPLETE FIXED VERSION
-# =============================================
+
+
+
 
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE FIXED VERSION
@@ -705,18 +705,68 @@ def whatsapp_webhook2(request):
                         text_body = ""
                         content_type = "text"
                         media_file_data = None
+                        button_response = ""
+                        
 
                         if msg_type == "text":
                             text_body = msg["text"].get("body", "")
                             # print(f"📝 Text from {mobile}: {text_body[:50]}")
 
                         elif msg_type == "interactive":
+
                             interactive = msg.get("interactive", {})
                             content_type = "interactive"
-                            if interactive.get("type") == "button":
-                                text_body = interactive["button"].get("text", "")
-                            elif interactive.get("type") == "list_reply":
-                                text_body = interactive["list_reply"].get("title", "")
+
+                            interactive_type = interactive.get("type")
+
+                            if interactive_type == "button_reply":
+
+                                button_reply = interactive.get("button_reply", {})
+
+                                button_id = button_reply.get("id", "")
+                                button_title = button_reply.get("title", "")
+
+                                button_response = json.dumps({
+                                    "type": "button_click",
+                                    "button_id": button_id,
+                                    "button_title": button_title,
+                                    "timestamp": timezone.now().isoformat()
+                                })
+
+                                text_body = f"[Button Click] {button_title}"
+
+                            elif interactive_type == "list_reply":
+
+                                list_reply = interactive.get("list_reply", {})
+
+                                list_id = list_reply.get("id", "")
+                                list_title = list_reply.get("title", "")
+
+                                button_response = json.dumps({
+                                    "type": "list_selection",
+                                    "list_id": list_id,
+                                    "list_title": list_title,
+                                    "timestamp": timezone.now().isoformat()
+                                })
+
+                                text_body = f"[List Selection] {list_title}"
+                        elif msg_type == "button":
+
+                            button = msg.get("button", {})
+
+                            button_text = button.get("text", "")
+                            button_payload = button.get("payload", "")
+
+                            content_type = "button"
+
+                            button_response = json.dumps({
+                                "type": "template_quick_reply",
+                                "button_text": button_text,
+                                "button_payload": button_payload,
+                                "timestamp": timezone.now().isoformat()
+                            })
+
+                            text_body = f"[Button Click] {button_text}"
 
                         elif msg_type in ("image", "video", "audio", "document"):
                             media_id = msg[msg_type].get("id")
@@ -753,6 +803,7 @@ def whatsapp_webhook2(request):
                                 message_type="Received",
                                 message_id=msg_id,
                                 content_type=content_type,
+                                button_response=button_response,
                             )
                             clear_chat_cache2(mobile)
 
@@ -966,7 +1017,6 @@ def whatsapp_webhook2(request):
 
 
 
-
 @csrf_exempt
 def mark_read2(request, mobile):
     try:
@@ -1130,21 +1180,47 @@ def agent_case_list_api(request):
     tab = request.GET.get('tab', 'assigned')
     
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    base_qs = CaseModel.objects.filter(group__in=agent.groups.all())
     
     if tab == 'assigned':
-        cases = base_qs.filter(assigned_to=agent, current_level='ESC1', status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
+        # Cases assigned to this agent (already scoped to agent's groups)
+        cases = CaseModel.objects.filter(
+            assigned_to=agent,
+            current_level='ESC1',
+            status__in=['Open', 'In Progress', 'Reopened']
+        ).exclude(status='Closed')
+        
     elif tab == 'available':
-        cases = base_qs.filter(assigned_to__isnull=True, current_level='ESC1', status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
+        # Cases available for assignment (within agent's groups)
+        if agent.groups.exists():
+            cases = CaseModel.objects.filter(
+                current_level='ESC1',
+                group__in=agent.groups.all(),
+                assigned_to__isnull=True,
+                status__in=['Open', 'In Progress', 'Reopened']
+            ).exclude(status='Closed')
+        else:
+            cases = CaseModel.objects.none()
+            
     elif tab == 'today_created':
-        cases = base_qs.filter(created_at__gte=today_start)
+        # ✅ Fix: Cases created by this agent today (no group restriction)
+        cases = CaseModel.objects.filter(
+            created_by=agent.name,
+            created_at__gte=today_start
+        ).order_by('-created_at')
+        
     elif tab == 'resolved_by_me':
-        cases = CaseModel.objects.filter(resolved_by=agent.name).order_by('-resolved_at')
+        cases = CaseModel.objects.filter(
+            resolved_by=agent.name
+        ).order_by('-resolved_at')
+        
     elif tab == 'escalated_by_me':
-        escalated_case_ids = CaseEscalationLog.objects.filter(escalated_by=agent.name).values_list('case_id', flat=True).distinct()
-        cases = CaseModel.objects.filter(id__in=escalated_case_ids).order_by('-created_at')
+        # ✅ Fix: Use the reverse relation escalation_logs (app‑aware)
+        cases = CaseModel.objects.filter(
+            escalation_logs__escalated_by=agent.name
+        ).distinct().order_by('-created_at')
+        
     else:
-        cases = base_qs.none()
+        cases = CaseModel.objects.none()
     
     case_list = [{
         'case_id': c.case_id,
@@ -1156,32 +1232,55 @@ def agent_case_list_api(request):
         'status': c.status,
         'created_at': c.created_at.isoformat(),
     } for c in cases]
+    
     return JsonResponse({'cases': case_list})
+
+
 # Executive Dashboard (ESC2)
+
 @messaging2_required
 def executive_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
     if agent.role != 'EXECUTIVE':
         return redirect('agent_dashboard')
-    
-    cases = CaseModel.objects.filter(
+
+    executive_groups = agent.groups.all()
+
+    # Pending cases (ESC2, not resolved/closed)
+    pending_cases = CaseModel.objects.filter(
         current_level='ESC2',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed')
-    cases = cases.filter(group__in=agent.groups.all()).order_by('-created_at')
-    
+    ).exclude(status='Closed').filter(group__in=executive_groups).order_by('-created_at')
+
+    # Resolved cases (resolved_at_level = ESC2)
+    resolved_cases = CaseModel.objects.filter(
+        resolved_at_level='ESC2',
+        group__in=executive_groups
+    ).order_by('-resolved_at')
+
+    # Escalated cases (previous_level = ESC2, meaning escalated from ESC2 to higher)
+    escalated_cases = CaseModel.objects.filter(
+        previous_level='ESC2',
+        group__in=executive_groups
+    ).order_by('-updated_at')
+
     stats = {
-        'pending': cases.count(),
-        'resolved': CaseModel.objects.filter(resolved_at_level='ESC2').count(),
-        'escalated': CaseModel.objects.filter(previous_level='ESC2').count(),
+        'pending': pending_cases.count(),
+        'resolved': resolved_cases.count(),
+        'escalated': escalated_cases.count(),
     }
+
     current_app = request.GET.get('app', 'psf')
     return render(request, 'messaging2/executive_dashboard.html', {
-        'cases': cases, 'stats': stats, 'agent': agent,
-        'current_app': current_app, 'app_list': APP_CONFIG.items(),
+        'pending_cases': pending_cases,
+        'resolved_cases': resolved_cases,
+        'escalated_cases': escalated_cases,
+        'stats': stats,
+        'agent': agent,
+        'current_app': current_app,
+        'app_list': APP_CONFIG.items(),
     })
-
 # Manager Dashboard (ESC3)
 from django.utils import timezone
 from datetime import datetime
@@ -1192,49 +1291,103 @@ def manager_dashboard2(request):
     agent = get_agent_from_user(request.user)
     if agent.role != 'MANAGER':
         return redirect('agent_dashboard')
-    
-    # Get all groups the manager belongs to
+
     manager_groups = agent.groups.all()
-    
-    # Base queryset for ESC3 cases (already group-filtered)
-    base_qs = CaseModel.objects.filter(
+    if not manager_groups:
+        context = {
+            'pending_cases': CaseModel.objects.none(),
+            'resolved_cases': CaseModel.objects.none(),
+            'escalated_cases': CaseModel.objects.none(),
+            'stats': {'pending': 0, 'resolved': 0, 'escalated': 0},
+            'dept_stats': [],
+            'level_wise_stats': [],
+            'agents_list': [],
+            'agent': agent,
+            'current_app': request.GET.get('app', 'psf'),
+            'app_list': APP_CONFIG.items(),
+        }
+        return render(request, 'messaging2/manager_dashboard.html', context)
+
+    # ---- Pending cases (ESC3, not resolved/closed) ----
+    pending_cases = CaseModel.objects.filter(
         current_level='ESC3',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').filter(group__in=manager_groups)
-    
-    # ✅ Fixed stats: apply group filter to resolved and escalated as well
+    ).exclude(status='Closed').filter(group__in=manager_groups).order_by('-created_at')
+
+    # ---- Resolved cases (resolved_at_level = ESC3) ----
+    resolved_cases = CaseModel.objects.filter(
+        resolved_at_level='ESC3',
+        group__in=manager_groups
+    ).order_by('-resolved_at')
+
+    # ---- Escalated cases (previous_level = ESC3) ----
+    escalated_cases = CaseModel.objects.filter(
+        previous_level='ESC3',
+        group__in=manager_groups
+    ).order_by('-updated_at')
+
     stats = {
-        'pending': base_qs.count(),
-        'resolved': CaseModel.objects.filter(
-            resolved_at_level='ESC3',
-            group__in=manager_groups
-        ).count(),
-        'escalated': CaseModel.objects.filter(
-            previous_level='ESC3',
-            group__in=manager_groups
-        ).count(),
+        'pending': pending_cases.count(),
+        'resolved': resolved_cases.count(),
+        'escalated': escalated_cases.count(),
     }
-    
-    # Department-wise stats (for cards) – already correct
+
+    # ---- Department-wise stats (for cards) ----
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     dept_stats = []
     for group in manager_groups:
-        dept_cases = base_qs.filter(group=group)
-        dept_today = dept_cases.filter(created_at__gte=today_start).count()
+        dept_pending = pending_cases.filter(group=group).count()
+        dept_today = CaseModel.objects.filter(
+            group=group,
+            created_at__gte=today_start
+        ).count()
         dept_stats.append({
             'name': group.name,
-            'pending': dept_cases.count(),
+            'pending': dept_pending,
             'today': dept_today,
         })
-    
-    # List of agents for assign dropdown (only active agents)
-    from .models import Agent
-    agents_list = Agent.objects.filter(is_active=True).values('id', 'name', 'role')
-    
+
+    # ---- Level-wise stats (optional, for extra table) ----
+    all_levels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5']
+    level_wise_stats = []
+    for group in manager_groups:
+        group_stats = {
+            'group_name': group.name,
+            'levels': {},
+            'resolved_by_level': {},
+            'total_cases': 0,
+            'total_resolved': 0
+        }
+        for level in all_levels:
+            open_cases = CaseModel.objects.filter(
+                group=group,
+                current_level=level,
+                status__in=['Open', 'In Progress', 'Reopened']
+            ).exclude(status='Closed').count()
+            group_stats['levels'][level] = open_cases
+            group_stats['total_cases'] += open_cases
+
+            resolved = CaseModel.objects.filter(
+                group=group,
+                resolved_at_level=level
+            ).count()
+            group_stats['resolved_by_level'][level] = resolved
+            group_stats['total_resolved'] += resolved
+        level_wise_stats.append(group_stats)
+
+    # ---- Agents list for assignment ----
+    agents_list = Agent.objects.filter(
+        is_active=True,
+        groups__in=manager_groups
+    ).distinct().values('id', 'name', 'role')
+
     context = {
-        'cases': base_qs.order_by('-priority', '-created_at'),
+        'pending_cases': pending_cases,
+        'resolved_cases': resolved_cases,
+        'escalated_cases': escalated_cases,
         'stats': stats,
         'dept_stats': dept_stats,
+        'level_wise_stats': level_wise_stats,
         'agents_list': agents_list,
         'today_date': timezone.now().date().isoformat(),
         'agent': agent,
@@ -1242,7 +1395,6 @@ def manager_dashboard2(request):
         'app_list': APP_CONFIG.items(),
     }
     return render(request, 'messaging2/manager_dashboard.html', context)
-
 @messaging2_required
 def manager_cases_api(request):
     agent = get_agent_from_user(request.user)

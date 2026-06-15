@@ -107,7 +107,7 @@ def create_case_from_chat_api2(request):
 
     try:
         data = json.loads(request.body)
-        mobile = format_mobile2(data.get('mobile', ''))
+        mobile = data.get('mobile', '')
 
         # Get app‑aware models (case, contact, log)
         CaseModel, ContactModel, LogModel, _ = get_models_for_app(request)
@@ -288,7 +288,6 @@ def dashboard(request):
     app_key = get_app_from_request(request)
     cfg = APP_CONFIG[app_key]
     CaseModel = cfg['case_model']
-
     stats = {
         'total_cases': CaseModel.objects.count(),
         'open_cases': CaseModel.objects.filter(status='Open').count(),
@@ -312,6 +311,7 @@ def dashboard(request):
         except Agent.DoesNotExist:
             user_agent = None
         users_with_agents.append({'user': user, 'agent': user_agent})
+    all_groups = SupportGroup.objects.all().order_by('name')
 
     context = {
         'users': users,
@@ -321,9 +321,9 @@ def dashboard(request):
         'current_app': app_key,
         'app_name': cfg['name'],
         'app_list': [(key, cfg['name']) for key, cfg in APP_CONFIG.items()],
+        'all_groups':all_groups
     }
     return render(request, 'adminpanel/dashboard.html', context)
-
 
 # ============================================
 # API ENDPOINTS (app-aware)
@@ -578,6 +578,7 @@ def get_case_detail_api(request, case_id):
             'resolution_notes': case.resolution_notes,
             'reopen_count': case.reopen_count,
             'group_name': case.group.name if case.group else None,
+            'group_id': case.group.id if case.group else None, 
         }
     })
 
@@ -680,7 +681,7 @@ def get_case_timeline_api(request, case_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def edit_case_api(request, case_id):
-    """Admin-only endpoint to edit case fields"""
+    """Admin-only endpoint to edit case fields (loan_number, customer_name, issue_description, group)"""
     agent = get_agent_from_user(request.user)
     if agent.role != 'ADMIN':
         return JsonResponse({'error': 'Only Admin can edit cases'}, status=403)
@@ -690,17 +691,29 @@ def edit_case_api(request, case_id):
     case = get_object_or_404(CaseModel, case_id=case_id)
     data = json.loads(request.body)
 
-    # Allowed fields to edit
+    # Allowed fields
     if 'loan_number' in data:
         case.loan_number = data['loan_number']
     if 'customer_name' in data:
         case.customer_name = data['customer_name']
     if 'issue_description' in data:
         case.issue_description = data['issue_description']
-    
+
+    # Group field: accept either group_id (int) or group_name (string)
+    if 'group' in data:
+        group_val = data['group']
+        group_obj = None
+        if isinstance(group_val, int) or (isinstance(group_val, str) and group_val.isdigit()):
+            group_obj = SupportGroup.objects.filter(id=int(group_val)).first()
+        elif isinstance(group_val, str):
+            group_obj = SupportGroup.objects.filter(name=group_val).first()
+        if group_obj:
+            case.group = group_obj
+        else:
+            return JsonResponse({'error': 'Invalid group specified'}, status=400)
+
     case.save()
     return JsonResponse({'success': True, 'message': 'Case updated'})
-
 
 # ============================================
 # UNIFIED FAILED MESSAGES (supports ?app=...)

@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
+    
     "channels",
     "storages",
     
@@ -46,12 +46,15 @@ INSTALLED_APPS = [
     "financehub",
     "notices",
     "special_cases",
+    
       
 ]
 
 
 #ELASTICSEARCH_DSL_AUTOSYNC = True
 #ELASTICSEARCH_DSL_AUTO_REFRESH = True
+
+
 
 # -------------------------------------------------------
 # MIDDLEWARE

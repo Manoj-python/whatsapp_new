@@ -15,6 +15,7 @@
         </div>
     </div>
 
+    <!-- Stats Cards -->
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="card text-white bg-warning">
@@ -23,47 +24,166 @@
         </div>
         <div class="col-md-4">
             <div class="card text-white bg-success">
-                <div class="card-body"><h6>Resolved</h6><h2>{{ stats.resolved }}</h2></div>
+                <div class="card-body"><h6>Resolved (ESC2)</h6><h2>{{ stats.resolved }}</h2></div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card text-white bg-info">
-                <div class="card-body"><h6>Escalated</h6><h2>{{ stats.escalated }}</h2></div>
+                <div class="card-body"><h6>Escalated from ESC2</h6><h2>{{ stats.escalated }}</h2></div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header bg-primary text-white">
-            <h4><i class="fas fa-chart-line"></i> Executive Cases (ESC2)</h4>
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="caseTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">📋 Pending Cases</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button" role="tab">✅ Resolved Cases</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="escalated-tab" data-bs-toggle="tab" data-bs-target="#escalated" type="button" role="tab">⬆️ Escalated Cases</button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        <!-- Pending Cases Tab -->
+        <div class="tab-pane fade show active" id="pending" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-primary text-white">Pending ESC2 Cases</div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Priority</th><th>Status</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for case in pending_cases %}
+                            <tr>
+                                <td>{{ case.loan_number|default:"-" }}</small></td>
+                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
+                                <td>{{ case.mobile }}</small></td>
+                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
+                                <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></small></td>
+                                <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
+                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check-circle"></i></button>
+                                 </small></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center">No pending ESC2 cases in your departments.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <table class="table table-hover">
-                <thead>
-                    <tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Priority</th><th>Status</th><th>Actions</th></tr>
-                </thead>
-                <tbody>
-                    {% for case in cases %}
-                    <tr>
-                        <td>{{ case.loan_number|default:"-" }}</small></td>
-                        <td>{{ case.customer_name|default:case.mobile }}</small></td>
-                        <td>{{ case.mobile }}</small></td>
-                        <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
-                        <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></small></td>
-                        <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
-                            <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
-                            <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check-circle"></i></button>
-                         </small></td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="7" class="text-center">No ESC2 cases in your departments.{% endfor %}
-                </tbody>
-            </table>
+
+        <!-- Resolved Cases Tab -->
+        <div class="tab-pane fade" id="resolved" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-success text-white">Resolved at ESC2 Level</div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr><th>Case ID</th><th>Customer</th><th>Loan No</th><th>Department</th><th>Resolved By</th><th>Resolved At</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for case in resolved_cases %}
+                            <tr>
+                                <td>{{ case.case_id }}</small></td>
+                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
+                                <td>{{ case.loan_number|default:"-" }}</small></td>
+                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                <td>{{ case.resolved_by|default:"System" }}</small></td>
+                                <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</small></td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+                                 </small></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Escalated Cases Tab -->
+        <div class="tab-pane fade" id="escalated" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-info text-white">Escalated from ESC2 to Higher Levels</div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr><th>Case ID</th><th>Customer</th><th>Loan No</th><th>Current Level</th><th>Escalated By</th><th>Escalated At</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for case in escalated_cases %}
+                            <tr>
+                                <td>{{ case.case_id }}</small></td>
+                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
+                                <td>{{ case.loan_number|default:"-" }}</small></td>
+                                <td>{{ case.current_level }}</small></td>
+                                <td>
+                                    {% with last_log=case.escalation_logs.first %}
+                                        {{ last_log.escalated_by|default:"System" }}
+                                    {% endwith %}
+                                 </small></td>
+                                <td>
+                                    {% with last_log=case.escalation_logs.first %}
+                                        {{ last_log.created_at|date:"d-m-Y H:i" }}
+                                    {% endwith %}
+                                 </small></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+                                 </small></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center">No escalated cases from ESC2 in your departments.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
+<!-- Include modals (case details, escalate, resolve) -->
 {% include "messaging2/_case_modals.html" %}
+
+<script>
+    // Ensure Bootstrap tabs work (if not already loaded)
+    document.addEventListener('DOMContentLoaded', function() {
+        var triggerTabList = [].slice.call(document.querySelectorAll('#caseTabs button'));
+        triggerTabList.forEach(function(triggerEl) {
+            var tabTrigger = new bootstrap.Tab(triggerEl);
+            triggerEl.addEventListener('click', function(event) {
+                event.preventDefault();
+                tabTrigger.show();
+            });
+        });
+    });
+
+    // Functions for actions (these should match your existing modal logic)
+    function viewCase(caseId) {
+        // Open case detail modal – implement as needed
+        $('#caseDetailModal').modal('show');
+        // Fetch case details via AJAX and populate
+    }
+    function escalateCase(caseId) {
+        // Show escalate modal
+        $('#escalateModal').modal('show');
+        // Set case_id in hidden field
+    }
+    function resolveCase(caseId) {
+        // Show resolve modal
+        $('#resolveModal').modal('show');
+        // Set case_id
+    }
+</script>
 {% endblock %}

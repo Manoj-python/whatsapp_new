@@ -386,6 +386,7 @@
 </div>
 
 <!-- Edit Case Modal -->
+<!-- Edit Case Modal -->
 <div class="modal fade" id="editCaseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -397,6 +398,14 @@
                 <input type="hidden" id="editCaseId">
                 <div class="mb-3"><label>Loan Number</label><input type="text" id="editLoanNumber" class="form-control"></div>
                 <div class="mb-3"><label>Customer Name</label><textarea id="editName" class="form-control" rows="2"></textarea></div>
+                <div class="mb-3"><label>Department (Group)</label>
+                    <select id="editGroup" class="form-select">
+                        <option value="">-- Select Department --</option>
+                        {% for group in all_groups %}
+                        <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="mb-3"><label>Issue Description</label><textarea id="editIssueDescription" class="form-control" rows="3"></textarea></div>
             </div>
             <div class="modal-footer">
@@ -771,37 +780,66 @@
         });
     }
     
-    function openEditCaseModal(caseId) {
-        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('editCaseId').value = caseId;
-                    document.getElementById('editLoanNumber').value = data.case.loan_number || '';
-                    document.getElementById('editName').value = data.case.customer_name || '';
-                    document.getElementById('editIssueDescription').value = data.case.issue_description || '';
-                    $('#editCaseModal').modal('show');
-                } else alert('Error loading case');
-            });
-    }
-    function submitEditCase() {
-        const caseId = document.getElementById('editCaseId').value;
-        const loanNumber = document.getElementById('editLoanNumber').value;
-        const customerName = document.getElementById('editName').value;
-        const issueDesc = document.getElementById('editIssueDescription').value;
-        fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-            body: JSON.stringify({ loan_number: loanNumber, customer_name: customerName, issue_description: issueDesc })
-        })
+   function openEditCaseModal(caseId) {
+    fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert('Case updated');
-                $('#editCaseModal').modal('hide');
-                loadCases();
-            } else alert('Error: ' + data.error);
+                document.getElementById('editCaseId').value = caseId;
+                document.getElementById('editLoanNumber').value = data.case.loan_number || '';
+                document.getElementById('editName').value = data.case.customer_name || '';
+                document.getElementById('editIssueDescription').value = data.case.issue_description || '';
+                
+                // Set the selected group in dropdown (if group exists)
+                const groupSelect = document.getElementById('editGroup');
+                if (groupSelect) {
+                    if (data.case.group_id) {
+                        groupSelect.value = data.case.group_id;
+                    } else {
+                        groupSelect.value = '';
+                    }
+                }
+                $('#editCaseModal').modal('show');
+            } else {
+                alert('Error loading case');
+            }
         });
+}
+
+
+    function submitEditCase() {
+    const caseId = document.getElementById('editCaseId').value;
+    const loanNumber = document.getElementById('editLoanNumber').value;
+    const customerName = document.getElementById('editName').value;
+    const issueDesc = document.getElementById('editIssueDescription').value;
+    const groupId = document.getElementById('editGroup').value;
+
+    const payload = {
+        loan_number: loanNumber,
+        customer_name: customerName,
+        issue_description: issueDesc
+    };
+    if (groupId) {
+        payload.group = parseInt(groupId);
     }
+
+    fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case updated');
+            $('#editCaseModal').modal('hide');
+            loadCases();      // refresh the cases list
+            loadGlobalStats(); // refresh stats if needed
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+}
     
     function showEscalateModal(caseId) {
         document.getElementById('escalateCaseId').value = caseId;
