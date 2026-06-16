@@ -334,23 +334,36 @@ function submitEscalation() {
 }
 
 function resolveCase(caseId) {
+    console.log('resolveCase called with caseId:', caseId);
     document.getElementById('resolveCaseId').value = caseId;
-    document.getElementById('resolutionNotes').value = '';
+    console.log('Hidden field value set to:', document.getElementById('resolveCaseId').value);
     $('#resolveModal').modal('show');
 }
 
 function submitResolution() {
     const caseId = document.getElementById('resolveCaseId').value;
     const notes = document.getElementById('resolutionNotes').value;
-
     if (!notes) { alert('Please provide resolution notes'); return; }
+
+    const csrftoken = document.querySelector('[name=csrf-token]').content;
+    if (!csrftoken) {
+        alert('CSRF token missing. Please refresh the page.');
+        return;
+    }
 
     fetch(addAppParam(`/messaging2/case/${caseId}/resolve/`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
         body: JSON.stringify({ resolution_notes: notes })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => {
+                throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             alert('Case resolved successfully!');
@@ -362,7 +375,6 @@ function submitResolution() {
     })
     .catch(error => alert('Error: ' + error.message));
 }
-
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');

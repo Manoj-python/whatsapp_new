@@ -257,10 +257,7 @@ function submitAssignCase() {
 function escapeHtml(text) { if(!text) return ''; return text.replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
 document.querySelectorAll('.dept-card').forEach(card => card.addEventListener('click', () => loadPendingCases(card.getAttribute('data-dept'))));
 document.addEventListener('DOMContentLoaded', function() { var triggerTabList = [].slice.call(document.querySelectorAll('#caseTabs button')); triggerTabList.forEach(el => { var tab = new bootstrap.Tab(el); el.addEventListener('click', e => { e.preventDefault(); tab.show(); }); }); });
-// Dummy functions – replace with your actual modal logic
-function viewCase(caseId) { alert('View case: ' + caseId); }
-function escalateCase(caseId) { alert('Escalate case: ' + caseId); }
-function resolveCase(caseId) { alert('Resolve case: ' + caseId); }
+
 </script>
 
 {% include "messaging2/_case_modals.html" %}

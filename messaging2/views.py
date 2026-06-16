@@ -1858,7 +1858,7 @@ def create_case_from_chat_api2(request):
 
     try:
         data = json.loads(request.body)
-        mobile = format_mobile2(data.get('mobile', ''))
+        mobile = data.get('mobile', '')
 
         # Get app‑aware models (case, contact, log)
         CaseModel, ContactModel, LogModel, _ = get_models_for_app(request)

@@ -251,12 +251,13 @@
     } catch(e) { console.error('Failed to load groups', e); availableGroups = []; }
   }
 
+
 async function renderCasePanel() {
     const content = document.getElementById('caseSidebarContent');
     if (!content) return;
     content.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Loading case details...</p></div>';
     try {
-        const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(selectedMobile)}`);
+        const response = await fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(selectedMobile)}&app=sms`);
         const data = await response.json();
         if (data.case) {
             currentCaseData = data.case;
@@ -400,6 +401,7 @@ async function renderCasePanel() {
         content.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
     }
 }
+
   // Escalate case
   window.escalateCase = async function() {
     const level = document.getElementById('escalateLevelSelect')?.value;
