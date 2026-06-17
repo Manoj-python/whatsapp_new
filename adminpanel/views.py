@@ -24,7 +24,7 @@ from .models import *
 from messaging2.models import Agent, Case as psfCase, ChatContact2, SmsWhatsAppLog2
 from messaging.models import Case as smsCase, ChatContact, SmsWhatsAppLog
 from special_cases.models import Case as SplCase, SmsWhatsAppLog3, ChatContact3
-
+from django.conf import settings
 # ============================================
 # APP CONFIGURATION
 # ============================================
@@ -35,6 +35,15 @@ APP_CONFIG = {
         'log_model': SmsWhatsAppLog2,
         'contact_model': ChatContact2,
         'channel_group': 'global_contacts2',
+        'templates': {
+            'open': 'ticket_open',    # Replace with actual template name for PSF
+            'close': 'ticket_closed',
+            'welcome':'welcome_message',
+        },
+        'whatsapp': {
+            'phone_number_id': settings.WHATSAPP2_PHONE_NUMBER_ID,   # Use PSF's
+            'access_token': settings.WHATSAPP2_ACCESS_TOKEN,
+        },
     },
     'sms': {
         'name': 'SMS',
@@ -42,6 +51,15 @@ APP_CONFIG = {
         'log_model': SmsWhatsAppLog,
         'contact_model': ChatContact,
         'channel_group': 'global_contacts',
+        'templates': {
+            'open': 'ticket_open',    # Replace with actual template name for PSF
+            'close': 'ticket_closed',
+            'welcome':'welcome_message',
+        },
+        'whatsapp': {
+            'phone_number_id': settings.WHATSAPP_PHONE_NUMBER_ID,   # Use PSF's
+            'access_token': settings.WHATSAPP_ACCESS_TOKEN,
+        },
     },
     'spl': {
         'name': 'SPL Cases',

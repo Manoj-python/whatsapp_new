@@ -663,6 +663,7 @@ def send_reply_api(request):
 
 
 
+from messaging2.tasks import send_welcome_message
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
 # =============================================
@@ -714,10 +715,10 @@ def whatsapp_webhook(request):
                         # ======================================
                         # DEBUG - SEE EXACT META PAYLOAD
                         # ======================================
-                        print("=" * 80)
-                        print("RAW WHATSAPP MESSAGE")
-                        print(json.dumps(msg, indent=2))
-                        print("=" * 80)
+                        # print("=" * 80)
+                        # print("RAW WHATSAPP MESSAGE")
+                        # print(json.dumps(msg, indent=2))
+                        # print("=" * 80)
 
                         # ======================================
                         # TEXT MESSAGES
@@ -908,6 +909,12 @@ def whatsapp_webhook(request):
                         if contacts_data:
                             customer_name = contacts_data[0].get("profile", {}).get("name", "")
                             print(f"📛 Customer name: {customer_name}")
+                        last_incoming = SmsWhatsAppLog.objects.filter(mobile=mobile,message_type='Received').order_by('-sent_at').first()
+                        send_welcome = False
+                        if not last_incoming:
+                            send_welcome = True
+                        elif (timezone.now() - last_incoming.sent_at).total_seconds() > 3600:  # 1 hour
+                            send_welcome = True   
 
                         # ======================================
                         # SAVE MESSAGE TO DATABASE
@@ -1073,6 +1080,8 @@ def whatsapp_webhook(request):
                                 last_status="Unread",
                                 unread=F("unread") + 1
                             )
+                        if send_welcome:
+                            send_welcome_message.delay('sms', mobile, customer_name)
 
                         # ======================================
                         # WEBSOCKET BROADCAST - CHAT GROUP

@@ -791,7 +791,14 @@ def whatsapp_webhook2(request):
                             customer_name = contacts_data[0].get("profile", {}).get("name", "")
                             print(f"📛 Customer name: {customer_name}")  # Debug print
 
-
+                        last_incoming = SmsWhatsAppLog2.objects.filter(mobile=mobile,message_type='Received').order_by('-sent_at').first()
+                        send_welcome = False
+                        if not last_incoming:
+                            send_welcome = True
+                        elif (timezone.now() - last_incoming.sent_at).total_seconds() > 3600:  # 1 hour
+                            send_welcome = True   
+                            
+                            
                         # Save message
                         with transaction.atomic():
                             log = SmsWhatsAppLog2.objects.create(
@@ -833,7 +840,8 @@ def whatsapp_webhook2(request):
                                 last_status="Unread",
                                 unread=F("unread") + 1
                             )
-
+                        if send_welcome:
+                            send_welcome_message.delay('psf', mobile, customer_name)
                         # WebSocket broadcast
                         gm = ws_group2(mobile)
                         if gm:
@@ -1292,6 +1300,85 @@ def agent_case_list_api(request):
 
 # Executive Dashboard (ESC2)
 
+
+from financehub.models import Lcc
+
+from financehub.models import Lcc
+from django.db.models import Q
+
+def normalize_mobile(mobile):
+    mobile = ''.join(filter(str.isdigit, str(mobile or '')))
+
+    if mobile.startswith('91') and len(mobile) > 10:
+        mobile = mobile[-10:]
+
+    return mobile
+
+
+def enrich_case_details(cases):
+
+    for case in cases:
+
+        need_customer = not (
+            case.customer_name and str(case.customer_name).strip()
+        )
+
+        need_loan = not (
+            case.loan_number and str(case.loan_number).strip()
+        )
+
+        if not (need_customer or need_loan):
+            continue
+
+        mobile = normalize_mobile(case.mobile)
+
+        lcc = Lcc.objects.filter(
+            Q(cust_mobile__endswith=mobile) |
+            Q(guarantor_mobile__endswith=mobile)
+        ).first()
+
+        if not lcc:
+            continue
+
+        updated_fields = []
+
+        # Customer Mobile Match
+        if (
+            lcc.cust_mobile and
+            normalize_mobile(lcc.cust_mobile) == mobile
+        ):
+
+            if need_customer and lcc.customer_name:
+                case.customer_name = lcc.customer_name
+                updated_fields.append('customer_name')
+
+            if need_loan and lcc.loan_number:
+                case.loan_number = lcc.loan_number
+                updated_fields.append('loan_number')
+
+        # Guarantor Mobile Match
+        elif (
+            lcc.guarantor_mobile and
+            normalize_mobile(lcc.guarantor_mobile) == mobile
+        ):
+
+            if need_customer and lcc.guarantor:
+                case.customer_name = lcc.guarantor
+                updated_fields.append('customer_name')
+
+            if need_loan and lcc.loan_number:
+                case.loan_number = lcc.loan_number
+                updated_fields.append('loan_number')
+
+        if updated_fields:
+            case.save(update_fields=updated_fields)
+
+            print(
+                f"UPDATED: Mobile={case.mobile}, "
+                f"Name={case.customer_name}, "
+                f"Loan={case.loan_number}"
+            )
+
 @messaging2_required
 def executive_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
@@ -1319,6 +1406,9 @@ def executive_dashboard2(request):
         group__in=executive_groups
     ).order_by('-updated_at')
 
+    enrich_case_details(pending_cases)
+    enrich_case_details(resolved_cases)
+    enrich_case_details(escalated_cases)
     stats = {
         'pending': pending_cases.count(),
         'resolved': resolved_cases.count(),
@@ -1335,6 +1425,7 @@ def executive_dashboard2(request):
         'current_app': current_app,
         'app_list': APP_CONFIG.items(),
     })
+
 # Manager Dashboard (ESC3)
 from django.utils import timezone
 from datetime import datetime

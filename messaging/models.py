@@ -220,7 +220,8 @@ class Case(models.Model):
         ('app3', 'App 3 - splcase'),
     ])
     created_by = models.CharField(max_length=255, blank=True, null=True)
-    
+    ticket_open_message_sent = models.BooleanField(default=False)
+    ticket_close_message_sent = models.BooleanField(default=False)    
     class Meta:
         ordering = ['-created_at']
         indexes = [

@@ -595,3 +595,362 @@ def process_pending_webhook_updates():
 
 
 	
+# messaging2/tasks.py
+
+# messaging2/tasks.py
+
+from celery import shared_task
+from django.utils import timezone
+from adminpanel.views import APP_CONFIG
+from .utils import format_mobile2
+from adminpanel.utils import send_whatsapp_template4
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+import re
+
+@shared_task(queue="messaging2")
+def send_ticket_open_message(app_key, case_id):
+    try:
+        cfg = APP_CONFIG[app_key]
+        CaseModel = cfg['case_model']
+        LogModel = cfg['log_model']
+        ContactModel = cfg['contact_model']
+        channel_group = cfg['channel_group']
+        open_template = cfg['templates']['open']
+        whatsapp_creds = cfg.get('whatsapp', {})
+    except KeyError:
+        return
+
+    case = CaseModel.objects.filter(id=case_id).first()
+    if not case or case.ticket_open_message_sent:
+        return
+
+    mobile = format_mobile2(case.mobile)
+    if not mobile:
+        return
+
+    customer_name = case.customer_name or "Customer"
+    case_id_str = case.case_id
+    group_name = case.group.name if case.group else "General"
+    created_at = timezone.localtime(case.created_at).strftime('%d-%m-%Y %I:%M %p')
+
+    parameters = [
+        {"type": "text", "text": customer_name},
+        {"type": "text", "text": case_id_str},
+        {"type": "text", "text": group_name},
+        {"type": "text", "text": created_at},
+    ]
+
+    try:
+        resp = send_whatsapp_template4(to_number=mobile, template_name=open_template, parameters=parameters,phone_number_id=whatsapp_creds.get('phone_number_id'),access_token=whatsapp_creds.get('access_token'))
+        msg_id = resp.get("messages", [{}])[0].get("id", "")
+        status = "Sent"
+        error = ""
+    except Exception as e:
+        msg_id = ""
+        status = "Failed"
+        error = str(e)
+
+    # Log
+    log = LogModel.objects.create(
+        customer_name=case.customer_name or "",
+        mobile=mobile,
+        template_name=open_template,
+        sent_text_message="[Template: {}]".format(open_template),
+        status=status,
+        message_id=msg_id,
+        message_type="Sent",
+        content_type="text",
+        error_message=error,
+    )
+
+    # Update Contact
+    contact, created = ContactModel.objects.get_or_create(
+        mobile=mobile,
+        defaults={
+            "last_msg": f"📩 Ticket opened: {case.case_id}",
+            "last_time": timezone.now(),
+            "last_type": "Sent",
+            "last_status": status,
+            "unread": 0,
+        }
+    )
+    if not created:
+        ContactModel.objects.filter(mobile=mobile).update(
+            last_msg=f"📩 Ticket opened: {case.case_id}",
+            last_time=timezone.now(),
+            last_type="Sent",
+            last_status=status,
+            unread=0,
+        )
+
+    # Mark flag
+    case.ticket_open_message_sent = True
+    case.save(update_fields=["ticket_open_message_sent"])
+
+    # WebSocket Broadcast
+    try:
+        channel_layer = get_channel_layer()
+        gm = re.sub(r"\D", "", mobile)
+        if gm:
+            async_to_sync(channel_layer.group_send)(
+                f"chat2_{gm}",  # adjust if app-specific room naming differs
+                {
+                    "type": "new_message",
+                    "message": {
+                        "id": log.id,
+                        "mobile": mobile,
+                        "sent_text_message": log.sent_text_message,
+                        "content_type": "text",
+                        "media_file": "",
+                        "sent_at": timezone.localtime(log.sent_at).isoformat(),
+                        "message_type": "Sent",
+                        "message_id": log.message_id,
+                        "status": log.status,
+                        "sender_name": "System",
+                    }
+                }
+            )
+        async_to_sync(channel_layer.group_send)(
+            channel_group,
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": mobile,
+                    "last_msg": f"📩 Ticket opened: {case.case_id}",
+                    "last_time": timezone.now().isoformat(),
+                    "last_type": "Sent",
+                    "last_status": status,
+                    "unread": 0,
+                }
+            }
+        )
+    except Exception:
+        pass
+
+
+@shared_task(queue="messaging2")
+def send_ticket_close_message(app_key, case_id):
+    try:
+        cfg = APP_CONFIG[app_key]
+        CaseModel = cfg['case_model']
+        LogModel = cfg['log_model']
+        ContactModel = cfg['contact_model']
+        channel_group = cfg['channel_group']
+        close_template = cfg['templates']['close']
+        whatsapp_creds = cfg.get('whatsapp', {})
+    except KeyError:
+        return
+
+    case = CaseModel.objects.filter(id=case_id).first()
+    if not case or case.ticket_close_message_sent:
+        return
+
+    mobile = format_mobile2(case.mobile)
+    if not mobile:
+        return
+
+    customer_name = case.customer_name or "Customer"
+    case_id_str = case.case_id
+    summary = case.closed_reason or "Resolved"
+    closed_at = timezone.localtime(case.closed_at or case.updated_at).strftime('%d-%m-%Y %I:%M %p')
+
+    parameters = [
+        {"type": "text", "text": customer_name},
+        {"type": "text", "text": case_id_str},
+        {"type": "text", "text": summary},
+        {"type": "text", "text": closed_at},
+    ]
+
+    try:
+        resp = send_whatsapp_template4(
+            to_number=mobile,
+            template_name=close_template,
+            parameters=parameters,
+            phone_number_id=whatsapp_creds.get('phone_number_id'),
+            access_token=whatsapp_creds.get('access_token'),
+        )
+        msg_id = resp.get("messages", [{}])[0].get("id", "")
+        status = "Sent"
+        error = ""
+    except Exception as e:
+        msg_id = ""
+        status = "Failed"
+        error = str(e)
+
+    # Log
+    log = LogModel.objects.create(
+        customer_name=case.customer_name or "",
+        mobile=mobile,
+        template_name=close_template,
+        sent_text_message="[Template: {}]".format(close_template),
+        status=status,
+        message_id=msg_id,
+        message_type="Sent",
+        content_type="text",
+        error_message=error,
+    )
+
+    # Update Contact
+    contact, created = ContactModel.objects.get_or_create(
+        mobile=mobile,
+        defaults={
+            "last_msg": f"✅ Ticket closed: {case.case_id}",
+            "last_time": timezone.now(),
+            "last_type": "Sent",
+            "last_status": status,
+            "unread": 0,
+        }
+    )
+    if not created:
+        ContactModel.objects.filter(mobile=mobile).update(
+            last_msg=f"✅ Ticket closed: {case.case_id}",
+            last_time=timezone.now(),
+            last_type="Sent",
+            last_status=status,
+            unread=0,
+        )
+
+    # Mark flag
+    case.ticket_close_message_sent = True
+    case.save(update_fields=["ticket_close_message_sent"])
+
+    # WebSocket Broadcast
+    try:
+        channel_layer = get_channel_layer()
+        gm = re.sub(r"\D", "", mobile)
+        if gm:
+            async_to_sync(channel_layer.group_send)(
+                f"chat2_{gm}",
+                {
+                    "type": "new_message",
+                    "message": {
+                        "id": log.id,
+                        "mobile": mobile,
+                        "sent_text_message": log.sent_text_message,
+                        "content_type": "text",
+                        "media_file": "",
+                        "sent_at": timezone.localtime(log.sent_at).isoformat(),
+                        "message_type": "Sent",
+                        "message_id": log.message_id,
+                        "status": log.status,
+                        "sender_name": "System",
+                    }
+                }
+            )
+        async_to_sync(channel_layer.group_send)(
+            channel_group,
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": mobile,
+                    "last_msg": f"✅ Ticket closed: {case.case_id}",
+                    "last_time": timezone.now().isoformat(),
+                    "last_type": "Sent",
+                    "last_status": status,
+                    "unread": 0,
+                }
+            }
+        )
+    except Exception:
+        pass
+
+@shared_task(queue="messaging2")
+def send_welcome_message(app_key, mobile, customer_name=""):
+    try:
+        cfg = APP_CONFIG[app_key]
+        LogModel = cfg['log_model']
+        ContactModel = cfg['contact_model']
+        channel_group = cfg['channel_group']
+        welcome_template = cfg['templates']['welcome']
+        whatsapp_creds = cfg.get('whatsapp', {})
+    except KeyError:
+        return
+
+    mobile = format_mobile2(mobile)
+    if not mobile:
+        return
+
+    # Build parameters – template has one placeholder for customer name
+    parameters = [{"type": "text", "text": customer_name or "Customer"}]
+
+    try:
+        resp = send_whatsapp_template4(
+            to_number=mobile,
+            template_name=welcome_template,
+            parameters=parameters,
+            phone_number_id=whatsapp_creds.get('phone_number_id'),
+            access_token=whatsapp_creds.get('access_token'),
+        )
+        msg_id = resp.get("messages", [{}])[0].get("id", "")
+        status = "Sent"
+        error = ""
+    except Exception as e:
+        msg_id = ""
+        status = "Failed"
+        error = str(e)
+
+    # Log the message
+    log = LogModel.objects.create(
+        customer_name=customer_name or "",
+        mobile=mobile,
+        template_name=welcome_template,
+        sent_text_message="[Template: {}]".format(welcome_template),
+        status=status,
+        message_id=msg_id,
+        message_type="Sent",
+        content_type="text",
+        error_message=error,
+    )
+
+    # Update contact (if needed)
+    ContactModel.objects.update_or_create(
+        mobile=mobile,
+        defaults={
+            "last_msg": "👋 Welcome message sent",
+            "last_time": timezone.now(),
+            "last_type": "Sent",
+            "last_status": status,
+            "unread": 0,
+        }
+    )
+
+    # WebSocket broadcast
+    try:
+        channel_layer = get_channel_layer()
+        gm = re.sub(r"\D", "", mobile)
+        if gm:
+            async_to_sync(channel_layer.group_send)(
+                f"chat2_{gm}",
+                {
+                    "type": "new_message",
+                    "message": {
+                        "id": log.id,
+                        "mobile": mobile,
+                        "sent_text_message": log.sent_text_message,
+                        "content_type": "text",
+                        "media_file": "",
+                        "sent_at": timezone.localtime(log.sent_at).isoformat(),
+                        "message_type": "Sent",
+                        "message_id": log.message_id,
+                        "status": log.status,
+                        "sender_name": "System",
+                    }
+                }
+            )
+        async_to_sync(channel_layer.group_send)(
+            channel_group,
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": mobile,
+                    "last_msg": "👋 Welcome message sent",
+                    "last_time": timezone.now().isoformat(),
+                    "last_type": "Sent",
+                    "last_status": status,
+                    "unread": 0,
+                }
+            }
+        )
+    except Exception:
+        pass
