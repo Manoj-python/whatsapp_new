@@ -12,7 +12,35 @@ from django.conf import settings
 from .models import *
 
 PAYMENT_LINK = "https://smsquare.co.in/pay2"
+from financehub.models import Lcc
 
+def lcc_details(mobile):
+    """
+    Fetch customer details from LCC table using mobile number.
+    Returns dict with customer_name, loan_number, vehicle_no or None if not found.
+    """
+    if not mobile:
+        return None
+
+    # Normalize: remove '+', spaces, etc.
+    clean = mobile.lstrip('+').strip()
+
+    # Try both with and without country code '91'
+    possible_numbers = [clean]
+    if clean.startswith('91'):
+        possible_numbers.append(clean[2:])
+    else:
+        possible_numbers.append('91' + clean)
+
+    for num in possible_numbers:
+        record = Lcc.objects.filter(cust_mobile=num).first()
+        if record:
+            return {
+                'customer_name': record.customer_name or '',
+                'loan_number': record.loan_number or '',
+                'vehicle_no': record.vehicle_no or '',
+            }
+    return None
 # -----------------------------------------------------
 # Upload media to WhatsApp Cloud
 # -----------------------------------------------------

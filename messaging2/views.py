@@ -1076,7 +1076,61 @@ def view_secure_document2(request, log_id):
     return response
 
 # =============================== Escalation views =======================================================
+import logging
+from django.core.cache import cache
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from financehub.models import Lcc
 
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+def fetch_padmasai_details(request):
+    mobile = request.GET.get('mobile')
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile number required'}, status=200)
+
+    # Normalize: remove '+', spaces, and any non-digit characters
+    clean_mobile = ''.join(filter(str.isdigit, mobile))
+    # If it starts with 91, keep it; otherwise it's already without country code.
+
+    # Generate possible variations
+    possible_numbers = [clean_mobile]
+    if clean_mobile.startswith('91'):
+        # Also try without the leading 91
+        possible_numbers.append(clean_mobile[2:])
+    else:
+        # Also try with 91 prefixed
+        possible_numbers.append('91' + clean_mobile)
+
+    # Optional cache (key based on original mobile)
+    cache_key = f'lcc_{clean_mobile}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse({'success': True, **cached})
+
+    try:
+        lcc_record = None
+        for num in possible_numbers:
+            lcc_record = Lcc.objects.filter(cust_mobile=num).first()
+            if lcc_record:
+                break
+
+        if not lcc_record:
+            logger.info(f"❌ No LCC record for mobile {mobile} (tried: {possible_numbers})")
+            return JsonResponse({'success': False, 'error': 'No details found'}, status=200)
+
+        result = {
+            'customer_name': lcc_record.customer_name or '',
+            'agreement_no': lcc_record.loan_number or '',
+            'vehicle_no': lcc_record.vehicle_no or '',
+        }
+        cache.set(cache_key, result, 300)
+        return JsonResponse({'success': True, **result})
+
+    except Exception as e:
+        logger.error(f"LCC query error: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=200)
 
 
 # ============================================

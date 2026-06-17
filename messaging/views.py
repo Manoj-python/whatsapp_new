@@ -659,6 +659,10 @@ def send_reply_api(request):
 
 
 
+
+
+
+
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
 # =============================================
@@ -928,7 +932,126 @@ def whatsapp_webhook(request):
                                 log.save()
 
                         print(f"💾 Saved message {log.id} from {mobile}: {text_body[:50] if text_body else 'Empty'}")
+                        # ======================================
+                        # AUTO LEAD CREATION FROM INTERESTED BUTTON
+                        # ======================================
+                        try:
+                            interested_clicked = False
 
+                            if "[Button Click] Interested" in text_body:
+                                interested_clicked = True
+
+                            if interested_clicked:
+
+                                message = (
+                                    "ధన్యవాదాలు! 🙏\n\n"
+                                    "మీ ఆసక్తిని నమోదు చేసుకున్నాము.\n\n"
+                                    "మా Sales టీమ్ త్వరలో మిమ్మల్ని సంప్రదిస్తుంది.\n\n"
+                                    "📞 8333000111\n\n"
+                                    "SMSquare"
+                                )
+
+                                # ----------------------------------
+                                # SEND WHATSAPP AUTO REPLY
+                                # ----------------------------------
+                                resp = send_whatsapp_text(mobile, message)
+
+                                msg_id = ""
+                                try:
+                                    if isinstance(resp, dict):
+                                        msg_id = resp.get("messages", [{}])[0].get("id", "")
+                                except Exception:
+                                    pass
+
+                                if not msg_id:
+                                    msg_id = f"AUTO-{uuid.uuid4().hex[:12]}"
+
+                                # ----------------------------------
+                                # SAVE AUTO REPLY TO CHAT HISTORY
+                                # ----------------------------------
+                                auto_log = SmsWhatsAppLog.objects.create(
+                                    customer_name="SMSquare",
+                                    mobile=mobile,
+                                    template_name="auto_reply",
+                                    sent_text_message=message,
+                                    status="Sent",
+                                    message_type="Sent",
+                                    message_id=msg_id,
+                                    content_type="text",
+                                )
+
+                                clear_chat_cache(mobile)
+
+                                # ----------------------------------
+                                # UPDATE CONTACT
+                                # ----------------------------------
+                                ChatContact.objects.filter(mobile=mobile).update(
+                                    last_time=timezone.now(),
+                                    last_msg=message,
+                                    last_type="Sent",
+                                    last_status="Sent"
+                                )
+
+                                # ----------------------------------
+                                # WEBSOCKET UPDATE CHAT WINDOW
+                                # ----------------------------------
+                                gm = ws_group(mobile)
+
+                                if gm:
+                                    async_to_sync(channel_layer.group_send)(
+                                        f"chat_{gm}",
+                                        {
+                                            "type": "new_message",
+                                            "message": {
+                                                "id": auto_log.id,
+                                                "mobile": mobile,
+                                                "sent_text_message": message,
+                                                "content_type": "text",
+                                                "media_file": "",
+                                                "sent_at": timezone.localtime(
+                                                    auto_log.sent_at
+                                                ).isoformat(),
+                                                "message_type": "Sent",
+                                                "message_id": msg_id,
+                                                "status": "Sent",
+                                                "sender_name": "SMSquare"
+                                            }
+                                        }
+                                    )
+
+                                # ----------------------------------
+                                # CREATE SALES CASE
+                                # ----------------------------------
+                                from adminpanel.models import SupportGroup
+
+                                existing_case = Case.objects.filter(
+                                    mobile=mobile,
+                                    group__name__iexact="Sales"
+                                ).exclude(
+                                    status__in=["Closed"]
+                                ).first()
+
+                                if not existing_case:
+
+                                    sales_group = SupportGroup.objects.get(name="Sales")
+
+                                    Case.objects.create(
+                                        case_id=f"LEAD-{uuid.uuid4().hex[:8].upper()}",
+                                        customer_name=customer_name,
+                                        mobile=mobile,
+                                        issue_description="Customer clicked Interested on WhatsApp Loan Campaign",
+                                        group=sales_group,
+                                        current_level="ESC2",
+                                        status="Open",
+                                        priority="Medium",
+                                        source="WhatsApp Marketing Campaign",
+                                        created_by="System Auto Lead"
+                                    )
+
+                                    print(f"✅ Sales Lead Created: {mobile}")
+
+                        except Exception as e:
+                            print("Lead creation error:", str(e))
                         # ======================================
                         # UPDATE CONTACT
                         # ======================================
@@ -968,7 +1091,7 @@ def whatsapp_webhook(request):
                                 "status": log.status,
                                 "sender_name": customer_name
                             }
-                            
+
                             if button_response:
                                 try:
                                     btn_data = json.loads(button_response)
@@ -976,7 +1099,7 @@ def whatsapp_webhook(request):
                                     ws_message["interaction_type"] = btn_data.get("type")
                                 except:
                                     pass
-                            
+
                             async_to_sync(channel_layer.group_send)(
                                 f"chat_{gm}",
                                 {"type": "new_message", "message": ws_message}
@@ -1019,7 +1142,7 @@ def whatsapp_webhook(request):
                             if obj:
                                 SmsWhatsAppLog.objects.filter(id=obj.id).update(message_id=msg_id)
                                 obj.refresh_from_db()
-                        
+
                         if not obj:
                             continue
 
@@ -1063,7 +1186,7 @@ def whatsapp_webhook(request):
                                 f"chat_{gm}",
                                 {"type": "delivery.update", "message_id": msg_id, "status": norm, "mobile": mobile}
                             )
-                        
+
                         async_to_sync(channel_layer.group_send)(
                             "global_contacts",
                             {"type": "contact.update", "contact": {"mobile": mobile, "last_status": norm}}
@@ -1084,6 +1207,8 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
+
+
 
 
 
@@ -1140,3 +1265,22 @@ def view_secure_document(request, log_id):
 
     return response
 
+
+@csrf_exempt
+def fetch_padmasai_details(request):
+    mobile = request.GET.get('mobile')
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile number required'})
+
+    # Optional cache
+    cache_key = f'lcc_{mobile.lstrip("+")}'
+    cached = cache.get(cache_key)
+    if cached:
+        return JsonResponse({'success': True, **cached})
+
+    result = lcc_details(mobile)
+    if result:
+        cache.set(cache_key, result, 300)
+        return JsonResponse({'success': True, **result})
+    else:
+        return JsonResponse({'success': False, 'error': 'No details found'})
