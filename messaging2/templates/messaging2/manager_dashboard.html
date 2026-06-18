@@ -108,7 +108,13 @@
                                     <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
                                     <td>{{ case.resolved_by|default:"System" }}</small></small></td>
                                     <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</small></small></td>
-                                    <td><button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button></small></td>
+                                    
+                                    <td><button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button></small>
+                                     {% if agent.role == 'MANAGER' or agent.role == 'ADMIN' %}
+                                    <button class="btn btn-sm btn-danger" onclick="closeCase('{{ case.case_id }}')"><i class="fas fa-door-closed"></i> Close</button>
+                                {% endif %}
+                                    </td>
+                                    
                                 </tr>
                                 {% empty %}
                                 <tr><td colspan="7" class="text-center">No resolved cases at ESC3 level.{% endfor %}
@@ -217,9 +223,16 @@ function loadPendingCases(department) {
 
 function renderPendingTable(cases) {
     const tbody = document.getElementById('pendingTableBody');
-    if (!cases || cases.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center">No pending cases</td></tr>'; return; }
+    if (!cases || cases.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No pending cases</td></tr>';
+        return;
+    }
     let html = '';
     for (let c of cases) {
+        // Determine if close button should be shown (if user is MANAGER or ADMIN)
+        const userRole = '{{ agent.role }}';  // passed from Django template context
+        const showClose = (userRole === 'MANAGER' || userRole === 'ADMIN');
+        
         html += `<tr>
             <td>${c.loan_number || '-'}</td>
             <td>${escapeHtml(c.customer_name || c.mobile)}</td>
@@ -237,6 +250,29 @@ function renderPendingTable(cases) {
         </tr>`;
     }
     tbody.innerHTML = html;
+}
+function closeCase(caseId) {
+    const reason = prompt("Enter reason for closing this case (optional):");
+    if (reason === null) return;
+
+    fetch(`/adminpanel/case/${caseId}/close/?app={{ current_app }}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ close_reason: reason || "" })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case closed successfully!');
+            window.location.reload();  // Refresh page to update resolved tab
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
 }
 
 function showAssignModal(caseId) { document.getElementById('assignCaseId').value = caseId; $('#assignModal').modal('show'); }

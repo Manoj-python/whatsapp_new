@@ -600,20 +600,52 @@ def get_case_detail_api(request, case_id):
         }
     })
 
+# adminpanel/views.py
+
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def close_case_api(request, case_id):
     agent = get_agent_from_user(request.user)
-    if agent.role != 'ADMIN':
-        return JsonResponse({'error': 'Only Admin can close cases'}, status=403)
+    if agent.role not in ['ADMIN', 'MANAGER']:
+        return JsonResponse({'error': 'Only Admin and Manager can close cases'}, status=403)
+
     app_key = get_app_from_request(request)
-    CaseModel = APP_CONFIG[app_key]['case_model']
+    cfg = APP_CONFIG[app_key]
+    CaseModel = cfg['case_model']
+    ContactModel = cfg['contact_model']
+    channel_group = cfg['channel_group']
+
     case = get_object_or_404(CaseModel, case_id=case_id)
     data = json.loads(request.body)
-    case.close(agent, data.get('close_reason', ''))
-    return JsonResponse({'success': True, 'message': 'Case closed successfully'})
 
+    # This will call the model's close() method – you already allow MANAGER
+    case.close(agent, data.get('close_reason', ''))
+
+    # ✅ Update contact model
+    ContactModel.objects.filter(mobile=case.mobile).update(
+        current_level='CLOSED',
+        last_status='Closed'
+    )
+
+    # ✅ Broadcast WebSocket update
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        channel_group,
+        {
+            "type": "contact.update",
+            "contact": {
+                "mobile": case.mobile,
+                "current_level": 'CLOSED',
+                "last_status": 'Closed',
+                "last_msg": f"✅ Ticket closed: {case.case_id}",
+                "last_time": timezone.now().isoformat(),
+            }
+        }
+    )
+
+    return JsonResponse({'success': True, 'message': 'Case closed successfully'})
 
 @csrf_exempt
 @require_http_methods(["POST"])

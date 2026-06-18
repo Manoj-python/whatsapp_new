@@ -291,7 +291,7 @@ class Case(models.Model):
         return True
     
     def close(self, agent, close_reason=None):
-        if agent.role != 'ADMIN':
+        if agent.role not in ['ADMIN','MANAGER']:
             raise PermissionError("Only Admin can close cases")
         if self.status != 'Resolved':
             raise ValueError(f"Cannot close case in {self.status} status")
