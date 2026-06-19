@@ -913,7 +913,7 @@ def whatsapp_webhook(request):
                         send_welcome = False
                         if not last_incoming:
                             send_welcome = True
-                        elif (timezone.now() - last_incoming.sent_at).total_seconds() > 3600:  # 1 hour
+                        elif (timezone.now() - last_incoming.sent_at).total_seconds() > 21600:  # 1 hour
                             send_welcome = True   
 
                         # ======================================

@@ -31,6 +31,7 @@ from django.conf import settings
 APP_CONFIG = {
     'psf': {
         'name': 'PSF',
+        'app_name':'Padma Sai Holdings Private Limited',
         'case_model': psfCase,
         'log_model': SmsWhatsAppLog2,
         'contact_model': ChatContact2,
@@ -47,6 +48,7 @@ APP_CONFIG = {
     },
     'sms': {
         'name': 'SMS',
+        'app_name':'SM SQUARE CREDIT SERVICES PRIVATE LIMITED',
         'case_model': smsCase,
         'log_model': SmsWhatsAppLog,
         'contact_model': ChatContact,
@@ -602,7 +604,7 @@ def get_case_detail_api(request, case_id):
 
 # adminpanel/views.py
 
-
+from messaging2.tasks import send_ticket_close_message 
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -622,7 +624,7 @@ def close_case_api(request, case_id):
 
     # This will call the model's close() method – you already allow MANAGER
     case.close(agent, data.get('close_reason', ''))
-
+    send_ticket_close_message.delay(app_key, case.id)
     # ✅ Update contact model
     ContactModel.objects.filter(mobile=case.mobile).update(
         current_level='CLOSED',
