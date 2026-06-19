@@ -636,8 +636,8 @@ def send_ticket_open_message(app_key, case_id):
         {"type": "text", "text": customer_name},
         {"type": "text", "text": case_id_str},
         {"type": "text", "text": group_name},
-        {"type": "text", "text": created_at},
         {"type": "text", "text": description},
+        {"type": "text", "text": created_at},
     ]
 
     # Fallback free text (used when 24h window is open)
@@ -763,8 +763,8 @@ def send_ticket_close_message(app_key, case_id):
 
     customer_name = case.customer_name or "Customer"
     case_id_str = case.case_id
-    summary = case.closed_reason or "Resolved"
-    closed_at = timezone.localtime(case.closed_at or case.updated_at).strftime('%d-%m-%Y %I:%M %p')
+    summary = case.resolution_notes or "Resolved"
+    closed_at = timezone.localtime(case.resolved_at or case.updated_at).strftime('%d-%m-%Y %I:%M %p')
 
     template_params = [
         {"type": "text", "text": customer_name},
@@ -873,10 +873,8 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         LogModel = cfg['log_model']
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
-        app_name=cfg['app_name']
-        welcome_template = cfg['templates']['welcome']
+        app_name = cfg['app_name']
         whatsapp_creds = cfg.get('whatsapp', {})
-
     except KeyError:
         return
 
@@ -885,7 +883,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         return
 
     customer_name = customer_name or "Customer"
-    template_params = [{"type": "text", "text": customer_name}]
+    # Direct free text – no template
     free_text = (
         f"👋 Welcome to {app_name}!\n\n"
         f"Thank you for contacting us. We're here to assist you with loans, account information, EMI details, payments, and other services.\n\n"
@@ -893,22 +891,21 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         f"Type your query or select a service to get started."
     )
 
-    msg_id, status, error, used_template = send_message_based_on_window(
+    # ─── Direct send using WhatsApp credentials ───
+    # You can either call a helper function or directly use the WhatsApp client
+    # Here I assume you have a function send_whatsapp_text(mobile, text, creds)
+    msg_id, status, error = send_whatsapp_text4(
         mobile=mobile,
-        template_name=welcome_template,
-        template_params=template_params,
-        free_text=free_text,
-        whatsapp_creds=whatsapp_creds,
-        LogModel=LogModel
+        text=free_text,
+        creds=whatsapp_creds
     )
-    template_rendered_text = render_template_text(welcome_template, template_params)
-    sent_text = template_rendered_text if used_template else free_text
 
+    # Log the message (no template fields)
     log = LogModel.objects.create(
         customer_name=customer_name,
         mobile=mobile,
-        template_name=welcome_template if used_template else "",
-        sent_text_message=sent_text,
+        template_name="",               # no template
+        sent_text_message=free_text,
         status=status,
         message_id=msg_id,
         message_type="Sent",
@@ -927,7 +924,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         }
     )
 
-    # WebSocket broadcast (same pattern)
+    # WebSocket broadcast (same as before, but no template info)
     try:
         channel_layer = get_channel_layer()
         gm = re.sub(r"\D", "", mobile)

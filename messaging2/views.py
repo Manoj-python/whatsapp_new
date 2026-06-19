@@ -112,18 +112,7 @@ def messaging2_login(request):
                 }
             )
             request.session["messaging2_user"] = user.id
-            if agent.role == 'ADMIN':
-                return redirect('admin_dashboard')
-            elif agent.role == 'MANAGER':
-                return redirect('manager_dashboard')
-            elif agent.role == 'LEAD':
-                return redirect('lead_dashboard')
-            elif agent.role == 'LEGAL':
-                return redirect('legal_dashboard')
-            else:
-                return redirect('agent_dashboard')
-        else:
-            messages.error(request, "Invalid username or password")
+           
     return render(request, "messaging2/login.html")
 
 def messaging2_logout(request):
@@ -1751,6 +1740,11 @@ def escalate_case_api2(request, case_id):
         return JsonResponse({'error': str(e)}, status=500)
     
 
+
+        
+
+from .tasks import send_ticket_close_message   # import the task
+
 @csrf_exempt
 def resolve_case_api2(request, case_id):
     if request.method != 'POST':
@@ -1760,55 +1754,50 @@ def resolve_case_api2(request, case_id):
         agent = get_agent_from_user(request.user)
         case = CaseModel.objects.get(case_id=case_id)
 
-        # ✅ No permission restriction – any authenticated agent can resolve
-        # (case.group can be None – that's fine)
-
         if case.status in ['Resolved', 'Closed']:
             return JsonResponse({'error': f'Case already {case.status}'}, status=400)
 
         data = json.loads(request.body)
         resolution_notes = data.get('resolution_notes', '')
-        case.resolve(agent, resolution_notes)
-        ContactModel.objects.filter(mobile=case.mobile).update(current_level='RESOLVED')
+
+        # ── Set case as Resolved (not Closed) ──
+        case.status = 'Resolved'
+        case.resolved_at = timezone.now()
+        case.resolved_by = agent.name if agent else request.user.username
+        case.resolution_notes = resolution_notes
+        case.current_level = 'Resolved'   # if you have this field on Case
+        case.save()
+
+        # ── Update ContactModel ──
+        ContactModel.objects.filter(mobile=case.mobile).update(
+            current_level='RESOLVED'
+        )
+
+        # ── WebSocket broadcast ──
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             channel_group,
             {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'RESOLVED'}}
         )
-        return JsonResponse({'success': True, 'message': 'Case resolved successfully', 
-                             'case': {'case_id': case.case_id, 'status': case.status, 'current_level': case.current_level}})
+
+        # ── 🚀 Trigger closure message task asynchronously ──
+        app_key = request.GET.get('app', 'psf')   # or from request.POST
+        send_ticket_close_message.delay(app_key, case.id)   # case.id = primary key
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Case resolved and closure message queued',
+            'case': {
+                'case_id': case.case_id,
+                'status': case.status,          # will be 'Resolved'
+                'current_level': case.current_level
+            }
+        })
     except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
-@csrf_exempt
-def close_case_api2(request, case_id):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
-    try:
-        CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
-        agent = get_agent_from_user(request.user)
-        if agent.role != 'ADMIN':
-            return JsonResponse({'error': 'Only Admin can close cases'}, status=403)
-        case = CaseModel.objects.get(case_id=case_id)
-        if not case.can_close(agent):
-            return JsonResponse({'error': f'Cannot close case in {case.status} status'}, status=400)
-        data = json.loads(request.body)
-        close_reason = data.get('close_reason', '')
-        case.close(agent, close_reason)
-        ContactModel.objects.filter(mobile=case.mobile).update(current_level='CLOSED', last_status='Closed')
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            channel_group,
-            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'CLOSED'}}
-        )
-        return JsonResponse({'success': True, 'message': f'Case {case.case_id} closed successfully'})
-    except CaseModel.DoesNotExist:
-        return JsonResponse({'error': 'Case not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
+    
 @csrf_exempt
 def reopen_case_api2(request, case_id):
     if request.method != 'POST':

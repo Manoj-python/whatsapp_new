@@ -68,5 +68,5 @@ def handle_case_messages(sender, instance, created, **kwargs):
     # Status changed to 'Closed' → send close message
     if not created:
         old_status = getattr(instance, '_old_status', None)
-        if instance.status == 'Closed' and old_status != 'Closed' and not instance.ticket_close_message_sent:
+        if instance.status == 'Resolved' and old_status != 'Resolved' and not instance.ticket_close_message_sent:
             send_ticket_close_message.delay(actual_app_key, instance.id)

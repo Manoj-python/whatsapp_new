@@ -110,8 +110,11 @@
                                     <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</small></small></td>
                                     
                                     <td><button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button></small>
-                                     {% if agent.role == 'MANAGER' or agent.role == 'ADMIN' %}
                                     <button class="btn btn-sm btn-danger" onclick="closeCase('{{ case.case_id }}')"><i class="fas fa-door-closed"></i> Close</button>
+                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')"><i class="fas fa-check-circle"></i></button>
+                                     <button class="btn btn-sm btn-secondary" onclick="editCase('{{ case.case_id }}')"><i class="fas fa-edit"></i></button>
+
+
                                 {% endif %}
                                     </td>
                                     
@@ -274,6 +277,79 @@ function closeCase(caseId) {
     })
     .catch(err => alert('Error: ' + err.message));
 }
+
+function editCase(caseId) {
+        document.getElementById('editCaseId').value = caseId;
+        $('#editCaseModal').modal('show');
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const c = data.case;
+                    document.getElementById('editLoanNumber').value = c.loan_number || '';
+                    document.getElementById('editCustomerName').value = c.customer_name || '';
+                    document.getElementById('editIssueDescription').value = c.issue_description || '';
+                } else {
+                    alert('Could not load case data for editing.');
+                }
+            })
+            .catch(error => {
+                alert('Error loading case: ' + error.message);
+            });
+    }
+
+    function submitEdit() {
+        const caseId = document.getElementById('editCaseId').value;
+        const loanNumber = document.getElementById('editLoanNumber').value;
+        const customerName = document.getElementById('editCustomerName').value;
+        const issueDescription = document.getElementById('editIssueDescription').value;
+
+        if (!loanNumber || !customerName || !issueDescription) {
+            alert('Please fill in all fields.');
+            return;
+        }
+
+        const csrftoken = document.querySelector('[name=csrf-token]').content;
+        if (!csrftoken) {
+            alert('CSRF token missing. Please refresh the page.');
+            return;
+        }
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/edit/`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                loan_number: loanNumber,
+                customer_name: customerName,
+                issue_description: issueDescription
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Case updated successfully!');
+                $('#editCaseModal').modal('hide');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+
 
 function showAssignModal(caseId) { document.getElementById('assignCaseId').value = caseId; $('#assignModal').modal('show'); }
 function submitAssignCase() {

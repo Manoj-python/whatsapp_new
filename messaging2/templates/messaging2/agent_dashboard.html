@@ -106,7 +106,6 @@
                 <li class="nav-item"><a class="nav-link active" data-tab="assigned" onclick="loadCaseTab('assigned')">My Assigned Cases</a></li>
                 <li class="nav-item"><a class="nav-link" data-tab="today_created" onclick="loadCaseTab('today_created')">Today’s Created Cases</a></li>
                 <li class="nav-item"><a class="nav-link" data-tab="resolved_by_me" onclick="loadCaseTab('resolved_by_me')">Resolved by Me (All Time)</a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="escalated_by_me" onclick="loadCaseTab('escalated_by_me')">Escalated by Me</a></li>
             </ul>
             <div id="casesContainer">
                 <!-- initial load: assigned cases -->
@@ -134,7 +133,6 @@
                                 <td>{{ case.created_at|date:"d/m/Y H:i" }}</small></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
-                                    <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
                                     <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check-circle"></i></button>
                                 </small></td>
                             </tr>
@@ -176,7 +174,6 @@ function renderCaseTable(cases) {
             <td>${new Date(c.created_at).toLocaleString()}</td>
             <td>
                 <button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>
-                <button class="btn btn-sm btn-warning" onclick="escalateCase('${c.case_id}')"><i class="fas fa-arrow-up"></i></button>
                 <button class="btn btn-sm btn-success" onclick="resolveCase('${c.case_id}')"><i class="fas fa-check-circle"></i></button>
             </td>
         </tr>`;

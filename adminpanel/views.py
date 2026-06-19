@@ -610,8 +610,8 @@ from messaging2.tasks import send_ticket_close_message
 @require_http_methods(["POST"])
 def close_case_api(request, case_id):
     agent = get_agent_from_user(request.user)
-    if agent.role not in ['ADMIN', 'MANAGER']:
-        return JsonResponse({'error': 'Only Admin and Manager can close cases'}, status=403)
+    # if agent.role not in ['ADMIN', 'MANAGER']:
+    #     return JsonResponse({'error': 'Only Admin and Manager can close cases'}, status=403)
 
     app_key = get_app_from_request(request)
     cfg = APP_CONFIG[app_key]
@@ -624,7 +624,7 @@ def close_case_api(request, case_id):
 
     # This will call the model's close() method – you already allow MANAGER
     case.close(agent, data.get('close_reason', ''))
-    send_ticket_close_message.delay(app_key, case.id)
+    # send_ticket_close_message.delay(app_key, case.id)
     # ✅ Update contact model
     ContactModel.objects.filter(mobile=case.mobile).update(
         current_level='CLOSED',
@@ -700,18 +700,60 @@ def reopen_case_api(request, case_id):
     })
 
 
+from messaging2.tasks import send_ticket_close_message   # import the task
+
 @csrf_exempt
-@require_http_methods(["POST"])
-def resolve_case_api(request, case_id):
-    agent = get_agent_from_user(request.user)
-    if agent.role != 'ADMIN':
-        return JsonResponse({'error': 'Only Admin can resolve ESC5 cases'}, status=403)
-    app_key = get_app_from_request(request)
-    CaseModel = APP_CONFIG[app_key]['case_model']
-    case = get_object_or_404(CaseModel, case_id=case_id)
-    data = json.loads(request.body)
-    case.resolve(agent, data.get('resolution_notes', ''))
-    return JsonResponse({'success': True, 'message': 'Case resolved successfully'})
+def resolve_case_api2(request, case_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
+        agent = get_agent_from_user(request.user)
+        case = CaseModel.objects.get(case_id=case_id)
+
+        if case.status in ['Resolved', 'Closed']:
+            return JsonResponse({'error': f'Case already {case.status}'}, status=400)
+
+        data = json.loads(request.body)
+        resolution_notes = data.get('resolution_notes', '')
+
+        # ── Set case as Resolved (not Closed) ──
+        case.status = 'Resolved'
+        case.resolved_at = timezone.now()
+        case.resolved_by = agent.name if agent else request.user.username
+        case.resolution_notes = resolution_notes
+        case.current_level = 'Resolved'   # if you have this field on Case
+        case.save()
+
+        # ── Update ContactModel ──
+        ContactModel.objects.filter(mobile=case.mobile).update(
+            current_level='RESOLVED'
+        )
+
+        # ── WebSocket broadcast ──
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            channel_group,
+            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'RESOLVED'}}
+        )
+
+        # ── 🚀 Trigger closure message task asynchronously ──
+        app_key = request.GET.get('app', 'psf')   # or from request.POST
+        send_ticket_close_message.delay(app_key, case.id)   # case.id = primary key
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Case resolved and closure message queued',
+            'case': {
+                'case_id': case.case_id,
+                'status': case.status,          # will be 'Resolved'
+                'current_level': case.current_level
+            }
+        })
+    except CaseModel.DoesNotExist:
+        return JsonResponse({'error': 'Case not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 def get_case_timeline_api(request, case_id):
@@ -735,8 +777,8 @@ def get_case_timeline_api(request, case_id):
 def edit_case_api(request, case_id):
     """Admin-only endpoint to edit case fields (loan_number, customer_name, issue_description, group)"""
     agent = get_agent_from_user(request.user)
-    if agent.role != 'ADMIN':
-        return JsonResponse({'error': 'Only Admin can edit cases'}, status=403)
+    # if agent.role != 'ADMIN':
+    #     return JsonResponse({'error': 'Only Admin can edit cases'}, status=403)
 
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']

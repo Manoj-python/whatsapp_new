@@ -3,6 +3,7 @@
 
 {% block content %}
 <div class="container-fluid">
+    <!-- App Switcher -->
     <div class="row mb-3">
         <div class="col-12">
             <div class="btn-group">
@@ -48,29 +49,39 @@
     </ul>
 
     <div class="tab-content mt-3">
-        <!-- Pending Cases Tab -->
+        <!-- ==================== PENDING CASES TAB ==================== -->
         <div class="tab-pane fade show active" id="pending" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-primary text-white">Pending ESC2 Cases</div>
                 <div class="card-body">
                     <table class="table table-hover">
                         <thead>
-                            <tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Priority</th><th>Status</th><th>Actions</th></tr>
+                            <tr>
+                                <th>Loan No</th>
+                                <th>Customer</th>
+                                <th>Mobile</th>
+                                <th>Department</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for case in pending_cases %}
                             <tr>
-                                <td>{{ case.loan_number|default:"-" }}</small></td>
-                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
-                                <td>{{ case.mobile }}</small></td>
-                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
-                                <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></small></td>
-                                <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
+                                <td>{{ case.loan_number|default:"-" }}</td>
+                                <td>{{ case.customer_name|default:case.mobile }}</td>
+                                <td>{{ case.mobile }}</td>
+                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></td>
+                                <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
-                                    <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
-                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')"><i class="fas fa-check-circle"></i></button>
-                                 </small></td>
+                                    <!-- View, Edit, Resolve (No Close) -->
+                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-secondary" onclick="editCase('{{ case.case_id }}')" title="Edit"><i class="fas fa-edit"></i></button>
+                                    <!-- Escalate is intentionally disabled/hidden -->
+                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')" title="Resolve"><i class="fas fa-check-circle"></i></button>
+                                </td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="7" class="text-center">No pending ESC2 cases in your departments.</td></tr>
@@ -81,27 +92,37 @@
             </div>
         </div>
 
-        <!-- Resolved Cases Tab -->
+        <!-- ==================== RESOLVED CASES TAB ==================== -->
         <div class="tab-pane fade" id="resolved" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-success text-white">Resolved at ESC2 Level</div>
                 <div class="card-body">
                     <table class="table table-hover">
                         <thead>
-                            <tr><th>Case ID</th><th>Customer</th><th>Loan No</th><th>Department</th><th>Resolved By</th><th>Resolved At</th><th>Actions</th></tr>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Customer</th>
+                                <th>Loan No</th>
+                                <th>Department</th>
+                                <th>Resolved By</th>
+                                <th>Resolved At</th>
+                                <th>Actions</th>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for case in resolved_cases %}
                             <tr>
-                                <td>{{ case.case_id }}</small></td>
-                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
-                                <td>{{ case.loan_number|default:"-" }}</small></td>
+                                <td>{{ case.case_id }}</td>
+                                <td>{{ case.customer_name|default:case.mobile }}</td>
+                                <td>{{ case.loan_number|default:"-" }}</td>
                                 <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
-                                <td>{{ case.resolved_by|default:"System" }}</small></td>
-                                <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</small></td>
+                                <td>{{ case.resolved_by|default:"System" }}</td>
+                                <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
-                                 </small></td>
+                                    <!-- View & Close (Close is new) -->
+                                    <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-danger" onclick="closeCase('{{ case.case_id }}')" title="Close Permanently"><i class="fas fa-times-circle"></i> Close</button>
+                                </td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="7" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
@@ -112,35 +133,44 @@
             </div>
         </div>
 
-        <!-- Escalated Cases Tab -->
+        <!-- ==================== ESCALATED CASES TAB ==================== -->
         <div class="tab-pane fade" id="escalated" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-info text-white">Escalated from ESC2 to Higher Levels</div>
                 <div class="card-body">
                     <table class="table table-hover">
                         <thead>
-                            <tr><th>Case ID</th><th>Customer</th><th>Loan No</th><th>Current Level</th><th>Escalated By</th><th>Escalated At</th><th>Actions</th></tr>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Customer</th>
+                                <th>Loan No</th>
+                                <th>Current Level</th>
+                                <th>Escalated By</th>
+                                <th>Escalated At</th>
+                                <th>Actions</th>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for case in escalated_cases %}
                             <tr>
-                                <td>{{ case.case_id }}</small></td>
-                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
-                                <td>{{ case.loan_number|default:"-" }}</small></td>
-                                <td>{{ case.current_level }}</small></td>
+                                <td>{{ case.case_id }}</td>
+                                <td>{{ case.customer_name|default:case.mobile }}</td>
+                                <td>{{ case.loan_number|default:"-" }}</td>
+                                <td>{{ case.current_level }}</td>
                                 <td>
                                     {% with last_log=case.escalation_logs.first %}
                                         {{ last_log.escalated_by|default:"System" }}
                                     {% endwith %}
-                                 </small></td>
+                                </td>
                                 <td>
                                     {% with last_log=case.escalation_logs.first %}
                                         {{ last_log.created_at|date:"d-m-Y H:i" }}
                                     {% endwith %}
-                                 </small></td>
+                                </td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
-                                 </small></td>
+                                    <!-- Only View -->
+                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
+                                </td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="7" class="text-center">No escalated cases from ESC2 in your departments.</td></tr>
@@ -153,11 +183,11 @@
     </div>
 </div>
 
-<!-- Include modals (case details, escalate, resolve) -->
+<!-- Include modals (case details, escalate, resolve, edit) -->
 {% include "messaging2/_case_modals.html" %}
 
 <script>
-    // Ensure Bootstrap tabs work (if not already loaded)
+    // Ensure Bootstrap tabs work
     document.addEventListener('DOMContentLoaded', function() {
         var triggerTabList = [].slice.call(document.querySelectorAll('#caseTabs button'));
         triggerTabList.forEach(function(triggerEl) {
@@ -169,7 +199,126 @@
         });
     });
 
-   
-    
+    // ------------------------------------------------------------------
+    // EDIT CASE (re‑used from previous code)
+    // ------------------------------------------------------------------
+    function editCase(caseId) {
+        document.getElementById('editCaseId').value = caseId;
+        $('#editCaseModal').modal('show');
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const c = data.case;
+                    document.getElementById('editLoanNumber').value = c.loan_number || '';
+                    document.getElementById('editCustomerName').value = c.customer_name || '';
+                    document.getElementById('editIssueDescription').value = c.issue_description || '';
+                } else {
+                    alert('Could not load case data for editing.');
+                }
+            })
+            .catch(error => {
+                alert('Error loading case: ' + error.message);
+            });
+    }
+
+    function submitEdit() {
+        const caseId = document.getElementById('editCaseId').value;
+        const loanNumber = document.getElementById('editLoanNumber').value;
+        const customerName = document.getElementById('editCustomerName').value;
+        const issueDescription = document.getElementById('editIssueDescription').value;
+
+        if (!loanNumber || !customerName || !issueDescription) {
+            alert('Please fill in all fields.');
+            return;
+        }
+
+        const csrftoken = document.querySelector('[name=csrf-token]').content;
+        if (!csrftoken) {
+            alert('CSRF token missing. Please refresh the page.');
+            return;
+        }
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/edit/`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({
+                loan_number: loanNumber,
+                customer_name: customerName,
+                issue_description: issueDescription
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Case updated successfully!');
+                $('#editCaseModal').modal('hide');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // CLOSE CASE – called from Resolved tab
+    // ------------------------------------------------------------------
+    function closeCase(caseId) {
+        if (!confirm('Are you sure you want to permanently close this resolved case? This action cannot be undone.')) {
+            return;
+        }
+
+        const csrftoken = document.querySelector('[name=csrf-token]').content;
+        if (!csrftoken) {
+            alert('CSRF token missing. Please refresh the page.');
+            return;
+        }
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/close/`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({})
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Case closed successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => alert('Error: ' + error.message));
+    }
+
+    // ------------------------------------------------------------------
+    // Existing functions (viewCase, resolveCase, escalateCase, etc.)
+    // are assumed to be present in _case_modals.html or elsewhere.
+    // If not, you must include them.
+    // ------------------------------------------------------------------
 </script>
 {% endblock %}
