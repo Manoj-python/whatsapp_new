@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     "financehub",
     "notices",
     "special_cases",
-    
+     "meghaai_app"
       
 ]
 
@@ -270,4 +270,35 @@ CHANNEL_LAYERS = {
             "expiry": 60,
         },
     },
+}
+
+
+
+
+# MeghaAI Config with Connection Pool Settings
+MEGHAAI_CONFIG = {
+    'ANTHROPIC_API_KEY': os.environ.get('ANTHROPIC_API_KEY'),
+    'MODEL': os.environ.get('MODEL', 'claude-sonnet-4-6'),
+    'MAX_ROWS': int(os.environ.get('SQL_MAX_ROWS', 500)),
+    'QUERY_TIMEOUT_MS': int(os.environ.get('SQL_TIMEOUT_MS', 30000)),
+    
+    # Database Settings
+    'MYSQL_HOST': os.environ.get('MYSQL_HOST', '127.0.0.1'),
+    'MYSQL_PORT': int(os.environ.get('MYSQL_PORT', 3306)),
+    'MYSQL_USER': os.environ.get('MYSQL_USER'),
+    'MYSQL_PASSWORD': os.environ.get('MYSQL_PASSWORD'),
+    'MYSQL_DATABASE': os.environ.get('MYSQL_DATABASE'),
+    
+    # SSH Tunnel Settings
+    'SSH_HOST': os.environ.get('SSH_HOST'),
+    'SSH_PORT': int(os.environ.get('SSH_PORT', 22)),
+    'SSH_USER': os.environ.get('SSH_USER'),
+    'SSH_KEY_FILE': os.environ.get('SSH_KEY_FILE'),
+    'SSH_KEY_PASSPHRASE': os.environ.get('SSH_KEY_PASSPHRASE'),
+    'SSH_PASSWORD': os.environ.get('SSH_PASSWORD'),
+    
+    # ========== NEW: Connection Pool Settings ==========
+    'DB_POOL_SIZE': 15,           # Minimum connections always open
+    'DB_MAX_POOL_SIZE': 30,       # Maximum connections in pool
+    'DB_MAX_OVERFLOW': 20,        # Extra connections when needed
 }
