@@ -89,6 +89,8 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
     }
     
     .filter-card {
@@ -129,7 +131,6 @@
     .modern-table tbody tr:hover { background: #f8f9fa; }
     .modern-table td { padding: 12px 15px; vertical-align: middle; }
     
-    
     .status-badge {
         display: inline-block;
         padding: 4px 12px;
@@ -163,10 +164,43 @@
     .app-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
     .app-btn:hover:not(.active) { background: #f0f2f5; }
     
+    .tab-btn.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    .tab-btn:not(.active) {
+        background: white;
+        color: var(--dark);
+        border-color: #ddd;
+    }
+    .tab-btn:hover:not(.active) {
+        background: #f0f2f5;
+    }
+    
+    .dept-summary-badge {
+        background: #e9ecef;
+        color: var(--dark);
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .dept-summary-badge span.count {
+        background: var(--primary);
+        color: white;
+        border-radius: 50%;
+        padding: 0 8px;
+        margin-left: 4px;
+        font-size: 12px;
+    }
+    
     @media (max-width: 768px) {
         .stat-number { font-size: 24px; }
         .filter-card h4 { font-size: 18px; }
         .app-btn { padding: 4px 10px; font-size: 11px; }
+        .section-title { flex-direction: column; align-items: stretch; }
+        .tab-group { flex-wrap: wrap; }
     }
 </style>
 {% endblock %}
@@ -194,6 +228,13 @@
             </div>
         </div>
         <div class="col-md-2 col-sm-4 mb-3">
+            <div class="stat-card" onclick="filterByStatus('Active')">
+                <div class="stat-icon"><i class="fas fa-bolt"></i></div>
+                <div class="stat-number" id="activeCases">0</div>
+                <div class="stat-label">Active Cases</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-4 mb-3">
             <div class="stat-card" onclick="filterByStatus('Open')">
                 <div class="stat-icon"><i class="fas fa-play-circle"></i></div>
                 <div class="stat-number" id="openCases">0</div>
@@ -205,6 +246,13 @@
                 <div class="stat-icon"><i class="fas fa-spinner"></i></div>
                 <div class="stat-number" id="inProgressCases">0</div>
                 <div class="stat-label">In Progress</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-4 mb-3">
+            <div class="stat-card" onclick="filterByStatus('Reopened')">
+                <div class="stat-icon"><i class="fas fa-undo-alt"></i></div>
+                <div class="stat-number" id="reopenCases">0</div>
+                <div class="stat-label">Reopened</div>
             </div>
         </div>
         <div class="col-md-2 col-sm-4 mb-3">
@@ -267,12 +315,6 @@
                     <p>ESC5 - Admin</p>
                 </div>
             </div>
-            <div class="col-md-2 col-sm-4 mb-2">
-                <div class="filter-card text-center" data-level="RESOLVED" onclick="filterByLevel('RESOLVED')">
-                    <h4 id="resolvedLevelCount">0</h4>
-                    <p>Resolved</p>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -291,30 +333,45 @@
         </div>
     </div>
     
-    <!-- Cases Table with Search -->
+    <!-- Cases Table with Tabs + Search + Department Summary -->
     <div class="section-card">
         <div class="section-title">
-            <span><i class="fas fa-tasks"></i> Cases 
-                <span id="activeFilterBadge" class="badge bg-primary ms-2">All Cases</span>
+            <span>
+                <i class="fas fa-tasks"></i> Cases 
+                <span id="activeFilterBadge" class="badge bg-primary ms-2">Tab: Active</span>
             </span>
-            <div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Tabs -->
+                <div class="btn-group me-2" role="group">
+                    <button class="btn btn-outline-primary btn-sm tab-btn active" data-tab="active" onclick="setTab('active')">Active</button>
+                    <button class="btn btn-outline-primary btn-sm tab-btn" data-tab="resolved" onclick="setTab('resolved')">Resolved</button>
+                    <button class="btn btn-outline-primary btn-sm tab-btn" data-tab="closed" onclick="setTab('closed')">Closed</button>
+                </div>
+                <!-- Search -->
                 <div class="input-group input-group-sm" style="width: 300px;">
                     <input type="text" id="searchInput" class="form-control" placeholder="Search by Case ID or Loan Number...">
-                    <button class="btn btn-primary" type="button" onclick="searchCases()"><i class="fas fa-search"></i> Search</button>
+                    <button class="btn btn-primary" type="button" onclick="searchCases()"><i class="fas fa-search"></i></button>
                     <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()"><i class="fas fa-times"></i></button>
                 </div>
-                <button class="btn btn-sm btn-outline-gradient ms-2" onclick="refreshCases()"><i class="fas fa-sync-alt"></i> Refresh</button>
-                <button id="exportEsc3Btn" class="btn btn-sm btn-success ms-2" onclick="exportESC3()" style="display: none;">
-                    <i class="fas fa-file-excel"></i> Export ESC3 to Excel
+                <button class="btn btn-sm btn-outline-gradient" onclick="refreshCases()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <button id="exportEsc3Btn" class="btn btn-sm btn-success" onclick="exportESC3()" style="display: none;">
+                    <i class="fas fa-file-excel"></i> Export ESC3
                 </button>
             </div>
         </div>
+        
+        <!-- Department Summary (for current filtered view) -->
+        <div id="deptSummary" class="d-flex flex-wrap gap-2 mb-3">
+            <span class="text-muted">Loading departments...</span>
+        </div>
+        
         <div id="casesTableContainer">
             <div class="text-center py-4"><div class="loading-spinner"></div><p>Loading cases...</p></div>
         </div>
     </div>
 </div>
 
+<!-- ===== MODALS (unchanged) ===== -->
 <!-- Case Detail Modal -->
 <div class="modal fade" id="caseModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -385,7 +442,6 @@
     </div>
 </div>
 
-<!-- Edit Case Modal -->
 <!-- Edit Case Modal -->
 <div class="modal fade" id="editCaseModal" tabindex="-1">
     <div class="modal-dialog">
@@ -465,37 +521,48 @@
 <script>
     let csrftoken = '{{ csrf_token }}';
     let currentApp = '{{ current_app }}';
-    let currentFilter = { type: 'all', value: null };  // type: 'all', 'status', 'level', 'dept'
-    
+    let currentFilter = { type: 'all', value: null };  // type: 'all', 'level', 'dept'
+    let currentTab = 'active';  // 'active', 'resolved', 'closed'
+
     // Helper: build URL with app param
     function buildUrl(baseUrl) {
         const separator = baseUrl.includes('?') ? '&' : '?';
         return `${baseUrl}${separator}app=${currentApp}`;
     }
-    
+
     // ========== Load Global Stats ==========
     async function loadGlobalStats() {
         try {
             const resp = await fetch(buildUrl('/adminpanel/api/level-distribution/'));
             const data = await resp.json();
-            document.getElementById('esc1Count').innerText = data.esc1 || 0;
-            document.getElementById('esc2Count').innerText = data.esc2 || 0;
-            document.getElementById('esc3Count').innerText = data.esc3 || 0;
-            document.getElementById('esc4Count').innerText = data.esc4 || 0;
-            document.getElementById('esc5Count').innerText = data.esc5 || 0;
-            document.getElementById('resolvedLevelCount').innerText = data.resolved || 0;
-            
+
+            function setText(id, value) {
+                const el = document.getElementById(id);
+                if (el) el.innerText = value;
+                else console.warn(`Element #${id} not found`);
+            }
+
+            setText('esc1Count', data.esc1 || 0);
+            setText('esc2Count', data.esc2 || 0);
+            setText('esc3Count', data.esc3 || 0);
+            setText('esc4Count', data.esc4 || 0);
+            setText('esc5Count', data.esc5 || 0);
+
             const statsResp = await fetch(buildUrl('/adminpanel/api/stats/'));
             const stats = await statsResp.json();
-            document.getElementById('totalCases').innerText = stats.total_cases || 0;
-            document.getElementById('openCases').innerText = stats.open_cases || 0;
-            document.getElementById('inProgressCases').innerText = stats.in_progress_cases || 0;
-            document.getElementById('resolvedCases').innerText = stats.resolved_cases || 0;
-            document.getElementById('closedCases').innerText = stats.closed_cases || 0;
-            document.getElementById('totalAgents').innerText = stats.total_agents || 0;
-        } catch(e) { console.error('Stats error:', e); }
+            setText('totalCases', stats.total_cases || 0);
+            setText('activeCases', (stats.total_cases - stats.resolved_cases - stats.closed_cases) || 0);
+            setText('openCases', stats.open_cases || 0);
+            setText('inProgressCases', stats.in_progress_cases || 0);
+            setText('reopenCases', stats.reopened_cases || 0);
+            setText('resolvedCases', stats.resolved_cases || 0);
+            setText('closedCases', stats.closed_cases || 0);
+            setText('totalAgents', stats.total_agents || 0);
+        } catch(e) {
+            console.error('Stats error:', e);
+        }
     }
-    
+
     // ========== Load Department-wise counts ==========
     async function loadDepartmentStats() {
         try {
@@ -523,35 +590,78 @@
             deptContainer.innerHTML = html;
         } catch(e) { console.error('Dept stats error:', e); }
     }
-    
-    // ========== Load Cases with current filters ==========
+
+    // ========== Tab Switching ==========
+    function setTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('[data-tab]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+        const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+        document.getElementById('activeFilterBadge').innerText = `Tab: ${label}`;
+        loadCases();
+    }
+
+    // ========== Render Department Summary ==========
+    function renderDepartmentSummary(deptCounts) {
+        const summaryDiv = document.getElementById('deptSummary');
+        if (!deptCounts || deptCounts.length === 0) {
+            summaryDiv.innerHTML = '<span class="text-muted">No departments</span>';
+            return;
+        }
+        let html = '<span class="fw-bold me-2">Departments:</span>';
+        deptCounts.forEach(d => {
+            const name = d.name || 'Unassigned';
+            html += `<span class="dept-summary-badge">${name} <span class="count">${d.count}</span></span>`;
+        });
+        summaryDiv.innerHTML = html;
+    }
+
+    // ========== Load Cases ==========
     async function loadCases() {
         const container = document.getElementById('casesTableContainer');
         container.innerHTML = '<div class="text-center py-4"><div class="loading-spinner"></div><p>Loading cases...</p></div>';
-        
-        let url = buildUrl('/adminpanel/api/cases/');
-        if (currentFilter.type === 'status' && currentFilter.value) {
-            url = buildUrl(`/adminpanel/api/cases/?status=${currentFilter.value}`);
-        } else if (currentFilter.type === 'level' && currentFilter.value) {
-            url = buildUrl(`/adminpanel/api/cases/?level=${currentFilter.value}`);
-        } else if (currentFilter.type === 'dept' && currentFilter.value && currentFilter.value !== 'all') {
-            url = buildUrl(`/adminpanel/api/cases/?department=${encodeURIComponent(currentFilter.value)}`);
+
+        const params = new URLSearchParams();
+
+        // Tab filter
+        if (currentTab === 'active') {
+            params.append('status__in', 'Open,In Progress,Reopened');
+        } else if (currentTab === 'resolved') {
+            params.append('status', 'Resolved');
+        } else if (currentTab === 'closed') {
+            params.append('status', 'Closed');
         }
-        
+
+        // Department filter
+        if (currentFilter.type === 'dept' && currentFilter.value && currentFilter.value !== 'all') {
+            params.append('department', currentFilter.value);
+        }
+
+        // Level filter
+        if (currentFilter.type === 'level' && currentFilter.value) {
+            params.append('level', currentFilter.value);
+        }
+
+        const url = buildUrl('/adminpanel/api/cases/') + '&' + params.toString();
+
         try {
             const resp = await fetch(url);
             const data = await resp.json();
             if (data.success) {
                 renderCasesTable(data.cases);
+                renderDepartmentSummary(data.department_counts || []);
             } else {
                 container.innerHTML = '<div class="alert alert-info">No cases found</div>';
+                renderDepartmentSummary([]);
             }
         } catch(e) {
             console.error(e);
             container.innerHTML = '<div class="alert alert-danger">Error loading cases</div>';
+            renderDepartmentSummary([]);
         }
     }
-    
+
     function renderCasesTable(cases) {
         const container = document.getElementById('casesTableContainer');
         if (!cases || cases.length === 0) {
@@ -577,76 +687,75 @@
             
             html += `
                 <tr>
-                    <td><strong>${escapeHtml(c.case_id)}</strong></small></td>
-                    <td>${escapeHtml(c.customer_name || c.mobile)}</small></td>
-                    <td>${c.mobile}</small></td>
-                    <td>${c.loan_number || ''}</small></td>
-                    <td><span class="badge bg-secondary">${escapeHtml(c.group_name || '-')}</span></small></td>
-                    <td><span class="badge bg-${c.current_level === 'ESC1' ? 'success' : c.current_level === 'ESC2' ? 'info' : c.current_level === 'ESC3' ? 'warning' : c.current_level === 'ESC4' ? 'danger' : 'dark'}">${c.current_level}</span></small></td>
-                    <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></small></td>
-                    <td><small>${new Date(c.created_at).toLocaleString()}</small></small></td>
+                    <td><strong>${escapeHtml(c.case_id)}</strong></td>
+                    <td>${escapeHtml(c.customer_name || c.mobile)}</td>
+                    <td>${c.mobile}</td>
+                    <td>${c.loan_number || ''}</td>
+                    <td><span class="badge bg-secondary">${escapeHtml(c.group_name || '-')}</span></td>
+                    <td><span class="badge bg-${c.current_level === 'ESC1' ? 'success' : c.current_level === 'ESC2' ? 'info' : c.current_level === 'ESC3' ? 'warning' : c.current_level === 'ESC4' ? 'danger' : 'dark'}">${c.current_level}</span></td>
+                    <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></td>
+                    <td><small>${new Date(c.created_at).toLocaleString()}</small></td>
                     <td>
                         <button class="btn btn-sm btn-primary action-btn" onclick="viewCase('${c.case_id}')" title="View"><i class="fas fa-eye"></i></button>
                         <button class="btn btn-sm btn-info action-btn" onclick="showEscalateModal('${c.case_id}')" title="Escalate"><i class="fas fa-arrow-up"></i></button>
                         <button class="btn btn-sm btn-warning action-btn" onclick="openEditCaseModal('${c.case_id}')" title="Edit"><i class="fas fa-edit"></i></button>
                         <button class="btn btn-sm btn-success action-btn" onclick="showCloseModal('${c.case_id}')" title="Close"><i class="fas fa-lock"></i></button>
                         <button class="btn btn-sm btn-secondary action-btn" onclick="showReopenModal('${c.case_id}')" title="Reopen"><i class="fas fa-undo"></i></button>
-                    </small></td>
+                    </td>
                 </tr>
             `;
         }
         html += `</tbody></table></div>`;
         container.innerHTML = html;
     }
-    
+
     // ========== Filter Functions ==========
     function filterByAll() {
         currentFilter = { type: 'all', value: null };
-        document.getElementById('activeFilterBadge').innerText = 'All Cases';
-        loadCases();
-        // Remove active class from all filter cards
         document.querySelectorAll('.filter-card').forEach(c => c.classList.remove('active'));
-    }
-    
-    function filterByStatus(status) {
-        currentFilter = { type: 'status', value: status };
-        document.getElementById('activeFilterBadge').innerText = `Status: ${status}`;
         loadCases();
-        // Highlight active status card (by using global stats cards)
-        document.querySelectorAll('#globalStats .stat-card').forEach(card => {
-            card.classList.remove('active');
-            if (card.querySelector('.stat-label')?.innerText === `${status} Cases`) card.classList.add('active');
-        });
     }
-    
+
     function filterByLevel(level) {
         currentFilter = { type: 'level', value: level };
-        document.getElementById('activeFilterBadge').innerText = `Level: ${level}`;
-        loadCases();
         document.querySelectorAll('#levelCards .filter-card').forEach(card => {
             card.classList.remove('active');
             if (card.getAttribute('data-level') === level) card.classList.add('active');
         });
+        document.querySelectorAll('#deptCards .filter-card').forEach(c => c.classList.remove('active'));
+        loadCases();
     }
-    
+
     function filterByDepartment(dept) {
         if (dept === 'all') {
             currentFilter = { type: 'all', value: null };
-            document.getElementById('activeFilterBadge').innerText = 'All Cases';
+            document.getElementById('activeFilterBadge').innerText = `Tab: ${currentTab.charAt(0).toUpperCase() + currentTab.slice(1)}`;
         } else {
             currentFilter = { type: 'dept', value: dept };
-            document.getElementById('activeFilterBadge').innerText = `Dept: ${dept}`;
         }
-        loadCases();
         document.querySelectorAll('#deptCards .filter-card').forEach(card => {
             card.classList.remove('active');
             if (card.getAttribute('data-dept') === dept) card.classList.add('active');
         });
+        document.querySelectorAll('#levelCards .filter-card').forEach(c => c.classList.remove('active'));
+        loadCases();
     }
-    
+
+    function filterByStatus(status) {
+        if (status === 'Active') {
+            setTab('active');
+        } else if (status === 'Resolved') {
+            setTab('resolved');
+        } else if (status === 'Closed') {
+            setTab('closed');
+        } else {
+            setTab('active');
+        }
+    }
+
     function refreshCases() { loadCases(); }
     function refreshLevelCounts() { loadGlobalStats(); }
-    
+
     // ========== Search ==========
     async function searchCases() {
         const query = document.getElementById('searchInput').value.trim();
@@ -661,11 +770,11 @@
         } catch(e) { container.innerHTML = '<div class="alert alert-danger">Error</div>'; }
     }
     function clearSearch() { document.getElementById('searchInput').value = ''; loadCases(); }
-    
+
     function exportESC3() {
         window.location.href = buildUrl('/adminpanel/export-esc3-cases/');
     }
-    
+
     // ========== Case Actions (Modals) ==========
     function viewCase(caseId) {
         $('#caseModal').modal('show');
@@ -681,28 +790,28 @@
             })
             .catch(err => document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`);
     }
-    
+
     function renderCaseDetail(caseData) {
         const html = `
             <div class="row">
                 <div class="col-md-6">
                     <h6><i class="fas fa-info-circle"></i> Case Information</h6>
                     <table class="table table-sm">
-                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></small></td>
-                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</small></td>
-                        <tr><th>Mobile:</th><td>${caseData.mobile}</small></td>
-                        <td><th>Loan No:</th><td>${caseData.loan_number || ''}</small></td>
-                        <tr><th>Group (Dept):</th><td>${escapeHtml(caseData.group_name || 'Not assigned')}</small></td>
-                        <tr><th>Current Level:</th><td>${caseData.current_level}</small></td>
-                        <tr><th>Status:</th><td>${caseData.status}</small></td>
+                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td>
+                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td>
+                        <tr><th>Mobile:</th><td>${caseData.mobile}</td>
+                        <tr><th>Loan No:</th><td>${caseData.loan_number || ''}</td>
+                        <tr><th>Group (Dept):</th><td>${escapeHtml(caseData.group_name || 'Not assigned')}</td>
+                        <tr><th>Current Level:</th><td>${caseData.current_level}</td>
+                        <tr><th>Status:</th><td>${caseData.status}</td>
                     </table>
                 </div>
                 <div class="col-md-6">
                     <h6><i class="fas fa-users"></i> Assignment</h6>
                     <table class="table table-sm">
-                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
-                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
-                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
+                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td>
+                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td>
+                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td>
                         ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td>` : ''}
                     </table>
                 </div>
@@ -718,7 +827,7 @@
         `;
         document.getElementById('caseModalBody').innerHTML = html;
     }
-    
+
     function loadCaseTimeline(caseId) {
         fetch(buildUrl(`/adminpanel/case/${caseId}/timeline/`))
             .then(res => res.json())
@@ -734,7 +843,7 @@
                 document.getElementById('timelineContainer').innerHTML = timelineHtml || '<div class="text-muted">No timeline history</div>';
             });
     }
-    
+
     function showCloseModal(caseId) {
         document.getElementById('closeCaseId').value = caseId;
         $('#closeModal').modal('show');
@@ -756,7 +865,7 @@
             } else alert('Error: ' + data.error);
         });
     }
-    
+
     function showReopenModal(caseId) {
         document.getElementById('reopenCaseId').value = caseId;
         $('#reopenModal').modal('show');
@@ -779,68 +888,55 @@
             } else alert('Error: ' + data.error);
         });
     }
-    
-   function openEditCaseModal(caseId) {
-    fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+
+    function openEditCaseModal(caseId) {
+        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('editCaseId').value = caseId;
+                    document.getElementById('editLoanNumber').value = data.case.loan_number || '';
+                    document.getElementById('editName').value = data.case.customer_name || '';
+                    document.getElementById('editIssueDescription').value = data.case.issue_description || '';
+                    const groupSelect = document.getElementById('editGroup');
+                    if (groupSelect) {
+                        groupSelect.value = data.case.group_id || '';
+                    }
+                    $('#editCaseModal').modal('show');
+                } else {
+                    alert('Error loading case');
+                }
+            });
+    }
+
+    function submitEditCase() {
+        const caseId = document.getElementById('editCaseId').value;
+        const loanNumber = document.getElementById('editLoanNumber').value;
+        const customerName = document.getElementById('editName').value;
+        const issueDesc = document.getElementById('editIssueDescription').value;
+        const groupId = document.getElementById('editGroup').value;
+
+        const payload = { loan_number: loanNumber, customer_name: customerName, issue_description: issueDesc };
+        if (groupId) payload.group = parseInt(groupId);
+
+        fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify(payload)
+        })
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                document.getElementById('editCaseId').value = caseId;
-                document.getElementById('editLoanNumber').value = data.case.loan_number || '';
-                document.getElementById('editName').value = data.case.customer_name || '';
-                document.getElementById('editIssueDescription').value = data.case.issue_description || '';
-                
-                // Set the selected group in dropdown (if group exists)
-                const groupSelect = document.getElementById('editGroup');
-                if (groupSelect) {
-                    if (data.case.group_id) {
-                        groupSelect.value = data.case.group_id;
-                    } else {
-                        groupSelect.value = '';
-                    }
-                }
-                $('#editCaseModal').modal('show');
+                alert('Case updated');
+                $('#editCaseModal').modal('hide');
+                loadCases();
+                loadGlobalStats();
             } else {
-                alert('Error loading case');
+                alert('Error: ' + data.error);
             }
         });
-}
-
-
-    function submitEditCase() {
-    const caseId = document.getElementById('editCaseId').value;
-    const loanNumber = document.getElementById('editLoanNumber').value;
-    const customerName = document.getElementById('editName').value;
-    const issueDesc = document.getElementById('editIssueDescription').value;
-    const groupId = document.getElementById('editGroup').value;
-
-    const payload = {
-        loan_number: loanNumber,
-        customer_name: customerName,
-        issue_description: issueDesc
-    };
-    if (groupId) {
-        payload.group = parseInt(groupId);
     }
 
-    fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            alert('Case updated');
-            $('#editCaseModal').modal('hide');
-            loadCases();      // refresh the cases list
-            loadGlobalStats(); // refresh stats if needed
-        } else {
-            alert('Error: ' + data.error);
-        }
-    });
-}
-    
     function showEscalateModal(caseId) {
         document.getElementById('escalateCaseId').value = caseId;
         fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
@@ -854,7 +950,7 @@
             });
         $('#escalateModal').modal('show');
     }
-    
+
     function submitEscalation() {
         const caseId = document.getElementById('escalateCaseId').value;
         const newLevel = document.getElementById('escalateLevelSelect').value;
@@ -876,14 +972,14 @@
             } else alert('Error: ' + data.error);
         });
     }
-    
+
     function escapeHtml(text) { if(!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
-    
+
     // ========== Initialize ==========
     document.addEventListener('DOMContentLoaded', function() {
         loadGlobalStats();
         loadDepartmentStats();
-        loadCases();
+        setTab('active');
     });
 </script>
 {% endblock %}

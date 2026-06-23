@@ -587,7 +587,7 @@
   function switchTab(filter) { if(currentFilter===filter) return; currentFilter=filter; document.querySelectorAll('.chat-tab').forEach(tab=>{ if(tab.dataset.filter===filter) tab.classList.add('active'); else tab.classList.remove('active'); }); contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; contactListEl.innerHTML='<div class="loading">Loading contacts...</div>'; loadContacts(); }
   function loadContacts(page=1) { if(isLoadingContacts||(page<=contactPage&&page>1)) return; isLoadingContacts=true; console.log(`Load contacts page ${page}`); let levelToSend=currentUser.role==='ADMIN'?null:currentUser.level; sendWS({type:'get_contacts',page:page,filter:currentFilter,level:levelToSend}); }
   function searchContacts(query) { contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; let levelToSend=currentUser.role==='ADMIN'?null:currentUser.level; sendWS({type:'search_contacts',q:query,filter:currentFilter,level:levelToSend}); }
-function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore = false, currentPage = 1) {
+  function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore = false, currentPage = 1) {
     if (isRenderingContacts || (lastProcessedPage === currentPage && !replace)) {
         isRenderingContacts = false;
         return;
@@ -595,37 +595,65 @@ function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore =
     isRenderingContacts = true;
     isLoadingContacts = false;
     lastProcessedPage = currentPage;
+
+    // Optional role-based filtering (keep as is)
     let filteredContacts = contactsData;
     if (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN')
         filteredContacts = contactsData.filter(c => c.current_level === currentUser.level);
-    if (replace) contacts = filteredContacts;
-    else {
-        let existing = new Set(contacts.map(c => c.mobile));
-        let newContacts = filteredContacts.filter(c => !existing.has(c.mobile));
+
+    // Deduplicate: for contacts use mobile; for cases use mobile+case_id
+    if (replace) {
+        contacts = filteredContacts;
+    } else {
+        let existing = new Set(contacts.map(c => c.mobile + (c.is_case ? c.case_id : '')));
+        let newContacts = filteredContacts.filter(c => !existing.has(c.mobile + (c.is_case ? c.case_id : '')));
         contacts = [...contacts, ...newContacts];
     }
+
+    // Update unread badge
     totalUnreadCount = unreadCount;
     let badge = document.getElementById('unreadCountBadge');
     if (badge) {
         if (totalUnreadCount > 0) {
             badge.style.display = 'inline';
             badge.textContent = totalUnreadCount;
-        } else badge.style.display = 'none';
+        } else {
+            badge.style.display = 'none';
+        }
     }
+
     if (contacts.length === 0) {
         let msg = '';
         if (currentUser.role !== 'AGENT' && currentUser.role !== 'ADMIN')
             msg = `No chats at ${currentUser.level} level`;
-        else msg = currentFilter === 'unread' ? 'No unread messages' : 'No contacts found';
+        else
+            msg = currentFilter === 'unread' ? 'No unread messages' : 'No contacts found';
         contactListEl.innerHTML = `<div class="empty-state">${msg}</div>`;
         isRenderingContacts = false;
         return;
     }
+
     let html = '';
     for (let c of contacts) {
         if (currentFilter === 'unread' && (!c.last_msg || c.unread === 0)) continue;
-        let lastMsg = c.last_msg || 'No messages yet';
-        if (lastMsg.length > 50) lastMsg = lastMsg.substring(0, 47) + '...';
+
+        // Determine display name and subtitle
+        let displayName, subText, avatarText;
+        if (c.is_case) {
+            displayName = c.case_id;                         // show case ID
+            subText = `📱 ${c.mobile}`;                      // mobile as subtitle
+            if (c.customer_name) subText += ` | ${c.customer_name}`;
+            avatarText = c.case_id.slice(-2);                // last 2 chars of case ID
+        } else {
+            displayName = c.mobile;
+            subText = c.last_msg || 'No messages yet';
+            avatarText = c.mobile.slice(-2);
+        }
+
+        // Truncate subtitle if too long
+        if (subText.length > 50) subText = subText.substring(0, 47) + '...';
+
+        // Level indicator
         let levelClass = c.current_level || 'ESC1';
         let indicator = '', colorClass = '';
         if (levelClass === 'RESOLVED') {
@@ -638,26 +666,31 @@ function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore =
             indicator = levelClass.replace('ESC', '');
             colorClass = `level-${levelClass}`;
         }
+
+        // Department
         let departmentHtml = '';
         if (c.group_name) {
             departmentHtml = `<div class="contact-dept"><i class="fas fa-building"></i> ${escapeHtml(c.group_name)}</div>`;
         } else if (c.current_level) {
             departmentHtml = `<div class="contact-dept"><i class="fas fa-level-up-alt"></i> Level: ${c.current_level}</div>`;
         }
+
+        // Build the contact/case item
         html += `
             <div class="contact-item ${selectedMobile === c.mobile ? 'active' : ''}"
                  data-mobile="${c.mobile}"
-                 onclick="selectContact('${c.mobile.replace(/'/g, "\\'")}')">
+                 data-caseid="${c.is_case ? c.case_id : ''}"
+                 onclick="selectContactOrCase('${c.mobile.replace(/'/g, "\\'")}', '${c.is_case ? c.case_id.replace(/'/g, "\\'") : ''}')">
                 <div class="contact-avatar">
-                    ${c.mobile.slice(-2)}
+                    ${avatarText}
                     <div class="esc-level-indicator ${colorClass}">${indicator}</div>
                 </div>
                 <div class="contact-info">
                     <div class="contact-name">
-                        ${escapeHtml(c.mobile)}
+                        ${escapeHtml(displayName)}
                         ${c.unread > 0 ? `<span class="unread-badge">${c.unread}</span>` : ''}
                     </div>
-                    <div class="contact-last-msg">${escapeHtml(lastMsg)}</div>
+                    <div class="contact-last-msg">${escapeHtml(subText)}</div>
                     ${departmentHtml}
                 </div>
                 <div class="contact-meta">
@@ -666,13 +699,150 @@ function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore =
             </div>
         `;
     }
+
     contactListEl.innerHTML = html;
+
     if (hasMore) addContactsLoadingIndicator();
     else removeContactsLoadingIndicator();
+
     hasMoreContacts = hasMore;
     contactPage = currentPage;
     isRenderingContacts = false;
 }
+function selectContactOrCase(mobile, caseId) {
+    // Always load the chat for this mobile (existing behaviour)
+    if (selectedMobile !== mobile) {
+        selectContact(mobile);
+    }
+    // If we clicked on a case, open the case sidebar with that case loaded
+    if (caseId) {
+        setTimeout(() => {
+            openCaseSidebar();
+            loadSingleCaseAndShowActions(caseId);
+        }, 400);
+    }
+}
+// ====================================================================
+// Load a specific case and show action buttons in the case sidebar
+// ====================================================================
+async function loadSingleCaseAndShowActions(caseId) {
+    const content = document.getElementById('caseSidebarContent');
+    if (!caseId) {
+        showNotification('No case ID provided', 'error');
+        return;
+    }
+
+    // Store the case ID globally so that escalation/resolution functions can use it
+    window._currentActionCaseId = caseId;
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <div class="loading-spinner"></div>
+            <p>Loading case details...</p>
+        </div>
+    `;
+
+    try {
+        const resp = await fetch(`/messaging2/case/${caseId}/detail/`);
+        const data = await resp.json();
+
+        if (data.success && data.case) {
+            const c = data.case;
+            // Set the global case data so existing actions (escalateCase, resolveCurrentCase) work
+            currentCaseData = c;
+
+            // Level colors and icons
+            const levelColors = {
+                'ESC0': 'secondary', 'ESC1': 'success', 'ESC2': 'info',
+                'ESC3': 'warning', 'ESC4': 'danger', 'ESC5': 'dark',
+                'RESOLVED': 'success', 'CLOSED': 'secondary'
+            };
+            let levelIcon = '';
+            if (c.current_level === 'RESOLVED') levelIcon = '✅';
+            else if (c.current_level === 'CLOSED') levelIcon = '🔒';
+            else levelIcon = c.current_level.replace('ESC', '📞');
+
+            // Determine available escalation levels (higher than current)
+            const allLevels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5'];
+            const currentIdx = allLevels.indexOf(c.current_level);
+            let availableLevels = allLevels.slice(currentIdx + 1);
+            let escalateOptions = '';
+            const canEscalate = (c.status !== 'Resolved' && c.status !== 'Closed' && availableLevels.length > 0);
+            if (canEscalate) {
+                const levelNames = {
+                    'ESC1': '📞 Normal (ESC1)',
+                    'ESC2': '⚖️ Executive (ESC2)',
+                    'ESC3': '⭐ Manager (ESC3)',
+                    'ESC4': '📊 Head (ESC4)',
+                    'ESC5': '🔒 Admin (ESC5)'
+                };
+                availableLevels.forEach(lvl => {
+                    escalateOptions += `<option value="${lvl}">${levelNames[lvl]}</option>`;
+                });
+            }
+
+            const canResolve = (c.status !== 'Resolved' && c.status !== 'Closed');
+
+            let html = `
+                <div class="case-info-section">
+                    <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-info-circle"></i> Case Actions</h6>
+                    <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(c.case_id)}</strong></div>
+                    <div class="mb-2"><label>Customer:</label> ${escapeHtml(c.customer_name || selectedMobile)}</div>
+                    <div class="mb-2"><label>Loan Number:</label> ${escapeHtml(c.loan_number || 'Not provided')}</div>
+                    <div class="mb-2"><label>Department:</label> ${escapeHtml(c.group_name || 'Not assigned')}</div>
+                    <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[c.current_level] || 'secondary'}">${levelIcon} ${c.current_level}</span></div>
+                    <div class="mb-2"><label>Status:</label> <span class="badge bg-${c.status === 'Resolved' ? 'success' : 'primary'}">${c.status}</span></div>
+                    <div class="mb-2"><label>Assigned To:</label> ${escapeHtml(c.assigned_to_name || 'Unassigned')}</div>
+                    <div class="mb-2"><label>Issue:</label> <div class="border rounded p-2 bg-light small">${escapeHtml(c.issue_description || 'No description')}</div></div>
+                </div>
+                <hr>
+                <div class="case-actions-section">
+                    <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-cogs"></i> Actions</h6>
+            `;
+
+            // Escalate section
+            if (canEscalate) {
+                html += `
+                    <div class="mb-3 escalation-section">
+                        <label class="form-label small fw-bold">Escalate To:</label>
+                        <select id="escalateLevelSelect" class="form-select form-select-sm mb-2">${escalateOptions}</select>
+                        <textarea id="escalateReasonText" class="form-control form-control-sm mb-2" rows="2" placeholder="Reason for escalation..."></textarea>
+                        <div class="row mb-2">
+                            <div class="col"><input type="text" id="escalateLoanNumber" class="form-control form-control-sm" placeholder="Loan number (optional)" value="${escapeHtml(c.loan_number || '')}"></div>
+                            <div class="col"><input type="text" id="escalateCustomerName" class="form-control form-control-sm" placeholder="Customer name" value="${escapeHtml(c.customer_name || '')}"></div>
+                        </div>
+                        <button class="btn btn-warning btn-sm w-100" onclick="escalateCase()">⬆️ Escalate Case</button>
+                    </div>
+                `;
+            }
+
+            // Resolve section
+            if (canResolve) {
+                html += `
+                    <div class="mb-3">
+                        <textarea id="resolutionNotesText" class="form-control form-control-sm mb-2" rows="2" placeholder="Resolution notes..."></textarea>
+                        <button class="btn btn-success btn-sm w-100" onclick="resolveCurrentCase()">✅ Resolve Case</button>
+                    </div>
+                `;
+            }
+
+            // Timeline and back buttons
+            html += `
+                    <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="viewCaseTimeline()"><i class="fas fa-history"></i> View Timeline</button>
+                    <button class="btn btn-outline-secondary btn-sm w-100" onclick="renderCasePanel()"><i class="fas fa-arrow-left"></i> Back to All Cases</button>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        } else {
+            content.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to load case'}</div>`;
+        }
+    } catch (e) {
+        console.error('Error loading case:', e);
+        content.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+    }
+}
+
   function addContactsLoadingIndicator() { removeContactsLoadingIndicator(); let loader=document.createElement('div'); loader.id='contactsLoadingIndicator'; loader.className='contacts-loading'; loader.innerHTML='<i class="fas fa-spinner fa-spin"></i> Loading more...'; contactListEl.appendChild(loader); }
   function removeContactsLoadingIndicator() { let existing=document.getElementById('contactsLoadingIndicator'); if(existing) existing.remove(); }
   function handleContactsScroll() { if(!hasMoreContacts||isLoadingContacts) return; if(scrollTimeout) clearTimeout(scrollTimeout); scrollTimeout=setTimeout(()=>{ if(contactListEl.scrollTop+contactListEl.clientHeight>=contactListEl.scrollHeight-200) loadContacts(contactPage+1); },200); }

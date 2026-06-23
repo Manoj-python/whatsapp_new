@@ -667,6 +667,10 @@ from messaging2.tasks import send_welcome_message
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
 # =============================================
+from messaging2.tasks import send_welcome_message,clear_button_clicked,was_button_clicked_recently,mark_button_clicked
+# =============================================
+# WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
+# =============================================
 @csrf_exempt
 def whatsapp_webhook(request):
     from channels.layers import get_channel_layer
@@ -738,7 +742,7 @@ def whatsapp_webhook(request):
                             if text_body in quick_reply_values:
 
                                 content_type = "interactive"
-
+                                
                                 context_id = None
                                 if msg.get("context"):
                                     context_id = msg.get("context", {}).get("id")
@@ -753,6 +757,7 @@ def whatsapp_webhook(request):
                                 })
 
                                 text_body = f"[Button Click] {text_body}"
+                                mark_button_clicked(mobile)
 
                                 print(f"🔘 Quick Reply captured via TEXT: {text_body}")
 
@@ -781,7 +786,8 @@ def whatsapp_webhook(request):
                             })
 
                             text_body = f"[Button Click] {button_text}"
-
+                            mark_button_clicked(mobile)
+ 
                             print(
                                 f"🔘 Template Button Clicked: "
                                 f"text={button_text}, payload={button_payload}"
@@ -820,6 +826,7 @@ def whatsapp_webhook(request):
                                 })
 
                                 text_body = f"[Button Click] {button_title}"
+                                mark_button_clicked(mobile)
 
                                 print(
                                     f"🔘 Button Reply: "
@@ -843,6 +850,8 @@ def whatsapp_webhook(request):
                                 })
 
                                 text_body = f"[List Selection] {list_title}"
+                                mark_button_clicked(mobile)
+
 
                                 print(
                                     f"📋 List selected: "
@@ -871,6 +880,7 @@ def whatsapp_webhook(request):
                             else:
 
                                 text_body = f"[Interactive] {interactive_type}"
+                                mark_button_clicked(mobile)
 
                                 button_response = json.dumps({
                                     "type": "unknown_interactive",
@@ -914,7 +924,7 @@ def whatsapp_webhook(request):
                         if not last_incoming:
                             send_welcome = True
                         elif (timezone.now() - last_incoming.sent_at).total_seconds() > 21600:  # 1 hour
-                            send_welcome = True   
+                            send_welcome = True
 
                         # ======================================
                         # SAVE MESSAGE TO DATABASE
@@ -949,6 +959,26 @@ def whatsapp_webhook(request):
                                 interested_clicked = True
 
                             if interested_clicked:
+                                gm = ws_group(mobile)
+                                if gm:
+                                    async_to_sync(channel_layer.group_send)(
+                                        f"chat_{gm}",
+                                        {
+                                            "type": "new_message",
+                                            "message": {
+                                                "id": log.id,
+                                                "mobile": mobile,
+                                                "sent_text_message": log.sent_text_message,
+                                                "content_type": log.content_type,
+                                                "media_file": "",
+                                                "sent_at": timezone.localtime(log.sent_at).isoformat(),
+                                                "message_type": "Received",
+                                                "message_id": log.message_id,
+                                                "status": log.status,
+                                                "sender_name": customer_name
+                                            }
+                                        }
+                                    )
 
                                 message = (
                                     "ధన్యవాదాలు! 🙏\n\n"
@@ -1081,13 +1111,18 @@ def whatsapp_webhook(request):
                                 unread=F("unread") + 1
                             )
                         if send_welcome:
-                            send_welcome_message.delay('sms', mobile, customer_name)
+                            print(f"🔍 TASK: mobile={mobile}, flag={was_button_clicked_recently(mobile)}")
+
+                            if was_button_clicked_recently(mobile):
+                                clear_button_clicked(mobile)
+                            else:
+                                send_welcome_message.delay('sms', mobile, customer_name)
 
                         # ======================================
                         # WEBSOCKET BROADCAST - CHAT GROUP
                         # ======================================
                         gm = ws_group(mobile)
-                        if gm:
+                        if gm and not interested_clicked:
                             ws_message = {
                                 "id": log.id,
                                 "mobile": mobile,

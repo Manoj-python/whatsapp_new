@@ -112,7 +112,7 @@ def messaging2_login(request):
                 }
             )
             request.session["messaging2_user"] = user.id
-           
+
     return render(request, "messaging2/login.html")
 
 def messaging2_logout(request):
@@ -374,8 +374,7 @@ def download_whatsapp_media2(media_id):
 # =============================================
 # CHAT DASHBOARD & MESSAGES API
 # =============================================
-
-
+from django.core.cache import cache
 
 def chat_messages_api2(request, mobile):
     mobile = format_mobile2(mobile)
@@ -416,7 +415,6 @@ def chat_messages_api2(request, mobile):
         "messages": [to_json(m) for m in result],
         "has_more": pg.has_next()
     })
-
 
 
 @csrf_exempt
@@ -695,7 +693,7 @@ def whatsapp_webhook2(request):
                         content_type = "text"
                         media_file_data = None
                         button_response = ""
-                        
+
 
                         if msg_type == "text":
                             text_body = msg["text"].get("body", "")
@@ -721,8 +719,10 @@ def whatsapp_webhook2(request):
                                     "button_title": button_title,
                                     "timestamp": timezone.now().isoformat()
                                 })
+                                
 
                                 text_body = f"[Button Click] {button_title}"
+                                mark_button_clicked(mobile)
 
                             elif interactive_type == "list_reply":
 
@@ -739,6 +739,7 @@ def whatsapp_webhook2(request):
                                 })
 
                                 text_body = f"[List Selection] {list_title}"
+                                mark_button_clicked(mobile)
                         elif msg_type == "button":
 
                             button = msg.get("button", {})
@@ -756,6 +757,7 @@ def whatsapp_webhook2(request):
                             })
 
                             text_body = f"[Button Click] {button_text}"
+                            mark_button_clicked(mobile)
 
                         elif msg_type in ("image", "video", "audio", "document"):
                             media_id = msg[msg_type].get("id")
@@ -785,9 +787,9 @@ def whatsapp_webhook2(request):
                         if not last_incoming:
                             send_welcome = True
                         elif (timezone.now() - last_incoming.sent_at).total_seconds() > 21600:  # 1 hour
-                            send_welcome = True   
-                            
-                            
+                            send_welcome = True
+
+
                         # Save message
                         with transaction.atomic():
                             log = SmsWhatsAppLog2.objects.create(
@@ -830,7 +832,10 @@ def whatsapp_webhook2(request):
                                 unread=F("unread") + 1
                             )
                         if send_welcome:
-                            send_welcome_message.delay('psf', mobile,customer_name)
+                            if was_button_clicked_recently(mobile):
+                                clear_button_clicked(mobile)   # skip because button clicked
+                            else:
+                                send_welcome_message.delay('psf', mobile, customer_name)
                         # WebSocket broadcast
                         gm = ws_group2(mobile)
                         if gm:
@@ -959,12 +964,12 @@ def whatsapp_webhook2(request):
                             'status': norm,
                             'error_message': json.dumps(errors) if errors else ""
                         }
-                        
+
                         if errors:
                             err = errors[0]
                             update_data['error_code'] = err.get('code')
                             update_data['error_reason'] = err.get('title', '') or err.get('message', '')
-                        
+
                         SmsWhatsAppLog2.objects.filter(message_id=msg_id).update(**update_data)
                         ChatContact2.objects.filter(mobile=mobile).update(last_status=norm)
 
@@ -1229,9 +1234,9 @@ def agent_case_list_api(request):
     agent = get_agent_from_user(request.user)
     CaseModel = get_case_model_for_app(request)
     tab = request.GET.get('tab', 'assigned')
-    
+
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     if tab == 'assigned':
         # Cases assigned to this agent (already scoped to agent's groups)
         cases = CaseModel.objects.filter(
@@ -1239,7 +1244,7 @@ def agent_case_list_api(request):
             current_level='ESC1',
             status__in=['Open', 'In Progress', 'Reopened']
         ).exclude(status='Closed')
-        
+
     elif tab == 'available':
         # Cases available for assignment (within agent's groups)
         if agent.groups.exists():
@@ -1251,28 +1256,28 @@ def agent_case_list_api(request):
             ).exclude(status='Closed')
         else:
             cases = CaseModel.objects.none()
-            
+
     elif tab == 'today_created':
         # ✅ Fix: Cases created by this agent today (no group restriction)
         cases = CaseModel.objects.filter(
             created_by=agent.name,
             created_at__gte=today_start
         ).order_by('-created_at')
-        
+
     elif tab == 'resolved_by_me':
         cases = CaseModel.objects.filter(
             resolved_by=agent.name
         ).order_by('-resolved_at')
-        
+
     elif tab == 'escalated_by_me':
         # ✅ Fix: Use the reverse relation escalation_logs (app‑aware)
         cases = CaseModel.objects.filter(
             escalation_logs__escalated_by=agent.name
         ).distinct().order_by('-created_at')
-        
+
     else:
         cases = CaseModel.objects.none()
-    
+
     case_list = [{
         'case_id': c.case_id,
         'customer_name': c.customer_name,
@@ -1283,7 +1288,7 @@ def agent_case_list_api(request):
         'status': c.status,
         'created_at': c.created_at.isoformat(),
     } for c in cases]
-    
+
     return JsonResponse({'cases': case_list})
 
 
@@ -1534,17 +1539,17 @@ def manager_cases_api(request):
     agent = get_agent_from_user(request.user)
     CaseModel = get_case_model_for_app(request)
     department = request.GET.get('dept', 'all')
-    
+
     base_qs = CaseModel.objects.filter(
         current_level='ESC3',
         status__in=['Open', 'In Progress', 'Reopened']
     ).exclude(status='Closed').filter(group__in=agent.groups.all())
-    
+
     if department != 'all':
         base_qs = base_qs.filter(group__name=department)
-    
+
     cases = base_qs.order_by('-priority', '-created_at')
-    
+
     case_list = [{
         'case_id': c.case_id,
         'customer_name': c.customer_name,
@@ -1556,7 +1561,7 @@ def manager_cases_api(request):
         'created_at': c.created_at.isoformat(),
         'issue_description': c.issue_description or '',
     } for c in cases]
-    
+
     return JsonResponse({'cases': case_list})
 
 # Head Dashboard (ESC4)
@@ -1566,19 +1571,19 @@ def head_dashboard2(request):
     agent = get_agent_from_user(request.user)
     if agent.role != 'HEAD':
         return redirect('agent_dashboard')
-    
+
     manager_groups = agent.groups.all()
     base_qs = CaseModel.objects.filter(
         current_level='ESC4',
         status__in=['Open', 'In Progress', 'Reopened']
     ).exclude(status='Closed').filter(group__in=manager_groups)
-    
+
     stats = {
         'pending': base_qs.count(),
         'resolved': CaseModel.objects.filter(resolved_at_level='ESC4').count(),
         'escalated_to_admin': CaseModel.objects.filter(current_level='ESC5').count(),
     }
-    
+
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     dept_stats = []
     for group in manager_groups:
@@ -1589,10 +1594,10 @@ def head_dashboard2(request):
             'pending': dept_cases.count(),
             'today': dept_today,
         })
-    
+
     from .models import Agent
     agents_list = Agent.objects.filter(is_active=True).values('id', 'name', 'role')
-    
+
     context = {
         'cases': base_qs.order_by('-priority', '-created_at'),
         'stats': stats,
@@ -1610,17 +1615,17 @@ def head_cases_api(request):
     agent = get_agent_from_user(request.user)
     CaseModel = get_case_model_for_app(request)
     department = request.GET.get('dept', 'all')
-    
+
     base_qs = CaseModel.objects.filter(
         current_level='ESC4',
         status__in=['Open', 'In Progress', 'Reopened']
     ).exclude(status='Closed').filter(group__in=agent.groups.all())
-    
+
     if department != 'all':
         base_qs = base_qs.filter(group__name=department)
-    
+
     cases = base_qs.order_by('-priority', '-created_at')
-    
+
     case_list = [{
         'case_id': c.case_id,
         'customer_name': c.customer_name,
@@ -1631,7 +1636,7 @@ def head_cases_api(request):
         'status': c.status,
         'created_at': c.created_at.isoformat(),
     } for c in cases]
-    
+
     return JsonResponse({'cases': case_list})
 
 import json
@@ -1685,6 +1690,7 @@ def get_case_detail_api2(request, case_id):
                 'issue_description': case.issue_description,
                 'resolution_notes': case.resolution_notes,
                 'reopen_count': case.reopen_count,
+                'group_name': case.group.name if case.group else None,
             }
         })
     except CaseModel.DoesNotExist:
@@ -1738,10 +1744,10 @@ def escalate_case_api2(request, case_id):
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-    
 
 
-        
+
+
 
 from .tasks import send_ticket_close_message   # import the task
 
@@ -1749,55 +1755,81 @@ from .tasks import send_ticket_close_message   # import the task
 def resolve_case_api2(request, case_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
+
     try:
         CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
+
         agent = get_agent_from_user(request.user)
         case = CaseModel.objects.get(case_id=case_id)
 
         if case.status in ['Resolved', 'Closed']:
-            return JsonResponse({'error': f'Case already {case.status}'}, status=400)
+            return JsonResponse(
+                {'error': f'Case already {case.status}'},
+                status=400
+            )
 
         data = json.loads(request.body)
         resolution_notes = data.get('resolution_notes', '')
 
-        # ── Set case as Resolved (not Closed) ──
-        case.status = 'Resolved'
-        case.resolved_at = timezone.now()
-        case.resolved_by = agent.name if agent else request.user.username
-        case.resolution_notes = resolution_notes
-        case.current_level = 'Resolved'   # if you have this field on Case
-        case.save()
+        # Use model method
+        case.resolve(
+            agent=agent,
+            resolution_notes=resolution_notes
+        )
 
-        # ── Update ContactModel ──
-        ContactModel.objects.filter(mobile=case.mobile).update(
+        # Update Contact
+        ContactModel.objects.filter(
+            mobile=case.mobile
+        ).update(
             current_level='RESOLVED'
         )
 
-        # ── WebSocket broadcast ──
+        # WebSocket Broadcast
         channel_layer = get_channel_layer()
+
         async_to_sync(channel_layer.group_send)(
             channel_group,
-            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'RESOLVED'}}
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": case.mobile,
+                    "current_level": "RESOLVED"
+                }
+            }
         )
 
-        # ── 🚀 Trigger closure message task asynchronously ──
-        app_key = request.GET.get('app', 'psf')   # or from request.POST
-        send_ticket_close_message.delay(app_key, case.id)   # case.id = primary key
+        # Send Close Message
+        app_key = request.GET.get('app', 'psf')
+
+        send_ticket_close_message.delay(
+            app_key,
+            case.id
+        )
 
         return JsonResponse({
             'success': True,
-            'message': 'Case resolved and closure message queued',
+            'message': 'Case resolved successfully',
             'case': {
                 'case_id': case.case_id,
-                'status': case.status,          # will be 'Resolved'
-                'current_level': case.current_level
+                'status': case.status,
+                'current_level': case.current_level,
+                'resolved_at_level': case.resolved_at_level,
+                'resolved_by_role': case.resolved_by_role
             }
         })
+
     except CaseModel.DoesNotExist:
-        return JsonResponse({'error': 'Case not found'}, status=404)
+        return JsonResponse(
+            {'error': 'Case not found'},
+            status=404
+        )
+
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-    
+        return JsonResponse(
+            {'error': str(e)},
+            status=500
+        )
+
 @csrf_exempt
 def reopen_case_api2(request, case_id):
     if request.method != 'POST':
@@ -1831,22 +1863,22 @@ def assign_case_api2(request, case_id):
         agent = get_agent_from_user(request.user)
         if agent.role not in ['MANAGER', 'ADMIN']:
             return JsonResponse({'error': 'Only Manager or Admin can assign cases'}, status=403)
-        
+
         case = CaseModel.objects.get(case_id=case_id)
         data = json.loads(request.body)
         target_agent_id = data.get('agent_id')
         notes = data.get('notes', '')
-        
+
         target_agent = Agent.objects.get(id=target_agent_id)
         # Check if target agent belongs to the same group as the case
         if case.group not in target_agent.groups.all():
             return JsonResponse({'error': f'Agent must be a member of {case.group.name} department'}, status=400)
-        
+
         case.assigned_to = target_agent
         case.assigned_to_name = target_agent.name
         case.status = 'In Progress'
         case.save()
-        
+
         # Log assignment
         from .models import CaseAssignmentLog
         CaseAssignmentLog.objects.create(
@@ -1855,7 +1887,7 @@ def assign_case_api2(request, case_id):
             assigned_by=agent.name,
             reason=notes
         )
-        
+
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
@@ -2120,10 +2152,10 @@ def export_cases_excel(request):
     agent = get_agent_from_user(request.user)
     CaseModel = get_case_model_for_app(request)
     tab = request.GET.get('tab', 'assigned')
-    
+
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     base_qs = CaseModel.objects.filter(group__in=agent.groups.all())
-    
+
     if tab == 'assigned':
         cases = base_qs.filter(assigned_to=agent, current_level='ESC1', status__in=['Open','In Progress','Reopened']).exclude(status='Closed')
     elif tab == 'today_created':
@@ -2135,7 +2167,7 @@ def export_cases_excel(request):
         cases = CaseModel.objects.filter(id__in=escalated_case_ids).order_by('-created_at')
     else:
         cases = base_qs.none()
-    
+
     data = []
     for case in cases:
         data.append({
@@ -2147,13 +2179,13 @@ def export_cases_excel(request):
             'Status': case.status,
             'Created At': case.created_at.strftime('%Y-%m-%d %H:%M:%S'),
         })
-    
+
     df = pd.DataFrame(data)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Cases')
     output.seek(0)
-    
+
     response = HttpResponse(output.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="cases_{tab}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
     return response
@@ -2206,3 +2238,28 @@ def export_group_cases_excel(request):
     response = HttpResponse(output.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="{group_name}_all_cases_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
     return response
+
+@csrf_exempt
+def close_case_api2(request, case_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
+        agent = get_agent_from_user(request.user)
+        case = CaseModel.objects.get(case_id=case_id)
+        if not case.can_close(agent):
+            return JsonResponse({'error': f'Cannot close case in {case.status} status'}, status=400)
+        data = json.loads(request.body)
+        close_reason = data.get('close_reason', '')
+        case.close(agent, close_reason)
+        ContactModel.objects.filter(mobile=case.mobile).update(current_level='CLOSED', last_status='Closed')
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            channel_group,
+            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'CLOSED'}}
+        )
+        return JsonResponse({'success': True, 'message': f'Case {case.case_id} closed successfully'})
+    except CaseModel.DoesNotExist:
+        return JsonResponse({'error': 'Case not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

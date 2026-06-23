@@ -121,28 +121,14 @@ def send_message_based_on_window(
             used_template = False
 
     return msg_id, status, error, used_template
-def render_template_text(template_name, params):
-    texts = [p["text"] for p in params]
-    
-    if template_name == 'ticket_open':
-        return (
-            f"Dear {texts[0]},\n\n"
-            f"Your support ticket has been created successfully.\n\n"
-            f"Ticket Number: {texts[1]}\n"
-            f"Department: {texts[2]}\n"
-            f"Created On: {texts[3]}\n"
-            f"Issue: {texts[4]}\n\n"
-            f"Our team will review and get back to you shortly."
-        )
-    elif template_name == 'ticket_closed':
-        return (
-            f"Dear {texts[0]},\n\n"
-            f"Your ticket {texts[1]} has been resolved and closed.\n"
-            f"Summary: {texts[2]}\n"
-            f"Closed on: {texts[3]}\n\n"
-            f"Thank you for choosing our services."
-        )
-    elif template_name == 'welcome_message':
-        return f"Welcome {texts[0]}!"
-    else:
-        return f"[Template: {template_name}]"  # fallback
+
+def render_template_text(template_body: str, parameters: list) -> str:
+    """
+    Replace {{1}}, {{2}} placeholders with Excel values.
+    """
+    if not template_body:
+        return ""
+    out = template_body
+    for i, p in enumerate(parameters, start=1):
+        out = out.replace(f"{{{{{i}}}}}", str(p.get("text", "")))
+    return out

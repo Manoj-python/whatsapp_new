@@ -604,8 +604,34 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 import re
 
+from django.core.cache import cache
+
+
+
+# ----------------------------------------------
+# Cache helpers for button click detection
+# ----------------------------------------------
+def mark_button_clicked(mobile):
+    cache.set(f"button_clicked_{mobile}", True, timeout=300)  # 5 minutes
+
+def was_button_clicked_recently(mobile):
+    return cache.get(f"button_clicked_{mobile}") is not None
+
+def clear_button_clicked(mobile):
+    cache.delete(f"button_clicked_{mobile}")
+
+# ----------------------------------------------
+# MAIN TASK: Send Ticket Open Message
+# ----------------------------------------------
+# ----------------------------------------------
 @shared_task(queue="messaging2")
 def send_ticket_open_message(app_key, case_id):
+    """
+    Send a ticket‑open message to the customer.
+    - Uses template if 24‑h window is open, else plain text.
+    - Skips sending if the customer clicked a button in the last 5 minutes.
+    - Sets sender_name = app_name (company name) on the WebSocket broadcast.
+    """
     try:
         cfg = APP_CONFIG[app_key]
         CaseModel = cfg['case_model']
@@ -613,7 +639,10 @@ def send_ticket_open_message(app_key, case_id):
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
         open_template = cfg['templates']['open']
+        get_template_text = cfg.get('get_template_text')
+        render_template = cfg.get('render_template_text')
         whatsapp_creds = cfg.get('whatsapp', {})
+        app_name = cfg['app_name']   # Get the company name
     except KeyError:
         return
 
@@ -625,13 +654,22 @@ def send_ticket_open_message(app_key, case_id):
     if not mobile:
         return
 
+    # ----------------------------------------------------------
+    # 🚫 SKIP if this mobile clicked a button recently
+    # ----------------------------------------------------------
+    if was_button_clicked_recently(mobile):
+        clear_button_clicked(mobile)   # clean up
+        return   # exit early – no ticket‑open message
+
+    # ----------------------------------------------------------
+    # Prepare template parameters and fallback text
+    # ----------------------------------------------------------
     customer_name = case.customer_name or "Customer"
     case_id_str = case.case_id
     group_name = case.group.name if case.group else "General"
     created_at = timezone.localtime(case.created_at).strftime('%d-%m-%Y %I:%M %p')
-    description=case.issue_description or "Opened"
+    description = case.issue_description or "Opened"
 
-    # Template parameters (order matches the template placeholders)
     template_params = [
         {"type": "text", "text": customer_name},
         {"type": "text", "text": case_id_str},
@@ -640,17 +678,18 @@ def send_ticket_open_message(app_key, case_id):
         {"type": "text", "text": created_at},
     ]
 
-    # Fallback free text (used when 24h window is open)
     free_text = (
-    "Thank you for contacting us.\n\n"
-    "Your request has been successfully registered and a support ticket has been created.\n\n"
-    f"Ticket Number: {case_id_str}\n\n"
-    "Our team is reviewing your request and will get back to you as soon as possible. "
-    "Please keep your ticket number handy for future reference.\n\n"
-    "Thank you for your patience."
+        "Thank you for contacting us.\n\n"
+        "Your request has been successfully registered and a support ticket has been created.\n\n"
+        f"Ticket Number: {case_id_str}\n\n"
+        "Our team is reviewing your request and will get back to you as soon as possible. "
+        "Please keep your ticket number handy for future reference.\n\n"
+        "Thank you for your patience."
     )
 
-    # Send the appropriate message
+    # ----------------------------------------------------------
+    # Send the appropriate message (template or free text)
+    # ----------------------------------------------------------
     msg_id, status, error, used_template = send_message_based_on_window(
         mobile=mobile,
         template_name=open_template,
@@ -659,12 +698,19 @@ def send_ticket_open_message(app_key, case_id):
         whatsapp_creds=whatsapp_creds,
         LogModel=LogModel
     )
-    template_rendered_text = render_template_text(open_template, template_params)
-    sent_text = template_rendered_text if used_template else free_text
+    # template_body = get_template_text_from_whatsapp2(open_template)
 
-    # Log
+    if used_template and get_template_text and render_template:
+        template_body = get_template_text(open_template)
+        sent_text = render_template(template_body, template_params)
+    else:
+        sent_text = free_text
+
+    # ----------------------------------------------------------
+    # Log the outgoing message
+    # ----------------------------------------------------------
     log = LogModel.objects.create(
-        customer_name=case.customer_name or "",
+        customer_name=app_name,
         mobile=mobile,
         template_name=open_template if used_template else "",
         sent_text_message=sent_text,
@@ -675,7 +721,9 @@ def send_ticket_open_message(app_key, case_id):
         error_message=error,
     )
 
-    # Update Contact
+    # ----------------------------------------------------------
+    # Update Contact (last message summary)
+    # ----------------------------------------------------------
     contact, created = ContactModel.objects.get_or_create(
         mobile=mobile,
         defaults={
@@ -695,11 +743,13 @@ def send_ticket_open_message(app_key, case_id):
             unread=0,
         )
 
-    # Mark flag
+    # Mark as sent on the case
     case.ticket_open_message_sent = True
     case.save(update_fields=["ticket_open_message_sent"])
 
-    # WebSocket broadcast (unchanged)
+    # ----------------------------------------------------------
+    # WebSocket broadcast – with app_name as sender
+    # ----------------------------------------------------------
     try:
         channel_layer = get_channel_layer()
         gm = re.sub(r"\D", "", mobile)
@@ -718,7 +768,7 @@ def send_ticket_open_message(app_key, case_id):
                         "message_type": "Sent",
                         "message_id": log.message_id,
                         "status": log.status,
-                        "sender_name": "System",
+                        "sender_name": app_name,   # ✅ Company name, not "System"
                     }
                 }
             )
@@ -745,10 +795,13 @@ def send_ticket_close_message(app_key, case_id):
     try:
         cfg = APP_CONFIG[app_key]
         CaseModel = cfg['case_model']
+        app_name=cfg['app_name']
         LogModel = cfg['log_model']
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
         close_template = cfg['templates']['close']
+        get_template_text = cfg.get('get_template_text')
+        render_template = cfg.get('render_template_text')
         whatsapp_creds = cfg.get('whatsapp', {})
     except KeyError:
         return
@@ -788,11 +841,16 @@ def send_ticket_close_message(app_key, case_id):
         whatsapp_creds=whatsapp_creds,
         LogModel=LogModel
     )
-    template_rendered_text = render_template_text(close_template, template_params)
-    sent_text = template_rendered_text if used_template else free_text
+    # template_body = get_template_text_from_whatsapp2(close_template)
+    if used_template and get_template_text and render_template:
+        template_body = get_template_text(close_template)
+        sent_text = render_template(template_body, template_params)
+    else:
+        sent_text = free_text
+
 
     log = LogModel.objects.create(
-        customer_name=case.customer_name or "",
+        customer_name=app_name or "",
         mobile=mobile,
         template_name=close_template if used_template else "",
         sent_text_message=sent_text,
@@ -844,7 +902,7 @@ def send_ticket_close_message(app_key, case_id):
                         "message_type": "Sent",
                         "message_id": log.message_id,
                         "status": log.status,
-                        "sender_name": "System",
+                        "sender_name": app_name,
                     }
                 }
             )
@@ -865,16 +923,17 @@ def send_ticket_close_message(app_key, case_id):
     except Exception:
         pass
 
-
 @shared_task(queue="messaging2")
 def send_welcome_message(app_key, mobile, customer_name=""):
     try:
         cfg = APP_CONFIG[app_key]
+
         LogModel = cfg['log_model']
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
         app_name = cfg['app_name']
         whatsapp_creds = cfg.get('whatsapp', {})
+
     except KeyError:
         return
 
@@ -883,28 +942,37 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         return
 
     customer_name = customer_name or "Customer"
-    # Direct free text – no template
+
     free_text = (
         f"👋 Welcome to {app_name}!\n\n"
-        f"Thank you for contacting us. We're here to assist you with loans, account information, EMI details, payments, and other services.\n\n"
-        f"Please let us know how we can help you today. Our virtual assistant is available 24/7 to support you.\n\n"
+        f"Thank you for contacting us. We're here to assist you with loans, "
+        f"account information, EMI details, payments, and other services.\n\n"
+        f"Please let us know how we can help you today. "
+        f"Our virtual assistant is available 24/7 to support you.\n\n"
         f"Type your query or select a service to get started."
     )
 
-    # ─── Direct send using WhatsApp credentials ───
-    # You can either call a helper function or directly use the WhatsApp client
-    # Here I assume you have a function send_whatsapp_text(mobile, text, creds)
-    msg_id, status, error = send_whatsapp_text4(
-        mobile=mobile,
-        text=free_text,
-        creds=whatsapp_creds
-    )
+    try:
+        resp = send_whatsapp_text4(
+            to_number=mobile,
+            text=free_text,
+            phone_number_id=whatsapp_creds["phone_number_id"],
+            access_token=whatsapp_creds["access_token"]
+        )
 
-    # Log the message (no template fields)
+        msg_id = resp.get("messages", [{}])[0].get("id", "")
+        status = "Sent"
+        error = ""
+
+    except Exception as e:
+        msg_id = ""
+        status = "Failed"
+        error = str(e)
+
     log = LogModel.objects.create(
-        customer_name=customer_name,
+        customer_name=app_name,
         mobile=mobile,
-        template_name="",               # no template
+        template_name="",
         sent_text_message=free_text,
         status=status,
         message_id=msg_id,
@@ -924,10 +992,11 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         }
     )
 
-    # WebSocket broadcast (same as before, but no template info)
     try:
         channel_layer = get_channel_layer()
+
         gm = re.sub(r"\D", "", mobile)
+
         if gm:
             async_to_sync(channel_layer.group_send)(
                 f"chat2_{gm}",
@@ -936,17 +1005,20 @@ def send_welcome_message(app_key, mobile, customer_name=""):
                     "message": {
                         "id": log.id,
                         "mobile": mobile,
-                        "sent_text_message": log.sent_text_message,
+                        "sent_text_message": free_text,
                         "content_type": "text",
                         "media_file": "",
-                        "sent_at": timezone.localtime(log.sent_at).isoformat(),
+                        "sent_at": timezone.localtime(
+                            log.sent_at
+                        ).isoformat(),
                         "message_type": "Sent",
-                        "message_id": log.message_id,
-                        "status": log.status,
-                        "sender_name": "System",
+                        "message_id": msg_id,
+                        "status": status,
+                        "sender_name": app_name,
                     }
                 }
             )
+
         async_to_sync(channel_layer.group_send)(
             channel_group,
             {
@@ -961,5 +1033,6 @@ def send_welcome_message(app_key, mobile, customer_name=""):
                 }
             }
         )
-    except Exception:
-        pass
+
+    except Exception as e:
+        print("Welcome websocket error:", str(e))

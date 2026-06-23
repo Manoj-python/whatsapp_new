@@ -28,7 +28,16 @@ from .models import (
     Freshdesk,
     DueNotice,
     Visiter,
-    Dialer, # ✅ ADD THIS
+    Dialer,
+    Hero,           # ✅ ADD THIS
+    KotakECS,       # ✅ ADD THIS
+    EseBuzz,        # ✅ ADD THIS
+    Smsquare,       # ✅ ADD THIS
+    Upi,            # ✅ ADD THIS
+    Repo,           # ✅ ADD THIS
+    Paid,           # ✅ ADD THIS
+    Closed,         # ✅ ADD THIS
+    CollectionAllocations,  # ✅ ADD THIS
 )
 
 # Forms
@@ -477,32 +486,31 @@ def build_latest_payment_map(loan_numbers):
                 "source": source,  # temp
             }
 
-    # HERO
-    for h in Hero.objects.filter(referencenumber__in=loan_numbers):
-        push_payment(h.referencenumber, h.status, h.date, h.amount, "HERO")
+    # HERO - ✅ FIXED: use reference_number (with underscore)
+    for h in Hero.objects.filter(reference_number__in=loan_numbers):
+        push_payment(h.reference_number, h.status, h.date, h.amount, "HERO")
 
-    # KOTAK
-    for k in KotakECS.objects.filter(loannumber__in=loan_numbers):
-        push_payment(k.loannumber, k.ecsstatus, k.ecsdate, k.amount, "KOTAK")
+    # KOTAK - ✅ FIXED: use loan_number and ecs_status
+    for k in KotakECS.objects.filter(loan_number__in=loan_numbers):
+        push_payment(k.loan_number, k.ecs_status, k.ecs_date, k.amount, "KOTAK")
 
-    # ESEBUZZ
-    for e in EseBuzz.objects.filter(loanno__in=loan_numbers):
-        push_payment(e.loanno, e.status, e.initiateddate, e.amount, "ESEBUZZ")
+    # ESEBUZZ - ✅ FIXED: use loan_no and initiated_date
+    for e in EseBuzz.objects.filter(loan_no__in=loan_numbers):
+        push_payment(e.loan_no, e.status, e.initiated_date, e.amount, "ESEBUZZ")
 
-    # SMSQUARE
-    for s in Smsquare.objects.filter(uniqueregistrationnumber__in=loan_numbers):
-        push_payment(s.uniqueregistrationnumber, s.status, s.date, s.amount, "SMSQUARE")
+    # SMSQUARE - ✅ FIXED: use unique_registration_number
+    for s in Smsquare.objects.filter(unique_registration_number__in=loan_numbers):
+        push_payment(s.unique_registration_number, s.status, s.date, s.amount, "SMSQUARE")
 
-    # UPI
-    for u in Upi.objects.filter(loannoreference__in=loan_numbers):
-        push_payment(u.loannoreference, u.paymentstatus, u.paymentdatetime, u.transactionamount, "UPI")
+    # UPI - ✅ FIXED: use loan_no_reference and payment_status
+    for u in Upi.objects.filter(loan_no_reference__in=loan_numbers):
+        push_payment(u.loan_no_reference, u.payment_status, u.payment_datetime, u.transaction_amount, "UPI")
 
     # merge sources
     for loan, latest in payment_latest_map.items():
         latest["source"] = " + ".join(sorted(payment_source_map.get(loan, [])))
 
     return payment_latest_map
-
 
 # ---------------------------------------------------------------------
 # CREATE FEEDBACK

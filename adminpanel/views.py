@@ -28,6 +28,12 @@ from django.conf import settings
 # ============================================
 # APP CONFIGURATION
 # ============================================
+from messaging2.utils import get_template_text_from_whatsapp2
+from messaging.utils import get_template_text_from_whatsapp
+from .utils import render_template_text
+# ============================================
+# APP CONFIGURATION
+# ============================================
 APP_CONFIG = {
     'psf': {
         'name': 'PSF',
@@ -41,6 +47,8 @@ APP_CONFIG = {
             'close': 'ticket_closed',
             'welcome':'welcome_message',
         },
+        'get_template_text': get_template_text_from_whatsapp2,
+        'render_template_text': render_template_text,
         'whatsapp': {
             'phone_number_id': settings.WHATSAPP2_PHONE_NUMBER_ID,   # Use PSF's
             'access_token': settings.WHATSAPP2_ACCESS_TOKEN,
@@ -53,6 +61,8 @@ APP_CONFIG = {
         'log_model': SmsWhatsAppLog,
         'contact_model': ChatContact,
         'channel_group': 'global_contacts',
+        'get_template_text': get_template_text_from_whatsapp,
+        'render_template_text': render_template_text,
         'templates': {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
@@ -71,7 +81,6 @@ APP_CONFIG = {
         'channel_group': 'global_contacts3',
     },
 }
-
 # ============================================
 # HELPER FUNCTIONS
 # ============================================
@@ -310,6 +319,7 @@ def dashboard(request):
     CaseModel = cfg['case_model']
     stats = {
         'total_cases': CaseModel.objects.count(),
+        'active_cases': CaseModel.objects.exclude(status__in=['Resolved', 'Closed']).count(),
         'open_cases': CaseModel.objects.filter(status='Open').count(),
         'in_progress_cases': CaseModel.objects.filter(status='In Progress').count(),
         'resolved_cases': CaseModel.objects.filter(status='Resolved').count(),
@@ -357,49 +367,71 @@ def get_stats_api(request):
     CaseModel = APP_CONFIG[app_key]['case_model']
     return JsonResponse({
         'total_cases': CaseModel.objects.count(),
+        'active_cases': CaseModel.objects.exclude(status__in=['Resolved', 'Closed']).count(),
         'open_cases': CaseModel.objects.filter(status='Open').count(),
         'in_progress_cases': CaseModel.objects.filter(status='In Progress').count(),
         'resolved_cases': CaseModel.objects.filter(status='Resolved').count(),
         'closed_cases': CaseModel.objects.filter(status='Closed').count(),
+        'reopened_cases': CaseModel.objects.filter(status='Reopened').count(),
         'total_agents': Agent.objects.filter(is_active=True).count(),
     })
 
 # NEW: Department-wise case counts
+
 @login_required
 def get_department_stats_api(request):
-    """Return case counts per department (group)"""
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
     groups = SupportGroup.objects.all()
     dept_stats = []
-    total_all = CaseModel.objects.count()
-    for group in groups:
-        count = CaseModel.objects.filter(group=group).count()
-        dept_stats.append({'name': group.name, 'count': count})
-    return JsonResponse({'departments': dept_stats, 'total_all': total_all})
 
+    # Count only cases that have a department AND are active (exclude Resolved/Closed)
+    total_active = CaseModel.objects.filter(
+        group__isnull=False
+    ).exclude(status__in=['Resolved', 'Closed']).count()
+
+    for group in groups:
+        count = CaseModel.objects.filter(
+            group=group
+        ).exclude(status__in=['Resolved', 'Closed']).count()
+        dept_stats.append({'name': group.name, 'count': count})
+
+    return JsonResponse({
+        'departments': dept_stats,
+        'total_all': total_active   # now equals sum of department counts
+    })
 # NEW: Enhanced case listing with filters (status, level, department)
+
+from django.db.models import Count
+
 @login_required
 def get_filtered_cases_api(request):
-    """Return cases with optional filters: ?status=, ?level=, ?department="""
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
     queryset = CaseModel.objects.select_related('group').all().order_by('-created_at')
-    
+
     status = request.GET.get('status')
-    if status:
+    status_in = request.GET.get('status__in')
+    if status_in:
+        status_list = [s.strip() for s in status_in.split(',')]
+        queryset = queryset.filter(status__in=status_list)
+    elif status:
         queryset = queryset.filter(status=status)
-    
+
     level = request.GET.get('level')
     if level:
         queryset = queryset.filter(current_level=level)
-    
+
     department = request.GET.get('department')
     if department and department != 'all':
         queryset = queryset.filter(group__name=department)
-    
-    cases = queryset[:200]  # limit for performance
-    
+
+    # Department counts for the filtered queryset
+    dept_counts = queryset.values('group__name').annotate(count=Count('id')).order_by('-count')
+    department_counts = [{'name': item['group__name'], 'count': item['count']} for item in dept_counts]
+
+    cases = queryset[:200]
+
     case_list = [{
         'case_id': c.case_id,
         'customer_name': c.customer_name,
@@ -411,8 +443,12 @@ def get_filtered_cases_api(request):
         'status': c.status,
         'created_at': c.created_at.isoformat(),
     } for c in cases]
-    
-    return JsonResponse({'success': True, 'cases': case_list})
+
+    return JsonResponse({
+        'success': True,
+        'cases': case_list,
+        'department_counts': department_counts,
+    })
 
 # Keep original endpoints for backward compatibility
 @login_required
@@ -703,58 +739,84 @@ def reopen_case_api(request, case_id):
 from messaging2.tasks import send_ticket_close_message   # import the task
 
 @csrf_exempt
-def resolve_case_api2(request, case_id):
+@require_http_methods(["POST"])
+def resolve_case_api(request, case_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
+
     try:
         CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
+
         agent = get_agent_from_user(request.user)
         case = CaseModel.objects.get(case_id=case_id)
 
         if case.status in ['Resolved', 'Closed']:
-            return JsonResponse({'error': f'Case already {case.status}'}, status=400)
+            return JsonResponse(
+                {'error': f'Case already {case.status}'},
+                status=400
+            )
 
         data = json.loads(request.body)
         resolution_notes = data.get('resolution_notes', '')
 
-        # ── Set case as Resolved (not Closed) ──
-        case.status = 'Resolved'
-        case.resolved_at = timezone.now()
-        case.resolved_by = agent.name if agent else request.user.username
-        case.resolution_notes = resolution_notes
-        case.current_level = 'Resolved'   # if you have this field on Case
-        case.save()
+        # Use model method
+        case.resolve(
+            agent=agent,
+            resolution_notes=resolution_notes
+        )
 
-        # ── Update ContactModel ──
-        ContactModel.objects.filter(mobile=case.mobile).update(
+        # Update Contact
+        ContactModel.objects.filter(
+            mobile=case.mobile
+        ).update(
             current_level='RESOLVED'
         )
 
-        # ── WebSocket broadcast ──
+        # WebSocket Broadcast
         channel_layer = get_channel_layer()
+
         async_to_sync(channel_layer.group_send)(
             channel_group,
-            {"type": "contact.update", "contact": {"mobile": case.mobile, "current_level": 'RESOLVED'}}
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": case.mobile,
+                    "current_level": "RESOLVED"
+                }
+            }
         )
 
-        # ── 🚀 Trigger closure message task asynchronously ──
-        app_key = request.GET.get('app', 'psf')   # or from request.POST
-        send_ticket_close_message.delay(app_key, case.id)   # case.id = primary key
+        # Send Close Message
+        app_key = request.GET.get('app', 'psf')
+
+        send_ticket_close_message.delay(
+            app_key,
+            case.id
+        )
 
         return JsonResponse({
             'success': True,
-            'message': 'Case resolved and closure message queued',
+            'message': 'Case resolved successfully',
             'case': {
                 'case_id': case.case_id,
-                'status': case.status,          # will be 'Resolved'
-                'current_level': case.current_level
+                'status': case.status,
+                'current_level': case.current_level,
+                'resolved_at_level': case.resolved_at_level,
+                'resolved_by_role': case.resolved_by_role
             }
         })
-    except CaseModel.DoesNotExist:
-        return JsonResponse({'error': 'Case not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
 
+    except CaseModel.DoesNotExist:
+        return JsonResponse(
+            {'error': 'Case not found'},
+            status=404
+        )
+
+    except Exception as e:
+        return JsonResponse(
+            {'error': str(e)},
+            status=500
+        )
 
 def get_case_timeline_api(request, case_id):
     app_key = get_app_from_request(request)

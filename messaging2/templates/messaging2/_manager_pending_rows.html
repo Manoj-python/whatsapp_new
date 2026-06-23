@@ -22,9 +22,10 @@
     </td>
     <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
     <td>
-        <button class="btn btn-sm btn-outline-primary view-case-btn" data-case-id="{{ case.case_id }}">
-            <i class="fas fa-eye"></i> View
-        </button>
+        <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+        <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')"><i class="fas fa-check-circle"></i></button>
+        <button class="btn btn-sm btn-secondary" onclick="editCase('{{ case.case_id }}')"><i class="fas fa-edit"></i></button>
+                                    
     </td>
 </tr>
 {% empty %}

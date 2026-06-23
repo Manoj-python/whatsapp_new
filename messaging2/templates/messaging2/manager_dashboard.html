@@ -2,6 +2,12 @@
 {% block title %}Manager Dashboard - ESC3{% endblock %}
 
 {% block content %}
+
+<!-- ========================================================== -->
+<!-- 1. Include shared modals FIRST (defines common JS functions) -->
+<!-- ========================================================== -->
+{% include "messaging2/_case_modals.html" %}
+
 <div class="container-fluid">
     <!-- App Switcher -->
     <div class="row mb-3">
@@ -35,7 +41,7 @@
         </div>
     </div>
 
-    <!-- Department Cards (Clickable) -->
+    <!-- Department Cards -->
     <div class="row mb-4" id="deptCards">
         <div class="col-md-3 mb-2">
             <div class="card text-white bg-primary dept-card" data-dept="all" style="cursor: pointer;">
@@ -59,7 +65,7 @@
         {% endfor %}
     </div>
 
-    <!-- Tabs for Pending / Resolved / Escalated -->
+    <!-- Tabs -->
     <ul class="nav nav-tabs" id="caseTabs" role="tablist">
         <li class="nav-item"><button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button">📋 Pending Cases</button></li>
         <li class="nav-item"><button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button">✅ Resolved Cases</button></li>
@@ -89,7 +95,7 @@
             </div>
         </div>
 
-        <!-- Resolved Cases Tab -->
+        <!-- ========== RESOLVED TAB – FIXED ========== -->
         <div class="tab-pane fade" id="resolved" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-success text-white">Resolved at ESC3 Level</div>
@@ -102,25 +108,20 @@
                             <tbody>
                                 {% for case in resolved_cases %}
                                 <tr>
-                                    <td>{{ case.case_id }}</small></td>
-                                    <td>{{ case.customer_name|default:case.mobile }}</small></td>
-                                    <td>{{ case.loan_number|default:"-" }}</small></td>
-                                    <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
-                                    <td>{{ case.resolved_by|default:"System" }}</small></small></td>
-                                    <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</small></small></td>
-                                    
-                                    <td><button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button></small>
-                                    <button class="btn btn-sm btn-danger" onclick="closeCase('{{ case.case_id }}')"><i class="fas fa-door-closed"></i> Close</button>
-                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')"><i class="fas fa-check-circle"></i></button>
-                                     <button class="btn btn-sm btn-secondary" onclick="editCase('{{ case.case_id }}')"><i class="fas fa-edit"></i></button>
-
-
-                                {% endif %}
+                                    <td>{{ case.case_id }}</td>
+                                    <td>{{ case.customer_name|default:case.mobile }}</td>
+                                    <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                    <td>{{ case.resolved_by|default:"System" }}</td>
+                                    <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
+                                        <button class="btn btn-sm btn-danger" onclick="closeCase('{{ case.case_id }}')"><i class="fas fa-door-closed"></i> Close</button>
                                     </td>
-                                    
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="text-center">No resolved cases at ESC3 level.{% endfor %}
+                                <tr><td colspan="7" class="text-center">No resolved cases at ESC3 level.</td></tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -128,7 +129,7 @@
             </div>
         </div>
 
-        <!-- Escalated Cases Tab -->
+        <!-- ========== ESCALATED TAB – FIXED ========== -->
         <div class="tab-pane fade" id="escalated" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-info text-white">Escalated from ESC3 to Higher Levels</div>
@@ -141,16 +142,17 @@
                             <tbody>
                                 {% for case in escalated_cases %}
                                 <tr>
-                                    <td>{{ case.case_id }}</small></small></td>
-                                    <td>{{ case.customer_name|default:case.mobile }}</small></small></td>
-                                    <td>{{ case.loan_number|default:"-" }}</small></small></td>
-                                    <td>{{ case.current_level }}</small></small></td>
-                                    <td>{% with last_log=case.escalation_logs.first %}{{ last_log.escalated_by|default:"System" }}{% endwith %}</small></td>
-                                    <td>{% with last_log=case.escalation_logs.first %}{{ last_log.created_at|date:"d-m-Y H:i" }}{% endwith %}</small></small></td>
-                                    <td><button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button></small></td>
+                                    <td>{{ case.case_id }}</td>
+                                    <td>{{ case.customer_name|default:case.mobile }}</td>
+                                    <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td>{{ case.current_level }}</td>
+                                    <td>{% with last_log=case.escalation_logs.first %}{{ last_log.escalated_by|default:"System" }}{% endwith %}</td>
+                                    <td>{% with last_log=case.escalation_logs.first %}{{ last_log.created_at|date:"d-m-Y H:i" }}{% endwith %}</td>
+                                    <td><button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button></td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="text-center">No escalated cases from ESC3.{% endfor %}
+                                <tr><td colspan="7" class="text-center">No escalated cases from ESC3.</td></tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -159,7 +161,7 @@
         </div>
     </div>
 
-    <!-- Optional Level-wise Stats Table (Extra) -->
+    <!-- Level‑wise Stats – FIXED -->
     <div class="row mt-4">
         <div class="col-12">
             <div class="card">
@@ -171,17 +173,18 @@
                             <tbody id="levelWiseStatsBody">
                                 {% for dept in level_wise_stats %}
                                 <tr>
-                                    <td>{{ dept.group_name }}</small></small></td>
-                                    <td>{{ dept.levels.ESC1|default:0 }}</small></small></td>
-                                    <td>{{ dept.levels.ESC2|default:0 }}</small></small></td>
-                                    <td>{{ dept.levels.ESC3|default:0 }}</small></small></td>
-                                    <td>{{ dept.levels.ESC4|default:0 }}</small></small></td>
-                                    <td>{{ dept.levels.ESC5|default:0 }}</small></small></small></td>
-                                    <td><strong>{{ dept.total_cases }}</strong></small></td>
-                                    <td>{{ dept.total_resolved }}</small></small></td>
+                                    <td>{{ dept.group_name }}</td>
+                                    <td>{{ dept.levels.ESC1|default:0 }}</td>
+                                    <td>{{ dept.levels.ESC2|default:0 }}</td>
+                                    <td>{{ dept.levels.ESC3|default:0 }}</td>
+                                    <td>{{ dept.levels.ESC4|default:0 }}</td>
+                                    <td>{{ dept.levels.ESC5|default:0 }}</td>
+                                    <td><strong>{{ dept.total_cases }}</strong></td>
+                                    <td>{{ dept.total_resolved }}</td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="8">No departments available.{% endfor %}
+                                <tr><td colspan="8">No departments available</td></tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -204,86 +207,133 @@
     </div>
 </div>
 
+<!-- ========================================================== -->
+<!-- 2. Manager‑specific JavaScript (no duplicate common functions) -->
+<!-- ========================================================== -->
 <script>
-let currentDepartment = 'all';
+    // ─── Use common functions from _case_modals.html ───
+    // viewCase, resolveCase, escalateCase, addAppParam, escapeHtml are already defined.
 
-function refreshCases() { loadPendingCases(currentDepartment); }
+    // ─── CSRF token (will be used by manager functions) ───
+    //const csrftoken = document.querySelector('[name=csrf-token]').content;
+    //if (!csrftoken) console.warn("CSRF token not found");
 
-function loadPendingCases(department) {
-    currentDepartment = department;
-    const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(department)}`;
-    fetch(url).then(res => res.json()).then(data => {
-        renderPendingTable(data.cases);
-        document.getElementById('currentFilterBadge')?.setAttribute('data-filter', department);
-        document.querySelectorAll('.dept-card').forEach(card => {
-            const d = card.getAttribute('data-dept');
-            if ((d === 'all' && department === 'all') || d === department) {
-                card.classList.remove('bg-secondary'); card.classList.add('bg-success');
-            } else { card.classList.remove('bg-success'); card.classList.add('bg-secondary'); }
-        });
-    }).catch(err => console.error(err));
-}
+    // ─── Pending cases filter ───
+    let currentDepartment = 'all';
 
-function renderPendingTable(cases) {
-    const tbody = document.getElementById('pendingTableBody');
-    if (!cases || cases.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No pending cases</td></tr>';
-        return;
+    function refreshCases() {
+        loadPendingCases(currentDepartment);
     }
-    let html = '';
-    for (let c of cases) {
-        // Determine if close button should be shown (if user is MANAGER or ADMIN)
-        const userRole = '{{ agent.role }}';  // passed from Django template context
-        const showClose = (userRole === 'MANAGER' || userRole === 'ADMIN');
-        
-        html += `<tr>
-            <td>${c.loan_number || '-'}</td>
-            <td>${escapeHtml(c.customer_name || c.mobile)}</td>
-            <td>${c.mobile}</td>
-            <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>
-            <td>${c.issue_description || '-'}</td>
-            <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></td>
-            <td>${new Date(c.created_at).toLocaleString()}</td>
-            <td>
-                <button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>
-                <button class="btn btn-sm btn-info" onclick="showAssignModal('${c.case_id}')"><i class="fas fa-user-check"></i></button>
-                <button class="btn btn-sm btn-warning" onclick="escalateCase('${c.case_id}')"><i class="fas fa-arrow-up"></i></button>
-                <button class="btn btn-sm btn-success" onclick="resolveCase('${c.case_id}')"><i class="fas fa-check-circle"></i></button>
-            </td>
-        </tr>`;
-    }
-    tbody.innerHTML = html;
-}
-function closeCase(caseId) {
-    const reason = prompt("Enter reason for closing this case (optional):");
-    if (reason === null) return;
 
-    fetch(`/adminpanel/case/${caseId}/close/?app={{ current_app }}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
-        },
-        body: JSON.stringify({ close_reason: reason || "" })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            alert('Case closed successfully!');
-            window.location.reload();  // Refresh page to update resolved tab
-        } else {
-            alert('Error: ' + data.error);
+    function loadPendingCases(department) {
+        currentDepartment = department;
+        const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(department)}`;
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                renderPendingTable(data.cases);
+                document.querySelectorAll('.dept-card').forEach(card => {
+                    const d = card.getAttribute('data-dept');
+                    if ((d === 'all' && department === 'all') || d === department) {
+                        card.classList.remove('bg-secondary');
+                        card.classList.add('bg-success');
+                    } else {
+                        card.classList.remove('bg-success');
+                        card.classList.add('bg-secondary');
+                    }
+                });
+            })
+            .catch(err => console.error(err));
+    }
+
+    function renderPendingTable(cases) {
+        const tbody = document.getElementById('pendingTableBody');
+        if (!cases || cases.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">No pending cases</td></tr>';
+            return;
         }
-    })
-    .catch(err => alert('Error: ' + err.message));
-}
+        let html = '';
+        for (let c of cases) {
+            html += `<tr>
+                <td>${c.loan_number || '-'}</td>
+                <td>${escapeHtml(c.customer_name || c.mobile)}</td>
+                <td>${c.mobile}</td>
+                <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>
+                <td>${c.issue_description || '-'}</td>
+                <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></td>
+                <td>${new Date(c.created_at).toLocaleString()}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>
+                    <button class="btn btn-sm btn-info" onclick="showAssignModal('${c.case_id}')"><i class="fas fa-user-check"></i></button>
+                    <button class="btn btn-sm btn-warning" onclick="escalateCase('${c.case_id}')"><i class="fas fa-arrow-up"></i></button>
+                    <button class="btn btn-sm btn-success" onclick="resolveCase('${c.case_id}')"><i class="fas fa-check-circle"></i></button>
+                </td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
+    }
 
-function editCase(caseId) {
+    // ─── Assign Case ───
+    function showAssignModal(caseId) {
+        document.getElementById('assignCaseId').value = caseId;
+        $('#assignModal').modal('show');
+    }
+
+    function submitAssignCase() {
+        const caseId = document.getElementById('assignCaseId').value;
+        const agentId = document.getElementById('assignAgentId').value;
+        const notes = document.getElementById('assignNotes').value;
+        if (!agentId) { alert('Select an agent'); return; }
+        fetch(addAppParam(`/messaging2/case/${caseId}/assign/`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ agent_id: agentId, notes: notes })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Assigned!');
+                $('#assignModal').modal('hide');
+                loadPendingCases(currentDepartment);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => alert(err.message));
+    }
+
+    // ─── Close Case (Resolved tab) ───
+    function closeCase(caseId) {
+        const reason = prompt("Enter reason for closing this case (optional):");
+        if (reason === null) return;
+
+        fetch(addAppParam(`/adminpanel/case/${caseId}/close/`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({ close_reason: reason || "" })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Case closed successfully!');
+                window.location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }
+
+    // ─── Edit Case ───
+    function editCase(caseId) {
         document.getElementById('editCaseId').value = caseId;
         $('#editCaseModal').modal('show');
 
         fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     const c = data.case;
@@ -294,9 +344,7 @@ function editCase(caseId) {
                     alert('Could not load case data for editing.');
                 }
             })
-            .catch(error => {
-                alert('Error loading case: ' + error.message);
-            });
+            .catch(err => alert('Error loading case: ' + err.message));
     }
 
     function submitEdit() {
@@ -304,18 +352,10 @@ function editCase(caseId) {
         const loanNumber = document.getElementById('editLoanNumber').value;
         const customerName = document.getElementById('editCustomerName').value;
         const issueDescription = document.getElementById('editIssueDescription').value;
-
         if (!loanNumber || !customerName || !issueDescription) {
             alert('Please fill in all fields.');
             return;
         }
-
-        const csrftoken = document.querySelector('[name=csrf-token]').content;
-        if (!csrftoken) {
-            alert('CSRF token missing. Please refresh the page.');
-            return;
-        }
-
         fetch(addAppParam(`/messaging2/case/${caseId}/edit/`), {
             method: 'POST',
             headers: {
@@ -328,48 +368,39 @@ function editCase(caseId) {
                 issue_description: issueDescription
             })
         })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
-                });
-            }
-            return response.json();
+        .then(res => {
+            if (!res.ok) return res.text().then(t => { throw new Error(`Server ${res.status} - ${t.substring(0,200)}`); });
+            return res.json();
         })
         .then(data => {
             if (data.success) {
-                alert('Case updated successfully!');
+                alert('Case updated!');
                 $('#editCaseModal').modal('hide');
                 location.reload();
             } else {
                 alert('Error: ' + data.error);
             }
         })
-        .catch(error => {
-            alert('Error: ' + error.message);
-        });
+        .catch(err => alert('Error: ' + err.message));
     }
 
+    // ─── Event listeners ───
+    document.querySelectorAll('.dept-card').forEach(card => {
+        card.addEventListener('click', function() {
+            loadPendingCases(this.getAttribute('data-dept'));
+        });
+    });
 
-function showAssignModal(caseId) { document.getElementById('assignCaseId').value = caseId; $('#assignModal').modal('show'); }
-function submitAssignCase() {
-    const caseId = document.getElementById('assignCaseId').value;
-    const agentId = document.getElementById('assignAgentId').value;
-    const notes = document.getElementById('assignNotes').value;
-    if (!agentId) { alert('Select an agent'); return; }
-    fetch(`/messaging2/case/${caseId}/assign/`, {
-        method: 'POST', headers: { 'Content-Type':'application/json', 'X-CSRFToken':csrftoken },
-        body: JSON.stringify({ agent_id: agentId, notes: notes })
-    }).then(res => res.json()).then(data => {
-        if (data.success) { alert('Assigned!'); $('#assignModal').modal('hide'); loadPendingCases(currentDepartment); }
-        else alert('Error: ' + data.error);
-    }).catch(err => alert(err.message));
-}
-function escapeHtml(text) { if(!text) return ''; return text.replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
-document.querySelectorAll('.dept-card').forEach(card => card.addEventListener('click', () => loadPendingCases(card.getAttribute('data-dept'))));
-document.addEventListener('DOMContentLoaded', function() { var triggerTabList = [].slice.call(document.querySelectorAll('#caseTabs button')); triggerTabList.forEach(el => { var tab = new bootstrap.Tab(el); el.addEventListener('click', e => { e.preventDefault(); tab.show(); }); }); });
-
+    document.addEventListener('DOMContentLoaded', function() {
+        var triggerTabList = [].slice.call(document.querySelectorAll('#caseTabs button'));
+        triggerTabList.forEach(el => {
+            var tab = new bootstrap.Tab(el);
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                tab.show();
+            });
+        });
+    });
 </script>
 
-{% include "messaging2/_case_modals.html" %}
 {% endblock %}

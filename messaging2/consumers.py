@@ -33,11 +33,77 @@ def ws_group_name2(mobile: str) -> str:
 # -------------------------
 # Database Queries
 # -------------------------
+from django.db.models import Q, OuterRef, Subquery
+from .models import ChatContact2, SmsWhatsAppLog2, Case
+
 @sync_to_async
 def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, group_ids=None):
-    from .models import ChatContact2, SmsWhatsAppLog2, Case
-    from django.db.models import Q, OuterRef, Subquery
+    """
+    For ESC2, ESC3, ESC4: returns a list of CASES (one per row) so that all cases are visible,
+    including duplicates for the same mobile.
+    For ESC1 and ESC5: returns a list of CONTACTS (unique mobiles) as before.
+    """
+    import re  # ensure re is imported
 
+    # ----- ESC2, ESC3, ESC4: show CASES -----
+    if level and level not in ['ESC1', 'ESC5']:
+        # Start from the Case table
+        case_qs = Case.objects.filter(current_level=level)
+        if group_ids:
+            case_qs = case_qs.filter(group_id__in=group_ids)
+
+        # Search: by case_id, mobile, customer_name
+        if q:
+            raw_q = q.strip()
+            digits = re.sub(r"\D", "", raw_q)
+            filters = Q()
+            if digits:
+                filters |= Q(mobile__icontains=digits)
+            filters |= Q(case_id__icontains=raw_q) | Q(customer_name__icontains=raw_q)
+            case_qs = case_qs.filter(filters)
+
+        # Order: high priority first, then newest
+        case_qs = case_qs.order_by('-priority', '-created_at')
+
+        total = case_qs.count()
+        start = (page - 1) * size
+        end = start + size
+        cases = case_qs[start:end]
+
+        contacts = []
+        for case in cases:
+            # Get ChatContact2 for this mobile (if exists)
+            cc = ChatContact2.objects.filter(mobile=case.mobile).first()
+            last_msg = cc.last_msg if cc else "No messages yet"
+            unread = cc.unread if cc else 0
+            last_time = cc.last_time if cc else case.created_at
+
+            contacts.append({
+                "mobile": case.mobile,
+                "case_id": case.case_id,                    # new field
+                "customer_name": case.customer_name or "",
+                "last_msg": last_msg,
+                "last_type": "Case",
+                "last_status": case.status,
+                "unread": unread,
+                "last_time": last_time.isoformat() if last_time else None,
+                "current_level": case.current_level,
+                "group_name": case.group.name if case.group else "",
+                "is_case": True,                            # flag for frontend
+            })
+
+        total_pages = (total + size - 1) // size if total > 0 else 1
+        # Unread count not used for ESC2/3/4 (return 0)
+        return {
+            "contacts": contacts,
+            "total_pages": total_pages,
+            "current_page": page,
+            "total": total,
+            "has_more": page < total_pages,
+            "unread_count": 0
+        }
+
+    # ----- ESC1 and ESC5: show CONTACTS (unchanged logic) -----
     # Subquery to get the latest case for each mobile
     latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
     # Annotate group_id and group_name
@@ -111,6 +177,7 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, gro
             "last_time": c.last_time.isoformat() if c.last_time else None,
             "current_level": c.current_level or "ESC1",
             "group_name": c.latest_group_name,
+            # No is_case flag – frontend will treat as contact
         })
 
     total_pages = (total + size - 1) // size if total > 0 else 1

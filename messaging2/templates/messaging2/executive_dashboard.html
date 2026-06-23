@@ -277,43 +277,30 @@
     // ------------------------------------------------------------------
     // CLOSE CASE – called from Resolved tab
     // ------------------------------------------------------------------
-    function closeCase(caseId) {
-        if (!confirm('Are you sure you want to permanently close this resolved case? This action cannot be undone.')) {
-            return;
-        }
+ function closeCase(caseId) {
+        const reason = prompt("Enter reason for closing this case (optional):");
+        if (reason === null) return;
 
-        const csrftoken = document.querySelector('[name=csrf-token]').content;
-        if (!csrftoken) {
-            alert('CSRF token missing. Please refresh the page.');
-            return;
-        }
-
-        fetch(addAppParam(`/messaging2/case/${caseId}/close/`), {
+        fetch(addAppParam(`/adminpanel/case/${caseId}/close/`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrftoken
             },
-            body: JSON.stringify({})
+            body: JSON.stringify({ close_reason: reason || "" })
         })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
-                });
-            }
-            return response.json();
-        })
+        .then(res => res.json())
         .then(data => {
             if (data.success) {
                 alert('Case closed successfully!');
-                location.reload();
+                window.location.reload();
             } else {
                 alert('Error: ' + data.error);
             }
         })
-        .catch(error => alert('Error: ' + error.message));
+        .catch(err => alert('Error: ' + err.message));
     }
+       
 
     // ------------------------------------------------------------------
     // Existing functions (viewCase, resolveCase, escalateCase, etc.)

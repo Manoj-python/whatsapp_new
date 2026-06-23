@@ -622,22 +622,22 @@ class Freshdesk(models.Model):
 
 
 
-
+# financehub/models.py
 
 class EseBuzz(models.Model):
-    loanno = models.CharField(max_length=150, db_index=True, null=True, blank=True)
-    loantype = models.CharField(max_length=255, null=True, blank=True)
-    umrnno = models.CharField(max_length=255, null=True, blank=True)
+    loan_no = models.CharField(max_length=150, db_index=True, null=True, blank=True)
+    loan_type = models.CharField(max_length=255, null=True, blank=True)
+    umrn_no = models.CharField(max_length=255, null=True, blank=True)
     amount = models.CharField(max_length=100, null=True, blank=True)
-    postingdate = models.CharField(max_length=100, null=True, blank=True)
-    initiateddate =  models.DateField(blank=True, null=True)
-    customername = models.CharField(max_length=255, null=True, blank=True)
-    bankaccountno = models.CharField(max_length=255, null=True, blank=True)
-    ifsccode = models.CharField(max_length=100, null=True, blank=True)
-    mobileno = models.CharField(max_length=100, null=True, blank=True)
-    achtype = models.CharField(max_length=100, null=True, blank=True)
-    achagent = models.CharField(max_length=255, null=True, blank=True)
-    bankformat = models.CharField(max_length=255, null=True, blank=True)
+    posting_date = models.CharField(max_length=100, null=True, blank=True)
+    initiated_date = models.DateField(blank=True, null=True)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
+    bank_account_no = models.CharField(max_length=255, null=True, blank=True)
+    ifsc_code = models.CharField(max_length=100, null=True, blank=True)
+    mobile_no = models.CharField(max_length=100, null=True, blank=True)
+    ach_type = models.CharField(max_length=100, null=True, blank=True)
+    ach_agent = models.CharField(max_length=255, null=True, blank=True)
+    bank_format = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -646,25 +646,23 @@ class EseBuzz(models.Model):
         db_table = "esebuzz"
 
     def __str__(self):
-        return f"{self.loanno} - {self.customername}"
-
-
+        return f"{self.loan_no} - {self.customer_name}"
 
 
 class Hero(models.Model):
     sno = models.CharField(max_length=100, null=True, blank=True)
     umrn = models.CharField(max_length=255, null=True, blank=True)
     amount = models.CharField(max_length=100, null=True, blank=True)
-    heroagreementno = models.CharField(max_length=255, null=True, blank=True)
-    referencenumber = models.CharField(max_length=255, null=True, blank=True)
-    customername = models.CharField(max_length=255, null=True, blank=True)
+    hero_agreement_no = models.CharField(max_length=255, null=True, blank=True)
+    reference_number = models.CharField(max_length=255, null=True, blank=True)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
     date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=255, null=True, blank=True)
-    branchcode = models.CharField(max_length=100, null=True, blank=True)
-    branchname = models.CharField(max_length=255, null=True, blank=True)
-    createdbyusername = models.CharField(max_length=255, null=True, blank=True)
-    createdbyemailid = models.CharField(max_length=255, null=True, blank=True)
-    encrypttransheaderid = models.CharField(max_length=255, null=True, blank=True)
+    branch_code = models.CharField(max_length=100, null=True, blank=True)
+    branch_name = models.CharField(max_length=255, null=True, blank=True)
+    created_by_username = models.CharField(max_length=255, null=True, blank=True)
+    created_by_email_id = models.CharField(max_length=255, null=True, blank=True)
+    encrypt_trans_header_id = models.CharField(max_length=255, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -672,21 +670,19 @@ class Hero(models.Model):
         db_table = "hero"
 
     def __str__(self):
-        return f"{self.sno} - {self.customername}"
-
+        return f"{self.sno} - {self.customer_name}"
 
 
 class KotakECS(models.Model):
-    loannumber = models.CharField(max_length=150, db_index=True, null=True, blank=True)
-    customername = models.CharField(max_length=255, null=True, blank=True)
-    vehicleno = models.CharField(max_length=100, null=True, blank=True)
+    loan_number = models.CharField(max_length=150, db_index=True, null=True, blank=True)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
     company = models.CharField(max_length=255, null=True, blank=True)
     amount = models.CharField(max_length=100, null=True, blank=True)
-    ecsdate = models.DateField(blank=True, null=True)
-    ecsstatus = models.CharField(max_length=255, null=True, blank=True)
-    releasestatus = models.CharField(max_length=255, null=True, blank=True)
+    ecs_date = models.DateField(blank=True, null=True)
+    ecs_status = models.CharField(max_length=255, null=True, blank=True)
+    release_status = models.CharField(max_length=255, null=True, blank=True)
     released = models.TextField(null=True, blank=True)
-
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -694,50 +690,47 @@ class KotakECS(models.Model):
         db_table = "kotakecs"
 
     def __str__(self):
-        return f"{self.loannumber} - {self.customername}"
-
-
+        return f"{self.loan_number} - {self.customer_name}"
 
 
 class Smsquare(models.Model):
-    uniqueregistrationnumber = models.CharField(max_length=255, null=True, blank=True, db_index=True)
-    transactionid = models.CharField(max_length=255, null=True, blank=True)
-    presentmentmode = models.CharField(max_length=255, null=True, blank=True)
-    customername = models.CharField(max_length=255, null=True, blank=True)
+    unique_registration_number = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    transaction_id = models.CharField(max_length=255, null=True, blank=True)
+    presentment_mode = models.CharField(max_length=255, null=True, blank=True)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
     amount = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=255, null=True, blank=True)
-    reasoncode = models.CharField(max_length=100, null=True, blank=True)
-    reasondescription = models.CharField(max_length=500, null=True, blank=True)
+    reason_code = models.CharField(max_length=100, null=True, blank=True)
+    reason_description = models.CharField(max_length=500, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "smsquare"
+        db_table = "smsquare_payments"
 
     def __str__(self):
-        return f"{self.uniqueregistrationnumber} - {self.customername}"
-
+        return f"{self.unique_registration_number} - {self.customer_name}"
 
 
 class Upi(models.Model):
-    loannoreference = models.CharField(max_length=255, null=True, blank=True, db_index=True)
-    customername = models.CharField(max_length=255, null=True, blank=True)
-    mobileno = models.CharField(max_length=100, null=True, blank=True)
-    transactionamount = models.CharField(max_length=100, null=True, blank=True)
+    loan_no_reference = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
+    mobile_no = models.CharField(max_length=100, null=True, blank=True)
+    transaction_amount = models.CharField(max_length=100, null=True, blank=True)
     frequency = models.CharField(max_length=100, null=True, blank=True)
-    utrno = models.CharField(max_length=255, null=True, blank=True)
-    dateofdeduction = models.CharField(max_length=100, null=True, blank=True)
-    amounttobededucted = models.CharField(max_length=100, null=True, blank=True)
-    initiateddatetime = models.CharField(max_length=100, null=True, blank=True)
-    paymentdatetime = models.CharField(max_length=100, null=True, blank=True)
-    paymentdescription = models.CharField(max_length=500, null=True, blank=True)
-    paymentstatus = models.CharField(max_length=255, null=True, blank=True)
-    notificationstatus = models.CharField(max_length=255, null=True, blank=True)
-    payresponsecode = models.CharField(max_length=100, null=True, blank=True)
-    transactionid = models.CharField(max_length=255, null=True, blank=True)
-    accountno = models.CharField(max_length=255, null=True, blank=True)
-    ifsccode = models.CharField(max_length=255, null=True, blank=True)
+    utr_no = models.CharField(max_length=255, null=True, blank=True)
+    date_of_deduction = models.CharField(max_length=100, null=True, blank=True)
+    amount_to_be_deducted = models.CharField(max_length=100, null=True, blank=True)
+    initiated_datetime = models.CharField(max_length=100, null=True, blank=True)
+    payment_datetime = models.CharField(max_length=100, null=True, blank=True)
+    payment_description = models.CharField(max_length=500, null=True, blank=True)
+    payment_status = models.CharField(max_length=255, null=True, blank=True)
+    notification_status = models.CharField(max_length=255, null=True, blank=True)
+    pay_response_code = models.CharField(max_length=100, null=True, blank=True)
+    transaction_id = models.CharField(max_length=255, null=True, blank=True)
+    account_no = models.CharField(max_length=255, null=True, blank=True)
+    ifsc_code = models.CharField(max_length=255, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -745,7 +738,8 @@ class Upi(models.Model):
         db_table = "upi"
 
     def __str__(self):
-        return f"{self.loannoreference} - {self.customername}"
+        return f"{self.loan_no_reference} - {self.customer_name}"
+
 
 
 
