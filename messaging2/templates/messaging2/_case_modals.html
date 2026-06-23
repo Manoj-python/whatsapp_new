@@ -87,6 +87,27 @@
                     <input type="text" id="editCustomerName" class="form-control">
                 </div>
                 <div class="mb-3">
+    <label>Department (Group)</label>
+    <select id="editGroup" class="form-select">
+        <option value="">-- Select --</option>
+        {% for group in all_groups %}
+        <option value="{{ group.id }}">{{ group.name }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div class="mb-3">
+    <label>Current Level</label>
+    <select id="editLevel" class="form-select">
+        <option value="ESC1">ESC1 - Agent</option>
+        <option value="ESC2">ESC2 - Executive</option>
+        <option value="ESC3">ESC3 - Manager</option>
+        <option value="ESC4">ESC4 - Head</option>
+        <option value="ESC5">ESC5 - Admin</option>
+        <option value="RESOLVED">RESOLVED - Resolved</option>
+        <option value="CLOSED">CLOSED - Closed</option>
+    </select>
+</div>
+                <div class="mb-3">
                     <label>Issue Description</label>
                     <textarea id="editIssueDescription" class="form-control" rows="4"></textarea>
                 </div>
@@ -99,6 +120,7 @@
         </div>
     </div>
 </div>
+
 
 <script>
 //const csrftoken = document.querySelector('[name=csrf-token]').content;

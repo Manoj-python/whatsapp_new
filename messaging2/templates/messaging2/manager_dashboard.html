@@ -365,7 +365,9 @@
             body: JSON.stringify({
                 loan_number: loanNumber,
                 customer_name: customerName,
-                issue_description: issueDescription
+                issue_description: issueDescription,
+                group: groupId || null,      // send null if empty
+                current_level: level
             })
         })
         .then(res => {

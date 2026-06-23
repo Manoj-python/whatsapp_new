@@ -867,6 +867,14 @@ def edit_case_api(request, case_id):
             case.group = group_obj
         else:
             return JsonResponse({'error': 'Invalid group specified'}, status=400)
+    if 'current_level' in data:
+        new_level = data['current_level']
+        # Get the list of valid choices from the model
+        valid_levels = [choice[0] for choice in CaseModel.ESCALATION_CHOICES]
+        if new_level in valid_levels:
+            case.current_level = new_level
+        else:
+            return JsonResponse({'error': f'Invalid level: {new_level}'}, status=400)
 
     case.save()
     return JsonResponse({'success': True, 'message': 'Case updated'})

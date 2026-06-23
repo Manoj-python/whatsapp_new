@@ -63,6 +63,8 @@ def handle_case_messages(sender, instance, created, **kwargs):
 
     # New case → send open message
     if created and not instance.ticket_open_message_sent:
+        if hasattr(instance, '_skip_ticket_open') and instance._skip_ticket_open:
+            return
         send_ticket_open_message.delay(actual_app_key, instance.id)
 
     # Status changed to 'Closed' → send close message

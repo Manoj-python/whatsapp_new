@@ -1072,7 +1072,7 @@ def whatsapp_webhook(request):
 
                                     sales_group = SupportGroup.objects.get(name="Sales")
 
-                                    Case.objects.create(
+                                    case=Case.objects.create(
                                         case_id=f"LEAD-{uuid.uuid4().hex[:8].upper()}",
                                         customer_name=customer_name,
                                         mobile=mobile,
@@ -1084,7 +1084,8 @@ def whatsapp_webhook(request):
                                         source="WhatsApp Marketing Campaign",
                                         created_by="System Auto Lead"
                                     )
-
+                                    case._skip_ticket_open = True
+                                    case.save()
                                     print(f"✅ Sales Lead Created: {mobile}")
 
                         except Exception as e:
