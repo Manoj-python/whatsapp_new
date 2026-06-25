@@ -301,4 +301,11 @@ MEGHAAI_CONFIG = {
     'DB_POOL_SIZE': 15,           # Minimum connections always open
     'DB_MAX_POOL_SIZE': 30,       # Maximum connections in pool
     'DB_MAX_OVERFLOW': 20,        # Extra connections when needed
+     
+    # Your Whisper API endpoint
+    'WHISPER_API_URL': os.environ.get('WHISPER_API_URL', ''),
+    
+    # Your Whisper API key (OpenAI API key for Whisper)
+    'WHISPER_API_KEY': os.environ.get('WHISPER_API_KEY', ''),    
+  
 }

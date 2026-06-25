@@ -523,6 +523,191 @@
         }
 
         /* ============================================
+           VOICE BUTTON
+           ============================================ */
+        .voice-btn {
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-body);
+            border: 2px solid var(--border-color);
+            color: var(--text-secondary);
+            transition: all 0.3s;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .voice-btn:hover:not(.recording) {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .voice-btn.recording {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: white;
+            animation: voice-pulse 1s infinite;
+        }
+
+        .voice-btn.processing {
+            background: var(--warning);
+            border-color: var(--warning);
+            color: white;
+        }
+
+        .voice-btn .bi {
+            font-size: 1.2rem;
+        }
+
+        @keyframes voice-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.92); }
+        }
+
+        /* Voice Recording Indicator */
+        .voice-indicator {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: var(--bg-body);
+            border-radius: var(--radius-xl);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .voice-indicator.show {
+            display: flex;
+        }
+
+        .voice-indicator .recording-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+            animation: dot-pulse 0.5s infinite;
+        }
+
+        @keyframes dot-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .voice-indicator .recording-timer {
+            font-variant-numeric: tabular-nums;
+            min-width: 40px;
+        }
+
+        /* Voice Confirmation Modal */
+        .voice-confirmation-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1050;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .voice-confirmation-overlay.show {
+            display: flex;
+        }
+
+        .voice-confirmation-modal {
+            background: var(--bg-card);
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .voice-confirmation-modal .icon {
+            font-size: 3rem;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .voice-confirmation-modal h5 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .voice-confirmation-modal p {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+
+        .voice-confirmation-modal .btn-group {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+        }
+
+        .voice-confirmation-modal .btn-group .btn {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .voice-confirmation-modal .btn-group .btn-confirm {
+            background: var(--primary);
+            color: white;
+        }
+
+        .voice-confirmation-modal .btn-group .btn-confirm:hover {
+            background: var(--primary-dark);
+        }
+
+        .voice-confirmation-modal .btn-group .btn-cancel {
+            background: var(--bg-body);
+            color: var(--text-secondary);
+        }
+
+        .voice-confirmation-modal .btn-group .btn-cancel:hover {
+            background: var(--border-color);
+        }
+
+        /* Voice Transcription Text */
+        .voice-transcript {
+            display: none;
+            padding: 0.25rem 0.75rem;
+            background: var(--bg-body);
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            flex: 1;
+            min-width: 60px;
+        }
+
+        .voice-transcript.show {
+            display: block;
+        }
+
+        /* ============================================
            WELCOME PLACEHOLDER
            ============================================ */
         .welcome-placeholder {
@@ -616,7 +801,7 @@
             }
 
             #chat-input {
-                font-size: 16px; /* Prevents zoom on iOS */
+                font-size: 16px;
                 padding: 0.6rem 1rem;
                 min-height: 44px;
             }
@@ -624,6 +809,15 @@
             #send-btn {
                 width: 44px;
                 height: 44px;
+            }
+
+            .voice-btn {
+                width: 44px;
+                height: 44px;
+            }
+
+            .voice-btn .bi {
+                font-size: 1rem;
             }
 
             .chat-header {
@@ -650,7 +844,6 @@
                 font-size: 1.1rem;
             }
 
-            /* Mobile Sidebar - Offcanvas */
             .sidebar-offcanvas {
                 position: fixed;
                 top: 0;
@@ -711,7 +904,6 @@
                 cursor: pointer;
             }
 
-            /* Hide desktop sidebar on mobile */
             .sidebar-desktop {
                 display: none !important;
             }
@@ -746,9 +938,22 @@
                 font-size: 0.75rem;
                 padding: 0.3rem 0.5rem;
             }
+
+            .voice-indicator {
+                font-size: 0.75rem;
+                padding: 0.2rem 0.5rem;
+            }
+
+            .voice-transcript {
+                font-size: 0.7rem;
+            }
+
+            .voice-confirmation-modal {
+                padding: 1.5rem;
+            }
         }
 
-        /* Medium devices (tablets, 768px and up) */
+        /* Medium devices (tablets, 577px - 768px) */
         @media (min-width: 577px) and (max-width: 768px) {
             .message {
                 max-width: 90%;
@@ -864,6 +1069,22 @@
 
             .input-area {
                 padding: 1rem 2rem;
+            }
+
+            .input-row {
+                display: flex;
+                gap: 0.5rem;
+                align-items: flex-end;
+            }
+
+            .input-row .col {
+                flex: 1;
+            }
+
+            .input-row .col-auto {
+                display: flex;
+                gap: 0.5rem;
+                align-items: center;
             }
         }
 
@@ -1071,12 +1292,23 @@
 
                     <!-- Input Area -->
                     <div class="input-area">
-                        <div class="row g-2">
+                        <div class="input-row">
                             <div class="col">
                                 <textarea class="form-control" id="chat-input" rows="2"
                                           placeholder="Ask about collections... (e.g., 'Show me the top 10 NPA accounts')"></textarea>
                             </div>
                             <div class="col-auto">
+                                <!-- Voice Button -->
+                                <button class="voice-btn" id="voiceBtn" title="Click to record voice command">
+                                    <i class="bi bi-mic"></i>
+                                </button>
+                                <!-- Voice Indicator -->
+                                <div class="voice-indicator" id="voiceIndicator">
+                                    <span class="recording-dot"></span>
+                                    <span>Recording</span>
+                                    <span class="recording-timer" id="recordingTimer">0:00</span>
+                                </div>
+                                <!-- Send Button -->
                                 <button class="btn btn-primary" id="send-btn">
                                     <i class="bi bi-send"></i>
                                 </button>
@@ -1087,12 +1319,31 @@
                                 <i class="bi bi-info-circle"></i>
                                 Press Enter to send, Shift+Enter for new line
                             </small>
+                            <small class="text-secondary ms-3">
+                                <i class="bi bi-mic"></i>
+                                Click mic to speak a command
+                            </small>
                         </div>
                     </div>
 
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- ============================================
+    VOICE CONFIRMATION MODAL
+    ============================================ -->
+    <div class="voice-confirmation-overlay" id="voiceConfirmation">
+        <div class="voice-confirmation-modal">
+            <div class="icon">🎤</div>
+            <h5>Confirm Voice Command</h5>
+            <p id="confirmationMessage">Are you sure you want to execute this command?</p>
+            <div class="btn-group">
+                <button class="btn btn-confirm" id="confirmVoiceBtn">✅ Yes, Confirm</button>
+                <button class="btn btn-cancel" id="cancelVoiceBtn">❌ Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -1115,7 +1366,6 @@
             html.setAttribute('data-theme', newTheme);
             localStorage.setItem('meghaai-theme', newTheme);
 
-            // Update all toggle buttons
             const toggleIcons = document.querySelectorAll('.theme-toggle i');
             const toggleTexts = document.querySelectorAll('.theme-toggle');
 
@@ -1130,14 +1380,12 @@
                 }
             });
 
-            // Update mobile header theme button
             const mobileThemeBtn = document.getElementById('themeToggleMobile');
             if (mobileThemeBtn) {
                 mobileThemeBtn.innerHTML = `<i class="bi bi-${newTheme === 'dark' ? 'sun' : 'moon'}"></i>`;
             }
         }
 
-        // Load saved theme
         function loadTheme() {
             const savedTheme = localStorage.getItem('meghaai-theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
@@ -1162,7 +1410,6 @@
             }
         }
 
-        // Theme toggle event listeners
         document.addEventListener('DOMContentLoaded', function() {
             loadTheme();
 
@@ -1190,6 +1437,286 @@
             document.getElementById('closeSidebar')?.addEventListener('click', toggleSidebar);
             document.getElementById('sidebarBackdrop')?.addEventListener('click', toggleSidebar);
         });
+
+        // ============================================
+        // VOICE COMMAND HANDLER - COMPLETE
+        // ============================================
+        class VoiceHandler {
+            constructor() {
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.isRecording = false;
+                this.timer = null;
+                this.seconds = 0;
+                this.isProcessing = false;
+                this.currentCommand = null;
+
+                // DOM Elements
+                this.voiceBtn = document.getElementById('voiceBtn');
+                this.voiceIndicator = document.getElementById('voiceIndicator');
+                this.recordingTimer = document.getElementById('recordingTimer');
+                this.confirmationModal = document.getElementById('voiceConfirmation');
+                this.confirmationMessage = document.getElementById('confirmationMessage');
+                this.confirmBtn = document.getElementById('confirmVoiceBtn');
+                this.cancelBtn = document.getElementById('cancelVoiceBtn');
+                this.chatInput = document.getElementById('chat-input');
+
+                this.init();
+            }
+
+            init() {
+                // Voice button click
+                this.voiceBtn?.addEventListener('click', () => this.toggleRecording());
+
+                // Confirm/Cancel buttons
+                this.confirmBtn?.addEventListener('click', () => this.confirmAction());
+                this.cancelBtn?.addEventListener('click', () => this.cancelAction());
+
+                // Check microphone permission
+                this.checkMicrophone();
+
+                // Keyboard shortcut: Ctrl+Shift+V for voice
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.shiftKey && e.key === 'v') {
+                        e.preventDefault();
+                        this.toggleRecording();
+                    }
+                });
+            }
+
+            async checkMicrophone() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(track => track.stop());
+                    this.microphoneAvailable = true;
+                    this.voiceBtn.style.opacity = '1';
+                } catch (error) {
+                    console.warn('Microphone not available:', error);
+                    this.microphoneAvailable = false;
+                    this.voiceBtn.style.opacity = '0.5';
+                    this.voiceBtn.title = 'Microphone not available';
+                }
+            }
+
+            async toggleRecording() {
+                if (this.isProcessing) return;
+
+                if (this.isRecording) {
+                    this.stopRecording();
+                } else {
+                    await this.startRecording();
+                }
+            }
+
+            async startRecording() {
+                if (!this.microphoneAvailable) {
+                    await this.checkMicrophone();
+                    if (!this.microphoneAvailable) {
+                        this.showError('Microphone access required for voice commands');
+                        return;
+                    }
+                }
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        this.processRecording();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    this.startTimer();
+
+                    // Update UI
+                    this.voiceBtn.classList.add('recording');
+                    this.voiceBtn.innerHTML = '<i class="bi bi-stop-circle"></i>';
+                    this.voiceBtn.title = 'Stop recording';
+                    this.voiceIndicator.classList.add('show');
+                    this.chatInput.placeholder = '🎤 Listening... speak now';
+
+                } catch (error) {
+                    console.error('Recording error:', error);
+                    this.showError('Could not start recording');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    this.stopTimer();
+                    this.voiceBtn.classList.remove('recording');
+                    this.voiceBtn.classList.add('processing');
+                    this.voiceBtn.innerHTML = '<div class="spinner-small"></div>';
+                    this.voiceBtn.title = 'Processing...';
+                    this.chatInput.placeholder = '⏳ Processing voice...';
+                }
+            }
+
+            startTimer() {
+                this.seconds = 0;
+                this.timer = setInterval(() => {
+                    this.seconds++;
+                    const minutes = Math.floor(this.seconds / 60);
+                    const seconds = this.seconds % 60;
+                    this.recordingTimer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                }
+                this.recordingTimer.textContent = '0:00';
+            }
+
+            async processRecording() {
+                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'voice_command.webm');
+
+                try {
+                    const response = await fetch('/meghaai/api/voice-command/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': this.getCSRFToken()
+                        },
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        if (data.needs_confirmation) {
+                            this.showConfirmation(data);
+                        } else {
+                            this.handleResult(data);
+                        }
+                    } else {
+                        if (data.suggestion) {
+                            this.showError(`"${data.text || ''}" not recognized. ${data.suggestion}`);
+                        } else {
+                            this.showError(data.error || 'Command processing failed');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Processing error:', error);
+                    this.showError('Failed to process voice command');
+                } finally {
+                    this.isProcessing = false;
+                    this.voiceBtn.classList.remove('processing');
+                    this.voiceBtn.innerHTML = '<i class="bi bi-mic"></i>';
+                    this.voiceBtn.title = 'Click to record voice command';
+                    this.voiceIndicator.classList.remove('show');
+                    this.chatInput.placeholder = 'Ask about collections... (e.g., \'Show me the top 10 NPA accounts\')';
+                }
+            }
+
+            showConfirmation(data) {
+                this.currentCommand = data.command;
+                this.confirmationMessage.textContent = data.confirmation_message || 'Confirm this action?';
+                this.confirmationModal.classList.add('show');
+            }
+
+            confirmAction() {
+                this.confirmationModal.classList.remove('show');
+
+                if (!this.currentCommand) return;
+
+                this.isProcessing = true;
+                this.voiceBtn.classList.add('processing');
+                this.voiceBtn.innerHTML = '<div class="spinner-small"></div>';
+
+                fetch('/meghaai/api/voice-command-confirm/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        command: this.currentCommand,
+                        confirm: true
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        this.handleResult(data);
+                    } else {
+                        this.showError(data.error || 'Command execution failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Confirmation error:', error);
+                    this.showError('Failed to confirm');
+                })
+                .finally(() => {
+                    this.isProcessing = false;
+                    this.voiceBtn.classList.remove('processing');
+                    this.voiceBtn.innerHTML = '<i class="bi bi-mic"></i>';
+                    this.currentCommand = null;
+                });
+            }
+
+            cancelAction() {
+                this.confirmationModal.classList.remove('show');
+                this.currentCommand = null;
+            }
+
+            handleResult(data) {
+                // Add to chat
+                if (window.meghaAIChat) {
+                    if (data.result) {
+                        window.meghaAIChat.addMessage({
+                            role: 'assistant',
+                            content: data.result
+                        });
+                    } else {
+                        window.meghaAIChat.addMessage({
+                            role: 'assistant',
+                            content: '✅ Voice command executed successfully!'
+                        });
+                    }
+
+                    // If there's a file download
+                    if (data.file) {
+                        const link = document.createElement('a');
+                        link.href = data.file;
+                        link.download = data.filename || 'export.xlsx';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                }
+            }
+
+            showError(message) {
+                if (window.meghaAIChat) {
+                    window.meghaAIChat.addMessage({
+                        role: 'assistant',
+                        content: `⚠️ ${message}`
+                    });
+                } else {
+                    alert(message);
+                }
+            }
+
+            getCSRFToken() {
+                return document.querySelector('#csrf-token')?.value ||
+                       document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+            }
+        }
 
         // ============================================
         // MEGHAAI CHAT CLASS - COMPLETE
@@ -1224,12 +1751,10 @@
                     }
                 });
 
-                // Clear chat buttons
                 document.querySelectorAll('#clear-chat-desktop, #clear-chat-mobile').forEach(btn => {
                     btn.addEventListener('click', () => this.clearChat());
                 });
 
-                // Suggestion buttons
                 document.querySelectorAll('.suggestion-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         this.chatInput.value = btn.textContent.replace(/^[^\s]+\s/, '').trim();
@@ -1376,24 +1901,14 @@
             formatMessage(content) {
                 let html = content;
 
-                // Headers
                 html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
                 html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
                 html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
-
-                // Bold
                 html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-                // Italic
                 html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-                // Inline code
                 html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-
-                // Line breaks
                 html = html.replace(/\n/g, '<br>');
 
-                // ===== Table Detection =====
                 const lines = content.split('\n');
                 let tableStart = -1;
                 let tableEnd = -1;
@@ -1484,9 +1999,15 @@
             }
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
+        // ============================================
+        // INITIALIZE EVERYTHING
+        // ============================================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Chat
             window.meghaAIChat = new MeghaAIChat();
+
+            // Initialize Voice Handler
+            window.voiceHandler = new VoiceHandler();
         });
     </script>
 </body>
