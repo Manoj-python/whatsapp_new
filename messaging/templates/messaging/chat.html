@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>SMS Cases - WhatsApp Chat Dashboard</title>
+  <title>PSF Cases - WhatsApp Chat Dashboard</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -140,6 +141,24 @@
 .contact-dept i {
     font-size: 10px;
 }
+.contact-dept-group {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: #6c757d;
+    margin-top: 3px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.contact-dept-group span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.contact-dept-group .separator {
+    color: #ccc;
+    font-weight: 300;
+}
     @media (max-width: 768px) { .message-bubble { max-width: 85%; min-width: 50px; padding: 6px 10px; } .composer { padding: 8px 12px; } }
   </style>
 </head>
@@ -148,7 +167,7 @@
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="header-top">
-        <h4 onclick="goToDashboard()"><i class="fab fa-whatsapp"></i>SMS Chats</h4>
+        <h4 onclick="goToDashboard()"><i class="fab fa-whatsapp"></i> PSF Chats</h4>
         <span class="esc-number">{{ agent.level|default:"ESC1" }}</span>
         <span class="role-name">{{ agent.role|default:"Agent" }}</span>
         <div class="user-badge">{{ request.user.username|slice:":2"|upper }}</div>
@@ -194,6 +213,21 @@
   <div class="case-sidebar-content" id="caseSidebarContent"><div class="text-center py-4"><div class="loading-spinner"></div><p>Loading case details...</p></div></div>
 </div>
 <div id="mediaModal" class="media-modal"><button class="modal-close" onclick="closeMediaModal()">×</button><div id="mediaContent"></div></div>
+
+<!-- Description History Modal -->
+<div class="modal fade" id="descriptionHistoryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-file-alt"></i> Description History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="descriptionHistoryBody">
+                <div class="text-center py-4"><div class="spinner-border"></div><p>Loading...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
   // ========== CONFIG ==========
@@ -251,6 +285,18 @@
     } catch(e) { console.error('Failed to load groups', e); availableGroups = []; }
   }
 
+  let allSubgroups = [];
+
+async function fetchSubgroups() {
+    try {
+        const resp = await fetch('/messaging2/api/subgroups/');
+        const data = await resp.json();
+        allSubgroups = data.subgroups || [];
+    } catch(e) { console.error('Failed to load subgroups', e); allSubgroups = []; }
+}
+
+
+
   // ========== MODIFIED: renderCasePanel ==========
   async function renderCasePanel() {
     const content = document.getElementById('caseSidebarContent');
@@ -299,7 +345,10 @@
             <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(currentCaseData.case_id)}</strong></div>
             <div class="mb-2"><label>Customer:</label> ${escapeHtml(currentCaseData.customer_name || selectedMobile)}</div>
             <div class="mb-2"><label>Loan Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.loan_number || 'Not provided')}</span></div>
+            <div class="mb-2"><label>Vehicle Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.vehicle_number || 'Not provided')}</span></div>
+
             <div class="mb-2"><label>Department:</label> ${escapeHtml(groupName)}</div>
+            <div class="mb-2"><label>Subgroup:</label> ${escapeHtml(currentCaseData.subgroup_name || 'None')}</div>
             <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[currentCaseData.current_level] || 'secondary'}">${levelIcon} ${currentCaseData.current_level}</span></div>
             <div class="mb-2"><label>Status:</label> <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span></div>
             <div class="mb-2"><label>Assigned To:</label> ${escapeHtml(currentCaseData.assigned_to_name || 'Unassigned')}</div>
@@ -336,6 +385,7 @@
 
         html += `
             <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="viewCaseTimeline()"><i class="fas fa-history"></i> View Timeline</button>
+            <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="viewDescriptionHistory('${currentCaseData.case_id}')"><i class="fas fa-file-alt"></i>View Descriptions</button>
             <button class="btn btn-outline-secondary btn-sm w-100" onclick="openCreateAnotherCaseForm()"><i class="fas fa-plus"></i> Create Another Case</button>
           </div>
         `;
@@ -397,54 +447,100 @@
     // Build groups dropdown
     let groupsHtml = '<select id="newCaseGroup" class="form-select form-select-sm mb-2" required><option value="">Select Department</option>';
     availableGroups.forEach(g => {
-      groupsHtml += `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`;
+        groupsHtml += `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`;
     });
     groupsHtml += '</select>';
+
+    // Build subgroups dropdown (initially all subgroups, but we'll filter by JS)
+    let subgroupsHtml = '<select id="newCaseSubgroup" class="form-select form-select-sm mb-2"><option value="">Select Subgroup (optional)</option>';
+    allSubgroups.forEach(s => {
+        subgroupsHtml += `<option value="${s.id}" data-group-name="${escapeHtml(s.group_name)}">${escapeHtml(s.name)} (${escapeHtml(s.group_name)})</option>`;
+    });
+    subgroupsHtml += '</select>';
 
     let escalationOptions = '<option value="">-- No escalation (ESC1) --</option>';
     const creationLevels = ['ESC2', 'ESC3', 'ESC4', 'ESC5'];
     const levelNamesShort = { 'ESC2': 'Executive (ESC2)', 'ESC3': 'Manager (ESC3)', 'ESC4': 'Head (ESC4)', 'ESC5': 'Admin (ESC5)' };
     for (let lvl of creationLevels) {
-      escalationOptions += `<option value="${lvl}">${levelNamesShort[lvl]}</option>`;
+        escalationOptions += `<option value="${lvl}">${levelNamesShort[lvl]}</option>`;
     }
 
     content.innerHTML = `
-      <div class="text-center py-3">
-        <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
-        <p>Create a new case for ${escapeHtml(headerName.textContent)}:</p>
-        <div class="text-start">
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Customer Name</label>
-            <input type="text" id="newCaseCustomerName" class="form-control form-control-sm" value="${escapeHtml(customerName)}">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Agreement No (Loan Number)</label>
-            <input type="text" id="newCaseLoanNumber" class="form-control form-control-sm" value="${escapeHtml(agreementNo)}" placeholder="e.g., LOAN12345">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Vehicle No</label>
-            <input type="text" id="newCaseVehicleNo" class="form-control form-control-sm" value="${escapeHtml(vehicleNo)}" placeholder="Vehicle number">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Department (Group)</label>
-            ${groupsHtml}
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Escalate To (Optional)</label>
-            <select id="newCaseEscalateTo" class="form-select form-select-sm">${escalationOptions}</select>
-            <small class="text-muted">If selected, case will be created at that level</small>
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Issue Description</label>
-            <textarea id="newCaseDesc" class="form-control form-control-sm" rows="3" placeholder="Describe the issue..."></textarea>
-          </div>
-          <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> You can create multiple cases for the same customer.</small>
-          <button class="btn btn-success btn-sm w-100 mt-2" onclick="createCaseFromChat()">✅ Create Case</button>
-          <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="renderCasePanel()">← Back</button>
+        <div class="text-center py-3">
+            <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+            <p>Create a new case for ${escapeHtml(headerName.textContent)}:</p>
+            <div class="text-start">
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Customer Name</label>
+                    <input type="text" id="newCaseCustomerName" class="form-control form-control-sm" value="${escapeHtml(customerName)}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Agreement No (Loan Number)</label>
+                    <input type="text" id="newCaseLoanNumber" class="form-control form-control-sm" value="${escapeHtml(agreementNo)}" placeholder="e.g., LOAN12345">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Vehicle No</label>
+                    <input type="text" id="newCaseVehicleNo" class="form-control form-control-sm" value="${escapeHtml(vehicleNo)}" placeholder="Vehicle number">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Department (Group)</label>
+                    ${groupsHtml}
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Subgroup (optional)</label>
+                    ${subgroupsHtml}
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Escalate To (Optional)</label>
+                    <select id="newCaseEscalateTo" class="form-select form-select-sm">${escalationOptions}</select>
+                    <small class="text-muted">If selected, case will be created at that level</small>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Issue Description</label>
+                    <textarea id="newCaseDesc" class="form-control form-control-sm" rows="3" placeholder="Describe the issue..."></textarea>
+                </div>
+                <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> You can create multiple cases for the same customer.</small>
+                <button class="btn btn-success btn-sm w-100 mt-2" onclick="createCaseFromChat()">✅ Create Case</button>
+                <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="renderCasePanel()">← Back</button>
+            </div>
         </div>
-      </div>
     `;
-  }
+
+    // ─── Add event listener to filter subgroups based on selected group ───
+    const groupSelect = document.getElementById('newCaseGroup');
+    const subgroupSelect = document.getElementById('newCaseSubgroup');
+    if (groupSelect && subgroupSelect) {
+        // Store all subgroup options for filtering
+        const allSubOptions = Array.from(subgroupSelect.options);
+        const subgroupData = allSubOptions.map(opt => ({
+            value: opt.value,
+            text: opt.text,
+            groupName: opt.getAttribute('data-group-name')
+        }));
+
+        function filterSubgroups() {
+            const selectedGroupName = groupSelect.value;
+            // Clear current options
+            subgroupSelect.innerHTML = '<option value="">Select Subgroup (optional)</option>';
+            // Filter and add matching subgroups
+            subgroupData.forEach(data => {
+                if (!selectedGroupName || data.groupName === selectedGroupName) {
+                    const opt = document.createElement('option');
+                    opt.value = data.value;
+                    opt.textContent = data.text;
+                    opt.setAttribute('data-group-name', data.groupName);
+                    subgroupSelect.appendChild(opt);
+                }
+            });
+        }
+
+        // Initial filter (in case a group is pre-selected)
+        filterSubgroups();
+
+        // Listen for group changes
+        groupSelect.addEventListener('change', filterSubgroups);
+    }
+}
 
   // ========== Escalate / Resolve / Timeline (unchanged) ==========
   window.escalateCase = async function() {
@@ -499,6 +595,87 @@
     } catch(e) { showNotification('Error loading timeline', 'error'); }
   };
 
+ function viewDescriptionHistory(caseId) {
+    if (!caseId) {
+        showNotification('No case ID', 'error');
+        return;
+    }
+    const modalEl = document.getElementById('descriptionHistoryModal');
+    if (!modalEl) return;
+
+    // Show modal
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    } else {
+        modalEl.style.display = 'block';
+        modalEl.classList.add('show');
+        document.body.classList.add('modal-open');
+        if (!document.querySelector('.modal-backdrop')) {
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+    }
+
+    const body = document.getElementById('descriptionHistoryBody');
+    body.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div><p>Loading...</p></div>';
+
+    fetch(`/messaging2/case/${caseId}/description-history/?app=sms`)
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        })
+        .then(data => {
+            console.log('📜 History data:', data);
+            if (data.success && data.logs && data.logs.length > 0) {
+                let html = '<div class="timeline">';
+                data.logs.forEach(log => {
+                    // Use either format: try to pick correct fields
+                    const changedAt = log.changed_at || log.created_at || log.timestamp || null;
+                    let dateStr = 'Unknown date';
+                    if (changedAt) {
+                        try {
+                            const d = new Date(changedAt);
+                            if (!isNaN(d.getTime())) {
+                                dateStr = d.toLocaleString('en-IN', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit', hour12: true
+                                });
+                            }
+                        } catch(e) { /* ignore */ }
+                    }
+
+                    const updatedBy = log.changed_by || log.updated_by || log.changed_by_name || 'Unknown';
+                    const role = log.changed_by_role || log.role || '';
+                    const level = log.level || log.current_level || 'N/A';
+                    // Description: new description might be in `new_description` or `description`
+                    const newDesc = log.new_description || log.description || '';
+                    const prevDesc = log.previous_description || log.old_description || '';
+
+                    html += `
+                        <div class="border-bottom pb-3 mb-3">
+                            <small class="text-muted">${dateStr}</small>
+                            <div><strong>Level:</strong> ${escapeHtml(level)}</div>
+                            <div><strong>Updated By:</strong> ${escapeHtml(updatedBy)} ${role ? '('+escapeHtml(role)+')' : ''}</div>
+                            <div class="mt-2 p-2 bg-light rounded">
+                                <strong>Description:</strong><br>${escapeHtml(newDesc) || '<em>(empty)</em>'}
+                            </div>
+                            ${prevDesc ? `<div class="small text-muted mt-1"><strong>Previous:</strong> ${escapeHtml(prevDesc)}</div>` : ''}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                body.innerHTML = html;
+            } else {
+                body.innerHTML = '<div class="alert alert-info">No description history available.</div>';
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            body.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+        });
+}
   // ========== MODIFIED: createCaseFromChat (added vehicle_no) ==========
   window.createCaseFromChat = async function(forceNew = false) {
     const description = document.getElementById('newCaseDesc')?.value;
@@ -507,6 +684,7 @@
     const loanNumberInput = document.getElementById('newCaseLoanNumber');
     const vehicleNoInput = document.getElementById('newCaseVehicleNo');   // NEW
     const escalateSelect = document.getElementById('newCaseEscalateTo');
+    const subgroupSelect = document.getElementById('newCaseSubgroup');
 
     if (!groupSelect) { showNotification('Group selector missing', 'error'); return; }
     const groupName = groupSelect.value;
@@ -514,6 +692,7 @@
     const loanNumber = loanNumberInput ? loanNumberInput.value.trim() : '';
     const vehicleNo = vehicleNoInput ? vehicleNoInput.value.trim() : '';   // NEW
     const escalateTo = escalateSelect ? escalateSelect.value : '';
+    const subgroupId = subgroupSelect ? subgroupSelect.value : '';
 
     if (!description) { showNotification('Please describe the issue', 'warning'); return; }
     if (!groupName) { showNotification('Please select a department (group)', 'warning'); return; }
@@ -529,6 +708,7 @@
           loan_number: loanNumber,
           vehicle_no: vehicleNo,          // SEND IT
           group: groupName,
+          subgroup_id: subgroupId, 
           escalate_to: escalateTo || null,
           force_new: forceNew
         })
@@ -587,7 +767,7 @@
   function switchTab(filter) { if(currentFilter===filter) return; currentFilter=filter; document.querySelectorAll('.chat-tab').forEach(tab=>{ if(tab.dataset.filter===filter) tab.classList.add('active'); else tab.classList.remove('active'); }); contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; contactListEl.innerHTML='<div class="loading">Loading contacts...</div>'; loadContacts(); }
   function loadContacts(page=1) { if(isLoadingContacts||(page<=contactPage&&page>1)) return; isLoadingContacts=true; console.log(`Load contacts page ${page}`); let levelToSend=currentUser.role==='ADMIN'?null:currentUser.level; sendWS({type:'get_contacts',page:page,filter:currentFilter,level:levelToSend}); }
   function searchContacts(query) { contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; let levelToSend=currentUser.role==='ADMIN'?null:currentUser.level; sendWS({type:'search_contacts',q:query,filter:currentFilter,level:levelToSend}); }
-function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore = false, currentPage = 1) {
+  function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore = false, currentPage = 1) {
     if (isRenderingContacts || (lastProcessedPage === currentPage && !replace)) {
         isRenderingContacts = false;
         return;
@@ -668,12 +848,21 @@ function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore =
         }
 
         // Department
-        let departmentHtml = '';
-        if (c.group_name) {
-            departmentHtml = `<div class="contact-dept"><i class="fas fa-building"></i> ${escapeHtml(c.group_name)}</div>`;
-        } else if (c.current_level) {
-            departmentHtml = `<div class="contact-dept"><i class="fas fa-level-up-alt"></i> Level: ${c.current_level}</div>`;
-        }
+       let deptSubgroupHtml = '';
+if (c.group_name || c.subgroup_name) {
+    let parts = [];
+    if (c.group_name) {
+        parts.push(`<span><i class="fas fa-building"></i> ${escapeHtml(c.group_name)}</span>`);
+    }
+    if (c.subgroup_name) {
+        parts.push(`<span><i class="fas fa-tag"></i> ${escapeHtml(c.subgroup_name)}</span>`);
+    }
+    if (parts.length > 0) {
+        deptSubgroupHtml = `<div class="contact-dept-group">${parts.join(' <span class="separator">|</span> ')}</div>`;
+    }
+} else if (c.current_level) {
+    deptSubgroupHtml = `<div class="contact-dept-group"><span><i class="fas fa-level-up-alt"></i> Level: ${c.current_level}</span></div>`;
+}
 
         // Build the contact/case item
         html += `
@@ -691,7 +880,7 @@ function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore =
                         ${c.unread > 0 ? `<span class="unread-badge">${c.unread}</span>` : ''}
                     </div>
                     <div class="contact-last-msg">${escapeHtml(subText)}</div>
-                    ${departmentHtml}
+ ${deptSubgroupHtml}                   
                 </div>
                 <div class="contact-meta">
                     ${c.last_time ? `<div class="contact-time">${formatTime(c.last_time)}</div>` : ''}
@@ -709,7 +898,6 @@ function renderContacts(contactsData, replace = true, unreadCount = 0, hasMore =
     contactPage = currentPage;
     isRenderingContacts = false;
 }
-
 function selectContactOrCase(mobile, caseId) {
     // Always load the chat for this mobile (existing behaviour)
     if (selectedMobile !== mobile) {
@@ -723,7 +911,6 @@ function selectContactOrCase(mobile, caseId) {
         }, 400);
     }
 }
-
 // ====================================================================
 // Load a specific case and show action buttons in the case sidebar
 // ====================================================================
@@ -791,6 +978,7 @@ async function loadSingleCaseAndShowActions(caseId) {
                     <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(c.case_id)}</strong></div>
                     <div class="mb-2"><label>Customer:</label> ${escapeHtml(c.customer_name || selectedMobile)}</div>
                     <div class="mb-2"><label>Loan Number:</label> ${escapeHtml(c.loan_number || 'Not provided')}</div>
+                    <div class="mb-2"><label>Loan Number:</label> ${escapeHtml(c.vehicle_number || 'Not provided')}</div>
                     <div class="mb-2"><label>Department:</label> ${escapeHtml(c.group_name || 'Not assigned')}</div>
                     <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[c.current_level] || 'secondary'}">${levelIcon} ${c.current_level}</span></div>
                     <div class="mb-2"><label>Status:</label> <span class="badge bg-${c.status === 'Resolved' ? 'success' : 'primary'}">${c.status}</span></div>
@@ -831,6 +1019,8 @@ async function loadSingleCaseAndShowActions(caseId) {
             // Timeline and back buttons
             html += `
                     <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="viewCaseTimeline()"><i class="fas fa-history"></i> View Timeline</button>
+                                <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="viewDescriptionHistory('${currentCaseData.case_id}')"><i class="fas fa-file-alt"></i>View Descriptions</button>
+
                     <button class="btn btn-outline-secondary btn-sm w-100" onclick="renderCasePanel()"><i class="fas fa-arrow-left"></i> Back to All Cases</button>
                 </div>
             `;
@@ -948,6 +1138,7 @@ function appendMessage(msg){ let wasAtBottom=messagesContainer.scrollHeight-mess
   sendBtn.onclick=sendMessage; messageInput.addEventListener('keypress',e=>{if(e.key==='Enter') sendMessage();}); messageInput.addEventListener('input',onTyping); attachBtn.onclick=()=>mediaInput.click(); backBtn.onclick=()=>{document.getElementById('sidebar').classList.remove('hide'); chatArea.style.display='none';}; mediaInput.addEventListener('change',e=>{if(e.target.files[0]){ filePreview.classList.add('show'); document.querySelector('.preview-info').textContent=e.target.files[0].name; }}); searchInput.addEventListener('input',e=>{clearTimeout(window.searchTimeout); window.searchTimeout=setTimeout(()=>{if(e.target.value.trim()) searchContacts(e.target.value.trim()); else{ contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; loadContacts(1); }},300);}); contactListEl.addEventListener('scroll',handleContactsScroll); document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMediaModal();}); document.getElementById('mediaModal').addEventListener('click',function(e){if(e.target===this) closeMediaModal();}); let casePanelBtn=document.getElementById('casePanelBtn'); if(casePanelBtn) casePanelBtn.onclick=function(e){ e.preventDefault(); openCaseSidebar(); }; document.addEventListener('contextmenu',e=>{e.preventDefault(); showNotification('Right-click disabled','warning'); return false;});
   connectWebSocket();
   fetchGroups();
+  fetchSubgroups();
 </script>
 </body>
 </html>

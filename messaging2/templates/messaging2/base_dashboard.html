@@ -127,8 +127,8 @@
             <nav class="nav flex-column">
                {% if agent.role == 'AGENT' %}
 <a class="nav-link" href="{% url 'agent_dashboard' %}"><i class="fas fa-tasks"></i> My Cases</a>
-{% elif agent.role == 'LEAD' %}
-<a class="nav-link" href="{% url 'executive_dashboard' %}"><i class="fas fa-star"></i> Lead Cases (ESC2)</a>
+{% elif agent.role == 'EXECUTIVE' %}
+<a class="nav-link" href="{% url 'executive_dashboard' %}"><i class="fas fa-star"></i>Executive Cases (ESC2)</a>
 {% elif agent.role == 'MANAGER' %}
 <a class="nav-link" href="{% url 'manager_dashboard' %}"><i class="fas fa-chart-line"></i> Manager Cases (ESC3)</a>
 {% elif agent.role == 'HEAD' %}

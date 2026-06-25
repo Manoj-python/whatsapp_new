@@ -3,9 +3,7 @@
 
 {% block content %}
 
-<!-- ========================================================== -->
-<!-- 1. Include shared modals FIRST (defines common JS functions) -->
-<!-- ========================================================== -->
+<!-- Include shared modals -->
 {% include "messaging2/_case_modals.html" %}
 
 <div class="container-fluid">
@@ -65,11 +63,32 @@
         {% endfor %}
     </div>
 
+    <!-- Subgroup Filter Dropdown -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label for="subgroupFilter" class="form-label"><i class="fas fa-sitemap"></i> Filter by Subgroup:</label>
+            <select id="subgroupFilter" class="form-select" onchange="applySubgroupFilter()">
+                <option value="all">All Subgroups</option>
+                {% for subgroup in all_subgroups %}
+                <option value="{{ subgroup.id }}">{{ subgroup.name }} ({{ subgroup.group.name }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+            <button class="btn btn-outline-secondary" onclick="clearFilters()">Clear Filters</button>
+        </div>
+    </div>
+
     <!-- Tabs -->
     <ul class="nav nav-tabs" id="caseTabs" role="tablist">
         <li class="nav-item"><button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button">📋 Pending Cases</button></li>
         <li class="nav-item"><button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button">✅ Resolved Cases</button></li>
         <li class="nav-item"><button class="nav-link" id="escalated-tab" data-bs-toggle="tab" data-bs-target="#escalated" type="button">⬆️ Escalated Cases</button></li>
+        <li class="nav-item">
+    <button class="nav-link" id="closed-tab" data-bs-toggle="tab" data-bs-target="#closed" type="button" role="tab">
+        🔒 Closed <span class="badge bg-secondary">{{ stats.closed }}</span>
+    </button>
+</li>
     </ul>
 
     <div class="tab-content mt-3">
@@ -84,7 +103,17 @@
                     <div class="table-responsive">
                         <table class="table table-hover" id="pendingTable">
                             <thead>
-                                <tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Description</th><th>Status</th><th>Created</th><th>Actions</th></tr>
+                                <tr>
+                                    <th>Loan No</th>
+                                    <th>Customer</th>
+                                    <th>Mobile</th>
+                                    <th>Department</th>
+                                    <th>Subgroup</th>  <!-- NEW -->
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
                             </thead>
                             <tbody id="pendingTableBody">
                                 {% include "messaging2/_manager_pending_rows.html" with cases=pending_cases %}
@@ -103,7 +132,16 @@
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
-                                <tr><th>Case ID</th><th>Customer</th><th>Loan No</th><th>Department</th><th>Resolved By</th><th>Resolved At</th><th>Actions</th></tr>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Customer</th>
+                                    <th>Loan No</th>
+                                    <th>Department</th>
+                                    <th>Subgroup</th>  <!-- NEW -->
+                                    <th>Resolved By</th>
+                                    <th>Resolved At</th>
+                                    <th>Actions</th>
+                                </tr>
                             </thead>
                             <tbody>
                                 {% for case in resolved_cases %}
@@ -112,6 +150,7 @@
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
                                     <td>{{ case.loan_number|default:"-" }}</td>
                                     <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>  <!-- NEW -->
                                     <td>{{ case.resolved_by|default:"System" }}</td>
                                     <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
                                     <td>
@@ -120,7 +159,7 @@
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="text-center">No resolved cases at ESC3 level.</td></tr>
+                                <tr><td colspan="8" class="text-center">No resolved cases at ESC3 level.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -137,7 +176,15 @@
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
-                                <tr><th>Case ID</th><th>Customer</th><th>Loan No</th><th>Current Level</th><th>Escalated By</th><th>Escalated At</th><th>Actions</th></tr>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Customer</th>
+                                    <th>Loan No</th>
+                                    <th>Current Level</th>
+                                    <th>Escalated By</th>
+                                    <th>Escalated At</th>
+                                    <th>Actions</th>
+                                </tr>
                             </thead>
                             <tbody>
                                 {% for case in escalated_cases %}
@@ -161,6 +208,42 @@
         </div>
     </div>
 
+
+    <div class="tab-pane fade" id="closed" role="tabpanel">
+    <div class="card">
+        <div class="card-header bg-secondary text-white">Closed Cases</div>
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Case ID</th>
+                        <th>Customer</th>
+                        <th>Mobile</th>
+                        <th>Loan No</th>
+                        <th>Closed At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in closed_cases %}
+                    <tr>
+                        <td>{{ case.case_id }}</td>
+                        <td>{{ case.customer_name|default:case.mobile }}</td>
+                        <td>{{ case.mobile }}</td>
+                        <td>{{ case.loan_number|default:"-" }}</td>
+                        <td>{{ case.closed_at|date:"d-m-Y H:i" }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')">View</button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center">No closed cases.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
     <!-- Level‑wise Stats -->
     <div class="row mt-4">
         <div class="col-12">
@@ -207,29 +290,33 @@
     </div>
 </div>
 
-<!-- ========================================================== -->
-<!-- 2. Manager‑specific JavaScript (uses common functions from _case_modals) -->
-<!-- ========================================================== -->
 <script>
-    // Use the global csrftoken (defined in base_dashboard.html) – do NOT redeclare
+    // ─── Agent permissions ──────────────────────────────────────────
+    var agentPermissions = {
+        can_edit: {{ agent.has_edit_permission|yesno:"true,false" }},
+        can_resolve: {{ agent.has_resolve_permission|yesno:"true,false" }},
+        can_close: {{ agent.has_close_permission|yesno:"true,false" }}
+    };
 
     // ─── Pending cases filter ───
     let currentDepartment = 'all';
+    let currentSubgroup = 'all';
 
     function refreshCases() {
-        loadPendingCases(currentDepartment);
+        loadPendingCases(currentDepartment, currentSubgroup);
     }
 
-    function loadPendingCases(department) {
-        currentDepartment = department;
-        const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(department)}`;
+    function loadPendingCases(department, subgroup) {
+        currentDepartment = department || 'all';
+        currentSubgroup = subgroup || 'all';
+        const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(currentDepartment)}&subgroup=${encodeURIComponent(currentSubgroup)}`;
         fetch(url)
             .then(res => res.json())
             .then(data => {
                 renderPendingTable(data.cases);
                 document.querySelectorAll('.dept-card').forEach(card => {
                     const d = card.getAttribute('data-dept');
-                    if ((d === 'all' && department === 'all') || d === department) {
+                    if ((d === 'all' && currentDepartment === 'all') || d === currentDepartment) {
                         card.classList.remove('bg-secondary');
                         card.classList.add('bg-success');
                     } else {
@@ -237,6 +324,7 @@
                         card.classList.add('bg-secondary');
                     }
                 });
+                document.getElementById('subgroupFilter').value = currentSubgroup;
             })
             .catch(err => console.error(err));
     }
@@ -244,7 +332,7 @@
     function renderPendingTable(cases) {
         const tbody = document.getElementById('pendingTableBody');
         if (!cases || cases.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center">No pending cases</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center">No pending cases</td></tr>';
             return;
         }
         let html = '';
@@ -254,6 +342,7 @@
                 <td>${escapeHtml(c.customer_name || c.mobile)}</td>
                 <td>${c.mobile}</td>
                 <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>
+                <td><span class="badge bg-info">${c.subgroup_name || '-'}</span></td>
                 <td>${c.issue_description || '-'}</td>
                 <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></td>
                 <td>${new Date(c.created_at).toLocaleString()}</td>
@@ -269,7 +358,17 @@
         tbody.innerHTML = html;
     }
 
-    // ─── Assign Case ───
+    function applySubgroupFilter() {
+        const subgroup = document.getElementById('subgroupFilter').value;
+        loadPendingCases(currentDepartment, subgroup);
+    }
+
+    function clearFilters() {
+        document.getElementById('subgroupFilter').value = 'all';
+        loadPendingCases('all', 'all');
+    }
+
+    // ─── Assign Case ────────────────────────────────────────────────────
     function showAssignModal(caseId) {
         document.getElementById('assignCaseId').value = caseId;
         $('#assignModal').modal('show');
@@ -290,7 +389,7 @@
             if (data.success) {
                 alert('Assigned!');
                 $('#assignModal').modal('hide');
-                loadPendingCases(currentDepartment);
+                loadPendingCases(currentDepartment, currentSubgroup);
             } else {
                 alert('Error: ' + data.error);
             }
@@ -298,17 +397,18 @@
         .catch(err => alert(err.message));
     }
 
-    // ─── Close Case (Resolved tab) ───
+    // ─── Close Case (Resolved tab) ────────────────────────────────────
     function closeCase(caseId) {
+        if (!agentPermissions.can_close) {
+            alert('You do not have permission to close cases.');
+            return;
+        }
         const reason = prompt("Enter reason for closing this case (optional):");
         if (reason === null) return;
 
         fetch(addAppParam(`/adminpanel/case/${caseId}/close/`), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ close_reason: reason || "" })
         })
         .then(res => res.json())
@@ -323,10 +423,11 @@
         .catch(err => alert('Error: ' + err.message));
     }
 
-    // ─── Event listeners ───
+    // ─── Event listeners ──────────────────────────────────────────────
     document.querySelectorAll('.dept-card').forEach(card => {
         card.addEventListener('click', function() {
-            loadPendingCases(this.getAttribute('data-dept'));
+            const dept = this.getAttribute('data-dept');
+            loadPendingCases(dept, currentSubgroup);
         });
     });
 
@@ -339,7 +440,8 @@
                 tab.show();
             });
         });
+        // Initial load
+        loadPendingCases('all', 'all');
     });
 </script>
-
 {% endblock %}

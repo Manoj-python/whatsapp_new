@@ -11,3 +11,11 @@ class SupportGroup(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Subgroup(models.Model):
+    group=models.ForeignKey(SupportGroup,on_delete=models.CASCADE,db_index=True)
+    name=models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.name

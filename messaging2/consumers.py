@@ -16,7 +16,7 @@ from django.core.cache import cache
 
 from .models import *
 from .utils import *
-
+from adminpanel.models import *
 import requests
 
 # -------------------------
@@ -37,7 +37,7 @@ from django.db.models import Q, OuterRef, Subquery
 from .models import ChatContact2, SmsWhatsAppLog2, Case
 
 @sync_to_async
-def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, group_ids=None):
+def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, group_ids=None,subgroup_ids=None):
     """
     For ESC2, ESC3, ESC4: returns a list of CASES (one per row) so that all cases are visible,
     including duplicates for the same mobile.
@@ -48,9 +48,20 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, gro
     # ----- ESC2, ESC3, ESC4: show CASES -----
     if level and level not in ['ESC1', 'ESC5']:
         # Start from the Case table
-        case_qs = Case.objects.filter(current_level=level)
-        if group_ids:
-            case_qs = case_qs.filter(group_id__in=group_ids)
+        case_qs = Case.objects.filter(current_level=level).select_related('group', 'subgroup')
+
+        if group_ids or subgroup_ids:
+            if group_ids and subgroup_ids:
+                filter_q = Q(group_id__in=group_ids) & Q(subgroup_id__in=subgroup_ids)
+            elif group_ids:
+                filter_q = Q(group_id__in=group_ids)
+            else:
+                filter_q = Q(subgroup_id__in=subgroup_ids)
+            case_qs = case_qs.filter(filter_q)
+        else:
+            # If user has no groups/subgroups, return nothing (they can't see anything)
+            case_qs = case_qs.none()
+        case_qs = case_qs.exclude(status='Closed')
 
         # Search: by case_id, mobile, customer_name
         if q:
@@ -59,11 +70,12 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, gro
             filters = Q()
             if digits:
                 filters |= Q(mobile__icontains=digits)
+            
             filters |= Q(case_id__icontains=raw_q) | Q(customer_name__icontains=raw_q)
             case_qs = case_qs.filter(filters)
 
         # Order: high priority first, then newest
-        case_qs = case_qs.order_by('-priority', '-created_at')
+        case_qs = case_qs.order_by('-created_at')
 
         total = case_qs.count()
         start = (page - 1) * size
@@ -89,6 +101,7 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, gro
                 "last_time": last_time.isoformat() if last_time else None,
                 "current_level": case.current_level,
                 "group_name": case.group.name if case.group else "",
+                "subgroup_name": case.subgroup.name if case.subgroup else "",
                 "is_case": True,                            # flag for frontend
             })
 
@@ -109,7 +122,8 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, gro
     # Annotate group_id and group_name
     qs = ChatContact2.objects.annotate(
         latest_group_id=Subquery(latest_case.values('group_id')[:1]),
-        latest_group_name=Subquery(latest_case.values('group__name')[:1])
+        latest_group_name=Subquery(latest_case.values('group__name')[:1]),
+        latest_subgroup_name=Subquery(latest_case.values('subgroup__name')[:1])
     )
 
     # Apply level filter (based on current_level on ChatContact2)
@@ -177,6 +191,7 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, gro
             "last_time": c.last_time.isoformat() if c.last_time else None,
             "current_level": c.current_level or "ESC1",
             "group_name": c.latest_group_name,
+            "subgroup_name":c.latest_subgroup_name
             # No is_case flag – frontend will treat as contact
         })
 
@@ -545,6 +560,7 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
             filter_type = content.get("filter", "all")
             level = None
             group_ids = None
+            subgroup_ids = None
 
         # Get the authenticated user from the WebSocket scope (requires AuthMiddlewareStack)
             user = self.scope.get("user")
@@ -555,12 +571,14 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
                     if agent.role == 'ADMIN':
                         level = None
                         group_ids = None
+                        subgroup_ids = None
                     else:
 
                         level = agent.level
                 # For non‑agent roles (MANAGER, HEAD, EXECUTIVE), fetch group IDs
                         if level != 'ESC1':
                             group_ids = await sync_to_async(lambda: list(agent.groups.values_list('id', flat=True)))()
+                            subgroup_ids = await sync_to_async(lambda: list(agent.subgroup.values_list('id', flat=True)))()
                 except Agent.DoesNotExist:
                     pass
             else:
@@ -575,11 +593,13 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
                         if agent.role=='ADMIN':
                             level=None
                             group_ids=None
+                            subgroup_ids = None
                         else:
                             level = agent.level
     
                             if level != 'ESC1':
                                 group_ids = await sync_to_async(lambda: list(agent.groups.values_list('id', flat=True)))()
+                                subgroup_ids = await sync_to_async(lambda: list(agent.subgroup.values_list('id', flat=True)))()
                     except Exception:
                         pass
 
@@ -589,7 +609,8 @@ class ChatConsumer2(AsyncJsonWebsocketConsumer):
             q=q,
             filter_type=filter_type,
             level=level,
-            group_ids=group_ids   # ← now correctly passed
+            group_ids=group_ids,  # ← now correctly passed
+            subgroup_ids=subgroup_ids  
         )
 
             if self.connection_active:

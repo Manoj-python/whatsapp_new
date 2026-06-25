@@ -15,330 +15,49 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        
-        /* Modern Navbar */
-        .navbar-modern {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            padding: 15px 0;
-            margin-bottom: 30px;
-            border-radius: 15px;
-        }
-        
-        .navbar-brand {
-            font-weight: 800;
-            font-size: 1.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .nav-link {
-            font-weight: 500;
-            color: #4a5568;
-            transition: all 0.3s ease;
-            margin: 0 5px;
-            border-radius: 10px;
-            padding: 8px 16px;
-        }
-        
-        .nav-link:hover {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-logout {
-            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 8px 20px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-logout:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(229, 62, 62, 0.4);
-        }
-        
-        /* Section Card */
-        .section-card {
-            background: white;
-            border-radius: 20px;
-            padding: 25px;
-            margin-bottom: 25px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-        }
-        
-        .section-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: #2d3748;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        
-        .section-title i {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-right: 10px;
-        }
-        
-        /* User Avatar */
-        .user-avatar {
-            width: 35px;
-            height: 35px;
-            border-radius: 10px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            margin-right: 10px;
-        }
-        
-        /* Role Badges */
-        .role-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            gap: 6px;
-        }
-        
-        .role-ADMIN { background: linear-gradient(135deg, #f56565, #e53e3e); color: white; }
-        .role-MANAGER { background: linear-gradient(135deg, #ed8936, #dd6b20); color: white; }
-        .role-LEAD { background: linear-gradient(135deg, #4299e1, #3182ce); color: white; }
-        .role-LEGAL { background: linear-gradient(135deg, #718096, #4a5568); color: white; }
-        .role-AGENT { background: linear-gradient(135deg, #48bb78, #38a169); color: white; }
-        
-        /* Level Badges */
-        .level-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-        }
-        
-        .level-ESC1 { background: #48bb78; color: white; }
-        .level-ESC2 { background: #4299e1; color: white; }
-        .level-ESC3 { background: #ed8936; color: white; }
-        .level-ESC4 { background: #9f7aea; color: white; }
-        .level-ESC5 { background: #f56565; color: white; }
-        
-        /* Modern Table */
-        .modern-table {
-            border-radius: 15px;
-            overflow: hidden;
-        }
-        
-        .modern-table thead th {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            font-weight: 600;
-            padding: 15px;
-            border: none;
-        }
-        
-        .modern-table tbody tr {
-            transition: all 0.2s ease;
-        }
-        
-        .modern-table tbody tr:hover {
-            background: #f7fafc;
-            transform: scale(1.01);
-        }
-        
-        .modern-table td {
-            padding: 12px 15px;
-            vertical-align: middle;
-        }
-        
-        /* Buttons */
-        .btn-gradient {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .btn-gradient:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-            color: white;
-        }
-        
-        .btn-edit {
-            background: #4299e1;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            margin: 0 3px;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-        
-        .btn-edit:hover {
-            background: #3182ce;
-            transform: translateY(-1px);
-            color: white;
-        }
-        
-        .btn-delete {
-            background: #f56565;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            margin: 0 3px;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-        
-        .btn-delete:hover {
-            background: #e53e3e;
-            transform: translateY(-1px);
-            color: white;
-        }
-        
-        /* Search Bar */
-        .search-bar {
-            position: relative;
-            margin-bottom: 20px;
-        }
-        
-        .search-bar i {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #a0aec0;
-        }
-        
-        .search-bar input {
-            padding: 12px 15px 12px 45px;
-            border-radius: 12px;
-            border: 2px solid #e2e8f0;
-            width: 100%;
-            transition: all 0.3s ease;
-        }
-        
-        .search-bar input:focus {
-            border-color: #667eea;
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        /* Stats Summary */
-        .stats-summary {
-            background: #f7fafc;
-            border-radius: 12px;
-            padding: 12px 20px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .stat-number {
-            font-size: 20px;
-            font-weight: 800;
-            color: #2d3748;
-        }
-        
-        /* Alert */
-        .alert-custom {
-            border-radius: 12px;
-            border: none;
-            padding: 15px 20px;
-            margin-bottom: 20px;
-        }
-        
-        /* Footer */
-        .footer {
-            text-align: center;
-            padding: 20px;
-            color: rgba(255,255,255,0.8);
-            font-size: 12px;
-        }
-        
-        /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .animate {
-            animation: fadeInUp 0.6s ease forwards;
-        }
-        
-        @media (max-width: 768px) {
-            .section-card {
-                padding: 15px;
-            }
-            .modern-table {
-                font-size: 12px;
-            }
-            .btn-edit, .btn-delete {
-                padding: 4px 8px;
-                font-size: 10px;
-            }
-            .stats-summary {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter',sans-serif; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); min-height:100vh; }
+        .navbar-modern { background:rgba(255,255,255,0.95); backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.1); padding:15px 0; margin-bottom:30px; border-radius:15px; }
+        .navbar-brand { font-weight:800; font-size:1.5rem; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+        .nav-link { font-weight:500; color:#4a5568; transition:all 0.3s ease; margin:0 5px; border-radius:10px; padding:8px 16px; }
+        .nav-link:hover { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; }
+        .btn-logout { background:linear-gradient(135deg,#f56565 0%,#e53e3e 100%); color:white; border:none; border-radius:10px; padding:8px 20px; font-weight:600; transition:all 0.3s ease; }
+        .btn-logout:hover { transform:translateY(-2px); box-shadow:0 5px 15px rgba(229,62,62,0.4); }
+        .section-card { background:white; border-radius:20px; padding:25px; margin-bottom:25px; box-shadow:0 10px 40px rgba(0,0,0,0.1); }
+        .section-title { font-size:18px; font-weight:700; color:#2d3748; margin-bottom:20px; padding-bottom:15px; border-bottom:2px solid #e2e8f0; }
+        .section-title i { background:linear-gradient(135deg,#667eea,#764ba2); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-right:10px; }
+        .user-avatar { width:35px; height:35px; border-radius:10px; background:linear-gradient(135deg,#667eea,#764ba2); display:inline-flex; align-items:center; justify-content:center; color:white; font-weight:bold; margin-right:10px; }
+        .role-badge { display:inline-flex; align-items:center; padding:5px 12px; border-radius:20px; font-size:11px; font-weight:600; gap:6px; }
+        .role-ADMIN { background:linear-gradient(135deg,#f56565,#e53e3e); color:white; }
+        .role-MANAGER { background:linear-gradient(135deg,#ed8936,#dd6b20); color:white; }
+        .role-LEAD { background:linear-gradient(135deg,#4299e1,#3182ce); color:white; }
+        .role-LEGAL { background:linear-gradient(135deg,#718096,#4a5568); color:white; }
+        .role-AGENT { background:linear-gradient(135deg,#48bb78,#38a169); color:white; }
+        .modern-table { border-radius:15px; overflow:hidden; }
+        .modern-table thead th { background:linear-gradient(135deg,#667eea,#764ba2); color:white; font-weight:600; padding:15px; border:none; }
+        .modern-table tbody tr { transition:all 0.2s ease; }
+        .modern-table tbody tr:hover { background:#f7fafc; transform:scale(1.01); }
+        .modern-table td { padding:12px 15px; vertical-align:middle; }
+        .btn-gradient { background:linear-gradient(135deg,#667eea,#764ba2); color:white; border:none; padding:8px 20px; border-radius:10px; font-weight:600; transition:all 0.3s ease; text-decoration:none; display:inline-flex; align-items:center; gap:8px; }
+        .btn-gradient:hover { transform:translateY(-2px); box-shadow:0 5px 15px rgba(102,126,234,0.4); color:white; }
+        .btn-edit { background:#4299e1; color:white; border:none; padding:5px 12px; border-radius:8px; font-size:12px; margin:0 3px; transition:all 0.2s; text-decoration:none; display:inline-flex; align-items:center; gap:4px; }
+        .btn-edit:hover { background:#3182ce; transform:translateY(-1px); color:white; }
+        .btn-delete { background:#f56565; color:white; border:none; padding:5px 12px; border-radius:8px; font-size:12px; margin:0 3px; transition:all 0.2s; text-decoration:none; display:inline-flex; align-items:center; gap:4px; }
+        .btn-delete:hover { background:#e53e3e; transform:translateY(-1px); color:white; }
+        .search-bar { position:relative; margin-bottom:20px; }
+        .search-bar i { position:absolute; left:15px; top:50%; transform:translateY(-50%); color:#a0aec0; }
+        .search-bar input { padding:12px 15px 12px 45px; border-radius:12px; border:2px solid #e2e8f0; width:100%; transition:all 0.3s ease; }
+        .search-bar input:focus { border-color:#667eea; outline:none; box-shadow:0 0 0 3px rgba(102,126,234,0.1); }
+        .alert-custom { border-radius:12px; border:none; padding:15px 20px; margin-bottom:20px; }
+        .footer { text-align:center; padding:20px; color:rgba(255,255,255,0.8); font-size:12px; }
+        @keyframes fadeInUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
+        .animate { animation:fadeInUp 0.6s ease forwards; }
+        @media (max-width:768px) { .section-card { padding:15px; } .modern-table { font-size:12px; } .btn-edit, .btn-delete { padding:4px 8px; font-size:10px; } }
+        .badge-group { background:#e2e8f0; color:#2d3748; font-weight:500; margin:2px; padding:4px 8px; }
+        .badge-subgroup { background:#bee3f8; color:#2c5282; font-weight:500; margin:2px; padding:4px 8px; }
+        .perm-badge { font-size:12px; padding:2px 8px; border-radius:12px; font-weight:600; }
+        .perm-yes { background:#d4edda; color:#155724; }
+        .perm-no { background:#f8d7da; color:#721c24; }
     </style>
 </head>
 <body>
@@ -381,11 +100,10 @@
             </a>
         </div>
                 
-        
         <!-- Search Bar -->
         <div class="search-bar">
             <i class="fas fa-search"></i>
-            <input type="text" id="searchInput" placeholder="Search by username, email, or role..." onkeyup="searchUsers()">
+            <input type="text" id="searchInput" placeholder="Search by username, name, or role..." onkeyup="searchUsers()">
         </div>
         
         {% if messages %}
@@ -402,17 +120,20 @@
             <table class="table modern-table" id="userTable">
                 <thead>
                     <tr>
-                        <th><i class="fas fa-hashtag"></i> ID</th>
-                        <th><i class="fas fa-user"></i> Username</th>
-                        <th><i class="fas fa-envelope"></i>Name</th>
-                        <th><i class="fas fa-envelope"></i>MobileNumber</th>
-                        <th><i class="fas fa-envelope"></i>Email</th>
-
-
-                        <th><i class="fas fa-tag"></i> Role / Team</th>
-                        <th><i class="fas fa-chart-line"></i>Group</th>
-                        <th><i class="fas fa-shield-alt"></i> Staff</th>
-                        <th><i class="fas fa-cog"></i> Actions</th>
+                        <th>#ID</th>
+                        <th>Username</th>
+                        <th>Name</th>
+                        <th>Mobile</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Groups</th>
+                        <th>Subgroups</th>
+                        <th>Staff</th>
+                        <!-- New Permission Columns -->
+                        <th>Can Edit</th>
+                        <th>Can Resolve</th>
+                        <th>Can Close</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -427,9 +148,9 @@
                                 <strong>{{ user_data.user.username }}</strong>
                             </div>
                         </td>
-                         <td>{{ user_data.agent.name|default:"-" }}</td>      <!-- ✅ use agent.name -->
-                         <td>{{ user_data.agent.mobile|default:"-" }}</td>
-                         <td>{{  user_data.agent.email | default:"-"}}</td> 
+                        <td>{{ user_data.agent.name|default:"-" }}</td>
+                        <td>{{ user_data.agent.mobile|default:"-" }}</td>
+                        <td>{{ user_data.agent.email|default:"-" }}</td>
                         <td>
                             {% if user_data.agent %}
                                 <span class="role-badge role-{{ user_data.agent.role }}">
@@ -442,31 +163,33 @@
                                     {{ user_data.agent.get_role_display }}
                                 </span>
                             {% else %}
-                                <span class="role-badge" style="background: #a0aec0; color: white;">
+                                <span class="role-badge" style="background:#a0aec0;color:white;">
                                     <i class="fas fa-question"></i> No Role
                                 </span>
                             {% endif %}
                         </td>
                         <td>
                             {% if user_data.agent %}
-                                <span class="level-badge level-{{ user_data.agent.level }}">
-                                    {{ user_data.agent.level }}
-                                </span>
+                                {% for group in user_data.agent.groups.all %}
+                                    <span class="badge badge-group">{{ group.name }}</span>
+                                {% empty %}
+                                    <span class="text-muted">No groups</span>
+                                {% endfor %}
                             {% else %}
-                                -
+                                <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                       <td>
-    {% if user_data.agent %}
-        {% for group in user_data.agent.groups.all %}
-            <span class="badge bg-secondary me-1">{{ group.name }}</span>
-        {% empty %}
-            <span class="text-muted">No groups</span>
-        {% endfor %}
-    {% else %}
-        <span class="text-muted">No agent profile</span>
-    {% endif %}
-</td>
+                        <td>
+                            {% if user_data.agent %}
+                                {% for subgroup in user_data.agent.subgroup.all %}
+                                    <span class="badge badge-subgroup">{{ subgroup.name }}</span>
+                                {% empty %}
+                                    <span class="text-muted">No subgroups</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if user_data.user.is_staff %}
                                 <span class="badge bg-success"><i class="fas fa-check"></i> Yes</span>
@@ -474,7 +197,28 @@
                                 <span class="badge bg-secondary"><i class="fas fa-times"></i> No</span>
                             {% endif %}
                         </td>
-                       
+                        <!-- Permission Badges -->
+                        <td>
+                            {% if user_data.agent.can_edit %}
+                                <span class="perm-badge perm-yes"><i class="fas fa-check-circle"></i> Yes</span>
+                            {% else %}
+                                <span class="perm-badge perm-no"><i class="fas fa-times-circle"></i> No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user_data.agent.can_resolve %}
+                                <span class="perm-badge perm-yes"><i class="fas fa-check-circle"></i> Yes</span>
+                            {% else %}
+                                <span class="perm-badge perm-no"><i class="fas fa-times-circle"></i> No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user_data.agent.can_close %}
+                                <span class="perm-badge perm-yes"><i class="fas fa-check-circle"></i> Yes</span>
+                            {% else %}
+                                <span class="perm-badge perm-no"><i class="fas fa-times-circle"></i> No</span>
+                            {% endif %}
+                        </td>
                         <td>
                             <a href="{% url 'admin_user_edit' user_data.user.id %}" class="btn-edit" title="Edit">
                                 <i class="fas fa-edit"></i> Edit
@@ -485,11 +229,11 @@
                                 <i class="fas fa-trash"></i> Delete
                             </a>
                             {% endif %}
-                         </td>
-                     </tr>
+                        </td>
+                    </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center py-5">
+                        <td colspan="13" class="text-center py-5">
                             <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
                             <p>No users found. <a href="{% url 'admin_user_create' %}">Create your first user</a></p>
                         </td>
@@ -514,7 +258,6 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    // Search functionality
     function searchUsers() {
         const input = document.getElementById('searchInput');
         const filter = input.value.toLowerCase();
@@ -525,10 +268,10 @@
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const username = row.cells[1]?.textContent.toLowerCase() || '';
-            const email = row.cells[2]?.textContent.toLowerCase() || '';
-            const role = row.cells[3]?.textContent.toLowerCase() || '';
+            const name = row.cells[2]?.textContent.toLowerCase() || '';
+            const role = row.cells[5]?.textContent.toLowerCase() || '';
             
-            if (username.includes(filter) || email.includes(filter) || role.includes(filter)) {
+            if (username.includes(filter) || name.includes(filter) || role.includes(filter)) {
                 row.style.display = '';
                 visibleCount++;
             } else {
@@ -544,7 +287,6 @@
         }
     }
     
-    // Auto-hide alerts after 3 seconds
     setTimeout(function() {
         const alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
@@ -557,28 +299,6 @@
             }, 3000);
         });
     }, 100);
-    
-    // Add animation to cards
-    const observerOptions = {
-        threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
-    };
-    
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.style.opacity = '1';
-                entry.target.style.transform = 'translateY(0)';
-            }
-        });
-    }, observerOptions);
-    
-    document.querySelectorAll('.animate').forEach(el => {
-        el.style.opacity = '0';
-        el.style.transform = 'translateY(30px)';
-        el.style.transition = 'all 0.6s ease';
-        observer.observe(el);
-    });
 </script>
 
 </body>

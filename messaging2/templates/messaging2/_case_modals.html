@@ -1,4 +1,6 @@
-<!-- Case View Modal -->
+<!-- ============================================================ -->
+<!-- CASE VIEW MODAL                                               -->
+<!-- ============================================================ -->
 <div class="modal fade" id="caseModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -13,7 +15,9 @@
     </div>
 </div>
 
-<!-- Escalate Modal -->
+<!-- ============================================================ -->
+<!-- ESCALATE MODAL                                                -->
+<!-- ============================================================ -->
 <div class="modal fade" id="escalateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -44,7 +48,9 @@
     </div>
 </div>
 
-<!-- Resolve Modal -->
+<!-- ============================================================ -->
+<!-- RESOLVE MODAL                                                 -->
+<!-- ============================================================ -->
 <div class="modal fade" id="resolveModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -67,7 +73,9 @@
     </div>
 </div>
 
-<!-- Edit Case Modal (level removed) -->
+<!-- ============================================================ -->
+<!-- EDIT CASE MODAL (with Group & Subgroup)                      -->
+<!-- ============================================================ -->
 <div class="modal fade" id="editCaseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -85,6 +93,7 @@
                     <label>Customer Name</label>
                     <input type="text" id="editCustomerName" class="form-control">
                 </div>
+                <!-- Group dropdown -->
                 <div class="mb-3">
                     <label>Department (Group)</label>
                     <select id="editGroup" class="form-select">
@@ -92,6 +101,13 @@
                         {% for group in all_groups %}
                         <option value="{{ group.id }}">{{ group.name }}</option>
                         {% endfor %}
+                    </select>
+                </div>
+                <!-- Subgroup dropdown -->
+                <div class="mb-3">
+                    <label>Subgroup</label>
+                    <select id="editSubgroup" class="form-select">
+                        <option value="">-- Select Subgroup (optional) --</option>
                     </select>
                 </div>
                 <div class="mb-3">
@@ -107,13 +123,35 @@
     </div>
 </div>
 
-<script>
-    // ------------------------------------------------------------------
-    // CSRF token – use the global one defined in base_dashboard.html
-    // DO NOT redeclare 'const csrftoken' here.
-    // ------------------------------------------------------------------
 
-    // Helper: app parameter
+<div class="modal fade" id="descriptionHistoryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-file-alt"></i> Description History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="descriptionHistoryBody">
+                <div class="text-center py-4"><div class="spinner-border"></div><p>Loading...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- ============================================================ -->
+<!-- JAVASCRIPT – Shared Functions (must be included after modal HTML) -->
+<!-- ============================================================ -->
+<script>
+    // ─── Fallback if agentPermissions is not defined ─────────────
+    if (typeof agentPermissions === 'undefined') {
+        var agentPermissions = {
+            can_edit: false,
+            can_resolve: false,
+            can_close: false
+        };
+    }
+
+
+    // ─── App parameter helper ───────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const currentApp = urlParams.get('app') || 'psf';
     function addAppParam(url) {
@@ -121,7 +159,7 @@
         return `${url}${separator}app=${currentApp}`;
     }
 
-    // HTML escaping
+    // ─── Escape HTML ────────────────────────────────────────────
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -129,9 +167,36 @@
         return div.innerHTML;
     }
 
-    // ------------------------------------------------------------------
-    // VIEW CASE
-    // ------------------------------------------------------------------
+    // ─── Subgroups data ──────────────────────────────────────────
+    let allSubgroups = [];
+    let originalGroupId = null;
+    let originalSubgroupId = null;
+
+    async function fetchSubgroups() {
+        try {
+            const resp = await fetch('/messaging2/api/subgroups/');
+            const data = await resp.json();
+            allSubgroups = data.subgroups || [];
+        } catch(e) { console.error('Failed to load subgroups', e); allSubgroups = []; }
+    }
+
+    function populateSubgroups(groupId, selectedSubgroupId) {
+        const subgroupSelect = document.getElementById('editSubgroup');
+        subgroupSelect.innerHTML = '<option value="">-- Select Subgroup (optional) --</option>';
+        allSubgroups.forEach(s => {
+            if (!groupId || s.group_id == groupId) {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = `${s.name} (${s.group_name})`;
+                if (selectedSubgroupId && s.id == selectedSubgroupId) {
+                    opt.selected = true;
+                }
+                subgroupSelect.appendChild(opt);
+            }
+        });
+    }
+
+    // ─── VIEW CASE ──────────────────────────────────────────────
     let currentCaseData = null;
 
     function viewCase(caseId) {
@@ -166,6 +231,7 @@
                         <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
                         <tr><th>Loan Number:</th><td>${caseData.loan_number || '-'}</td></tr>
                         <tr><th>Department:</th><td>${caseData.group_name || 'Not assigned'}</td></tr>
+                        <tr><th>Subgroup:</th><td>${caseData.subgroup_name || 'None'}</td></tr>
                         <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level]}">${caseData.current_level}</span></td></tr>
                         <tr><th>Status:</th><td><span class="badge bg-${caseData.status === 'Resolved' ? 'success' : 'primary'}">${caseData.status}</span></td></tr>
                     </table>
@@ -199,6 +265,14 @@
                     <div id="timelineContent" class="border rounded p-3" style="max-height:300px; overflow-y:auto;">Loading...</div>
                 </div>
             </div>
+             <div class="row mt-3">
+                <div class="col-12 text-center">
+                    <button class="btn btn-outline-info btn-sm" onclick="viewDescriptionHistory('${caseData.case_id}')">
+                        <i class="fas fa-file-alt"></i> View Description History
+                    </button>
+                </div>
+            </div>
+        
         `;
         document.getElementById('caseModalBody').innerHTML = html;
         loadTimeline(caseData.case_id);
@@ -212,6 +286,67 @@
         higherLevels.forEach(lvl => { options += `<option value="${lvl}">${levelNames[lvl]}</option>`; });
         document.getElementById('escalateLevel').innerHTML = options || '<option disabled>No higher levels available</option>';
     }
+
+
+     function viewDescriptionHistory(caseId) {
+        if (!caseId) {
+            showNotification('No case ID provided', 'error');
+            return;
+        }
+
+        const modalElement = document.getElementById('descriptionHistoryModal');
+        if (!modalElement) {
+            showNotification('Modal not found', 'error');
+            return;
+        }
+
+        // Show modal using Bootstrap 5 API
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        } else {
+            // Fallback
+            modalElement.classList.add('show');
+            modalElement.style.display = 'block';
+            document.body.classList.add('modal-open');
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+
+        const body = document.getElementById('descriptionHistoryBody');
+        body.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div><p>Loading...</p></div>';
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/description-history/`))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.logs.length > 0) {
+                    let html = '<div class="timeline">';
+                    // Show all logs (already ordered by changed_at descending from backend)
+                    data.logs.forEach(log => {
+                        html += `
+                            <div class="border-bottom pb-3 mb-3">
+                                <small class="text-muted">${new Date(log.changed_at).toLocaleString()}</small>
+                                <div><strong>Level:</strong> ${log.level}</div>
+                                <div><strong>Updated By:</strong> ${escapeHtml(log.changed_by)}</div>
+                                <div class="mt-2 p-2 bg-light rounded">
+                                    <strong>Description:</strong> ${escapeHtml(log.new_description)}
+                                </div>
+                                ${log.previous_description ? `<div class="small text-muted mt-1">Previous: ${escapeHtml(log.previous_description)}</div>` : ''}
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    body.innerHTML = html;
+                } else {
+                    body.innerHTML = '<div class="alert alert-info">No description history available.</div>';
+                }
+            })
+            .catch(err => {
+                body.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            });
+    }
+
 
     function loadTimeline(caseId) {
         fetch(addAppParam(`/messaging2/case/${caseId}/timeline/`))
@@ -232,9 +367,7 @@
             });
     }
 
-    // ------------------------------------------------------------------
-    // ESCALATE
-    // ------------------------------------------------------------------
+    // ─── ESCALATE ─────────────────────────────────────────────────
     function escalateCase(caseId) {
         document.getElementById('escalateCaseId').value = caseId;
         document.getElementById('escalateReason').value = '';
@@ -292,10 +425,12 @@
         .catch(error => alert('Error: ' + error.message));
     }
 
-    // ------------------------------------------------------------------
-    // RESOLVE
-    // ------------------------------------------------------------------
+    // ─── RESOLVE ──────────────────────────────────────────────────
     function resolveCase(caseId) {
+        if (!agentPermissions.can_resolve) {
+            alert('You do not have permission to resolve cases.');
+            return;
+        }
         document.getElementById('resolveCaseId').value = caseId;
         $('#resolveModal').modal('show');
     }
@@ -330,13 +465,16 @@
         .catch(error => alert('Error: ' + error.message));
     }
 
-    // ------------------------------------------------------------------
-    // EDIT CASE (NO LEVEL)
-    // ------------------------------------------------------------------
+    // ─── EDIT CASE (with Subgroup) ──────────────────────────────
     function editCase(caseId) {
+        if (!agentPermissions.can_edit) {
+            alert('You do not have permission to edit cases.');
+            return;
+        }
         document.getElementById('editCaseId').value = caseId;
         $('#editCaseModal').modal('show');
 
+        // Fetch case details
         fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
             .then(response => response.json())
             .then(data => {
@@ -352,6 +490,26 @@
                     } else {
                         groupSelect.value = '';
                     }
+
+                    // Store original IDs for change detection
+                    originalGroupId = c.group_id || null;
+                    originalSubgroupId = c.subgroup_id || null;
+
+                    // Fetch subgroups if not loaded
+                    if (allSubgroups.length === 0) {
+                        fetchSubgroups().then(() => {
+                            populateSubgroups(c.group_id, c.subgroup_id);
+                        });
+                    } else {
+                        populateSubgroups(c.group_id, c.subgroup_id);
+                    }
+
+                    // Filter subgroups when group changes
+                    groupSelect.onchange = function() {
+                        const selectedGroupId = this.value;
+                        populateSubgroups(selectedGroupId, null);
+                    };
+
                 } else {
                     alert('Could not load case data for editing.');
                 }
@@ -367,10 +525,18 @@
         const customerName = document.getElementById('editCustomerName').value.trim();
         const issueDescription = document.getElementById('editIssueDescription').value.trim();
         const group = document.getElementById('editGroup').value;
+        const subgroup = document.getElementById('editSubgroup').value;
 
         if (!loanNumber || !customerName || !issueDescription) {
             alert('Please fill in all fields.');
             return;
+        }
+
+        // Optional: warn if group changed
+        if (originalGroupId && group && group != originalGroupId) {
+            if (!confirm('Changing the department will re‑assign the case to an available agent in that department. Continue?')) {
+                return;
+            }
         }
 
         if (!csrftoken) {
@@ -385,6 +551,9 @@
         };
         if (group) {
             payload.group = group;
+        }
+        if (subgroup) {
+            payload.subgroup = subgroup;
         }
 
         fetch(addAppParam(`/messaging2/case/${caseId}/edit/`), {
@@ -415,5 +584,31 @@
         .catch(error => {
             alert('Error: ' + error.message);
         });
+    }
+
+    // ─── CLOSE CASE (if needed) ──────────────────────────────────
+    function closeCase(caseId) {
+        if (!agentPermissions.can_close) {
+            alert('You do not have permission to close cases.');
+            return;
+        }
+        const reason = prompt("Enter reason for closing this case (optional):");
+        if (reason === null) return;
+
+        fetch(addAppParam(`/adminpanel/case/${caseId}/close/`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ close_reason: reason || "" })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Case closed successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => alert('Error: ' + err.message));
     }
 </script>

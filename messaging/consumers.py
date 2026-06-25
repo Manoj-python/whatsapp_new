@@ -13,6 +13,7 @@ from django.db import close_old_connections
 from django.db.models import Q, F
 from django.utils import timezone
 from django.core.cache import cache
+from django.db.models import Q, OuterRef, Subquery
 
 from .models import *
 from .utils import *
@@ -34,16 +35,31 @@ def ws_group_name(mobile: str) -> str:
 # Database Queries
 # -------------------------
 @sync_to_async
-def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, group_ids=None):
-    from .models import ChatContact, SmsWhatsAppLog, Case
-    from django.db.models import Q, OuterRef, Subquery
-    import re
+def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, group_ids=None,subgroup_ids=None):
+    """
+    For ESC2, ESC3, ESC4: returns a list of CASES (one per row) so that all cases are visible,
+    including duplicates for the same mobile.
+    For ESC1 and ESC5: returns a list of CONTACTS (unique mobiles) as before.
+    """
+    import re  # ensure re is imported
 
-    # ----- ESC2, ESC3, ESC4: show CASES (one per row) -----
+    # ----- ESC2, ESC3, ESC4: show CASES -----
     if level and level not in ['ESC1', 'ESC5']:
-        case_qs = Case.objects.filter(current_level=level)
-        if group_ids:
-            case_qs = case_qs.filter(group_id__in=group_ids)
+        # Start from the Case table
+        case_qs = Case.objects.filter(current_level=level).select_related('group', 'subgroup')
+
+        if group_ids or subgroup_ids:
+            if group_ids and subgroup_ids:
+                filter_q = Q(group_id__in=group_ids) & Q(subgroup_id__in=subgroup_ids)
+            elif group_ids:
+                filter_q = Q(group_id__in=group_ids)
+            else:
+                filter_q = Q(subgroup_id__in=subgroup_ids)
+            case_qs = case_qs.filter(filter_q)
+        else:
+            # If user has no groups/subgroups, return nothing (they can't see anything)
+            case_qs = case_qs.none()
+        case_qs = case_qs.exclude(status='Closed')
 
         # Search: by case_id, mobile, customer_name
         if q:
@@ -51,10 +67,12 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
             digits = re.sub(r"\D", "", raw_q)
             filters = Q()
             if digits:
-                filters |= Q(mobile__startswith=digits)|Q(mobile__icontains=digits)
+                filters |= Q(mobile__icontains=digits)
+            
             filters |= Q(case_id__icontains=raw_q) | Q(customer_name__icontains=raw_q)
             case_qs = case_qs.filter(filters)
 
+        # Order: high priority first, then newest
         case_qs = case_qs.order_by('-created_at')
 
         total = case_qs.count()
@@ -64,6 +82,7 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
 
         contacts = []
         for case in cases:
+            # Get ChatContact2 for this mobile (if exists)
             cc = ChatContact.objects.filter(mobile=case.mobile).first()
             last_msg = cc.last_msg if cc else "No messages yet"
             unread = cc.unread if cc else 0
@@ -71,7 +90,7 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
 
             contacts.append({
                 "mobile": case.mobile,
-                "case_id": case.case_id,
+                "case_id": case.case_id,                    # new field
                 "customer_name": case.customer_name or "",
                 "last_msg": last_msg,
                 "last_type": "Case",
@@ -80,10 +99,12 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
                 "last_time": last_time.isoformat() if last_time else None,
                 "current_level": case.current_level,
                 "group_name": case.group.name if case.group else "",
-                "is_case": True,
+                "subgroup_name": case.subgroup.name if case.subgroup else "",
+                "is_case": True,                            # flag for frontend
             })
 
         total_pages = (total + size - 1) // size if total > 0 else 1
+        # Unread count not used for ESC2/3/4 (return 0)
         return {
             "contacts": contacts,
             "total_pages": total_pages,
@@ -93,16 +114,21 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
             "unread_count": 0
         }
 
-    # ----- ESC1 and ESC5: show CONTACTS (optimized search) -----
+    # ----- ESC1 and ESC5: show CONTACTS (unchanged logic) -----
+    # Subquery to get the latest case for each mobile
     latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
+    # Annotate group_id and group_name
     qs = ChatContact.objects.annotate(
         latest_group_id=Subquery(latest_case.values('group_id')[:1]),
-        latest_group_name=Subquery(latest_case.values('group__name')[:1])
+        latest_group_name=Subquery(latest_case.values('group__name')[:1]),
+        latest_subgroup_name=Subquery(latest_case.values('subgroup__name')[:1])
     )
 
+    # Apply level filter (based on current_level on ChatContact2)
     if level and level != 'ESC1':
         qs = qs.filter(current_level=level)
 
+    # Apply unread/assigned filters
     if filter_type == "unread":
         qs = qs.filter(unread__gt=0)
         qs = qs.exclude(last_msg__icontains="No messages yet")
@@ -113,43 +139,41 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
             qs = qs.filter(current_level=level)
         qs = qs.exclude(last_msg__icontains="No messages yet")
 
-    # 🔥 OPTIMIZED SEARCH FILTER (no subquery)
+    # Search filter (mobile, last_msg, and group name from annotation)
     if q:
         raw_q = q.strip()
         digits = re.sub(r"\D", "", raw_q)
         filters = Q()
-
-        # Mobile: startswith if query starts with a digit (indexed)
         if digits:
-            if raw_q[0].isdigit():
-                filters |= Q(mobile__startswith=digits)
-            else:
-                filters |= Q(mobile__icontains=digits)
-
-        # last_msg: icontains (consider FULLTEXT for large data)
+            filters |= Q(mobile__icontains=digits)
         filters |= Q(last_msg__icontains=raw_q)
-
-        # ❌ REMOVED: filters |= Q(latest_group_name__icontains=raw_q)  # kills performance
-
+        # Also search in the annotated group name
+        filters |= Q(latest_group_name__icontains=raw_q)
         qs = qs.filter(filters)
 
+    # Group filter (if user is non‑agent and non‑admin)
     if group_ids and level and level != 'ESC1' and level != 'ESC5':
         qs = qs.filter(latest_group_id__in=group_ids)
 
+    # Order by last_time DESC (already indexed)
     qs = qs.order_by('-last_time')
 
+    # Paginate in the database
     total = qs.count()
     start = (page - 1) * size
     end = start + size
     contacts_qs = qs[start:end]
 
+    # Build the contact list (only paginated contacts, no extra queries)
     contacts = []
     for c in contacts_qs:
         last_msg = c.last_msg or ""
         if last_msg == "" or last_msg == "No messages yet":
+            # Only fetch latest message if needed (optional, but could be optimized further)
             latest_msg = SmsWhatsAppLog.objects.filter(mobile=c.mobile).order_by('-sent_at').first()
             if latest_msg:
                 last_msg = latest_msg.sent_text_message or "[Media]"
+                # Async update (optional, but fine)
                 ChatContact.objects.filter(mobile=c.mobile).update(last_msg=last_msg)
             else:
                 if filter_type == "unread":
@@ -165,10 +189,13 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
             "last_time": c.last_time.isoformat() if c.last_time else None,
             "current_level": c.current_level or "ESC1",
             "group_name": c.latest_group_name,
+            "subgroup_name":c.latest_subgroup_name
+            # No is_case flag – frontend will treat as contact
         })
 
     total_pages = (total + size - 1) // size if total > 0 else 1
 
+    # Unread count (only for agents/admins)
     unread_count = 0
     if not level or level in ['ESC1', 'ESC5']:
         unread_count = ChatContact.objects.filter(
@@ -186,8 +213,7 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
         "total": total,
         "has_more": page < total_pages,
         "unread_count": unread_count
-    }
-# messaging/consumers.py - Update get_messages_page_from_db function
+    }# messaging/consumers.py - Update get_messages_page_from_db function
 
 from datetime import datetime, timedelta
 from django.utils import timezone
@@ -531,6 +557,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             filter_type = content.get("filter", "all")
             level = None
             group_ids = None
+            subgroup_ids = None
 
         # Get the authenticated user from the WebSocket scope (requires AuthMiddlewareStack)
             user = self.scope.get("user")
@@ -541,18 +568,21 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     if agent.role == 'ADMIN':
                         level = None
                         group_ids = None
+                        subgroup_ids = None
                     else:
 
                         level = agent.level
                 # For non‑agent roles (MANAGER, HEAD, EXECUTIVE), fetch group IDs
                         if level != 'ESC1':
                             group_ids = await sync_to_async(lambda: list(agent.groups.values_list('id', flat=True)))()
+                            subgroup_ids = await sync_to_async(lambda: list(agent.subgroup.values_list('id', flat=True)))()
+
                 except Agent.DoesNotExist:
                     pass
             else:
             # Fallback: try session key (legacy)
                 session = self.scope.get("session", {})
-                user_id = session.get("messaging2_user")
+                user_id = session.get("messaging_user")
                 if user_id:
                     from django.contrib.auth.models import User
                     try:
@@ -561,11 +591,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                         if agent.role=='ADMIN':
                             level=None
                             group_ids=None
+                            subgroup_ids = None
                         else:
                             level = agent.level
     
                             if level != 'ESC1':
                                 group_ids = await sync_to_async(lambda: list(agent.groups.values_list('id', flat=True)))()
+                                subgroup_ids = await sync_to_async(lambda: list(agent.subgroup.values_list('id', flat=True)))()
+
                     except Exception:
                         pass
 
@@ -575,7 +608,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             q=q,
             filter_type=filter_type,
             level=level,
-            group_ids=group_ids   # ← now correctly passed
+            group_ids=group_ids,  # ← now correctly passed
+            subgroup_ids=subgroup_ids
         )
 
             if self.connection_active:

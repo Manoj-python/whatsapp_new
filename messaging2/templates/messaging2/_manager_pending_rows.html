@@ -1,38 +1,21 @@
 <!-- messaging2/templates/messaging2/_manager_pending_rows.html -->
 {% load static %}
-{% for case in pending_cases %}
-<tr class="case-row" data-case-id="{{ case.case_id }}">
-    <td>
-        <div class="fw-semibold">{{ case.case_id }}</div>
-        <div class="text-muted small">{{ case.customer_name|default:"—" }}</div>
-    </td>
+{% for case in cases %}
+<tr>
+    <td>{{ case.loan_number|default:"-" }}</td>
+    <td>{{ case.customer_name|default:case.mobile }}</td>
     <td>{{ case.mobile }}</td>
-    <td>{{ case.loan_number|default:"—" }}</td>
-    <td><span class="badge bg-secondary">{{ case.group.name|default:"—" }}</span></td>
-    <td>
-        {% if case.priority == "Urgent" %}
-            <span class="badge bg-danger">🔴 Urgent</span>
-        {% elif case.priority == "High" %}
-            <span class="badge bg-warning text-dark">🟠 High</span>
-        {% elif case.priority == "Medium" %}
-            <span class="badge bg-info text-dark">🟡 Medium</span>
-        {% else %}
-            <span class="badge bg-success">🟢 Low</span>
-        {% endif %}
-    </td>
+    <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+    <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+    <td>{{ case.issue_description|default:"-" }}</td>
+    <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
     <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
     <td>
-        <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
-        <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')"><i class="fas fa-check-circle"></i></button>
+        <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
         <button class="btn btn-sm btn-secondary" onclick="editCase('{{ case.case_id }}')"><i class="fas fa-edit"></i></button>
-                                    
-    </td>
-</tr>
-{% empty %}
-<tr>
-    <td colspan="7" class="text-center py-5 text-muted">
-        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
-        No pending cases at this level
+        <button class="btn btn-sm btn-info" onclick="showAssignModal('{{ case.case_id }}')"><i class="fas fa-user-check"></i></button>
+        <button class="btn btn-sm btn-warning" onclick="escalateCase('{{ case.case_id }}')"><i class="fas fa-arrow-up"></i></button>
+        <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check-circle"></i></button>
     </td>
 </tr>
 {% endfor %}

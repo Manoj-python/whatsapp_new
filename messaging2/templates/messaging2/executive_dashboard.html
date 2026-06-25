@@ -61,7 +61,7 @@
                                 <th>Customer</th>
                                 <th>Mobile</th>
                                 <th>Department</th>
-                                <th>Priority</th>
+                                <th>Subgroup</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -73,7 +73,7 @@
                                 <td>{{ case.customer_name|default:case.mobile }}</td>
                                 <td>{{ case.mobile }}</td>
                                 <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
-                                <td><span class="badge bg-{{ case.priority|lower }}">{{ case.priority }}</span></td>
+                                <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
                                 <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
@@ -82,7 +82,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="7" class="text-center">No pending ESC2 cases in your departments.</td></tr>
+                            <tr><td colspan="8" class="text-center">No pending ESC2 cases in your departments.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -102,6 +102,7 @@
                                 <th>Customer</th>
                                 <th>Loan No</th>
                                 <th>Department</th>
+                                <th>Subgroup</th>
                                 <th>Resolved By</th>
                                 <th>Resolved At</th>
                                 <th>Actions</th>
@@ -114,6 +115,7 @@
                                 <td>{{ case.customer_name|default:case.mobile }}</td>
                                 <td>{{ case.loan_number|default:"-" }}</td>
                                 <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
                                 <td>{{ case.resolved_by|default:"System" }}</td>
                                 <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
                                 <td>
@@ -122,7 +124,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="7" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
+                            <tr><td colspan="8" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -179,6 +181,15 @@
     </div>
 </div>
 
+<!-- ✅ STEP 1: Define JavaScript permissions BEFORE including modals -->
+<script>
+    var agentPermissions = {
+        can_edit: {{ agentPermissions.can_edit|yesno:"true,false" }},
+        can_resolve: {{ agentPermissions.can_resolve|yesno:"true,false" }},
+        can_close: {{ agentPermissions.can_close|yesno:"true,false" }}
+    };
+</script>
+
 <!-- Include modals (case details, escalate, resolve, edit) -->
 {% include "messaging2/_case_modals.html" %}
 
@@ -196,7 +207,16 @@
     });
 
     // ─── Close Case (Resolved tab) ───
+    // NOTE: This duplicates closeCase from the modal, but it's fine.
+    // The modal's closeCase is also guarded by agentPermissions.
+    // We can keep this or remove it – the modal version will work.
+    // If you keep this, ensure it uses the same addAppParam and csrftoken.
+    // Since csrftoken is already defined globally, no need to redeclare.
     function closeCase(caseId) {
+        if (!agentPermissions.can_close) {
+            alert('You do not have permission to close cases.');
+            return;
+        }
         const reason = prompt("Enter reason for closing this case (optional):");
         if (reason === null) return;
 
@@ -204,7 +224,7 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
+                'X-CSRFToken': csrftoken  // global variable from base template
             },
             body: JSON.stringify({ close_reason: reason || "" })
         })

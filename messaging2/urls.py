@@ -51,7 +51,7 @@ path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
     path('case/<str:case_id>/permissions/', views.get_case_action_permissions2, name='case_permissions'),
     path('case/by-mobile/', views.get_case_by_mobile2, name='get_case_by_mobile'),
     path('case/create-from-chat/', views.create_case_from_chat_api2, name='create_case_from_chat'),
-    
+    path('case/<str:case_id>/description-history/', views.get_description_history_api, name='get_description_history_api'),
     # ============================================
     # STATISTICS APIs
     # ============================================
@@ -61,6 +61,7 @@ path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
     path('case/<str:case_id>/edit/', edit_case_api, name='edit_case_api'),
 
     path('api/groups/', views.get_groups_api, name='get_groups_api'),
+    path('api/subgroups/', views.get_subgroups_api, name='get_subgroups_api'),
 
     path('manager-cases/', views.manager_cases_api, name='manager_cases_api'),
     path('head-cases/', views.head_cases_api, name='head_cases_api'),

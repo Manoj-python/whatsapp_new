@@ -1,158 +1,123 @@
 {% extends "adminpanel/base.html" %}
-{% load static %}
-
-{% block title %}Edit User | Case Management System{% endblock %}
-
-{% block extra_css %}
-<style>
-    .card {
-        border: none;
-        border-radius: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    }
-    .card-header {
-        background: linear-gradient(135deg, #4361ee, #3f37c9);
-        border-radius: 20px 20px 0 0 !important;
-        padding: 20px;
-    }
-    .form-label {
-        font-weight: 600;
-        color: #1a1a2e;
-    }
-    .form-control, .form-select {
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        padding: 10px 15px;
-    }
-    .form-control:focus, .form-select:focus {
-        border-color: #4361ee;
-        box-shadow: 0 0 0 0.2rem rgba(67,97,238,0.25);
-    }
-    .btn-primary {
-        background: linear-gradient(135deg, #4361ee, #3f37c9);
-        border: none;
-        border-radius: 10px;
-        padding: 10px 20px;
-        font-weight: 600;
-    }
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(67,97,238,0.4);
-    }
-    .info-box {
-        background: #f8f9fa;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 20px;
-    }
-</style>
-{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-7">
-            <div class="card">
-                <div class="card-header text-white">
-                    <h4 class="mb-0"><i class="fas fa-user-edit"></i> Edit User</h4>
-                </div>
-                <div class="card-body p-4">
-                    <div class="text-center mb-3">
-                        <span class="badge bg-secondary">Editing: {{ user.username }}</span>
-                    </div>
-
-                    <form method="POST" novalidate>
-                        {% csrf_token %}
-
-                        <div class="mb-3">
-                            <label for="username" class="form-label">Username *</label>
-                            <input type="text" class="form-control" id="username" name="username" 
-                                   value="{{ user.username }}" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="password" class="form-label">New Password</label>
-                            <input type="password" class="form-control" id="password" name="password" 
-                                   placeholder="Leave blank to keep current password">
-                            <div class="form-text">Only enter if you want to change the password.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="email" name="email" 
-                                   value="{{ user.email }}">
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Full Name (Display Name)</label>
-                            <input type="text" class="form-control" id="name" name="name" 
-                                   value="{{ user_agent.name|default:'' }}" placeholder="e.g., John Doe">
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="mobile" class="form-label">Mobile Number</label>
-                            <input type="tel" class="form-control" id="mobile" name="mobile" 
-                                   value="{{ user_agent.mobile|default:'' }}" placeholder="+91XXXXXXXXXX">
-                        </div>
-
-                         <select name="role">
-        {% for val, label in role_choices %}
-            <option value="{{ val }}"
-                {% if user_agent.role == val %}selected{% endif %}>
-                {{ label }}
-            </option>
-        {% endfor %}
-    </select>
-
-    <!-- ✅ MULTI SELECT WITH PRESELECT -->
-    <label>Groups</label>
-    <select name="groups" multiple>
-        {% for group in groups %}
-            <option value="{{ group.id }}"
-                {% if user_agent and group in user_agent.groups.all %}
-                    selected
-                {% endif %}
-            >
-                {{ group.name }}
-            </option>
-        {% endfor %}
-    </select>
-
-                        <!-- Current info summary -->
-                        <div class="info-box">
-                            <h6 class="mb-2"><i class="fas fa-chart-line"></i> Current Information</h6>
-                            <div class="row">
-                                <div class="col-6">
-                                    <small class="text-muted">Current Role</small><br>
-                                    <strong>
-                                        {% if user_agent %}
-                                            {{ user_agent.get_role_display }}
-                                        {% else %}
-                                            Not assigned
-                                        {% endif %}
-                                    </strong>
-                                </div>
-                                <div class="col-6">
-                                    <small class="text-muted">Cases Handled</small><br>
-                                    <strong>{{ user_agent.total_cases_handled|default:"0" }}</strong>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="d-flex justify-content-between gap-2">
-                            <a href="{% url 'admin_user_list' %}" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left"></i> Cancel
-                            </a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Update User
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+<div class="container mt-4">
+    <h2>Edit User: {{ user.username }}</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label>Username</label>
+            <input type="text" name="username" class="form-control" value="{{ user.username }}" required>
         </div>
+        <div class="mb-3">
+            <label>Password (leave blank to keep current)</label>
+            <input type="password" name="password" class="form-control">
+        </div>
+        <div class="mb-3">
+            <label>Email</label>
+            <input type="email" name="email" class="form-control" value="{{ user.email }}">
+        </div>
+        <div class="mb-3">
+            <label>Display Name</label>
+            <input type="text" name="name" class="form-control" value="{{ user_agent.name|default:'' }}">
+        </div>
+        <div class="mb-3">
+            <label>Mobile</label>
+            <input type="text" name="mobile" class="form-control" value="{{ user_agent.mobile|default:'' }}">
+        </div>
+        <div class="mb-3">
+            <label>Role</label>
+            <select name="role" class="form-select">
+                {% for value, label in role_choices %}
+                    <option value="{{ value }}" {% if user_agent and user_agent.role == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Groups (always visible) -->
+        <div class="mb-3">
+            <label>Groups (Departments)</label>
+            <select name="groups" id="groupsSelect" multiple class="form-select" size="4">
+                {% for group in groups %}
+                    <option value="{{ group.id }}" {% if user_agent and group in user_agent.groups.all %}selected{% endif %}>
+                        {{ group.name }}
+                    </option>
+                {% endfor %}
+            </select>
+            <div class="form-text">Hold Ctrl/Cmd to select multiple</div>
+        </div>
+
+        <!-- Subgroups (filtered by selected groups) -->
+        <div class="mb-3">
+            <label>Subgroups</label>
+            <select name="subgroups" id="subgroupsSelect" multiple class="form-select" size="4">
+                {% for subgroup in subgroups %}
+                    <option value="{{ subgroup.id }}" data-parent-group="{{ subgroup.group.name }}"
+                        {% if user_agent and subgroup in user_agent.subgroup.all %}selected{% endif %}>
+                        {{ subgroup.name }} ({{ subgroup.group.name }})
+                    </option>
+                {% endfor %}
+            </select>
+            <div class="form-text">Hold Ctrl/Cmd to select multiple. Only subgroups of selected groups will appear.</div>
+        </div>
+
+        <!-- Permissions Section -->
+<div class="mb-3">
+    <label class="form-label"><i class="fas fa-lock"></i> Permissions</label>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="can_edit" id="canEdit" {% if user_agent and user_agent.can_edit %}checked{% endif %}>
+        <label class="form-check-label" for="canEdit">Can Edit Cases</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="can_resolve" id="canResolve" {% if user_agent and user_agent.can_resolve %}checked{% endif %}>
+        <label class="form-check-label" for="canResolve">Can Resolve Cases</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="can_close" id="canClose" {% if user_agent and user_agent.can_close %}checked{% endif %}>
+        <label class="form-check-label" for="canClose">Can Close Cases</label>
     </div>
 </div>
+
+        <button type="submit" class="btn btn-primary">Update</button>
+        <a href="{% url 'admin_user_list' %}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const groupsSelect = document.getElementById('groupsSelect');
+        const subgroupsSelect = document.getElementById('subgroupsSelect');
+        const subgroupOptions = subgroupsSelect.querySelectorAll('option');
+
+        function filterSubgroups() {
+            const selectedGroupNames = [];
+            for (let opt of groupsSelect.selectedOptions) {
+                selectedGroupNames.push(opt.textContent.trim());
+            }
+
+            if (selectedGroupNames.length === 0) {
+                subgroupOptions.forEach(opt => {
+                    opt.style.display = 'none';
+                    opt.selected = false;
+                });
+                return;
+            }
+
+            subgroupOptions.forEach(opt => {
+                const parentGroup = opt.dataset.parentGroup.trim();
+                if (selectedGroupNames.includes(parentGroup)) {
+                    opt.style.display = '';
+                } else {
+                    opt.style.display = 'none';
+                    opt.selected = false;
+                }
+            });
+        }
+
+        groupsSelect.addEventListener('change', filterSubgroups);
+        filterSubgroups(); // Run initial filter
+    });
+</script>
 {% endblock %}
-
-

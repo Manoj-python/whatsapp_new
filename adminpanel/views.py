@@ -129,6 +129,8 @@ from messaging2.views import auto_assign
 import uuid 
 
 
+from adminpanel.models import SupportGroup, Subgroup  # ensure this import exists
+
 @csrf_exempt
 def create_case_from_chat_api2(request):
     if request.method != 'POST':
@@ -152,7 +154,9 @@ def create_case_from_chat_api2(request):
         agent_name = data.get('agent_name', 'Agent')
         issue_description = data.get('issue_description', '')
         loan_number = data.get('loan_number', '')
+        vehicle_number = data.get('vehicle_no', '')   # optional
         group_name = data.get('group', 'Collections')
+        subgroup_id = data.get('subgroup_id', None)   # NEW
         escalate_to = data.get('escalate_to', None)
         force_new = data.get('force_new', False)
 
@@ -160,6 +164,18 @@ def create_case_from_chat_api2(request):
         if not group_obj:
             return JsonResponse({'error': 'Invalid group'}, status=400)
 
+        # ─── Handle subgroup ────────────────────────────────────────────
+        subgroup_obj = None
+        if subgroup_id:
+            try:
+                subgroup_obj = Subgroup.objects.get(id=subgroup_id)
+                # Validate that subgroup belongs to the selected group
+                if subgroup_obj.group != group_obj:
+                    return JsonResponse({'error': 'Subgroup does not belong to the selected group'}, status=400)
+            except Subgroup.DoesNotExist:
+                return JsonResponse({'error': 'Invalid subgroup ID'}, status=400)
+
+        # ─── Check existing active case ────────────────────────────────
         if not force_new:
             existing_case = CaseModel.objects.filter(
                 mobile=mobile,
@@ -189,6 +205,7 @@ def create_case_from_chat_api2(request):
             customer_name=customer_name,
             mobile=mobile,
             loan_number=loan_number,
+            vehicle_number=vehicle_number,   # added
             issue_description=issue_description[:500],
             source='WhatsApp',
             current_level=initial_level,
@@ -196,17 +213,18 @@ def create_case_from_chat_api2(request):
             priority='Medium',
             created_by=agent_name,
             group=group_obj,
+            subgroup=subgroup_obj,           # NEW
             assigned_to=None,
             assigned_to_name=None,
         )
 
+        # ─── Assignment & Escalation Logic ────────────────────────────
         if initial_level == 'ESC1':
             auto_assign(case)
             if case.assigned_to:
                 case.assigned_to_name = case.assigned_to.name
                 case.save(update_fields=['assigned_to_name'])
         else:
-            # ✅ Use reverse relation – no import needed
             case.escalation_logs.create(
                 from_level='ESC1',
                 to_level=initial_level,
@@ -229,9 +247,11 @@ def create_case_from_chat_api2(request):
                 'case_id': case.case_id,
                 'customer_name': case.customer_name,
                 'loan_number': case.loan_number,
+                'vehicle_number': case.vehicle_number,   # optional
                 'assigned_to_name': case.assigned_to_name or 'Unassigned',
                 'current_level': case.current_level,
                 'status': case.status,
+                'subgroup_name': case.subgroup.name if case.subgroup else None,   # NEW
             },
             'existing': False
         })
@@ -276,7 +296,6 @@ def logout_view(request):
 
 
 # views.py
-
 @login_required
 def create_group(request):
     agent = get_agent_from_user(request.user)
@@ -286,16 +305,170 @@ def create_group(request):
         return redirect('agent_dashboard')
 
     if request.method == "POST":
-        name = request.POST.get('name')
+        name = request.POST.get('name').strip()
+        if not name:
+            messages.error(request, "Group name is required")
+            return redirect('manage_groups')
 
-        if SupportGroup.objects.filter(name=name).exists():
-            messages.error(request, "Group already exists")
+        if SupportGroup.objects.filter(name__iexact=name).exists():
+            messages.error(request, f"Group '{name}' already exists")
         else:
             SupportGroup.objects.create(name=name)
-            messages.success(request, "Group created successfully")
-            return HttpResponse('created')
+            messages.success(request, f"Group '{name}' created successfully")
+        return redirect('manage_groups')
 
     return render(request, 'adminpanel/create_group.html')
+
+
+@login_required
+def create_subgroup(request):
+    agent = get_agent_from_user(request.user)
+
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('agent_dashboard')
+
+    groups = SupportGroup.objects.all().order_by('name')
+
+    if request.method == "POST":
+        name = request.POST.get('name', '').strip()
+        group_id = request.POST.get('group')
+
+        if not name:
+            messages.error(request, "Subgroup name is required")
+            return redirect('manage_groups')
+
+        if not group_id:
+            messages.error(request, "Please select a parent group")
+            return redirect('manage_groups')
+
+        try:
+            parent_group = SupportGroup.objects.get(id=group_id)
+        except SupportGroup.DoesNotExist:
+            messages.error(request, "Selected group does not exist")
+            return redirect('manage_groups')
+
+        if Subgroup.objects.filter(name__iexact=name, group=parent_group).exists():
+            messages.error(request, f"A subgroup named '{name}' already exists under group '{parent_group.name}'")
+        else:
+            Subgroup.objects.create(name=name, group=parent_group)
+            messages.success(request, f"Subgroup '{name}' created under group '{parent_group.name}'")
+
+        return redirect('manage_groups')
+
+    return render(request, 'adminpanel/create_subgroup.html', {'groups': groups})
+
+@login_required
+def manage_groups_subgroups(request):
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('agent_dashboard')
+
+    all_groups = SupportGroup.objects.prefetch_related('subgroup_set').order_by('name')
+    return render(request, 'adminpanel/manage_group.html', {
+        'groups': all_groups,
+        'current_agent': agent,
+    })
+
+
+@login_required
+def edit_group(request, group_id):
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('manage_groups')
+
+    group = get_object_or_404(SupportGroup, id=group_id)
+
+    if request.method == "POST":
+        new_name = request.POST.get('name', '').strip()
+        if not new_name:
+            messages.error(request, "Group name is required")
+            return redirect('manage_groups')
+
+        # Check duplicate (case-insensitive, exclude current)
+        if SupportGroup.objects.filter(name__iexact=new_name).exclude(id=group.id).exists():
+            messages.error(request, f"A group named '{new_name}' already exists")
+        else:
+            group.name = new_name
+            group.save()
+            messages.success(request, f"Group updated to '{new_name}'")
+        return redirect('manage_groups')
+
+    # GET: return modal content or rendered form (we'll handle via modal)
+    return render(request, 'adminpanel/edit_group_modal.html', {'group': group})
+
+
+@login_required
+def delete_group(request, group_id):
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('manage_groups')
+
+    group = get_object_or_404(SupportGroup, id=group_id)
+    if group.subgroup_set.exists():
+        messages.error(request, f"Cannot delete group '{group.name}' because it has subgroups. Delete subgroups first.")
+    else:
+        group_name = group.name
+        group.delete()
+        messages.success(request, f"Group '{group_name}' deleted successfully")
+    return redirect('manage_groups')
+
+
+@login_required
+def edit_subgroup(request, subgroup_id):
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('manage_groups')
+
+    subgroup = get_object_or_404(Subgroup, id=subgroup_id)
+    groups = SupportGroup.objects.all().order_by('name')
+
+    if request.method == "POST":
+        new_name = request.POST.get('name', '').strip()
+        new_group_id = request.POST.get('group')
+        if not new_name:
+            messages.error(request, "Subgroup name is required")
+            return redirect('manage_groups')
+        if not new_group_id:
+            messages.error(request, "Parent group is required")
+            return redirect('manage_groups')
+
+        try:
+            parent_group = SupportGroup.objects.get(id=new_group_id)
+        except SupportGroup.DoesNotExist:
+            messages.error(request, "Selected group does not exist")
+            return redirect('manage_groups')
+
+        # Check duplicate within the same group (exclude current)
+        if Subgroup.objects.filter(name__iexact=new_name, group=parent_group).exclude(id=subgroup.id).exists():
+            messages.error(request, f"A subgroup named '{new_name}' already exists under group '{parent_group.name}'")
+        else:
+            subgroup.name = new_name
+            subgroup.group = parent_group
+            subgroup.save()
+            messages.success(request, f"Subgroup updated to '{new_name}' under '{parent_group.name}'")
+        return redirect('manage_groups')
+
+    return render(request, 'adminpanel/edit_subgroup_modal.html', {'subgroup': subgroup, 'groups': groups})
+
+
+@login_required
+def delete_subgroup(request, subgroup_id):
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('manage_groups')
+
+    subgroup = get_object_or_404(Subgroup, id=subgroup_id)
+    subgroup_name = subgroup.name
+    group_name = subgroup.group.name
+    subgroup.delete()
+    messages.success(request, f"Subgroup '{subgroup_name}' (under '{group_name}') deleted successfully")
+    return redirect('manage_groups')
 
 
 # ============================================
@@ -309,7 +482,7 @@ def dashboard(request):
             return redirect('manager_dashboard')
         elif agent.role == 'HEAD':
             return redirect('head_dashboard')
-        elif agent.role == 'EXCUTIVE':
+        elif agent.role == 'EXECUTIVE':
             return redirect('executive_dashboard')
         else:
             return redirect('agent_dashboard')
@@ -342,6 +515,17 @@ def dashboard(request):
             user_agent = None
         users_with_agents.append({'user': user, 'agent': user_agent})
     all_groups = SupportGroup.objects.all().order_by('name')
+    # ✅ Add all_subgroups
+    all_subgroups_qs = Subgroup.objects.select_related('group').order_by('group__name', 'name')
+    all_subgroups_json = json.dumps([
+        {
+            'id': s.id,
+            'name': s.name,
+            'group_name': s.group.name,
+            'group_id': s.group.id,
+        }
+        for s in all_subgroups_qs
+    ])
 
     context = {
         'users': users,
@@ -351,7 +535,9 @@ def dashboard(request):
         'current_app': app_key,
         'app_name': cfg['name'],
         'app_list': [(key, cfg['name']) for key, cfg in APP_CONFIG.items()],
-        'all_groups':all_groups
+        'all_groups': all_groups,
+        'all_subgroups_queryset': all_subgroups_qs,
+        'all_subgroups_json': all_subgroups_json,
     }
     return render(request, 'adminpanel/dashboard.html', context)
 
@@ -404,11 +590,12 @@ def get_department_stats_api(request):
 
 from django.db.models import Count
 
+
 @login_required
 def get_filtered_cases_api(request):
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
-    queryset = CaseModel.objects.select_related('group').all().order_by('-created_at')
+    queryset = CaseModel.objects.select_related('group', 'subgroup').all().order_by('-created_at')  # ✅ add subgroup
 
     status = request.GET.get('status')
     status_in = request.GET.get('status__in')
@@ -426,6 +613,11 @@ def get_filtered_cases_api(request):
     if department and department != 'all':
         queryset = queryset.filter(group__name=department)
 
+    # ✅ Subgroup filter
+    subgroup = request.GET.get('subgroup')
+    if subgroup and subgroup != 'all':
+        queryset = queryset.filter(subgroup_id=subgroup)
+
     # Department counts for the filtered queryset
     dept_counts = queryset.values('group__name').annotate(count=Count('id')).order_by('-count')
     department_counts = [{'name': item['group__name'], 'count': item['count']} for item in dept_counts]
@@ -438,6 +630,7 @@ def get_filtered_cases_api(request):
         'mobile': c.mobile,
         'loan_number': c.loan_number,
         'group_name': c.group.name if c.group else None,
+        'subgroup_name': c.subgroup.name if c.subgroup else None,  # ✅ NEW
         'priority': c.priority,
         'current_level': c.current_level,
         'status': c.status,
@@ -623,6 +816,7 @@ def get_case_detail_api(request, case_id):
             'status': case.status,
             'priority': case.priority,
             'loan_number': case.loan_number,
+            'vehicle_number':case.vehicle_number,
             'assigned_to_name': case.assigned_to_name,
             'created_by': case.created_by,
             'created_at': timezone.localtime(case.created_at).isoformat(),
@@ -635,6 +829,9 @@ def get_case_detail_api(request, case_id):
             'reopen_count': case.reopen_count,
             'group_name': case.group.name if case.group else None,
             'group_id': case.group.id if case.group else None, 
+            'subgroup_name':case.subgroup.name if case.subgroup else None,
+            'subgroup_id': case.subgroup.id if case.subgroup else None, 
+
         }
     })
 
@@ -646,6 +843,12 @@ from messaging2.tasks import send_ticket_close_message
 @require_http_methods(["POST"])
 def close_case_api(request, case_id):
     agent = get_agent_from_user(request.user)
+    if not agent.has_close_permission():
+        return JsonResponse(
+                {'error': 'You do not have permission to close cases'},
+                status=403
+            )
+
     # if agent.role not in ['ADMIN', 'MANAGER']:
     #     return JsonResponse({'error': 'Only Admin and Manager can close cases'}, status=403)
 
@@ -748,6 +951,12 @@ def resolve_case_api(request, case_id):
         CaseModel, ContactModel, _, channel_group = get_models_for_app(request)
 
         agent = get_agent_from_user(request.user)
+        if not agent.has_resolve_permission():
+            return JsonResponse(
+                {'error': 'You do not have permission to resolve cases'},
+                status=403
+            )
+
         case = CaseModel.objects.get(case_id=case_id)
 
         if case.status in ['Resolved', 'Closed']:
@@ -833,19 +1042,27 @@ def get_case_timeline_api(request, case_id):
         } for log in logs]
     })
 
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def edit_case_api(request, case_id):
     agent = get_agent_from_user(request.user)
-    # if agent.role != 'ADMIN':
-    #     return JsonResponse({'error': 'Only Admin can edit cases'}, status=403)
+    if not agent.has_edit_permission():
+        return JsonResponse({'error': 'You do not have permission to edit cases'}, status=403)
 
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
     case = get_object_or_404(CaseModel, case_id=case_id)
     data = json.loads(request.body)
 
+    # ─── Detect description change ──────────────────────────────
+    old_description = case.issue_description
+    description_changed = False
+    new_description_value = None
+    if 'issue_description' in data and data['issue_description'] != old_description:
+        description_changed = True
+        new_description_value = data['issue_description']
+
+    # ─── Metadata fields ──────────────────────────────────────────
     if 'loan_number' in data:
         case.loan_number = data['loan_number']
     if 'customer_name' in data:
@@ -853,24 +1070,60 @@ def edit_case_api(request, case_id):
     if 'issue_description' in data:
         case.issue_description = data['issue_description']
 
-    # Group field update (only if provided)
+    # ─── Group change ─────────────────────────────────────────────
+    group_changed = False
     if 'group' in data:
         group_val = data['group']
         group_obj = None
-        if group_val:  # skip if empty/null
-            if isinstance(group_val, int) or (isinstance(group_val, str) and group_val.isdigit()):
-                group_obj = SupportGroup.objects.filter(id=int(group_val)).first()
-            elif isinstance(group_val, str):
-                group_obj = SupportGroup.objects.filter(name=group_val).first()
-            if group_obj:
-                case.group = group_obj
-            else:
-                return JsonResponse({'error': 'Invalid group specified'}, status=400)
-        # else: keep existing group (do nothing)
+        if isinstance(group_val, int) or (isinstance(group_val, str) and group_val.isdigit()):
+            group_obj = SupportGroup.objects.filter(id=int(group_val)).first()
+        elif isinstance(group_val, str):
+            group_obj = SupportGroup.objects.filter(name=group_val).first()
+        if group_obj:
+            if case.group != group_obj:
+                group_changed = True
+            case.group = group_obj
+        else:
+            return JsonResponse({'error': 'Invalid group specified'}, status=400)
 
-    # No level update – we don't check for 'current_level'
+    # ─── Subgroup change ──────────────────────────────────────────
+    if 'subgroup' in data:
+        subgroup_val = data['subgroup']
+        if subgroup_val:
+            try:
+                subgroup_obj = Subgroup.objects.get(id=int(subgroup_val))
+                if case.group and subgroup_obj.group != case.group:
+                    return JsonResponse({'error': 'Subgroup does not belong to the selected group'}, status=400)
+                case.subgroup = subgroup_obj
+            except (ValueError, Subgroup.DoesNotExist):
+                return JsonResponse({'error': 'Invalid subgroup ID'}, status=400)
+        else:
+            case.subgroup = None
+
+    # ─── If group changed, reassign ──────────────────────────────
+    if group_changed:
+        from messaging2.views import auto_assign
+        auto_assign(case)
+        case.assigned_to_name = case.assigned_to.name if case.assigned_to else None
+
+    # ─── Save the case (so current_level is final) ──────────────
     case.save()
+
+    # ─── If description changed, create a log AFTER save ──────────
+    if description_changed:
+        from messaging2.models import CaseDescriptionLog
+        CaseDescriptionLog.objects.create(
+            case=case,
+            previous_description=old_description or "",
+            new_description=new_description_value,
+            changed_by=agent.name or "Unknown",
+            changed_by_role=agent.role,
+            level=case.current_level,  # now the saved level
+        )
+
     return JsonResponse({'success': True, 'message': 'Case updated'})
+
+
 # ============================================
 # UNIFIED FAILED MESSAGES (supports ?app=...)
 # ============================================
@@ -956,53 +1209,81 @@ def user_create(request):
         messages.error(request, "Access denied. Admin only.")
         return redirect('agent_dashboard')
 
-    groups = SupportGroup.objects.all()
+    groups = SupportGroup.objects.all().order_by('name')
+    subgroups = Subgroup.objects.all().order_by('name')
 
     if request.method == "POST":
-        username = request.POST['username']
-        password = request.POST['password']
+        username = request.POST.get('username')
+        password = request.POST.get('password')
         email = request.POST.get('email', '')
         role = request.POST.get('role', 'AGENT')
         mobile = request.POST.get('mobile', '')
         display_name = request.POST.get('name', '')
 
-        selected_groups = request.POST.getlist('groups')  # ✅ MULTI SELECT
+        selected_groups = request.POST.getlist('groups')
+        selected_subgroups = request.POST.getlist('subgroups')
+
+        # ─── New permission flags ───────────────────────────────
+        can_edit = request.POST.get('can_edit') == 'on'
+        can_resolve = request.POST.get('can_resolve') == 'on'
+        can_close = request.POST.get('can_close') == 'on'
+
+        # --- Server-side validation for subgroups ---
+        if selected_groups:
+            allowed_subgroup_ids = Subgroup.objects.filter(
+                group__id__in=selected_groups
+            ).values_list('id', flat=True)
+            
+            selected_subgroup_ids = [int(sid) for sid in selected_subgroups if sid.isdigit()]
+            invalid_subgroups = set(selected_subgroup_ids) - set(allowed_subgroup_ids)
+            
+            if invalid_subgroups:
+                selected_subgroups = [str(sid) for sid in selected_subgroup_ids if sid in allowed_subgroup_ids]
+                messages.warning(request, "Some invalid subgroups were removed because they don't belong to any selected group.")
+        else:
+            if selected_subgroups:
+                messages.error(request, "You must select at least one group to assign subgroups.")
+                selected_subgroups = []
 
         if User.objects.filter(username=username).exists():
             messages.error(request, "Username already exists")
-        else:
-            with transaction.atomic():
+            return render(request, 'adminpanel/user_create.html', {
+                'role_choices': Agent.ROLE_CHOICES,
+                'groups': groups,
+                'subgroups': subgroups,
+            })
 
-                is_staff = role in ['ADMIN', 'MANAGER']
+        with transaction.atomic():
+            is_staff = role in ['ADMIN', 'MANAGER']
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=email,
+                is_staff=is_staff,
+            )
 
-                user = User.objects.create_user(
-                    username=username,
-                    password=password,
-                    email=email,
-                    is_staff=is_staff,
-                    # selected_groups=groups
-                    
-                )
+            agent_obj = Agent.objects.create(
+                user=user,
+                agent_id=f"AGT-{user.id}",
+                name=display_name or username,
+                email=email,
+                mobile=mobile,
+                role=role,
+                can_edit=can_edit,
+                can_resolve=can_resolve,
+                can_close=can_close,
+            )
 
-                agent_obj = Agent.objects.create(
-                    user=user,
-                    agent_id=f"AGT-{user.id}",
-                    name=display_name or username,
-                    email=email,
-                    mobile=mobile,
-                    role=role,
-                    # groups=selected_groups
-                )
+            agent_obj.groups.set(selected_groups)
+            agent_obj.subgroup.set(selected_subgroups)
 
-                # ✅ ASSIGN MULTIPLE GROUPS
-                agent_obj.groups.set(selected_groups)
-
-                messages.success(request, f"User '{username}' created successfully")
-                return redirect('admin_user_list')
+            messages.success(request, f"User '{username}' created successfully")
+            return redirect('admin_user_list')
 
     return render(request, 'adminpanel/user_create.html', {
         'role_choices': Agent.ROLE_CHOICES,
-        'groups': groups
+        'groups': groups,
+        'subgroups': subgroups,
     })
 
 @login_required
@@ -1016,26 +1297,48 @@ def user_edit(request, user_id):
     user = get_object_or_404(User, id=user_id)
     user_agent = Agent.objects.filter(user=user).first()
 
-    groups = SupportGroup.objects.all()  # ✅ IMPORTANT
+    groups = SupportGroup.objects.all().order_by('name')
+    subgroups = Subgroup.objects.all().order_by('name')
 
     if request.method == "POST":
-        username = request.POST['username']
+        username = request.POST.get('username')
         email = request.POST.get('email', '')
         role = request.POST.get('role', 'AGENT')
         mobile = request.POST.get('mobile', '')
         display_name = request.POST.get('name', '')
 
-        selected_groups = request.POST.getlist('groups')  # ✅ IMPORTANT
+        selected_groups = request.POST.getlist('groups')
+        selected_subgroups = request.POST.getlist('subgroups')
+
+        # ─── New permission flags ───────────────────────────────
+        can_edit = request.POST.get('can_edit') == 'on'
+        can_resolve = request.POST.get('can_resolve') == 'on'
+        can_close = request.POST.get('can_close') == 'on'
+
+        # --- Server-side validation for subgroups ---
+        if selected_groups:
+            allowed_subgroup_ids = Subgroup.objects.filter(
+                group__id__in=selected_groups
+            ).values_list('id', flat=True)
+            
+            selected_subgroup_ids = [int(sid) for sid in selected_subgroups if sid.isdigit()]
+            invalid_subgroups = set(selected_subgroup_ids) - set(allowed_subgroup_ids)
+            
+            if invalid_subgroups:
+                selected_subgroups = [str(sid) for sid in selected_subgroup_ids if sid in allowed_subgroup_ids]
+                messages.warning(request, "Some invalid subgroups were removed because they don't belong to any selected group.")
+        else:
+            if selected_subgroups:
+                messages.error(request, "You must select at least one group to assign subgroups.")
+                selected_subgroups = []
 
         # Update user
         user.username = username
         user.email = email
         user.is_staff = role in ['ADMIN', 'MANAGER']
-
         pwd = request.POST.get('password')
         if pwd:
             user.set_password(pwd)
-
         user.save()
 
         # Update agent
@@ -1044,11 +1347,12 @@ def user_edit(request, user_id):
             user_agent.name = display_name or username
             user_agent.email = email
             user_agent.mobile = mobile
+            user_agent.can_edit = can_edit
+            user_agent.can_resolve = can_resolve
+            user_agent.can_close = can_close
             user_agent.save()
-
-            # ✅ UPDATE GROUPS
             user_agent.groups.set(selected_groups)
-
+            user_agent.subgroup.set(selected_subgroups)
         else:
             user_agent = Agent.objects.create(
                 user=user,
@@ -1057,21 +1361,24 @@ def user_edit(request, user_id):
                 email=email,
                 mobile=mobile,
                 role=role,
-                is_active=True
+                is_active=True,
+                can_edit=can_edit,
+                can_resolve=can_resolve,
+                can_close=can_close,
             )
-
             user_agent.groups.set(selected_groups)
+            user_agent.subgroup.set(selected_subgroups)
 
-        messages.success(request, "User updated")
+        messages.success(request, "User updated successfully")
         return redirect('admin_user_list')
 
     return render(request, 'adminpanel/user_edit.html', {
         'user': user,
         'user_agent': user_agent,
         'role_choices': Agent.ROLE_CHOICES,
-        'groups': groups  # ✅ IMPORTANT
+        'groups': groups,
+        'subgroups': subgroups,
     })
-
 
 @login_required
 def user_delete(request, user_id):

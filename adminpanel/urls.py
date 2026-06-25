@@ -11,8 +11,12 @@ urlpatterns = [
     path('login/', views.login_view, name='admin_login'),
     path('logout/', views.logout_view, name='admin_logout'),
     path('create-group/', views.create_group, name='create-group'),
-
-
+    path('create-subgroup/', views.create_subgroup, name='create_subgroup'),
+    path('manage-groups/', views.manage_groups_subgroups, name='manage_groups'),
+path('edit-group/<int:group_id>/', views.edit_group, name='edit_group'),
+path('delete-group/<int:group_id>/', views.delete_group, name='delete_group'),
+path('edit-subgroup/<int:subgroup_id>/', views.edit_subgroup, name='edit_subgroup'),
+path('delete-subgroup/<int:subgroup_id>/', views.delete_subgroup, name='delete_subgroup'),
     # ============================================
     # DASHBOARD (supports ?app=psf|sms|spl)
     # ============================================

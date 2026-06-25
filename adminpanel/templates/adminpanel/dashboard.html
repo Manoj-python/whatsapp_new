@@ -332,6 +332,34 @@
             </div>
         </div>
     </div>
+
+    <!-- ==================== FILTER BY SUBGROUP (with Group selector) ==================== -->
+    <div class="section-card">
+        <div class="section-title">
+            <span><i class="fas fa-sitemap"></i> Filter by Subgroup</span>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-2">
+                <label class="form-label">Department (Group)</label>
+                <select id="groupFilter" class="form-select" onchange="updateSubgroupOptions()">
+                    <option value="all">All Departments</option>
+                    {% for group in all_groups %}
+                    <option value="{{ group.id }}">{{ group.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 mb-2">
+                <label class="form-label">Subgroup</label>
+                <select id="subgroupFilter" class="form-select" onchange="applySubgroupFilter()">
+                    <option value="all">All Subgroups</option>
+                    <!-- Options populated by JavaScript -->
+                </select>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+                <button class="btn btn-outline-secondary" onclick="clearFilters()">Clear Filters</button>
+            </div>
+        </div>
+    </div>
     
     <!-- Cases Table with Tabs + Search + Department Summary -->
     <div class="section-card">
@@ -371,7 +399,8 @@
     </div>
 </div>
 
-<!-- ===== MODALS (unchanged) ===== -->
+<!-- ===== MODALS ===== -->
+
 <!-- Case Detail Modal -->
 <div class="modal fade" id="caseModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -442,7 +471,7 @@
     </div>
 </div>
 
-<!-- Edit Case Modal -->
+<!-- ===== EDIT CASE MODAL (NO LEVEL) ===== -->
 <div class="modal fade" id="editCaseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -452,29 +481,37 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editCaseId">
-                <div class="mb-3"><label>Loan Number</label><input type="text" id="editLoanNumber" class="form-control"></div>
-                <div class="mb-3"><label>Customer Name</label><textarea id="editName" class="form-control" rows="2"></textarea></div>
-                <div class="mb-3"><label>Department (Group)</label>
+                <div class="mb-3">
+                    <label>Loan Number</label>
+                    <input type="text" id="editLoanNumber" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label>Customer Name</label>
+                    <textarea id="editName" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label>Department (Group)</label>
                     <select id="editGroup" class="form-select">
                         <option value="">-- Select Department --</option>
                         {% for group in all_groups %}
                         <option value="{{ group.id }}">{{ group.name }}</option>
                         {% endfor %}
                     </select>
+                    <small class="text-muted">Changing the department may unassign the current agent if they don't belong to the new department.</small>
+                </div>
+                <!-- Subgroup dropdown (dynamic) -->
+                <div class="mb-3">
+                    <label>Subgroup</label>
+                    <select id="editSubgroup" class="form-select">
+                        <option value="">-- Select Subgroup (optional) --</option>
+                        <!-- Options populated by JS -->
+                    </select>
                 </div>
                 <div class="mb-3">
-    <label for="editLevel">Current Level</label>
-    <select id="editLevel" class="form-select">
-        <option value="ESC1">ESC1 - Agent</option>
-        <option value="ESC2">ESC2 - Executive</option>
-        <option value="ESC3">ESC3 - Manager</option>
-        <option value="ESC4">ESC4 - Head</option>
-        <option value="ESC5">ESC5 - Admin</option>
-        <option value="RESOLVED">RESOLVED - Resolved</option>
-        <option value="CLOSED">CLOSED - Closed</option>
-    </select>
-</div>
-                <div class="mb-3"><label>Issue Description</label><textarea id="editIssueDescription" class="form-control" rows="3"></textarea></div>
+                    <label>Issue Description</label>
+                    <textarea id="editIssueDescription" class="form-control" rows="3"></textarea>
+                </div>
+                <!-- ❌ NO current_level dropdown here -->
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -484,7 +521,7 @@
     </div>
 </div>
 
-<!-- Escalate Modal -->
+<!-- ===== ESCALATE MODAL ===== -->
 <div class="modal fade" id="escalateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -535,11 +572,35 @@
     let currentApp = '{{ current_app }}';
     let currentFilter = { type: 'all', value: null };  // type: 'all', 'level', 'dept'
     let currentTab = 'active';  // 'active', 'resolved', 'closed'
+    let currentSubgroup = 'all';
+    let currentDepartment = 'all';
+    let allSubgroups = JSON.parse('{{ all_subgroups_json|safe }}');
 
     // Helper: build URL with app param
     function buildUrl(baseUrl) {
         const separator = baseUrl.includes('?') ? '&' : '?';
         return `${baseUrl}${separator}app=${currentApp}`;
+    }
+
+    // ========== Update Subgroup Options based on selected group ==========
+    function updateSubgroupOptions() {
+        const groupId = document.getElementById('groupFilter').value;
+        const subgroupSelect = document.getElementById('subgroupFilter');
+        // Clear and add default 'all'
+        subgroupSelect.innerHTML = '<option value="all">All Subgroups</option>';
+        // Filter subgroups
+        const filtered = allSubgroups.filter(s => groupId === 'all' || s.group_id == groupId);
+        filtered.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = `${s.name} (${s.group_name})`;
+            subgroupSelect.appendChild(opt);
+        });
+        // Reset currentSubgroup to 'all' and reload
+        currentSubgroup = 'all';
+        subgroupSelect.value = 'all';
+        updateFilterBadge();
+        loadCases();
     }
 
     // ========== Load Global Stats ==========
@@ -609,9 +670,16 @@
         document.querySelectorAll('[data-tab]').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
         });
-        const label = tab.charAt(0).toUpperCase() + tab.slice(1);
-        document.getElementById('activeFilterBadge').innerText = `Tab: ${label}`;
+        updateFilterBadge();
         loadCases();
+    }
+
+    function updateFilterBadge() {
+        const deptLabel = currentDepartment === 'all' ? 'All Departments' : currentDepartment;
+        const subgroupLabel = currentSubgroup === 'all' ? 'All Subgroups' : 
+            document.querySelector(`#subgroupFilter option[value="${currentSubgroup}"]`)?.textContent || 'All Subgroups';
+        const tabLabel = currentTab.charAt(0).toUpperCase() + currentTab.slice(1);
+        document.getElementById('activeFilterBadge').innerText = `Tab: ${tabLabel} | ${deptLabel} | ${subgroupLabel}`;
     }
 
     // ========== Render Department Summary ==========
@@ -646,13 +714,18 @@
         }
 
         // Department filter
-        if (currentFilter.type === 'dept' && currentFilter.value && currentFilter.value !== 'all') {
-            params.append('department', currentFilter.value);
+        if (currentDepartment && currentDepartment !== 'all') {
+            params.append('department', currentDepartment);
         }
 
         // Level filter
         if (currentFilter.type === 'level' && currentFilter.value) {
             params.append('level', currentFilter.value);
+        }
+
+        // Subgroup filter
+        if (currentSubgroup && currentSubgroup !== 'all') {
+            params.append('subgroup', currentSubgroup);
         }
 
         const url = buildUrl('/adminpanel/api/cases/') + '&' + params.toString();
@@ -686,7 +759,7 @@
                     <thead>
                         <tr>
                             <th>Case ID</th><th>Customer</th><th>Mobile</th><th>Loan Number</th>
-                            <th>Department</th><th>Level</th><th>Status</th><th>Created</th><th>Actions</th>
+                            <th>Department</th><th>Subgroup</th><th>Level</th><th>Status</th><th>Created</th><th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -704,6 +777,7 @@
                     <td>${c.mobile}</td>
                     <td>${c.loan_number || ''}</td>
                     <td><span class="badge bg-secondary">${escapeHtml(c.group_name || '-')}</span></td>
+                    <td><span class="badge bg-info">${escapeHtml(c.subgroup_name || '-')}</span></td>
                     <td><span class="badge bg-${c.current_level === 'ESC1' ? 'success' : c.current_level === 'ESC2' ? 'info' : c.current_level === 'ESC3' ? 'warning' : c.current_level === 'ESC4' ? 'danger' : 'dark'}">${c.current_level}</span></td>
                     <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></td>
                     <td><small>${new Date(c.created_at).toLocaleString()}</small></td>
@@ -721,10 +795,16 @@
         container.innerHTML = html;
     }
 
-    // ========== Filter Functions ==========
+    // ─── Filter Functions ────────────────────────────────────────────
     function filterByAll() {
         currentFilter = { type: 'all', value: null };
+        currentDepartment = 'all';
+        currentSubgroup = 'all';
         document.querySelectorAll('.filter-card').forEach(c => c.classList.remove('active'));
+        document.getElementById('subgroupFilter').value = 'all';
+        document.getElementById('groupFilter').value = 'all';
+        updateSubgroupOptions(); // resets subgroup list
+        updateFilterBadge();
         loadCases();
     }
 
@@ -735,34 +815,47 @@
             if (card.getAttribute('data-level') === level) card.classList.add('active');
         });
         document.querySelectorAll('#deptCards .filter-card').forEach(c => c.classList.remove('active'));
+        updateFilterBadge();
         loadCases();
     }
 
     function filterByDepartment(dept) {
+        currentDepartment = dept;
         if (dept === 'all') {
             currentFilter = { type: 'all', value: null };
-            document.getElementById('activeFilterBadge').innerText = `Tab: ${currentTab.charAt(0).toUpperCase() + currentTab.slice(1)}`;
-        } else {
-            currentFilter = { type: 'dept', value: dept };
         }
         document.querySelectorAll('#deptCards .filter-card').forEach(card => {
             card.classList.remove('active');
             if (card.getAttribute('data-dept') === dept) card.classList.add('active');
         });
         document.querySelectorAll('#levelCards .filter-card').forEach(c => c.classList.remove('active'));
+        updateFilterBadge();
         loadCases();
     }
 
     function filterByStatus(status) {
-        if (status === 'Active') {
-            setTab('active');
-        } else if (status === 'Resolved') {
-            setTab('resolved');
-        } else if (status === 'Closed') {
-            setTab('closed');
-        } else {
-            setTab('active');
-        }
+        if (status === 'Active') setTab('active');
+        else if (status === 'Resolved') setTab('resolved');
+        else if (status === 'Closed') setTab('closed');
+        else setTab('active');
+    }
+
+    function applySubgroupFilter() {
+        currentSubgroup = document.getElementById('subgroupFilter').value;
+        updateFilterBadge();
+        loadCases();
+    }
+
+    function clearFilters() {
+        document.getElementById('subgroupFilter').value = 'all';
+        document.getElementById('groupFilter').value = 'all';
+        currentSubgroup = 'all';
+        currentDepartment = 'all';
+        currentFilter = { type: 'all', value: null };
+        document.querySelectorAll('.filter-card').forEach(c => c.classList.remove('active'));
+        updateSubgroupOptions(); // resets subgroup list
+        updateFilterBadge();
+        loadCases();
     }
 
     function refreshCases() { loadCases(); }
@@ -901,72 +994,101 @@
         });
     }
 
+    // ========== EDIT CASE ==========
     function openEditCaseModal(caseId) {
-    fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('editCaseId').value = caseId;
+                    document.getElementById('editLoanNumber').value = data.case.loan_number || '';
+                    document.getElementById('editName').value = data.case.customer_name || '';
+                    document.getElementById('editIssueDescription').value = data.case.issue_description || '';
+
+                    // Populate groups
+                    const groupSelect = document.getElementById('editGroup');
+                    if (data.case.group_id) {
+                        groupSelect.value = data.case.group_id;
+                    } else {
+                        groupSelect.value = '';
+                    }
+
+                    // Populate subgroups (filtered by selected group)
+                    const subgroupSelect = document.getElementById('editSubgroup');
+                    const selectedGroupId = groupSelect.value;
+                    subgroupSelect.innerHTML = '<option value="">-- Select Subgroup (optional) --</option>';
+                    allSubgroups.forEach(s => {
+                        if (!selectedGroupId || s.group_id == selectedGroupId) {
+                            const opt = document.createElement('option');
+                            opt.value = s.id;
+                            opt.textContent = `${s.name} (${s.group_name})`;
+                            if (s.id == data.case.subgroup_id) opt.selected = true;
+                            subgroupSelect.appendChild(opt);
+                        }
+                    });
+
+                    // Re-filter when group changes
+                    groupSelect.onchange = function() {
+                        const gId = this.value;
+                        subgroupSelect.innerHTML = '<option value="">-- Select Subgroup (optional) --</option>';
+                        allSubgroups.forEach(s => {
+                            if (!gId || s.group_id == gId) {
+                                const opt = document.createElement('option');
+                                opt.value = s.id;
+                                opt.textContent = `${s.name} (${s.group_name})`;
+                                subgroupSelect.appendChild(opt);
+                            }
+                        });
+                    };
+
+                    $('#editCaseModal').modal('show');
+                } else {
+                    alert('Error loading case');
+                }
+            })
+            .catch(err => alert('Error: ' + err.message));
+    }
+
+    function submitEditCase() {
+        const caseId = document.getElementById('editCaseId').value;
+        const loanNumber = document.getElementById('editLoanNumber').value;
+        const customerName = document.getElementById('editName').value;
+        const issueDesc = document.getElementById('editIssueDescription').value;
+        const groupId = document.getElementById('editGroup').value;
+        const subgroupId = document.getElementById('editSubgroup').value;
+
+        const payload = {
+            loan_number: loanNumber,
+            customer_name: customerName,
+            issue_description: issueDesc,
+        };
+        if (groupId) {
+            payload.group = parseInt(groupId);
+        }
+        if (subgroupId) {
+            payload.subgroup = parseInt(subgroupId);
+        }
+
+        fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify(payload)
+        })
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                document.getElementById('editCaseId').value = caseId;
-                document.getElementById('editLoanNumber').value = data.case.loan_number || '';
-                document.getElementById('editName').value = data.case.customer_name || '';
-                document.getElementById('editIssueDescription').value = data.case.issue_description || '';
-
-                // Set group dropdown
-                const groupSelect = document.getElementById('editGroup');
-                if (groupSelect) {
-                    groupSelect.value = data.case.group_id || '';
-                }
-
-                // ✅ Set level dropdown
-                const levelSelect = document.getElementById('editLevel');
-                if (levelSelect) {
-                    levelSelect.value = data.case.current_level || 'ESC1';
-                }
-
-                $('#editCaseModal').modal('show');
+                alert('Case updated successfully');
+                $('#editCaseModal').modal('hide');
+                loadCases();
+                loadGlobalStats();
             } else {
-                alert('Error loading case');
+                alert('Error: ' + data.error);
             }
         })
         .catch(err => alert('Error: ' + err.message));
-}
-    function submitEditCase() {
-    const caseId = document.getElementById('editCaseId').value;
-    const loanNumber = document.getElementById('editLoanNumber').value;
-    const customerName = document.getElementById('editName').value;
-    const issueDesc = document.getElementById('editIssueDescription').value;
-    const groupId = document.getElementById('editGroup').value;
-    const level = document.getElementById('editLevel').value;   // ✅ new
-
-    const payload = {
-        loan_number: loanNumber,
-        customer_name: customerName,
-        issue_description: issueDesc,
-        current_level: level,        // ✅ send level
-    };
-    if (groupId) {
-        payload.group = parseInt(groupId);
     }
 
-    fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            alert('Case updated');
-            $('#editCaseModal').modal('hide');
-            loadCases();
-            loadGlobalStats();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(err => alert('Error: ' + err.message));
-}
-
+    // ========== ESCALATE CASE ==========
     function showEscalateModal(caseId) {
         document.getElementById('escalateCaseId').value = caseId;
         fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
@@ -1009,7 +1131,10 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadGlobalStats();
         loadDepartmentStats();
+        // Populate subgroup dropdown initially (all subgroups)
+        updateSubgroupOptions();
         setTab('active');
+        updateFilterBadge();
     });
 </script>
 {% endblock %}

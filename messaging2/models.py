@@ -3,7 +3,7 @@
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
-from adminpanel.models import SupportGroup
+from adminpanel.models import SupportGroup,Subgroup
 
 # ============================================
 # WHATSAPP & CHAT LOGS (unchanged, kept as is)
@@ -152,7 +152,7 @@ class Agent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_activity = models.DateTimeField(auto_now=True)
     groups = models.ManyToManyField(SupportGroup, blank=True)
-    
+    subgroup=models.ManyToManyField(Subgroup,blank=True)
     total_cases_handled = models.IntegerField(default=0)
     total_cases_resolved = models.IntegerField(default=0)
     total_escalations_made = models.IntegerField(default=0)
@@ -163,6 +163,18 @@ class Agent(models.Model):
         ('app2', 'App 2 - messaging2'),
         ('app3', 'App 3 - splcase'),
     ])
+    can_edit = models.BooleanField(default=False, help_text="Can edit case metadata")
+    can_resolve = models.BooleanField(default=False, help_text="Can resolve cases")
+    can_close = models.BooleanField(default=False, help_text="Can close resolved cases")
+
+    def has_edit_permission(self):
+        return self.role == 'ADMIN' or self.can_edit
+
+    def has_resolve_permission(self):
+        return self.role == 'ADMIN' or self.can_resolve
+
+    def has_close_permission(self):
+        return self.role == 'ADMIN' or self.can_close
     
     @property
     def level(self):
@@ -184,7 +196,7 @@ class Agent(models.Model):
         if self.role == 'ADMIN':
             return True
         return (case.current_level == self.level and
-                case.group in self.groups.all())
+                (case.group in self.groups.all() or case.subgroup in self.subgroups.all()))
     
     def assign_to_agent(self, agent, assigned_by=None):
         # This method is used when an agent assigns a case to another agent?
@@ -251,6 +263,21 @@ class CaseComment(models.Model):
     class Meta:
         ordering = ['created_at']
 
+class CaseDescriptionLog(models.Model):
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='description_logs')
+    previous_description = models.TextField(blank=True, null=True)
+    new_description = models.TextField(blank=True, null=True)
+    changed_by = models.CharField(max_length=255, blank=True, null=True)
+    changed_by_role = models.CharField(max_length=50, blank=True, null=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    level = models.CharField(max_length=20, blank=True, null=True)  # The level at which it was changed
+
+    class Meta:
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f"{self.case.case_id} - {self.changed_at.strftime('%Y-%m-%d %H:%M')}"
+
 
 class Case(models.Model):
     """Case Management Model with Resolution Workflow"""
@@ -294,7 +321,7 @@ class Case(models.Model):
     issue_description = models.TextField(blank=True, null=True)
     category = models.CharField(max_length=100, blank=True, null=True)
     group = models.ForeignKey(SupportGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='cases')
-    
+    subgroup=models.ForeignKey(Subgroup,on_delete=models.SET_NULL,null=True,blank=True,related_name='subcases')
     # Escalation
     current_level = models.CharField(max_length=20, choices=ESCALATION_CHOICES, default='ESC0')
     previous_level = models.CharField(max_length=20, blank=True, null=True)

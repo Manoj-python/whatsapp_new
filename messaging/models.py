@@ -97,7 +97,7 @@ class BulkJob(models.Model):
 # ============================================
 
 from messaging2.models import Agent  # reuse Agent from PSF app
-from adminpanel.models import SupportGroup
+from adminpanel.models import SupportGroup,Subgroup
 class CaseEscalationLog(models.Model):
     case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='escalation_logs')
     from_level = models.CharField(max_length=20)
@@ -134,6 +134,22 @@ class CaseComment(models.Model):
 
     class Meta:
         ordering = ['created_at']
+
+class CaseDescriptionLog(models.Model):
+    case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='description_logs')
+    previous_description = models.TextField(blank=True, null=True)
+    new_description = models.TextField(blank=True, null=True)
+    changed_by = models.CharField(max_length=255, blank=True, null=True)
+    changed_by_role = models.CharField(max_length=50, blank=True, null=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    level = models.CharField(max_length=20, blank=True, null=True)  # The level at which it was changed
+
+    class Meta:
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f"{self.case.case_id} - {self.changed_at.strftime('%Y-%m-%d %H:%M')}"
+
 
 
 class Case(models.Model):
@@ -178,7 +194,8 @@ class Case(models.Model):
     issue_description = models.TextField(blank=True, null=True)
     category = models.CharField(max_length=100, blank=True, null=True)
     group = models.ForeignKey(SupportGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='app1_cases')
-    
+    subgroup=models.ForeignKey(Subgroup,on_delete=models.SET_NULL,null=True,blank=True,related_name='app1_subcases')
+
     # Escalation
     current_level = models.CharField(max_length=20, choices=ESCALATION_CHOICES, default='ESC0')
     previous_level = models.CharField(max_length=20, blank=True, null=True)
