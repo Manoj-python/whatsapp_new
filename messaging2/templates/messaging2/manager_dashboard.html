@@ -95,7 +95,7 @@
             </div>
         </div>
 
-        <!-- ========== RESOLVED TAB – FIXED ========== -->
+        <!-- Resolved Tab -->
         <div class="tab-pane fade" id="resolved" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-success text-white">Resolved at ESC3 Level</div>
@@ -129,7 +129,7 @@
             </div>
         </div>
 
-        <!-- ========== ESCALATED TAB – FIXED ========== -->
+        <!-- Escalated Tab -->
         <div class="tab-pane fade" id="escalated" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-info text-white">Escalated from ESC3 to Higher Levels</div>
@@ -161,7 +161,7 @@
         </div>
     </div>
 
-    <!-- Level‑wise Stats – FIXED -->
+    <!-- Level‑wise Stats -->
     <div class="row mt-4">
         <div class="col-12">
             <div class="card">
@@ -208,15 +208,10 @@
 </div>
 
 <!-- ========================================================== -->
-<!-- 2. Manager‑specific JavaScript (no duplicate common functions) -->
+<!-- 2. Manager‑specific JavaScript (uses common functions from _case_modals) -->
 <!-- ========================================================== -->
 <script>
-    // ─── Use common functions from _case_modals.html ───
-    // viewCase, resolveCase, escalateCase, addAppParam, escapeHtml are already defined.
-
-    // ─── CSRF token (will be used by manager functions) ───
-    //const csrftoken = document.querySelector('[name=csrf-token]').content;
-    //if (!csrftoken) console.warn("CSRF token not found");
+    // Use the global csrftoken (defined in base_dashboard.html) – do NOT redeclare
 
     // ─── Pending cases filter ───
     let currentDepartment = 'all';
@@ -264,6 +259,7 @@
                 <td>${new Date(c.created_at).toLocaleString()}</td>
                 <td>
                     <button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>
+                    <button class="btn btn-sm btn-secondary" onclick="editCase('${c.case_id}')"><i class="fas fa-edit"></i></button>
                     <button class="btn btn-sm btn-info" onclick="showAssignModal('${c.case_id}')"><i class="fas fa-user-check"></i></button>
                     <button class="btn btn-sm btn-warning" onclick="escalateCase('${c.case_id}')"><i class="fas fa-arrow-up"></i></button>
                     <button class="btn btn-sm btn-success" onclick="resolveCase('${c.case_id}')"><i class="fas fa-check-circle"></i></button>
@@ -320,65 +316,6 @@
             if (data.success) {
                 alert('Case closed successfully!');
                 window.location.reload();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        })
-        .catch(err => alert('Error: ' + err.message));
-    }
-
-    // ─── Edit Case ───
-    function editCase(caseId) {
-        document.getElementById('editCaseId').value = caseId;
-        $('#editCaseModal').modal('show');
-
-        fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    const c = data.case;
-                    document.getElementById('editLoanNumber').value = c.loan_number || '';
-                    document.getElementById('editCustomerName').value = c.customer_name || '';
-                    document.getElementById('editIssueDescription').value = c.issue_description || '';
-                } else {
-                    alert('Could not load case data for editing.');
-                }
-            })
-            .catch(err => alert('Error loading case: ' + err.message));
-    }
-
-    function submitEdit() {
-        const caseId = document.getElementById('editCaseId').value;
-        const loanNumber = document.getElementById('editLoanNumber').value;
-        const customerName = document.getElementById('editCustomerName').value;
-        const issueDescription = document.getElementById('editIssueDescription').value;
-        if (!loanNumber || !customerName || !issueDescription) {
-            alert('Please fill in all fields.');
-            return;
-        }
-        fetch(addAppParam(`/messaging2/case/${caseId}/edit/`), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify({
-                loan_number: loanNumber,
-                customer_name: customerName,
-                issue_description: issueDescription,
-                group: groupId || null,      // send null if empty
-                current_level: level
-            })
-        })
-        .then(res => {
-            if (!res.ok) return res.text().then(t => { throw new Error(`Server ${res.status} - ${t.substring(0,200)}`); });
-            return res.json();
-        })
-        .then(data => {
-            if (data.success) {
-                alert('Case updated!');
-                $('#editCaseModal').modal('hide');
-                location.reload();
             } else {
                 alert('Error: ' + data.error);
             }

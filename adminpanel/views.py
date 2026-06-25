@@ -837,7 +837,6 @@ def get_case_timeline_api(request, case_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def edit_case_api(request, case_id):
-    """Admin-only endpoint to edit case fields (loan_number, customer_name, issue_description, group)"""
     agent = get_agent_from_user(request.user)
     # if agent.role != 'ADMIN':
     #     return JsonResponse({'error': 'Only Admin can edit cases'}, status=403)
@@ -847,7 +846,6 @@ def edit_case_api(request, case_id):
     case = get_object_or_404(CaseModel, case_id=case_id)
     data = json.loads(request.body)
 
-    # Allowed fields
     if 'loan_number' in data:
         case.loan_number = data['loan_number']
     if 'customer_name' in data:
@@ -855,30 +853,24 @@ def edit_case_api(request, case_id):
     if 'issue_description' in data:
         case.issue_description = data['issue_description']
 
-    # Group field: accept either group_id (int) or group_name (string)
+    # Group field update (only if provided)
     if 'group' in data:
         group_val = data['group']
         group_obj = None
-        if isinstance(group_val, int) or (isinstance(group_val, str) and group_val.isdigit()):
-            group_obj = SupportGroup.objects.filter(id=int(group_val)).first()
-        elif isinstance(group_val, str):
-            group_obj = SupportGroup.objects.filter(name=group_val).first()
-        if group_obj:
-            case.group = group_obj
-        else:
-            return JsonResponse({'error': 'Invalid group specified'}, status=400)
-    if 'current_level' in data:
-        new_level = data['current_level']
-        # Get the list of valid choices from the model
-        valid_levels = [choice[0] for choice in CaseModel.ESCALATION_CHOICES]
-        if new_level in valid_levels:
-            case.current_level = new_level
-        else:
-            return JsonResponse({'error': f'Invalid level: {new_level}'}, status=400)
+        if group_val:  # skip if empty/null
+            if isinstance(group_val, int) or (isinstance(group_val, str) and group_val.isdigit()):
+                group_obj = SupportGroup.objects.filter(id=int(group_val)).first()
+            elif isinstance(group_val, str):
+                group_obj = SupportGroup.objects.filter(name=group_val).first()
+            if group_obj:
+                case.group = group_obj
+            else:
+                return JsonResponse({'error': 'Invalid group specified'}, status=400)
+        # else: keep existing group (do nothing)
 
+    # No level update – we don't check for 'current_level'
     case.save()
     return JsonResponse({'success': True, 'message': 'Case updated'})
-
 # ============================================
 # UNIFIED FAILED MESSAGES (supports ?app=...)
 # ============================================

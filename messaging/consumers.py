@@ -51,11 +51,11 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
             digits = re.sub(r"\D", "", raw_q)
             filters = Q()
             if digits:
-                filters |= Q(mobile__startswith=digits)
+                filters |= Q(mobile__startswith=digits)|Q(mobile__icontains=digits)
             filters |= Q(case_id__icontains=raw_q) | Q(customer_name__icontains=raw_q)
             case_qs = case_qs.filter(filters)
 
-        case_qs = case_qs.order_by('-priority', '-created_at')
+        case_qs = case_qs.order_by('-created_at')
 
         total = case_qs.count()
         start = (page - 1) * size

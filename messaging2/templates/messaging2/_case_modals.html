@@ -25,9 +25,7 @@
                 <input type="hidden" id="escalateCaseId">
                 <div class="mb-3">
                     <label>Escalate To:</label>
-                    <select id="escalateLevel" class="form-select">
-                        <!-- Options will be set dynamically -->
-                    </select>
+                    <select id="escalateLevel" class="form-select"></select>
                 </div>
                 <div class="mb-3">
                     <label>Loan Number (update if needed)</label>
@@ -68,7 +66,8 @@
         </div>
     </div>
 </div>
-<!-- Edit Case Modal -->
+
+<!-- Edit Case Modal (level removed) -->
 <div class="modal fade" id="editCaseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -87,31 +86,18 @@
                     <input type="text" id="editCustomerName" class="form-control">
                 </div>
                 <div class="mb-3">
-    <label>Department (Group)</label>
-    <select id="editGroup" class="form-select">
-        <option value="">-- Select --</option>
-        {% for group in all_groups %}
-        <option value="{{ group.id }}">{{ group.name }}</option>
-        {% endfor %}
-    </select>
-</div>
-<div class="mb-3">
-    <label>Current Level</label>
-    <select id="editLevel" class="form-select">
-        <option value="ESC1">ESC1 - Agent</option>
-        <option value="ESC2">ESC2 - Executive</option>
-        <option value="ESC3">ESC3 - Manager</option>
-        <option value="ESC4">ESC4 - Head</option>
-        <option value="ESC5">ESC5 - Admin</option>
-        <option value="RESOLVED">RESOLVED - Resolved</option>
-        <option value="CLOSED">CLOSED - Closed</option>
-    </select>
-</div>
+                    <label>Department (Group)</label>
+                    <select id="editGroup" class="form-select">
+                        <option value="">-- Select --</option>
+                        {% for group in all_groups %}
+                        <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="mb-3">
                     <label>Issue Description</label>
                     <textarea id="editIssueDescription" class="form-control" rows="4"></textarea>
                 </div>
-                <!-- Add more fields if needed, e.g., Department -->
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -121,317 +107,313 @@
     </div>
 </div>
 
-
 <script>
-//const csrftoken = document.querySelector('[name=csrf-token]').content;
+    // ------------------------------------------------------------------
+    // CSRF token – use the global one defined in base_dashboard.html
+    // DO NOT redeclare 'const csrftoken' here.
+    // ------------------------------------------------------------------
 
-// Helper: add ?app= to any URL
-const urlParams = new URLSearchParams(window.location.search);
-const currentApp = urlParams.get('app') || 'psf';
-function addAppParam(url) {
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}app=${currentApp}`;
-}
-
-let currentCaseData = null;
-
-// View Case Details
-function viewCase(caseId) {
-    $('#caseModal').modal('show');
-    document.getElementById('caseModalBody').innerHTML = '<div class="text-center"><div class="spinner-border"></div><p>Loading...</p></div>';
-
-    fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                renderCaseDetail(data.case);
-            } else {
-                document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-            }
-        })
-        .catch(error => {
-            document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
-        });
-}
-
-function renderCaseDetail(caseData) {
-    currentCaseData = caseData;
-    const levelBadges = { 'ESC1':'primary','ESC2':'warning','ESC3':'info','ESC4':'danger','ESC5':'dark','RESOLVED':'success','CLOSED':'secondary' };
-
-    const html = `
-        <div class="row">
-            <div class="col-md-6">
-                <h6><i class="fas fa-info-circle"></i> Case Information</h6>
-                <table class="table table-sm">
-                    <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td></tr>
-                    <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
-                    <tr><th>Mobile:</th><td>${caseData.mobile}</small></td>
-                    <tr><th>Loan Number:</th><td>${caseData.loan_number || '-'}</small></td>
-                    <tr><th>Department:</th><td>${caseData.group_name || 'Not assigned'}</small></td>
-                    <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level]}">${caseData.current_level}</span></small></td>
-                    <tr><th>Status:</th><td><span class="badge bg-${caseData.status === 'Resolved' ? 'success' : 'primary'}">${caseData.status}</span></small></td>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <h6><i class="fas fa-users"></i> Assignment</h6>
-                <table class="table table-sm">
-                    <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</small></td>
-                    <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</small></td>
-                    <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</small></td>
-                    ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td>` : ''}
-                </table>
-            </div>
-        </div>
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
-                <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description')}</div>
-            </div>
-        </div>
-        ${caseData.resolution_notes ? `
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-check-circle"></i> Resolution Notes</h6>
-                <div class="border rounded p-3 bg-light">${escapeHtml(caseData.resolution_notes)}</div>
-            </div>
-        </div>` : ''}
-        <div class="row mt-3">
-            <div class="col-12">
-                <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
-                <div id="timelineContent" class="border rounded p-3" style="max-height:300px; overflow-y:auto;">Loading...</div>
-            </div>
-        </div>
-    `;
-    document.getElementById('caseModalBody').innerHTML = html;
-    loadTimeline(caseData.case_id);
-
-    // Populate escalate modal based on current level
-    const allLevels = ['ESC1','ESC2','ESC3','ESC4','ESC5'];
-    const currentIdx = allLevels.indexOf(caseData.current_level);
-    const higherLevels = allLevels.slice(currentIdx + 1);
-    const levelNames = { 'ESC1':'Normal (ESC1)', 'ESC2':'Executive (ESC2)', 'ESC3':'Manager (ESC3)', 'ESC4':'Head (ESC4)', 'ESC5':'Admin (ESC5)' };
-    let options = '';
-    higherLevels.forEach(lvl => { options += `<option value="${lvl}">${levelNames[lvl]}</option>`; });
-    document.getElementById('escalateLevel').innerHTML = options;
-}
-
-function loadTimeline(caseId) {
-    fetch(addAppParam(`/messaging2/case/${caseId}/timeline/`))
-        .then(response => response.json())
-        .then(data => {
-            const html = data.logs.map(log => `
-                <div class="border-bottom pb-2 mb-2">
-                    <small>${new Date(log.created_at).toLocaleString()}</small>
-                    <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
-                    <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
-                    ${log.reason ? `<div class="small text-muted">${escapeHtml(log.reason)}</div>` : ''}
-                </div>
-            `).join('');
-            document.getElementById('timelineContent').innerHTML = html || '<div class="text-muted">No timeline history</div>';
-        })
-        .catch(error => {
-            document.getElementById('timelineContent').innerHTML = `<div class="alert alert-danger">Error loading timeline</div>`;
-        });
-}
-
-// ============================================
-// IMPROVED MESSAGE TICK UPDATE (handles all error codes)
-// ============================================
-function updateMessageTickImproved(messageId, status) {
-    if (!messageId || messageId === '') {
-        console.warn('⚠️ Ignoring delivery.update with empty message_id');
-        return;
-    }
-    console.log(`🔄 Updating tick for messageId: ${messageId}, status: ${status}`);
-
-    const failureStatuses = [
-        'Failed', 'Blocked', 'Invalid', 'Template Required', 'Template Failed',
-        'Re-engagement Required', 'Rate Limited', 'Auth Failed',
-        '24H_WINDOW_EXPIRED', 'NOT_ON_WHATSAPP', 'BLOCKED_BY_USER', 'BLOCKED_BY_BUSINESS',
-        'OPTED_OUT', 'TOKEN_ERROR', 'INVALID_PARAMETER', 'UNKNOWN_ERROR',
-        'REGISTRATION_ERROR', 'UNSUPPORTED_MESSAGE_TYPE', 'TEMPLATE_PARAM_ERROR',
-        'TEMPLATE_NOT_FOUND', 'TEMPLATE_PAUSED', 'TEMPLATE_DISABLED', 'RATE_LIMIT',
-        'TOO_MANY_MESSAGES'
-    ];
-    const isFailure = failureStatuses.some(s => status.includes(s));
-
-    if (isFailure) {
-        const sentMessages = document.querySelectorAll('.message-row.sent');
-        let updated = false;
-        for (let i = sentMessages.length - 1; i >= 0; i--) {
-            const tick = sentMessages[i].querySelector('.message-tick');
-            if (tick && !tick.classList.contains('delivered') &&
-                !tick.classList.contains('read') && !tick.classList.contains('failed')) {
-                tick.innerHTML = '❌';
-                tick.className = 'message-tick failed';
-                tick.style.color = '#dc3545';
-                tick.style.fontWeight = 'bold';
-                tick.title = status;
-                if (messageId) tick.setAttribute('data-msg-id', messageId);
-                updated = true;
-                console.log('✅ Marked message as FAILED');
-                break;
-            }
-        }
-        if (!updated) {
-            console.warn('⚠️ Could not find any sent message to mark as failed');
-        }
-        if (typeof showNotification === 'function') {
-            showNotification(`Message ${status.toLowerCase()}`, 'error');
-        } else {
-            console.log(`❌ Message failed: ${status}`);
-        }
-        return;
+    // Helper: app parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentApp = urlParams.get('app') || 'psf';
+    function addAppParam(url) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}app=${currentApp}`;
     }
 
-    let tickSpan = null;
-    if (messageId) tickSpan = document.querySelector(`.message-tick[data-msg-id="${messageId}"]`);
-    if (!tickSpan && messageId) {
-        const row = document.querySelector(`.message-row[data-msg-id="${messageId}"]`);
-        if (row) tickSpan = row.querySelector('.message-tick');
+    // HTML escaping
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
-    if (!tickSpan) {
-        const lastSent = document.querySelector('.message-row.sent:last-child');
-        if (lastSent) tickSpan = lastSent.querySelector('.message-tick');
-    }
-    if (tickSpan && !tickSpan.classList.contains('failed')) {
-        tickSpan.className = 'message-tick';
-        if (status === 'Read') {
-            tickSpan.textContent = '✓✓';
-            tickSpan.classList.add('read');
-            tickSpan.style.color = '#34B7F1';
-        } else if (status === 'Delivered') {
-            tickSpan.textContent = '✓✓';
-            tickSpan.classList.add('delivered');
-            tickSpan.style.color = '#25D366';
-        } else if (status === 'Sent') {
-            tickSpan.textContent = '✓';
-            tickSpan.classList.add('sent');
-            tickSpan.style.color = '#8696a0';
-        }
-        if (messageId) tickSpan.setAttribute('data-msg-id', messageId);
-        console.log(`✅ Updated tick to ${status}`);
-    } else {
-        console.error(`❌ Could not find tick for message ${messageId}`);
-    }
-}
 
-// Escalate Case (populates dropdown dynamically)
-function escalateCase(caseId) {
-    document.getElementById('escalateCaseId').value = caseId;
-    document.getElementById('escalateReason').value = '';
+    // ------------------------------------------------------------------
+    // VIEW CASE
+    // ------------------------------------------------------------------
+    let currentCaseData = null;
 
-    fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const caseData = data.case;
-                document.getElementById('escalateLoanNumber').value = caseData.loan_number || '';
+    function viewCase(caseId) {
+        $('#caseModal').modal('show');
+        document.getElementById('caseModalBody').innerHTML = '<div class="text-center"><div class="spinner-border"></div><p>Loading...</p></div>';
 
-                const allLevels = ['ESC1','ESC2','ESC3','ESC4','ESC5'];
-                const levelNames = {
-                    'ESC1': 'Normal (ESC1)',
-                    'ESC2': 'Executive (ESC2)',
-                    'ESC3': 'Manager (ESC3)',
-                    'ESC4': 'Head (ESC4)',
-                    'ESC5': 'Admin (ESC5)'
-                };
-                const currentIdx = allLevels.indexOf(caseData.current_level);
-                const higherLevels = allLevels.slice(currentIdx + 1);
-                let options = '';
-                if (higherLevels.length === 0) {
-                    options = '<option disabled>No higher levels available</option>';
+        fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderCaseDetail(data.case);
                 } else {
-                    higherLevels.forEach(lvl => {
-                        options += `<option value="${lvl}">${levelNames[lvl]}</option>`;
-                    });
+                    document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
                 }
-                document.getElementById('escalateLevel').innerHTML = options;
+            })
+            .catch(error => {
+                document.getElementById('caseModalBody').innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            });
+    }
+
+    function renderCaseDetail(caseData) {
+        currentCaseData = caseData;
+        const levelBadges = { 'ESC1':'primary','ESC2':'warning','ESC3':'info','ESC4':'danger','ESC5':'dark','RESOLVED':'success','CLOSED':'secondary' };
+
+        const html = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-info-circle"></i> Case Information</h6>
+                    <table class="table table-sm">
+                        <tr><th>Case ID:</th><td><strong>${escapeHtml(caseData.case_id)}</strong></td></tr>
+                        <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
+                        <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
+                        <tr><th>Loan Number:</th><td>${caseData.loan_number || '-'}</td></tr>
+                        <tr><th>Department:</th><td>${caseData.group_name || 'Not assigned'}</td></tr>
+                        <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level]}">${caseData.current_level}</span></td></tr>
+                        <tr><th>Status:</th><td><span class="badge bg-${caseData.status === 'Resolved' ? 'success' : 'primary'}">${caseData.status}</span></td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="fas fa-users"></i> Assignment</h6>
+                    <table class="table table-sm">
+                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td></tr>
+                        <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td></tr>
+                        <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td></tr>
+                        ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td>` : ''}
+                    </table>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6><i class="fas fa-file-alt"></i> Issue Description</h6>
+                    <div class="border rounded p-3 bg-light">${escapeHtml(caseData.issue_description || 'No description')}</div>
+                </div>
+            </div>
+            ${caseData.resolution_notes ? `
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6><i class="fas fa-check-circle"></i> Resolution Notes</h6>
+                    <div class="border rounded p-3 bg-light">${escapeHtml(caseData.resolution_notes)}</div>
+                </div>
+            </div>` : ''}
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6><i class="fas fa-history"></i> Escalation Timeline</h6>
+                    <div id="timelineContent" class="border rounded p-3" style="max-height:300px; overflow-y:auto;">Loading...</div>
+                </div>
+            </div>
+        `;
+        document.getElementById('caseModalBody').innerHTML = html;
+        loadTimeline(caseData.case_id);
+
+        // Populate escalate modal
+        const allLevels = ['ESC1','ESC2','ESC3','ESC4','ESC5'];
+        const currentIdx = allLevels.indexOf(caseData.current_level);
+        const higherLevels = allLevels.slice(currentIdx + 1);
+        const levelNames = { 'ESC1':'Normal (ESC1)', 'ESC2':'Executive (ESC2)', 'ESC3':'Manager (ESC3)', 'ESC4':'Head (ESC4)', 'ESC5':'Admin (ESC5)' };
+        let options = '';
+        higherLevels.forEach(lvl => { options += `<option value="${lvl}">${levelNames[lvl]}</option>`; });
+        document.getElementById('escalateLevel').innerHTML = options || '<option disabled>No higher levels available</option>';
+    }
+
+    function loadTimeline(caseId) {
+        fetch(addAppParam(`/messaging2/case/${caseId}/timeline/`))
+            .then(response => response.json())
+            .then(data => {
+                const html = data.logs.map(log => `
+                    <div class="border-bottom pb-2 mb-2">
+                        <small>${new Date(log.created_at).toLocaleString()}</small>
+                        <div><span class="badge bg-secondary">${log.from_level}</span> → <span class="badge bg-primary">${log.to_level}</span></div>
+                        <div><strong>By:</strong> ${log.escalated_by || 'System'}</div>
+                        ${log.reason ? `<div class="small text-muted">${escapeHtml(log.reason)}</div>` : ''}
+                    </div>
+                `).join('');
+                document.getElementById('timelineContent').innerHTML = html || '<div class="text-muted">No timeline history</div>';
+            })
+            .catch(error => {
+                document.getElementById('timelineContent').innerHTML = `<div class="alert alert-danger">Error loading timeline</div>`;
+            });
+    }
+
+    // ------------------------------------------------------------------
+    // ESCALATE
+    // ------------------------------------------------------------------
+    function escalateCase(caseId) {
+        document.getElementById('escalateCaseId').value = caseId;
+        document.getElementById('escalateReason').value = '';
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const caseData = data.case;
+                    document.getElementById('escalateLoanNumber').value = caseData.loan_number || '';
+                    // Populate levels
+                    const allLevels = ['ESC1','ESC2','ESC3','ESC4','ESC5'];
+                    const currentIdx = allLevels.indexOf(caseData.current_level);
+                    const higherLevels = allLevels.slice(currentIdx + 1);
+                    const levelNames = { 'ESC1':'Normal (ESC1)', 'ESC2':'Executive (ESC2)', 'ESC3':'Manager (ESC3)', 'ESC4':'Head (ESC4)', 'ESC5':'Admin (ESC5)' };
+                    let options = '';
+                    higherLevels.forEach(lvl => { options += `<option value="${lvl}">${levelNames[lvl]}</option>`; });
+                    document.getElementById('escalateLevel').innerHTML = options || '<option disabled>No higher levels available</option>';
+                } else {
+                    alert('Could not load case details');
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                alert('Error loading case details');
+            });
+
+        $('#escalateModal').modal('show');
+    }
+
+    function submitEscalation() {
+        const caseId = document.getElementById('escalateCaseId').value;
+        const newLevel = document.getElementById('escalateLevel').value;
+        const reason = document.getElementById('escalateReason').value;
+        const loan = document.getElementById('escalateLoanNumber').value;
+
+        if (!newLevel) { alert('Please select escalation level'); return; }
+        if (!reason) { alert('Please provide a reason'); return; }
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/escalate/`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ new_level: newLevel, reason: reason, loan: loan, name: '' })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Case escalated successfully!');
+                $('#escalateModal').modal('hide');
+                location.reload();
             } else {
-                alert('Could not load case details');
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => alert('Error: ' + error.message));
+    }
+
+    // ------------------------------------------------------------------
+    // RESOLVE
+    // ------------------------------------------------------------------
+    function resolveCase(caseId) {
+        document.getElementById('resolveCaseId').value = caseId;
+        $('#resolveModal').modal('show');
+    }
+
+    function submitResolution() {
+        const caseId = document.getElementById('resolveCaseId').value;
+        const notes = document.getElementById('resolutionNotes').value;
+        if (!notes) { alert('Please provide resolution notes'); return; }
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/resolve/`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ resolution_notes: notes })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Case resolved successfully!');
+                $('#resolveModal').modal('hide');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => alert('Error: ' + error.message));
+    }
+
+    // ------------------------------------------------------------------
+    // EDIT CASE (NO LEVEL)
+    // ------------------------------------------------------------------
+    function editCase(caseId) {
+        document.getElementById('editCaseId').value = caseId;
+        $('#editCaseModal').modal('show');
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/detail/`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const c = data.case;
+                    document.getElementById('editLoanNumber').value = c.loan_number || '';
+                    document.getElementById('editCustomerName').value = c.customer_name || '';
+                    document.getElementById('editIssueDescription').value = c.issue_description || '';
+
+                    const groupSelect = document.getElementById('editGroup');
+                    if (c.group_id) {
+                        groupSelect.value = c.group_id;
+                    } else {
+                        groupSelect.value = '';
+                    }
+                } else {
+                    alert('Could not load case data for editing.');
+                }
+            })
+            .catch(error => {
+                alert('Error loading case: ' + error.message);
+            });
+    }
+
+    function submitEdit() {
+        const caseId = document.getElementById('editCaseId').value;
+        const loanNumber = document.getElementById('editLoanNumber').value.trim();
+        const customerName = document.getElementById('editCustomerName').value.trim();
+        const issueDescription = document.getElementById('editIssueDescription').value.trim();
+        const group = document.getElementById('editGroup').value;
+
+        if (!loanNumber || !customerName || !issueDescription) {
+            alert('Please fill in all fields.');
+            return;
+        }
+
+        if (!csrftoken) {
+            alert('CSRF token missing. Please refresh the page.');
+            return;
+        }
+
+        const payload = {
+            loan_number: loanNumber,
+            customer_name: customerName,
+            issue_description: issueDescription
+        };
+        if (group) {
+            payload.group = group;
+        }
+
+        fetch(addAppParam(`/messaging2/case/${caseId}/edit/`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Case updated successfully!');
+                $('#editCaseModal').modal('hide');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
             }
         })
         .catch(error => {
-            console.error(error);
-            alert('Error loading case details');
+            alert('Error: ' + error.message);
         });
-
-    $('#escalateModal').modal('show');
-}
-
-function submitEscalation() {
-    const caseId = document.getElementById('escalateCaseId').value;
-    const newLevel = document.getElementById('escalateLevel').value;
-    const reason = document.getElementById('escalateReason').value;
-    const loan = document.getElementById('escalateLoanNumber').value;
-
-    if (!newLevel) { alert('Please select escalation level'); return; }
-    if (!reason) { alert('Please provide a reason'); return; }
-
-    fetch(addAppParam(`/messaging2/case/${caseId}/escalate/`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ new_level: newLevel, reason: reason, loan: loan, name: '' })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Case escalated successfully!');
-            $('#escalateModal').modal('hide');
-            location.reload();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => alert('Error: ' + error.message));
-}
-
-function resolveCase(caseId) {
-    console.log('resolveCase called with caseId:', caseId);
-    document.getElementById('resolveCaseId').value = caseId;
-    console.log('Hidden field value set to:', document.getElementById('resolveCaseId').value);
-    $('#resolveModal').modal('show');
-}
-
-function submitResolution() {
-    const caseId = document.getElementById('resolveCaseId').value;
-    const notes = document.getElementById('resolutionNotes').value;
-    if (!notes) { alert('Please provide resolution notes'); return; }
-
-    const csrftoken = document.querySelector('[name=csrf-token]').content;
-    if (!csrftoken) {
-        alert('CSRF token missing. Please refresh the page.');
-        return;
     }
-
-    fetch(addAppParam(`/messaging2/case/${caseId}/resolve/`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ resolution_notes: notes })
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.text().then(text => {
-                throw new Error(`Server returned ${response.status} - ${text.substring(0, 200)}`);
-            });
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            alert('Case resolved successfully!');
-            $('#resolveModal').modal('hide');
-            location.reload();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => alert('Error: ' + error.message));
-}
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 </script>

@@ -1,28 +1,103 @@
 <!DOCTYPE html>
 {% load static %}
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MeghaAI Collections Intelligence</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
+        /* ============================================
+           CSS VARIABLES - LIGHT & DARK THEMES
+           ============================================ */
+        :root {
+            /* Light Theme (Default) */
+            --bg-body: #f0f2f5;
+            --bg-sidebar: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            --bg-chat: #f0f2f5;
+            --bg-message-user: #0084ff;
+            --bg-message-assistant: #ffffff;
+            --bg-input: #ffffff;
+            --bg-card: #ffffff;
+            
+            --text-primary: #1a1a2e;
+            --text-secondary: #65676b;
+            --text-light: #e4e6eb;
+            --text-white: #ffffff;
+            
+            --border-color: #e4e6eb;
+            --shadow-color: rgba(0,0,0,0.08);
+            
+            --primary: #0084ff;
+            --primary-dark: #0066cc;
+            --primary-light: #e6f0ff;
+            
+            --success: #198754;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            
+            --radius-sm: 0.25rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 1rem;
+            --radius-xl: 1.5rem;
+            
+            --transition: 0.3s ease;
+        }
+
+        /* Dark Theme */
+        [data-theme="dark"] {
+            --bg-body: #0d1117;
+            --bg-sidebar: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+            --bg-chat: #0d1117;
+            --bg-message-user: #1f6feb;
+            --bg-message-assistant: #161b22;
+            --bg-input: #161b22;
+            --bg-card: #161b22;
+            
+            --text-primary: #e4e6eb;
+            --text-secondary: #8b949e;
+            --text-light: #e4e6eb;
+            --text-white: #ffffff;
+            
+            --border-color: #30363d;
+            --shadow-color: rgba(0,0,0,0.3);
+            
+            --primary: #1f6feb;
+            --primary-dark: #1158c7;
+            --primary-light: #1f6feb33;
+        }
+
+        /* ============================================
+           BASE STYLES
+           ============================================ */
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            background: #f0f2f5;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-body);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: var(--text-primary);
+            transition: background var(--transition), color var(--transition);
+            overflow: hidden;
+            height: 100vh;
         }
 
-        /* Sidebar */
+        /* ============================================
+           SIDEBAR
+           ============================================ */
         .sidebar {
-            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            background: var(--bg-sidebar);
             min-height: 100vh;
             overflow-y: auto;
             padding: 0;
+            transition: background var(--transition);
+            height: 100vh;
+            position: sticky;
+            top: 0;
         }
 
         .sidebar::-webkit-scrollbar {
@@ -33,20 +108,134 @@
             border-radius: 2px;
         }
 
-        /* Chat Container */
+        .sidebar-brand {
+            padding: 1.25rem 1rem 0.5rem;
+        }
+
+        .sidebar-brand h4 {
+            color: var(--text-white);
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .sidebar-brand small {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .sidebar-divider {
+            border-color: rgba(255,255,255,0.1);
+            margin: 0.75rem 0;
+        }
+
+        .sidebar-label {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0 0.25rem;
+        }
+
+        .sidebar-text {
+            color: var(--text-light);
+            font-size: 0.85rem;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+        }
+
+        .status-badge.online {
+            background: #d1e7dd;
+            color: #0a3622;
+        }
+
+        [data-theme="dark"] .status-badge.online {
+            background: #1a3a2a;
+            color: #8dd4b8;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online {
+            background: #198754;
+        }
+
+        /* ============================================
+           SUGGESTION BUTTONS
+           ============================================ */
+        .suggestion-btn {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            border: none;
+            background: transparent;
+            color: var(--text-light) !important;
+            width: 100%;
+            border-radius: var(--radius-sm);
+        }
+
+        .suggestion-btn:hover {
+            background: rgba(255,255,255,0.1) !important;
+            transform: translateX(3px);
+        }
+
+        [data-theme="dark"] .suggestion-btn:hover {
+            background: rgba(255,255,255,0.05) !important;
+        }
+
+        /* ============================================
+           CHAT CONTAINER
+           ============================================ */
         .chat-container {
             display: flex;
             flex-direction: column;
             height: 100vh;
-            background: #f0f2f5;
+            background: var(--bg-chat);
+            transition: background var(--transition);
         }
 
-        /* Messages Area */
+        /* Chat Header */
+        .chat-header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 1.5rem;
+            flex-shrink: 0;
+            transition: background var(--transition), border-color var(--transition);
+        }
+
+        .chat-header h5 {
+            margin: 0;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .chat-header small {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        /* ============================================
+           MESSAGES AREA
+           ============================================ */
         #chat-messages {
             flex: 1;
             overflow-y: auto;
             padding: 1.5rem;
-            background: #f0f2f5;
+            background: var(--bg-chat);
+            transition: background var(--transition);
         }
 
         #chat-messages::-webkit-scrollbar {
@@ -57,7 +246,13 @@
             border-radius: 3px;
         }
 
-        /* Message Bubbles */
+        [data-theme="dark"] #chat-messages::-webkit-scrollbar-thumb {
+            background: #30363d;
+        }
+
+        /* ============================================
+           MESSAGE BUBBLES
+           ============================================ */
         .message {
             margin-bottom: 1rem;
             max-width: 90%;
@@ -74,83 +269,49 @@
 
         .message .content {
             padding: 0.75rem 1.25rem;
-            border-radius: 1rem;
+            border-radius: var(--radius-lg);
             word-wrap: break-word;
             overflow-wrap: break-word;
             line-height: 1.6;
+            box-shadow: 0 1px 3px var(--shadow-color);
+            transition: background var(--transition), color var(--transition), border-color var(--transition);
         }
 
         .message.user .content {
-            background: #0084ff;
+            background: var(--bg-message-user);
             color: white;
-            border-bottom-right-radius: 0.25rem;
+            border-bottom-right-radius: var(--radius-sm);
         }
 
         .message.assistant .content {
-            background: white;
-            border: 1px solid #e4e6eb;
-            border-bottom-left-radius: 0.25rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            max-height: none;
-            overflow: visible;
+            background: var(--bg-message-assistant);
+            border: 1px solid var(--border-color);
+            border-bottom-left-radius: var(--radius-sm);
+            color: var(--text-primary);
         }
 
         .message .timestamp {
-            font-size: 0.7rem;
-            color: #65676b;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
             margin-top: 0.25rem;
             padding: 0 0.25rem;
+            transition: color var(--transition);
         }
 
         .message.user .timestamp {
             text-align: right;
         }
 
-        /* Typing Indicator */
-        .typing-indicator {
-            display: none;
-            padding: 0.75rem 1.25rem;
-            background: white;
-            border-radius: 1rem;
-            border: 1px solid #e4e6eb;
-            width: fit-content;
-            margin-bottom: 1rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-
-        .typing-indicator.show {
-            display: inline-block;
-        }
-
-        .typing-indicator span {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #65676b;
-            margin: 0 2px;
-            animation: typing 1.4s infinite both;
-        }
-        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-            30% { transform: translateY(-6px); opacity: 1; }
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Message Content Styling */
+        /* ============================================
+           MESSAGE CONTENT STYLING
+           ============================================ */
         .message.assistant .content h1,
         .message.assistant .content h2,
         .message.assistant .content h3 {
             font-size: 1.1rem;
             margin: 0.75rem 0 0.5rem 0;
             font-weight: 600;
+            color: var(--text-primary);
         }
 
         .message.assistant .content h1:first-child,
@@ -170,22 +331,32 @@
         }
 
         .message.assistant .content code {
-            background: #f0f2f5;
+            background: var(--bg-body);
             padding: 0.1rem 0.4rem;
-            border-radius: 0.25rem;
+            border-radius: var(--radius-sm);
             font-size: 0.85rem;
             color: #d63384;
+            transition: background var(--transition);
+        }
+
+        [data-theme="dark"] .message.assistant .content code {
+            background: #1a1a2e;
+            color: #f08dba;
         }
 
         .message.assistant .content pre {
             background: #1a1a2e;
             color: #e4e6eb;
             padding: 1rem;
-            border-radius: 0.5rem;
+            border-radius: var(--radius-md);
             overflow-x: auto;
             font-size: 0.85rem;
             margin: 0.5rem 0;
             max-height: 400px;
+        }
+
+        [data-theme="dark"] .message.assistant .content pre {
+            background: #0d1117;
         }
 
         .message.assistant .content pre code {
@@ -194,85 +365,138 @@
             padding: 0;
         }
 
-        /* Table Styling */
+        .message.assistant .content strong {
+            color: var(--text-primary);
+        }
+
+        .message.assistant .content blockquote {
+            border-left: 4px solid var(--primary);
+            padding-left: 1rem;
+            margin: 0.5rem 0;
+            color: var(--text-secondary);
+        }
+
+        /* ============================================
+           TABLE STYLING
+           ============================================ */
         .message.assistant .content .table-wrapper {
             overflow-x: auto;
             margin: 0.75rem 0;
-            border-radius: 0.5rem;
-            border: 1px solid #e4e6eb;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            -webkit-overflow-scrolling: touch;
         }
 
         .message.assistant .content table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            min-width: 400px;
+            min-width: 300px;
         }
 
         .message.assistant .content table th {
-            background: #f0f2f5;
+            background: var(--bg-body);
             font-weight: 600;
             padding: 0.6rem 0.75rem;
             text-align: left;
-            border-bottom: 2px solid #e4e6eb;
+            border-bottom: 2px solid var(--border-color);
             position: sticky;
             top: 0;
             z-index: 1;
+            color: var(--text-primary);
+            transition: background var(--transition);
         }
 
         .message.assistant .content table td {
             padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid #e4e6eb;
-            max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+            transition: color var(--transition), border-color var(--transition);
         }
 
         .message.assistant .content table tr:hover td {
-            background: #f8f9fa;
+            background: var(--bg-body);
+        }
+
+        [data-theme="dark"] .message.assistant .content table tr:hover td {
+            background: #1a1a2e;
         }
 
         .message.assistant .content table tr:last-child td {
             border-bottom: none;
         }
 
-        /* Suggestion Buttons */
-        .suggestion-btn {
-            font-size: 0.8rem;
-            padding: 0.4rem 0.75rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: left;
-            border: none;
-            background: transparent;
-            color: #e4e6eb !important;
+        /* ============================================
+           TYPING INDICATOR
+           ============================================ */
+        .typing-indicator {
+            display: none;
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-message-assistant);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            width: fit-content;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px var(--shadow-color);
+            transition: background var(--transition), border-color var(--transition);
         }
 
-        .suggestion-btn:hover {
-            background: rgba(255,255,255,0.1) !important;
-            transform: translateX(3px);
+        .typing-indicator.show {
+            display: inline-block;
         }
 
-        /* Input Area */
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            margin: 0 2px;
+            animation: typing 1.4s infinite both;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-6px); opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============================================
+           INPUT AREA
+           ============================================ */
         .input-area {
-            background: white;
-            border-top: 1px solid #e4e6eb;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
             padding: 1rem;
+            flex-shrink: 0;
+            transition: background var(--transition), border-color var(--transition);
         }
 
         #chat-input {
-            border-radius: 1.5rem;
+            border-radius: var(--radius-xl);
             padding: 0.6rem 1.25rem;
-            border: 2px solid #e4e6eb;
+            border: 2px solid var(--border-color);
             resize: none;
             font-size: 0.95rem;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, background var(--transition), color var(--transition);
+            background: var(--bg-input);
+            color: var(--text-primary);
         }
 
         #chat-input:focus {
-            border-color: #0084ff;
+            border-color: var(--primary);
             box-shadow: none;
+        }
+
+        #chat-input::placeholder {
+            color: var(--text-secondary);
         }
 
         #send-btn {
@@ -283,13 +507,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #0084ff;
+            background: var(--primary);
             border: none;
             transition: all 0.2s;
         }
 
         #send-btn:hover:not(:disabled) {
-            background: #0066cc;
+            background: var(--primary-dark);
             transform: scale(1.05);
         }
 
@@ -298,22 +522,63 @@
             cursor: not-allowed;
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .message {
-                max-width: 95%;
-            }
-            .sidebar {
-                min-height: auto;
-                max-height: 50vh;
-            }
-            .message.assistant .content table {
-                font-size: 0.75rem;
-                min-width: 300px;
-            }
+        /* ============================================
+           WELCOME PLACEHOLDER
+           ============================================ */
+        .welcome-placeholder {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
         }
 
-        /* Loading Spinner */
+        .welcome-placeholder i {
+            font-size: 4rem;
+            display: block;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .welcome-placeholder h5 {
+            color: var(--text-primary);
+        }
+
+        /* ============================================
+           DARK MODE TOGGLE
+           ============================================ */
+        .theme-toggle {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: var(--text-light);
+            padding: 0.4rem 0.6rem;
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            width: 100%;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .theme-toggle i {
+            font-size: 1.1rem;
+        }
+
+        [data-theme="dark"] .theme-toggle {
+            background: rgba(255,255,255,0.05);
+        }
+
+        [data-theme="dark"] .theme-toggle:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* ============================================
+           LOADING SPINNER
+           ============================================ */
         .spinner-small {
             width: 20px;
             height: 20px;
@@ -327,98 +592,437 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Welcome Placeholder */
-        .welcome-placeholder {
-            text-align: center;
-            padding: 3rem 1rem;
-            color: #65676b;
+        /* ============================================
+           RESPONSIVE - MOBILE FIRST
+           ============================================ */
+
+        /* Small devices (phones, 576px and down) */
+        @media (max-width: 576px) {
+            .message {
+                max-width: 95%;
+            }
+
+            .message .content {
+                padding: 0.6rem 0.9rem;
+                font-size: 0.9rem;
+            }
+
+            #chat-messages {
+                padding: 0.75rem;
+            }
+
+            .input-area {
+                padding: 0.6rem;
+            }
+
+            #chat-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 0.6rem 1rem;
+                min-height: 44px;
+            }
+
+            #send-btn {
+                width: 44px;
+                height: 44px;
+            }
+
+            .chat-header {
+                padding: 0.5rem 0.75rem;
+            }
+
+            .chat-header h5 {
+                font-size: 1rem;
+            }
+
+            .chat-header small {
+                font-size: 0.7rem;
+            }
+
+            .welcome-placeholder {
+                padding: 2rem 0.5rem;
+            }
+
+            .welcome-placeholder i {
+                font-size: 3rem;
+            }
+
+            .sidebar-brand h4 {
+                font-size: 1.1rem;
+            }
+
+            /* Mobile Sidebar - Offcanvas */
+            .sidebar-offcanvas {
+                position: fixed;
+                top: 0;
+                left: -280px;
+                width: 280px;
+                height: 100%;
+                background: var(--bg-sidebar);
+                transition: left 0.3s ease;
+                z-index: 1050;
+                overflow-y: auto;
+                padding: 1rem;
+            }
+
+            .sidebar-offcanvas.open {
+                left: 0;
+            }
+
+            .sidebar-backdrop {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 1049;
+            }
+
+            .sidebar-backdrop.show {
+                display: block;
+            }
+
+            .mobile-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.5rem 0.75rem;
+                background: var(--bg-card);
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .mobile-header .brand {
+                color: var(--text-primary);
+                font-weight: 600;
+                font-size: 1rem;
+            }
+
+            .mobile-header .brand i {
+                color: var(--primary);
+            }
+
+            .hamburger-btn {
+                background: none;
+                border: none;
+                color: var(--text-primary);
+                font-size: 1.5rem;
+                padding: 0.25rem;
+                cursor: pointer;
+            }
+
+            /* Hide desktop sidebar on mobile */
+            .sidebar-desktop {
+                display: none !important;
+            }
+
+            .message.assistant .content table {
+                font-size: 0.7rem;
+                min-width: 250px;
+            }
+
+            .message.assistant .content .table-wrapper {
+                margin: 0.5rem 0;
+            }
+
+            .suggestion-btn {
+                font-size: 0.75rem;
+                padding: 0.3rem 0.6rem;
+            }
+
+            .status-badge {
+                font-size: 0.65rem;
+            }
+
+            .sidebar-label {
+                font-size: 0.6rem;
+            }
+
+            .sidebar-text {
+                font-size: 0.75rem;
+            }
+
+            .theme-toggle {
+                font-size: 0.75rem;
+                padding: 0.3rem 0.5rem;
+            }
         }
 
-        .welcome-placeholder i {
-            font-size: 4rem;
-            display: block;
-            margin-bottom: 1rem;
-            color: #0084ff;
+        /* Medium devices (tablets, 768px and up) */
+        @media (min-width: 577px) and (max-width: 768px) {
+            .message {
+                max-width: 90%;
+            }
+
+            .sidebar-desktop {
+                display: none !important;
+            }
+
+            .sidebar-offcanvas {
+                position: fixed;
+                top: 0;
+                left: -300px;
+                width: 300px;
+                height: 100%;
+                background: var(--bg-sidebar);
+                transition: left 0.3s ease;
+                z-index: 1050;
+                overflow-y: auto;
+                padding: 1rem;
+            }
+
+            .sidebar-offcanvas.open {
+                left: 0;
+            }
+
+            .sidebar-backdrop {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 1049;
+            }
+
+            .sidebar-backdrop.show {
+                display: block;
+            }
+
+            .mobile-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.5rem 1rem;
+                background: var(--bg-card);
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .mobile-header .brand {
+                color: var(--text-primary);
+                font-weight: 600;
+                font-size: 1.1rem;
+            }
+
+            .mobile-header .brand i {
+                color: var(--primary);
+            }
+
+            .hamburger-btn {
+                background: none;
+                border: none;
+                color: var(--text-primary);
+                font-size: 1.5rem;
+                padding: 0.25rem;
+                cursor: pointer;
+            }
+
+            #chat-messages {
+                padding: 1rem;
+            }
+
+            .chat-header {
+                padding: 0.5rem 1rem;
+            }
+
+            .message.assistant .content table {
+                font-size: 0.8rem;
+                min-width: 280px;
+            }
         }
 
-        /* Status Badge */
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.2rem 0.6rem;
-            border-radius: 1rem;
-            font-size: 0.75rem;
+        /* Large devices (desktops, 769px and up) */
+        @media (min-width: 769px) {
+            .sidebar-desktop {
+                display: block !important;
+            }
+
+            .mobile-header {
+                display: none !important;
+            }
+
+            .sidebar-offcanvas {
+                display: none !important;
+            }
+
+            .sidebar-backdrop {
+                display: none !important;
+            }
+
+            .message {
+                max-width: 85%;
+            }
+
+            .chat-header {
+                padding: 0.75rem 2rem;
+            }
+
+            #chat-messages {
+                padding: 2rem;
+            }
+
+            .input-area {
+                padding: 1rem 2rem;
+            }
         }
 
-        .status-badge.online {
-            background: #d1e7dd;
-            color: #0a3622;
+        /* Extra large devices (large desktops, 1200px and up) */
+        @media (min-width: 1200px) {
+            .message {
+                max-width: 75%;
+            }
+
+            .chat-header {
+                padding: 1rem 2.5rem;
+            }
+
+            #chat-messages {
+                padding: 2.5rem;
+            }
+
+            .input-area {
+                padding: 1.25rem 2.5rem;
+            }
         }
 
-        .status-badge.offline {
-            background: #f8d7da;
-            color: #58151c;
+        /* ============================================
+           UTILITY CLASSES
+           ============================================ */
+        .text-secondary-light {
+            color: var(--text-secondary);
         }
 
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            display: inline-block;
+        .border-secondary-light {
+            border-color: var(--border-color);
         }
 
-        .status-dot.online {
-            background: #198754;
-        }
-        .status-dot.offline {
-            background: #dc3545;
+        .bg-card {
+            background: var(--bg-card);
         }
 
-        /* Markdown-like styling */
-        .message.assistant .content strong {
-            color: #1a1a2e;
+        /* ============================================
+           ANIMATIONS
+           ============================================ */
+        .fade-in {
+            animation: fadeIn 0.3s ease;
         }
 
-        .message.assistant .content blockquote {
-            border-left: 4px solid #0084ff;
-            padding-left: 1rem;
-            margin: 0.5rem 0;
-            color: #65676b;
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
     </style>
 </head>
 <body>
-    <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
 
+    <!-- ============================================
+    MOBILE HEADER (Visible on Mobile/Tablet)
+    ============================================ -->
+    <div class="mobile-header">
+        <button class="hamburger-btn" id="hamburgerBtn">
+            <i class="bi bi-list"></i>
+        </button>
+        <span class="brand">
+            <i class="bi bi-robot"></i> MeghaAI
+        </span>
+        <button class="hamburger-btn" id="themeToggleMobile">
+            <i class="bi bi-moon"></i>
+        </button>
+    </div>
+
+    <!-- ============================================
+    SIDEBAR BACKDROP (Mobile/Tablet)
+    ============================================ -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- ============================================
+    SIDEBAR OFFCANVAS (Mobile/Tablet)
+    ============================================ -->
+    <div class="sidebar-offcanvas" id="sidebarOffcanvas">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-white mb-0">
+                <i class="bi bi-robot text-primary"></i> MeghaAI
+            </h4>
+            <button class="btn btn-link text-white" id="closeSidebar">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <small class="text-secondary d-block mb-3">Collections Intelligence</small>
+        <hr class="border-secondary">
+
+        <div class="mb-3">
+            <label class="text-secondary small">Database</label>
+            <div class="text-light small" id="db-info-mobile">Loading...</div>
+        </div>
+
+        <div class="mb-3">
+            <label class="text-secondary small">Status</label>
+            <div class="status-badge online" id="db-status-mobile">
+                <span class="status-dot online"></span> Connected
+            </div>
+        </div>
+
+        <hr class="border-secondary">
+
+        <div class="mb-3">
+            <label class="text-secondary small">Suggested Questions</label>
+            <div class="d-flex flex-column gap-1 mt-2">
+                <button class="suggestion-btn">📊 Show portfolio health</button>
+                <button class="suggestion-btn">⚠️ Top NPA accounts</button>
+                <button class="suggestion-btn">📈 PTP broken rate by state</button>
+                <button class="suggestion-btn">📉 Collection efficiency trend</button>
+                <button class="suggestion-btn">📞 High-risk customers to call</button>
+            </div>
+        </div>
+
+        <hr class="border-secondary">
+
+        <button class="theme-toggle mb-2" id="themeToggleOffcanvas">
+            <i class="bi bi-moon"></i> Dark Mode
+        </button>
+
+        <button class="btn btn-outline-danger btn-sm w-100" id="clear-chat-mobile">
+            <i class="bi bi-trash"></i> Clear Chat
+        </button>
+    </div>
+
+    <!-- ============================================
+    MAIN LAYOUT
+    ============================================ -->
     <div class="container-fluid p-0">
-        <div class="row g-0">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 sidebar">
-                <div class="p-3">
-                    <h4 class="text-white mb-4">
-                        <i class="bi bi-robot text-primary"></i> MeghaAI
-                    </h4>
-                    <small class="text-secondary d-block mb-3">Collections Intelligence</small>
+        <div class="row g-0" style="height: 100vh;">
 
-                    <hr class="border-secondary">
+            <!-- ============================================
+            DESKTOP SIDEBAR (Visible on Desktop)
+            ============================================ -->
+            <div class="col-md-3 col-lg-2 sidebar sidebar-desktop" id="desktopSidebar">
+                <div class="p-3 d-flex flex-column" style="height: 100%;">
+                    <div class="sidebar-brand">
+                        <h4>
+                            <i class="bi bi-robot text-primary"></i> MeghaAI
+                        </h4>
+                        <small>Collections Intelligence</small>
+                    </div>
+
+                    <hr class="sidebar-divider">
 
                     <div class="mb-3">
-                        <label class="text-secondary small">Database</label>
-                        <div class="text-light small" id="db-info">Loading...</div>
+                        <label class="sidebar-label">Database</label>
+                        <div class="sidebar-text" id="db-info">Loading...</div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="text-secondary small">Status</label>
+                        <label class="sidebar-label">Status</label>
                         <div class="status-badge online" id="db-status">
                             <span class="status-dot online"></span> Connected
                         </div>
                     </div>
 
-                    <hr class="border-secondary">
+                    <hr class="sidebar-divider">
 
-                    <div class="mb-3">
-                        <label class="text-secondary small">Suggested Questions</label>
+                    <div class="mb-3 flex-grow-1">
+                        <label class="sidebar-label">Suggested Questions</label>
                         <div class="d-flex flex-column gap-1 mt-2">
                             <button class="suggestion-btn">📊 Show portfolio health</button>
                             <button class="suggestion-btn">⚠️ Top NPA accounts</button>
@@ -428,24 +1032,31 @@
                         </div>
                     </div>
 
-                    <hr class="border-secondary">
+                    <hr class="sidebar-divider">
 
-                    <button class="btn btn-outline-danger btn-sm w-100" id="clear-chat">
+                    <button class="theme-toggle mb-2" id="themeToggleDesktop">
+                        <i class="bi bi-moon"></i> Dark Mode
+                    </button>
+
+                    <button class="btn btn-outline-danger btn-sm w-100" id="clear-chat-desktop">
                         <i class="bi bi-trash"></i> Clear Chat
                     </button>
                 </div>
             </div>
 
-            <!-- Main Chat Area -->
-            <div class="col-md-9 col-lg-10 p-0">
+            <!-- ============================================
+            CHAT AREA
+            ============================================ -->
+            <div class="col-md-9 col-lg-10 p-0" style="height: 100vh;">
                 <div class="chat-container">
-                    <!-- Header -->
-                    <div class="bg-white p-3 border-bottom" style="flex-shrink: 0;">
-                        <h5 class="mb-0">
+
+                    <!-- Chat Header -->
+                    <div class="chat-header">
+                        <h5>
                             <i class="bi bi-chat-dots text-primary"></i>
                             Collections Manager Assistant
                         </h5>
-                        <small class="text-secondary">Ask about customer behavior, risk, and collections strategy</small>
+                        <small>Ask about customer behavior, risk, and collections strategy</small>
                     </div>
 
                     <!-- Messages -->
@@ -459,7 +1070,7 @@
                     </div>
 
                     <!-- Input Area -->
-                    <div class="input-area" style="flex-shrink: 0;">
+                    <div class="input-area">
                         <div class="row g-2">
                             <div class="col">
                                 <textarea class="form-control" id="chat-input" rows="2"
@@ -478,334 +1089,405 @@
                             </small>
                         </div>
                     </div>
+
                 </div>
             </div>
+
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- ============================================
+    SCRIPTS
+    ============================================ -->
+    <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js">
+    </script>
     <script>
-// ============================================
-// MEGHAAI CHAT - COMPLETE
-// ============================================
+        // ============================================
+        // DARK MODE TOGGLE - COMPLETE
+        // ============================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
-class MeghaAIChat {
-    constructor() {
-        this.messages = [];
-        this.isProcessing = false;
-        this.messageContainer = document.getElementById('chat-messages');
-        this.chatInput = document.getElementById('chat-input');
-        this.sendButton = document.getElementById('send-btn');
-        this.clearButton = document.getElementById('clear-chat');
-        this.welcomePlaceholder = document.getElementById('welcome-placeholder');
-        this.csrfToken = document.getElementById('csrf-token')?.value || '';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('meghaai-theme', newTheme);
 
-        this.setupEventListeners();
-        this.loadDatabaseInfo();
-        this.addWelcomeMessage();
+            // Update all toggle buttons
+            const toggleIcons = document.querySelectorAll('.theme-toggle i');
+            const toggleTexts = document.querySelectorAll('.theme-toggle');
 
-        // Auto-resize textarea
-        this.chatInput.addEventListener('input', () => {
-            this.chatInput.style.height = 'auto';
-            this.chatInput.style.height = Math.min(this.chatInput.scrollHeight, 150) + 'px';
-        });
-    }
-
-    setupEventListeners() {
-        this.sendButton.addEventListener('click', () => this.sendMessage());
-
-        this.chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendMessage();
-            }
-        });
-
-        this.clearButton.addEventListener('click', () => this.clearChat());
-
-        document.querySelectorAll('.suggestion-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.chatInput.value = btn.textContent.replace(/^[^\s]+\s/, '').trim();
-                this.sendMessage();
-            });
-        });
-    }
-
-    async loadDatabaseInfo() {
-        try {
-            console.log('Loading database info...');
-            const response = await fetch('/meghaai/schema/');
-            
-            if (!response.ok) {
-                console.warn('Schema API returned status:', response.status);
-                // Use fallback values
-                document.getElementById('db-info').textContent = 'whatsappdb (63 tables)';
-                document.getElementById('db-status').className = 'status-badge online';
-                document.getElementById('db-status').innerHTML = '<span class="status-dot online"></span> Connected';
-                return;
-            }
-            
-            const data = await response.json();
-            console.log('Schema data:', data);
-            
-            if (data && data.database && data.database !== 'Error') {
-                const dbName = data.database || 'Unknown';
-                const tableCount = data.table_count || 0;
-                document.getElementById('db-info').textContent = `${dbName} (${tableCount} tables)`;
-                document.getElementById('db-status').className = 'status-badge online';
-                document.getElementById('db-status').innerHTML = '<span class="status-dot online"></span> Connected';
-            } else {
-                // Fallback if no valid data
-                document.getElementById('db-info').textContent = 'whatsappdb (63 tables)';
-                document.getElementById('db-status').className = 'status-badge online';
-                document.getElementById('db-status').innerHTML = '<span class="status-dot online"></span> Connected';
-            }
-            
-        } catch (error) {
-            console.error('Failed to load database info:', error);
-            // Fallback to hardcoded values
-            document.getElementById('db-info').textContent = 'whatsappdb (63 tables)';
-            document.getElementById('db-status').className = 'status-badge online';
-            document.getElementById('db-status').innerHTML = '<span class="status-dot online"></span> Connected';
-        }
-    }
-
-    addWelcomeMessage() {
-        const welcome = {
-            role: 'assistant',
-            content: `Welcome! I'm MeghaAI, your collections intelligence assistant. Ask me about:
-
-• Portfolio health and metrics
-• Customer behavior analysis
-• Risk bucket distributions
-• PTP (Promise to Pay) performance
-• Collections strategy recommendations
-
-Try asking: **"Show me the portfolio distribution by DPD bucket"**`
-        };
-        this.addMessage(welcome);
-    }
-
-    async sendMessage() {
-        const text = this.chatInput.value.trim();
-        if (!text || this.isProcessing) return;
-
-        this.chatInput.value = '';
-        this.chatInput.style.height = 'auto';
-
-        const userMessage = { role: 'user', content: text };
-        this.addMessage(userMessage);
-        this.messages.push(userMessage);
-
-        if (this.welcomePlaceholder) {
-            this.welcomePlaceholder.remove();
-            this.welcomePlaceholder = null;
-        }
-
-        this.showTyping();
-        this.isProcessing = true;
-        this.sendButton.disabled = true;
-        this.sendButton.innerHTML = '<div class="spinner-small"></div>';
-
-        try {
-            const response = await fetch('/meghaai/chat/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': this.csrfToken || this.getCSRFToken()
-                },
-                body: JSON.stringify({ messages: this.messages })
+            toggleIcons.forEach(icon => {
+                icon.className = newTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon';
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            // Show assistant response
-            if (data.messages && data.messages.length > 0) {
-                const assistantMsgs = data.messages.filter(m => m.role === 'assistant');
-                if (assistantMsgs.length > 0) {
-                    const lastMsg = assistantMsgs[assistantMsgs.length - 1];
-                    this.addMessage({ role: 'assistant', content: lastMsg.content });
-                    this.messages.push({ role: 'assistant', content: lastMsg.content });
+            toggleTexts.forEach(btn => {
+                const textSpan = btn.querySelector('span');
+                if (textSpan) {
+                    textSpan.textContent = newTheme === 'dark' ? ' Light Mode' : ' Dark Mode';
                 }
-            }
-
-        } catch (error) {
-            console.error('Chat error:', error);
-
-            let userFriendlyMessage = '⚠️ I encountered an issue while processing your request. ';
-
-            if (error.message.includes('timeout') || error.message.includes('timed out')) {
-                userFriendlyMessage += 'The query took too long. Please try a simpler question.';
-            } else if (error.message.includes('CSRF')) {
-                userFriendlyMessage += 'Your session has expired. Please refresh the page.';
-            } else if (error.message.includes('database') || error.message.includes('connection')) {
-                userFriendlyMessage += 'There is a database connection issue. Please try again in a moment.';
-            } else {
-                userFriendlyMessage += 'Please try rephrasing your question or breaking it into smaller parts.';
-            }
-
-            this.addMessage({
-                role: 'assistant',
-                content: userFriendlyMessage
             });
-        } finally {
-            this.hideTyping();
-            this.isProcessing = false;
-            this.sendButton.disabled = false;
-            this.sendButton.innerHTML = '<i class="bi bi-send"></i>';
-            this.chatInput.focus();
-        }
-    }
 
-    addMessage(message) {
-        const wrapper = document.createElement('div');
-        wrapper.className = `message ${message.role}`;
-
-        const content = document.createElement('div');
-        content.className = 'content';
-        content.innerHTML = this.formatMessage(message.content);
-
-        const timestamp = document.createElement('div');
-        timestamp.className = 'timestamp';
-        timestamp.textContent = new Date().toLocaleTimeString();
-
-        wrapper.appendChild(content);
-        wrapper.appendChild(timestamp);
-
-        this.messageContainer.appendChild(wrapper);
-        this.scrollToBottom();
-    }
-
-    formatMessage(content) {
-        let html = content;
-
-        // Headers
-        html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
-        html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
-        html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
-
-        // Bold
-        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-        // Italic
-        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-        // Inline code
-        html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-
-        // Line breaks
-        html = html.replace(/\n/g, '<br>');
-
-        // Bullet lists
-        html = html.replace(/• (.*?)(<br>|$)/g, '• $1$2');
-
-        // Numbered lists
-        html = html.replace(/^(\d+)\. (.*?)(<br>|$)/gm, '$1. $2$3');
-
-        // ===== Table Detection =====
-        const lines = content.split('\n');
-        let tableStart = -1;
-        let tableEnd = -1;
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line.includes('|') && line.includes('-') && line.includes('|')) {
-                if (tableStart === -1) {
-                    tableStart = i - 1;
-                }
-                tableEnd = i + 1;
-                while (tableEnd < lines.length && lines[tableEnd].trim().includes('|')) {
-                    tableEnd++;
-                }
-                break;
+            // Update mobile header theme button
+            const mobileThemeBtn = document.getElementById('themeToggleMobile');
+            if (mobileThemeBtn) {
+                mobileThemeBtn.innerHTML = `<i class="bi bi-${newTheme === 'dark' ? 'sun' : 'moon'}"></i>`;
             }
         }
 
-        if (tableStart !== -1 && tableEnd !== -1) {
-            const tableLines = lines.slice(tableStart, tableEnd);
-            const headers = tableLines[0].split('|').filter(c => c.trim()).map(c => c.trim());
-            const rows = [];
+        // Load saved theme
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('meghaai-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
 
-            for (let i = 2; i < tableLines.length; i++) {
-                const cells = tableLines[i].split('|').filter(c => c.trim()).map(c => c.trim());
-                if (cells.length === headers.length) {
-                    rows.push(cells);
+            const toggleIcons = document.querySelectorAll('.theme-toggle i');
+            const toggleTexts = document.querySelectorAll('.theme-toggle');
+
+            toggleIcons.forEach(icon => {
+                icon.className = savedTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon';
+            });
+
+            toggleTexts.forEach(btn => {
+                const textSpan = btn.querySelector('span');
+                if (textSpan) {
+                    textSpan.textContent = savedTheme === 'dark' ? ' Light Mode' : ' Dark Mode';
+                }
+            });
+
+            const mobileThemeBtn = document.getElementById('themeToggleMobile');
+            if (mobileThemeBtn) {
+                mobileThemeBtn.innerHTML = `<i class="bi bi-${savedTheme === 'dark' ? 'sun' : 'moon'}"></i>`;
+            }
+        }
+
+        // Theme toggle event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTheme();
+
+            document.querySelectorAll('.theme-toggle').forEach(btn => {
+                btn.addEventListener('click', toggleTheme);
+            });
+
+            document.getElementById('themeToggleMobile')?.addEventListener('click', toggleTheme);
+        });
+
+        // ============================================
+        // MOBILE SIDEBAR TOGGLE
+        // ============================================
+        function toggleSidebar() {
+            const offcanvas = document.getElementById('sidebarOffcanvas');
+            const backdrop = document.getElementById('sidebarBackdrop');
+
+            offcanvas.classList.toggle('open');
+            backdrop.classList.toggle('show');
+            document.body.style.overflow = offcanvas.classList.contains('open') ? 'hidden' : '';
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('hamburgerBtn')?.addEventListener('click', toggleSidebar);
+            document.getElementById('closeSidebar')?.addEventListener('click', toggleSidebar);
+            document.getElementById('sidebarBackdrop')?.addEventListener('click', toggleSidebar);
+        });
+
+        // ============================================
+        // MEGHAAI CHAT CLASS - COMPLETE
+        // ============================================
+        class MeghaAIChat {
+            constructor() {
+                this.messages = [];
+                this.isProcessing = false;
+                this.messageContainer = document.getElementById('chat-messages');
+                this.chatInput = document.getElementById('chat-input');
+                this.sendButton = document.getElementById('send-btn');
+                this.csrfToken = document.getElementById('csrf-token')?.value || '';
+
+                this.setupEventListeners();
+                this.loadDatabaseInfo();
+                this.addWelcomeMessage();
+
+                // Auto-resize textarea
+                this.chatInput.addEventListener('input', () => {
+                    this.chatInput.style.height = 'auto';
+                    this.chatInput.style.height = Math.min(this.chatInput.scrollHeight, 150) + 'px';
+                });
+            }
+
+            setupEventListeners() {
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+
+                this.chatInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // Clear chat buttons
+                document.querySelectorAll('#clear-chat-desktop, #clear-chat-mobile').forEach(btn => {
+                    btn.addEventListener('click', () => this.clearChat());
+                });
+
+                // Suggestion buttons
+                document.querySelectorAll('.suggestion-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        this.chatInput.value = btn.textContent.replace(/^[^\s]+\s/, '').trim();
+                        this.sendMessage();
+                    });
+                });
+            }
+
+            async loadDatabaseInfo() {
+                try {
+                    const response = await fetch('/meghaai/schema/');
+                    if (!response.ok) {
+                        console.warn('Schema API status:', response.status);
+                        this.setDbInfo('whatsappdb (63 tables)', 'online');
+                        return;
+                    }
+
+                    const data = await response.json();
+                    if (data && data.database && data.database !== 'Error') {
+                        this.setDbInfo(`${data.database} (${data.table_count || 63} tables)`, 'online');
+                    } else {
+                        this.setDbInfo('whatsappdb (63 tables)', 'online');
+                    }
+                } catch (error) {
+                    console.error('DB info error:', error);
+                    this.setDbInfo('whatsappdb (63 tables)', 'online');
                 }
             }
 
-            if (rows.length > 0) {
-                let tableHtml = '<div class="table-wrapper"><table>';
-                tableHtml += '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead>';
-                tableHtml += '<tbody>';
-                for (const row of rows) {
-                    tableHtml += '<tr>' + row.map(c => `<td>${c}</td>`).join('') + '</tr>';
-                }
-                tableHtml += '</tbody></table></div>';
+            setDbInfo(text, status) {
+                document.querySelectorAll('#db-info, #db-info-mobile').forEach(el => {
+                    if (el) el.textContent = text;
+                });
+            }
 
-                const before = lines.slice(0, tableStart).join('\n');
-                const after = lines.slice(tableEnd).join('\n');
-                html = this.formatMessage(before) + tableHtml + this.formatMessage(after);
+            addWelcomeMessage() {
+                const welcome = {
+                    role: 'assistant',
+                    content: `Welcome! I'm MeghaAI, your collections intelligence assistant. Ask me about:
+
+                • Portfolio health and metrics
+                • Customer behavior analysis
+                • Risk bucket distributions
+                • PTP (Promise to Pay) performance
+                • Collections strategy recommendations
+
+                Try asking: **"Show me the portfolio distribution by DPD bucket"**`
+                };
+                this.addMessage(welcome);
+            }
+
+            async sendMessage() {
+                const text = this.chatInput.value.trim();
+                if (!text || this.isProcessing) return;
+
+                this.chatInput.value = '';
+                this.chatInput.style.height = 'auto';
+
+                const userMessage = { role: 'user', content: text };
+                this.addMessage(userMessage);
+                this.messages.push(userMessage);
+
+                const welcome = document.getElementById('welcome-placeholder');
+                if (welcome) welcome.remove();
+
+                this.showTyping();
+                this.isProcessing = true;
+                this.sendButton.disabled = true;
+                this.sendButton.innerHTML = '<div class="spinner-small"></div>';
+
+                try {
+                    const response = await fetch('/meghaai/chat/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.csrfToken || this.getCSRFToken()
+                        },
+                        body: JSON.stringify({ messages: this.messages })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    if (data.messages && data.messages.length > 0) {
+                        const assistantMsgs = data.messages.filter(m => m.role === 'assistant');
+                        if (assistantMsgs.length > 0) {
+                            const lastMsg = assistantMsgs[assistantMsgs.length - 1];
+                            this.addMessage({ role: 'assistant', content: lastMsg.content });
+                            this.messages.push({ role: 'assistant', content: lastMsg.content });
+                        }
+                    }
+
+                } catch (error) {
+                    console.error('Chat error:', error);
+                    let userMsg = '⚠️ I encountered an issue while processing your request. ';
+
+                    if (error.message.includes('timeout')) {
+                        userMsg += 'The query took too long. Please try a simpler question.';
+                    } else if (error.message.includes('CSRF')) {
+                        userMsg += 'Your session has expired. Please refresh the page.';
+                    } else if (error.message.includes('database')) {
+                        userMsg += 'There is a database connection issue. Please try again in a moment.';
+                    } else {
+                        userMsg += 'Please try rephrasing your question or breaking it into smaller parts.';
+                    }
+
+                    this.addMessage({ role: 'assistant', content: userMsg });
+                } finally {
+                    this.hideTyping();
+                    this.isProcessing = false;
+                    this.sendButton.disabled = false;
+                    this.sendButton.innerHTML = '<i class="bi bi-send"></i>';
+                    this.chatInput.focus();
+                }
+            }
+
+            addMessage(message) {
+                const wrapper = document.createElement('div');
+                wrapper.className = `message ${message.role}`;
+
+                const content = document.createElement('div');
+                content.className = 'content';
+                content.innerHTML = this.formatMessage(message.content);
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'timestamp';
+                timestamp.textContent = new Date().toLocaleTimeString();
+
+                wrapper.appendChild(content);
+                wrapper.appendChild(timestamp);
+
+                this.messageContainer.appendChild(wrapper);
+                this.scrollToBottom();
+            }
+
+            formatMessage(content) {
+                let html = content;
+
+                // Headers
+                html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+                html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
+                html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
+
+                // Bold
+                html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+                // Italic
+                html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+                // Inline code
+                html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+
+                // Line breaks
+                html = html.replace(/\n/g, '<br>');
+
+                // ===== Table Detection =====
+                const lines = content.split('\n');
+                let tableStart = -1;
+                let tableEnd = -1;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line.includes('|') && line.includes('-') && line.includes('|')) {
+                        if (tableStart === -1) {
+                            tableStart = i - 1;
+                        }
+                        tableEnd = i + 1;
+                        while (tableEnd < lines.length && lines[tableEnd].trim().includes('|')) {
+                            tableEnd++;
+                        }
+                        break;
+                    }
+                }
+
+                if (tableStart !== -1 && tableEnd !== -1) {
+                    const tableLines = lines.slice(tableStart, tableEnd);
+                    const headers = tableLines[0].split('|').filter(c => c.trim()).map(c => c.trim());
+                    const rows = [];
+
+                    for (let i = 2; i < tableLines.length; i++) {
+                        const cells = tableLines[i].split('|').filter(c => c.trim()).map(c => c.trim());
+                        if (cells.length === headers.length) {
+                            rows.push(cells);
+                        }
+                    }
+
+                    if (rows.length > 0) {
+                        let tableHtml = '<div class="table-wrapper"><table>';
+                        tableHtml += '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead>';
+                        tableHtml += '<tbody>';
+                        for (const row of rows) {
+                            tableHtml += '<tr>' + row.map(c => `<td>${c}</td>`).join('') + '</tr>';
+                        }
+                        tableHtml += '</tbody></table></div>';
+
+                        const before = lines.slice(0, tableStart).join('\n');
+                        const after = lines.slice(tableEnd).join('\n');
+                        html = this.formatMessage(before) + tableHtml + this.formatMessage(after);
+                        return html;
+                    }
+                }
+
                 return html;
             }
+
+            showTyping() {
+                const indicator = document.getElementById('typing-indicator') || this.createTypingIndicator();
+                indicator.classList.add('show');
+                this.scrollToBottom();
+            }
+
+            hideTyping() {
+                const indicator = document.getElementById('typing-indicator');
+                if (indicator) indicator.classList.remove('show');
+            }
+
+            createTypingIndicator() {
+                const indicator = document.createElement('div');
+                indicator.id = 'typing-indicator';
+                indicator.className = 'typing-indicator';
+                indicator.innerHTML = '<span></span><span></span><span></span>';
+                this.messageContainer.appendChild(indicator);
+                return indicator;
+            }
+
+            clearChat() {
+                if (confirm('Clear all messages?')) {
+                    this.messageContainer.innerHTML = '';
+                    this.messages = [];
+                    this.addWelcomeMessage();
+                }
+            }
+
+            scrollToBottom() {
+                setTimeout(() => {
+                    this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+                }, 100);
+            }
+
+            getCSRFToken() {
+                return document.cookie.split('; ')
+                    .find(row => row.startsWith('csrftoken='))
+                    ?.split('=')[1] || '';
+            }
         }
 
-        return html;
-    }
-
-    showTyping() {
-        const indicator = document.getElementById('typing-indicator') || this.createTypingIndicator();
-        indicator.classList.add('show');
-        this.scrollToBottom();
-    }
-
-    hideTyping() {
-        const indicator = document.getElementById('typing-indicator');
-        if (indicator) indicator.classList.remove('show');
-    }
-
-    createTypingIndicator() {
-        const indicator = document.createElement('div');
-        indicator.id = 'typing-indicator';
-        indicator.className = 'typing-indicator';
-        indicator.innerHTML = '<span></span><span></span><span></span>';
-        this.messageContainer.appendChild(indicator);
-        return indicator;
-    }
-
-    clearChat() {
-        if (confirm('Clear all messages?')) {
-            this.messageContainer.innerHTML = '';
-            this.messages = [];
-            this.addWelcomeMessage();
-        }
-    }
-
-    scrollToBottom() {
-        setTimeout(() => {
-            this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
-        }, 100);
-    }
-
-    getCSRFToken() {
-        return document.cookie.split('; ')
-            .find(row => row.startsWith('csrftoken='))
-            ?.split('=')[1] || '';
-    }
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    window.meghaAIChat = new MeghaAIChat();
-});
-</script>
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            window.meghaAIChat = new MeghaAIChat();
+        });
+    </script>
 </body>
 </html>
