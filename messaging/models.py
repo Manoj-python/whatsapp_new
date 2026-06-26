@@ -97,7 +97,8 @@ class BulkJob(models.Model):
 # ============================================
 
 from messaging2.models import Agent  # reuse Agent from PSF app
-from adminpanel.models import SupportGroup,Subgroup
+from adminpanel.models import SupportGroup,Subgroup,Category
+
 class CaseEscalationLog(models.Model):
     case = models.ForeignKey('Case', on_delete=models.CASCADE, related_name='escalation_logs')
     from_level = models.CharField(max_length=20)
@@ -192,7 +193,7 @@ class Case(models.Model):
     
     # Issue Details
     issue_description = models.TextField(blank=True, null=True)
-    category = models.CharField(max_length=100, blank=True, null=True)
+    category = models.ForeignKey(Category,on_delete=models.SET_NULL,null=True,blank=True,related_name='categories')
     group = models.ForeignKey(SupportGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='app1_cases')
     subgroup=models.ForeignKey(Subgroup,on_delete=models.SET_NULL,null=True,blank=True,related_name='app1_subcases')
 

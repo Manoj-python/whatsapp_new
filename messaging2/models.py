@@ -3,7 +3,7 @@
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
-from adminpanel.models import SupportGroup,Subgroup
+from adminpanel.models import SupportGroup,Subgroup,Category
 
 # ============================================
 # WHATSAPP & CHAT LOGS (unchanged, kept as is)
@@ -319,7 +319,7 @@ class Case(models.Model):
     
     # Issue Details
     issue_description = models.TextField(blank=True, null=True)
-    category = models.CharField(max_length=100, blank=True, null=True)
+    category = models.ForeignKey(Category,on_delete=models.SET_NULL,null=True,blank=True,related_name='categories')
     group = models.ForeignKey(SupportGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='cases')
     subgroup=models.ForeignKey(Subgroup,on_delete=models.SET_NULL,null=True,blank=True,related_name='subcases')
     # Escalation

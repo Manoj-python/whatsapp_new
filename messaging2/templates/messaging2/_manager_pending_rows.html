@@ -6,6 +6,8 @@
     <td>{{ case.customer_name|default:case.mobile }}</td>
     <td>{{ case.mobile }}</td>
     <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+    <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>
+
     <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
     <td>{{ case.issue_description|default:"-" }}</td>
     <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>

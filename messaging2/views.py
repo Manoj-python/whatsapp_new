@@ -1582,7 +1582,11 @@ def executive_dashboard2(request):
     executive_groups = agent.groups.all()
     executive_subgroups = agent.subgroup.all()
 
-    # ─── Build combined filter ──────────────────────────────────
+    # ─── Filters from request ──────────────────────────────────
+    category_id = request.GET.get('category')
+    subgroup_id = request.GET.get('subgroup')
+
+    # ─── Build combined filter (groups/subgroups) ─────────────
     if executive_groups and executive_subgroups:
         combined_filter = Q(group__in=executive_groups) & Q(subgroup__in=executive_subgroups)
     elif executive_groups:
@@ -1592,26 +1596,36 @@ def executive_dashboard2(request):
     else:
         combined_filter = Q(pk__in=[])  # no access
 
+    # ─── Apply category filter ─────────────────────────────────
+    if category_id:
+        combined_filter &= Q(category_id=category_id)
+
+    # ─── Apply subgroup filter (optional, overrides) ──────────
+    if subgroup_id:
+        combined_filter &= Q(subgroup_id=subgroup_id)
+
     # ─── Pending cases ──────────────────────────────────────────
     pending_cases = CaseModel.objects.filter(
         current_level='ESC2',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').filter(combined_filter).order_by('-created_at')
+    ).exclude(status='Closed').filter(combined_filter).select_related('group', 'subgroup', 'category').order_by('-created_at')
 
     # ─── Resolved cases ─────────────────────────────────────────
     resolved_cases = CaseModel.objects.filter(
         resolved_at_level='ESC2',
-        status='Resolved'          # only pending closure, exclude closed
-    ).filter(combined_filter).order_by('-resolved_at')
+        status='Resolved'
+    ).filter(combined_filter).select_related('group', 'subgroup', 'category').order_by('-resolved_at')
 
     # ─── Escalated cases ────────────────────────────────────────
     escalated_cases = CaseModel.objects.filter(
         previous_level='ESC2'
-    ).filter(combined_filter).order_by('-updated_at')
+    ).filter(combined_filter).select_related('group', 'subgroup', 'category').order_by('-updated_at')
 
+    # ─── Enrich with names ──────────────────────────────────────
     enrich_case_details(pending_cases)
     enrich_case_details(resolved_cases)
     enrich_case_details(escalated_cases)
+
 
     stats = {
         'pending': pending_cases.count(),
@@ -1626,8 +1640,10 @@ def executive_dashboard2(request):
         'can_close': agent.can_close,
     }
 
+    # ─── For filter dropdowns ───────────────────────────────────
     all_groups = SupportGroup.objects.all().order_by('name')
     all_subgroups = Subgroup.objects.select_related('group').order_by('group__name', 'name')
+    all_categories = Category.objects.select_related('group').order_by('group__name', 'name')
 
     return render(request, 'messaging2/executive_dashboard.html', {
         'pending_cases': pending_cases,
@@ -1640,14 +1656,12 @@ def executive_dashboard2(request):
         'app_list': APP_CONFIG.items(),
         'all_groups': all_groups,
         'all_subgroups': all_subgroups,
+        'all_categories': all_categories,   # new
+        'selected_category': category_id,
+        'selected_subgroup': subgroup_id,
     })
-
 # Manager Dashboard (ESC3)
-from django.utils import timezone
-from datetime import datetime
 
-from django.db.models import Q
-from adminpanel.models import Subgroup
 @messaging2_required
 def manager_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
@@ -1659,11 +1673,11 @@ def manager_dashboard2(request):
     manager_groups = agent.groups.all()
     manager_subgroups = agent.subgroup.all()
 
-    # ==========================================
-    # FILTER LOGIC
-    # If subgroups are assigned, show ONLY those subgroups.
-    # Otherwise, show all cases of assigned groups.
-    # ==========================================
+    # ─── Filters from request ──────────────────────────────────
+    category_id = request.GET.get('category')
+    subgroup_id = request.GET.get('subgroup')
+
+    # ─── Filter logic ──────────────────────────────────────────
     if manager_subgroups.exists():
         case_filter = Q(subgroup__in=manager_subgroups)
     elif manager_groups.exists():
@@ -1678,7 +1692,7 @@ def manager_dashboard2(request):
                 'pending': 0,
                 'resolved': 0,
                 'escalated': 0,
-                'closed_cases': 0
+                'closed': 0
             },
             'dept_stats': [],
             'level_wise_stats': [],
@@ -1686,15 +1700,20 @@ def manager_dashboard2(request):
             'agent': agent,
             'current_app': request.GET.get('app', 'psf'),
             'app_list': APP_CONFIG.items(),
-            'all_subgroups': Subgroup.objects.select_related(
-                'group'
-            ).order_by('group__name', 'name'),
+            'all_subgroups': Subgroup.objects.select_related('group').order_by('group__name', 'name'),
+            'all_categories': Category.objects.select_related('group').order_by('group__name', 'name'),
+            'selected_category': None,
+            'selected_subgroup': None,
         }
         return render(request, 'messaging2/manager_dashboard.html', context)
 
-    # ==========================================
-    # Pending Cases (ESC3)
-    # ==========================================
+    # ─── Apply category and subgroup filters ──────────────────
+    if category_id:
+        case_filter &= Q(category_id=category_id)
+    if subgroup_id:
+        case_filter &= Q(subgroup_id=subgroup_id)
+
+    # ─── Pending Cases (ESC3) ──────────────────────────────────
     pending_cases = (
         CaseModel.objects.filter(
             current_level='ESC3',
@@ -1702,43 +1721,53 @@ def manager_dashboard2(request):
         )
         .exclude(status='Closed')
         .filter(case_filter)
+        .select_related('group', 'subgroup', 'category')
         .order_by('-created_at')
     )
 
-    # ==========================================
-    # Resolved Cases
-    # ==========================================
+    # ─── Resolved Cases ────────────────────────────────────────
     resolved_cases = (
         CaseModel.objects.filter(
             resolved_at_level='ESC3',
             status='Resolved'
         )
         .filter(case_filter)
+        .select_related('group', 'subgroup', 'category')
         .order_by('-resolved_at')
     )
 
-    # ==========================================
-    # Closed Cases
-    # ==========================================
+    # ─── Closed Cases ──────────────────────────────────────────
     closed_cases = (
         CaseModel.objects.filter(
             status='Closed',
             resolved_at_level='ESC3'
         )
         .filter(case_filter)
+        .select_related('group', 'subgroup', 'category')
         .order_by('-closed_at')
     )
 
-    # ==========================================
-    # Escalated Cases
-    # ==========================================
+    # ─── Escalated Cases ───────────────────────────────────────
     escalated_cases = (
         CaseModel.objects.filter(
             previous_level='ESC3'
         )
         .filter(case_filter)
+        .select_related('group', 'subgroup', 'category')
         .order_by('-updated_at')
     )
+
+    # ─── Enrich with names ──────────────────────────────────────
+    def enrich(cases):
+        for case in cases:
+            case.group_name = case.group.name if case.group else None
+            case.subgroup_name = case.subgroup.name if case.subgroup else None
+            case.category_name = case.category.name if case.category else None
+
+    enrich(pending_cases)
+    enrich(resolved_cases)
+    enrich(closed_cases)
+    enrich(escalated_cases)
 
     stats = {
         'pending': pending_cases.count(),
@@ -1747,29 +1776,21 @@ def manager_dashboard2(request):
         'closed': closed_cases.count(),
     }
 
-    # ==========================================
-    # Department Wise Stats
-    # ==========================================
+    # ─── Department Wise Stats ──────────────────────────────────
     today_start = timezone.now().replace(
-        hour=0,
-        minute=0,
-        second=0,
-        microsecond=0
+        hour=0, minute=0, second=0, microsecond=0
     )
 
     dept_stats = []
-
     dept_ids = (
         CaseModel.objects.filter(case_filter)
         .values_list('group_id', flat=True)
         .distinct()
     )
-
     groups_with_cases = SupportGroup.objects.filter(id__in=dept_ids)
 
     for group in groups_with_cases:
         dept_pending = pending_cases.filter(group=group).count()
-
         dept_today = (
             CaseModel.objects.filter(
                 group=group,
@@ -1778,16 +1799,13 @@ def manager_dashboard2(request):
             .filter(case_filter)
             .count()
         )
-
         dept_stats.append({
             'name': group.name,
             'pending': dept_pending,
             'today': dept_today,
         })
 
-    # ==========================================
-    # Level Wise Stats
-    # ==========================================
+    # ─── Level Wise Stats ───────────────────────────────────────
     all_levels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5']
     level_wise_stats = []
 
@@ -1811,7 +1829,6 @@ def manager_dashboard2(request):
                 .filter(case_filter)
                 .count()
             )
-
             group_stats['levels'][level] = open_cases
             group_stats['total_cases'] += open_cases
 
@@ -1823,15 +1840,12 @@ def manager_dashboard2(request):
                 .filter(case_filter)
                 .count()
             )
-
             group_stats['resolved_by_level'][level] = resolved
             group_stats['total_resolved'] += resolved
 
         level_wise_stats.append(group_stats)
 
-    # ==========================================
-    # Agents List
-    # ==========================================
+    # ─── Agents List ─────────────────────────────────────────────
     if manager_subgroups.exists():
         agents_list = (
             Agent.objects.filter(
@@ -1852,25 +1866,24 @@ def manager_dashboard2(request):
         )
 
     all_groups = SupportGroup.objects.all().order_by('name')
-    # all_subgroups = Subgroup.objects.select_related(
-    #     'group'
-    # ).order_by('group__name', 'name')
     if manager_subgroups.exists():
         all_subgroups = (
-        manager_subgroups
-        .select_related('group')
-        .order_by('group__name', 'name')
-    )
+            manager_subgroups
+            .select_related('group')
+            .order_by('group__name', 'name')
+        )
     elif manager_groups.exists():
         all_subgroups = (
-        Subgroup.objects.filter(
-            group__in=manager_groups
+            Subgroup.objects.filter(
+                group__in=manager_groups
+            )
+            .select_related('group')
+            .order_by('group__name', 'name')
         )
-        .select_related('group')
-        .order_by('group__name', 'name')
-    )
     else:
         all_subgroups = Subgroup.objects.none()
+
+    all_categories = Category.objects.select_related('group').order_by('group__name', 'name')
 
     context = {
         'pending_cases': pending_cases,
@@ -1887,10 +1900,12 @@ def manager_dashboard2(request):
         'app_list': APP_CONFIG.items(),
         'all_groups': all_groups,
         'all_subgroups': all_subgroups,
+        'all_categories': all_categories,   # new
+        'selected_category': category_id,
+        'selected_subgroup': subgroup_id,
     }
 
     return render(request, 'messaging2/manager_dashboard.html', context)
-
 
 def manager_cases_api(request):
     agent = get_agent_from_user(request.user)
@@ -1914,6 +1929,7 @@ def manager_cases_api(request):
         )
         .exclude(status='Closed')
         .filter(case_filter)
+        .select_related('group', 'subgroup', 'category')   # ← added category
     )
 
     if department != 'all':
@@ -1931,6 +1947,7 @@ def manager_cases_api(request):
         'loan_number': c.loan_number,
         'group_name': c.group.name if c.group else None,
         'subgroup_name': c.subgroup.name if c.subgroup else None,
+        'category_name': c.category.name if c.category else None,   # ← added
         'priority': c.priority,
         'status': c.status,
         'created_at': c.created_at.isoformat(),
@@ -1941,7 +1958,6 @@ def manager_cases_api(request):
 # Head Dashboard (ESC4)
 from django.db.models import Q
 from adminpanel.models import Subgroup
-
 @messaging2_required
 def head_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
@@ -1952,7 +1968,11 @@ def head_dashboard2(request):
     head_groups = agent.groups.all()
     head_subgroups = agent.subgroup.all()
 
-    # Build OR filter for groups/subgroups
+    # ─── Filters from request ──────────────────────────────────
+    category_id = request.GET.get('category')
+    subgroup_id = request.GET.get('subgroup')
+
+    # ─── Build OR filter for groups/subgroups ──────────────────
     group_subgroup_filter = Q()
     if head_groups:
         group_subgroup_filter |= Q(group__in=head_groups)
@@ -1971,28 +1991,38 @@ def head_dashboard2(request):
             'current_app': request.GET.get('app', 'psf'),
             'app_list': APP_CONFIG.items(),
             'all_subgroups': Subgroup.objects.select_related('group').order_by('group__name', 'name'),
+            'all_categories': Category.objects.select_related('group').order_by('group__name', 'name'),
+            'selected_category': None,
+            'selected_subgroup': None,
         }
         return render(request, 'messaging2/head_dashboard.html', context)
 
-    # ---- Pending cases (ESC4) ----
+    # ─── Apply category and subgroup filters ──────────────────
+    if category_id:
+        group_subgroup_filter &= Q(category_id=category_id)
+    if subgroup_id:
+        group_subgroup_filter &= Q(subgroup_id=subgroup_id)
+
+    # ─── Base queryset for pending cases (ESC4) ──────────────
     base_qs = CaseModel.objects.filter(
         current_level='ESC4',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').filter(group_subgroup_filter)
+    ).exclude(status='Closed').filter(group_subgroup_filter).select_related('group', 'subgroup', 'category')
 
+    # ─── Stats ──────────────────────────────────────────────────
     stats = {
         'pending': base_qs.count(),
         'resolved': CaseModel.objects.filter(
             resolved_at_level='ESC4'
-        ).filter(group_subgroup_filter).count(),
+        ).filter(group_subgroup_filter).select_related('category').count(),
         'escalated_to_admin': CaseModel.objects.filter(
             current_level='ESC5'
-        ).filter(group_subgroup_filter).count(),
+        ).filter(group_subgroup_filter).select_related('category').count(),
     }
 
+    # ─── Department Stats ──────────────────────────────────────
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     dept_stats = []
-    # Get distinct groups that have cases within the filter
     dept_ids = CaseModel.objects.filter(group_subgroup_filter).values_list('group_id', flat=True).distinct()
     groups_with_cases = SupportGroup.objects.filter(id__in=dept_ids)
     for group in groups_with_cases:
@@ -2004,13 +2034,22 @@ def head_dashboard2(request):
             'today': dept_today,
         })
 
+    # ─── Agents list ────────────────────────────────────────────
     agents_list = Agent.objects.filter(is_active=True).values('id', 'name', 'role')
-    all_groups = SupportGroup.objects.all().order_by('name')
 
+    # ─── Enrich cases with names ───────────────────────────────
+    cases = base_qs.order_by('-priority', '-created_at')
+    for case in cases:
+        case.group_name = case.group.name if case.group else None
+        case.subgroup_name = case.subgroup.name if case.subgroup else None
+        case.category_name = case.category.name if case.category else None
+
+    all_groups = SupportGroup.objects.all().order_by('name')
     all_subgroups = Subgroup.objects.select_related('group').order_by('group__name', 'name')
+    all_categories = Category.objects.select_related('group').order_by('group__name', 'name')
 
     context = {
-        'cases': base_qs.order_by('-priority', '-created_at'),
+        'cases': cases,
         'stats': stats,
         'dept_stats': dept_stats,
         'agents_list': agents_list,
@@ -2018,16 +2057,21 @@ def head_dashboard2(request):
         'agent': agent,
         'current_app': request.GET.get('app', 'psf'),
         'app_list': APP_CONFIG.items(),
-        'all_groups':all_groups,
+        'all_groups': all_groups,
         'all_subgroups': all_subgroups,
+        'all_categories': all_categories,   # new
+        'selected_category': category_id,
+        'selected_subgroup': subgroup_id,
     }
     return render(request, 'messaging2/head_dashboard.html', context)
 
 def head_cases_api(request):
     agent = get_agent_from_user(request.user)
     CaseModel = get_case_model_for_app(request)
+
     department = request.GET.get('dept', 'all')
     subgroup_id = request.GET.get('subgroup', 'all')
+    category_id = request.GET.get('category', 'all')   # new
 
     # Build OR filter for groups/subgroups
     group_subgroup_filter = Q()
@@ -2039,12 +2083,14 @@ def head_cases_api(request):
     base_qs = CaseModel.objects.filter(
         current_level='ESC4',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').filter(group_subgroup_filter)
+    ).exclude(status='Closed').filter(group_subgroup_filter).select_related('group', 'subgroup', 'category')
 
     if department != 'all':
         base_qs = base_qs.filter(group__name=department)
     if subgroup_id != 'all':
         base_qs = base_qs.filter(subgroup_id=subgroup_id)
+    if category_id != 'all':   # new
+        base_qs = base_qs.filter(category_id=category_id)
 
     cases = base_qs.order_by('-created_at')
 
@@ -2054,13 +2100,15 @@ def head_cases_api(request):
         'mobile': c.mobile,
         'loan_number': c.loan_number,
         'group_name': c.group.name if c.group else None,
-        'subgroup_name': c.subgroup.name if c.subgroup else None,  # add subgroup_name
+        'subgroup_name': c.subgroup.name if c.subgroup else None,
+        'category_name': c.category.name if c.category else None,
         'priority': c.priority,
         'status': c.status,
         'created_at': c.created_at.isoformat(),
     } for c in cases]
 
     return JsonResponse({'cases': case_list})
+
 
 import json
 import uuid
@@ -2095,6 +2143,34 @@ def get_subgroups_api(request):
     data = [{'id': s.id, 'name': s.name, 'group_name': s.group.name, 'group_id': s.group.id} for s in subgroups]
     return JsonResponse({'subgroups': data})
 
+
+
+
+def api_categories(request):
+    """
+    API endpoint to fetch categories.
+    Optional query param: ?group_id=<id> to filter by department.
+    Returns JSON: {"categories": [{"id": 1, "name": "Bills not updated", "group_id": 3}, ...]}
+    """
+    group_id = request.GET.get('group_id')
+    categories = Category.objects.select_related('group').all()
+    if group_id:
+        try:
+            group_id = int(group_id)
+            categories = categories.filter(group_id=group_id)
+        except ValueError:
+            return JsonResponse({'error': 'Invalid group_id'}, status=400)
+
+    data = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'group_id': c.group_id,
+        }
+        for c in categories
+    ]
+    return JsonResponse({'categories': data})
+
 def get_case_detail_api2(request, case_id):
     CaseModel = get_case_model_for_app(request)
     try:
@@ -2124,6 +2200,8 @@ def get_case_detail_api2(request, case_id):
                 'subgroup_id': case.subgroup.id if case.subgroup else None,
                 'group_name': case.group.name if case.group else None,
                 'subgroup_name': case.subgroup.name if case.subgroup else None,
+                'category_id': case.category.id if case.category else None,
+                'category_name': case.category.name if case.category else None,
             }
         })
     except CaseModel.DoesNotExist:
@@ -2463,6 +2541,8 @@ def get_case_by_mobile2(request):
                 'group_id': case.group.id if case.group else None,
                 'subgroup_name': case.subgroup.name if case.subgroup else None,   # NEW
                 'subgroup_id': case.subgroup.id if case.subgroup else None,       # NEW
+                'category_name': case.category.name if case.category else None,   # NEW
+                'category_id': case.category.id if case.category else None,  
                 'created_by': case.created_by or 'System',
                 'assigned_to_name': case.assigned_to_name or 'Unassigned',
                 'current_level': case.current_level,
@@ -2474,8 +2554,6 @@ def get_case_by_mobile2(request):
         })
     return JsonResponse({'case': None})
 
-
-from adminpanel.models import SupportGroup, Subgroup  # ensure this import exists
 
 @csrf_exempt
 def create_case_from_chat_api2(request):
@@ -2500,26 +2578,39 @@ def create_case_from_chat_api2(request):
         agent_name = data.get('agent_name', 'Agent')
         issue_description = data.get('issue_description', '')
         loan_number = data.get('loan_number', '')
-        vehicle_number = data.get('vehicle_number', '')   # optional
+        vehicle_number = data.get('vehicle_number', '')
         group_name = data.get('group', 'Collections')
-        subgroup_id = data.get('subgroup_id', None)   # NEW
+        subgroup_id = data.get('subgroup_id', None)
+        category_id = data.get('category_id', None)   # now required
         escalate_to = data.get('escalate_to', None)
         force_new = data.get('force_new', False)
 
+        # ─── Validate group ─────────────────────────────────────────────
         group_obj = SupportGroup.objects.filter(name=group_name).first()
         if not group_obj:
             return JsonResponse({'error': 'Invalid group'}, status=400)
 
-        # ─── Handle subgroup ────────────────────────────────────────────
+        # ─── Handle subgroup (optional) ────────────────────────────────
         subgroup_obj = None
         if subgroup_id:
             try:
                 subgroup_obj = Subgroup.objects.get(id=subgroup_id)
-                # Validate that subgroup belongs to the selected group
                 if subgroup_obj.group != group_obj:
                     return JsonResponse({'error': 'Subgroup does not belong to the selected group'}, status=400)
             except Subgroup.DoesNotExist:
                 return JsonResponse({'error': 'Invalid subgroup ID'}, status=400)
+
+        # ─── Handle category (REQUIRED) ─────────────────────────────────
+        if not category_id:
+            return JsonResponse({'error': 'Category is required'}, status=400)
+
+        try:
+            category_id = int(category_id)
+            category_obj = Category.objects.get(id=category_id)
+            if category_obj.group != group_obj:
+                return JsonResponse({'error': 'Category does not belong to the selected group'}, status=400)
+        except (ValueError, Category.DoesNotExist):
+            return JsonResponse({'error': 'Invalid category ID'}, status=400)
 
         # ─── Check existing active case ────────────────────────────────
         if not force_new:
@@ -2536,22 +2627,25 @@ def create_case_from_chat_api2(request):
                         'assigned_to_name': existing_case.assigned_to_name or 'Unassigned',
                         'current_level': existing_case.current_level,
                         'status': existing_case.status,
+                        'category': existing_case.category.name if existing_case.category else None,
                     },
                     'existing': True,
                     'message': 'An active case already exists. Create new anyway?'
                 })
 
+        # ─── Determine initial level ────────────────────────────────────
         initial_level = 'ESC1'
         if escalate_to and escalate_to.startswith('ESC') and escalate_to != 'ESC1':
             initial_level = escalate_to
 
+        # ─── Create the case ────────────────────────────────────────────
         case_id = f"CASE-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         case = CaseModel.objects.create(
             case_id=case_id,
             customer_name=customer_name,
             mobile=mobile,
             loan_number=loan_number,
-            vehicle_number=vehicle_number,   # added
+            vehicle_number=vehicle_number,
             issue_description=issue_description[:500],
             source='WhatsApp',
             current_level=initial_level,
@@ -2559,12 +2653,13 @@ def create_case_from_chat_api2(request):
             priority='Medium',
             created_by=agent_name,
             group=group_obj,
-            subgroup=subgroup_obj,           # NEW
+            subgroup=subgroup_obj,
+            category=category_obj,   # category is always set now
             assigned_to=None,
             assigned_to_name=None,
         )
 
-        # ─── Assignment & Escalation Logic ────────────────────────────
+        # ─── Assignment & Escalation Logic ─────────────────────────────
         if initial_level == 'ESC1':
             auto_assign(case)
             if case.assigned_to:
@@ -2586,6 +2681,8 @@ def create_case_from_chat_api2(request):
             mobile=mobile,
             defaults={'current_level': case.current_level}
         )
+
+        # ─── Log the initial description (if any) ──────────────────────
         app_key = get_app_from_request(request)
         DescriptionLogModel = APP_CONFIG[app_key]['description_log_model']
         if case.issue_description:
@@ -2599,23 +2696,28 @@ def create_case_from_chat_api2(request):
         level=case.current_level,  # initial level
     )
 
+        # ─── Response ────────────────────────────────────────────────────
         return JsonResponse({
             'success': True,
             'case': {
                 'case_id': case.case_id,
                 'customer_name': case.customer_name,
                 'loan_number': case.loan_number,
-                'vehicle_number': case.vehicle_number,   # optional
+                'vehicle_number': case.vehicle_number,
                 'assigned_to_name': case.assigned_to_name or 'Unassigned',
                 'current_level': case.current_level,
                 'status': case.status,
-                'subgroup_name': case.subgroup.name if case.subgroup else None,   # NEW
+                'subgroup_name': case.subgroup.name if case.subgroup else None,
+                'category_name': case.category.name if case.category else None,
             },
             'existing': False
         })
 
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())   # for debugging
         return JsonResponse({'error': str(e)}, status=500)
+
     
 @login_required
 def get_description_history_api(request, case_id):

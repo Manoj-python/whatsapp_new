@@ -44,6 +44,41 @@
         </div>
     </div>
 
+    <!-- ===== FILTER BAR ===== -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <input type="hidden" name="app" value="{{ current_app }}">
+                <div class="col-md-3">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for cat in all_categories %}
+                            <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
+                                {{ cat.name }} ({{ cat.group.name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Subgroup</label>
+                    <select name="subgroup" class="form-select">
+                        <option value="">All Subgroups</option>
+                        {% for sg in all_subgroups %}
+                            <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
+                                {{ sg.name }} ({{ sg.group.name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                    <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Department-wise Cards (Clickable) -->
     <div class="row mb-4" id="deptCards">
         <div class="col-md-3 mb-2">
@@ -68,28 +103,12 @@
         {% endfor %}
     </div>
 
-    <!-- Subgroup Filter Dropdown -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label for="subgroupFilter" class="form-label"><i class="fas fa-sitemap"></i> Filter by Subgroup:</label>
-            <select id="subgroupFilter" class="form-select" onchange="applySubgroupFilter()">
-                <option value="all">All Subgroups</option>
-                {% for subgroup in all_subgroups %}
-                <option value="{{ subgroup.id }}">{{ subgroup.name }} ({{ subgroup.group.name }})</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-6 d-flex align-items-end">
-            <button class="btn btn-outline-secondary" onclick="clearFilters()">Clear Filters</button>
-        </div>
-    </div>
-
     <!-- Cases Table -->
     <div class="card">
         <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
             <h4 class="mb-0"><i class="fas fa-user-tie"></i> Head Cases (ESC4)</h4>
             <div>
-                <span id="currentFilterBadge" class="badge bg-light text-dark">All Departments | All Subgroups</span>
+                <span id="currentFilterBadge" class="badge bg-light text-dark">All Departments | All Subgroups | All Categories</span>
                 <button class="btn btn-sm btn-light ms-2" onclick="refreshCases()"><i class="fas fa-sync-alt"></i> Refresh</button>
             </div>
         </div>
@@ -102,7 +121,8 @@
                             <th>Customer</th>
                             <th>Mobile</th>
                             <th>Department</th>
-                            <th>Subgroup</th>   <!-- NEW -->
+                            <th>Category</th>   <!-- NEW -->
+                            <th>Subgroup</th>
                             <th>Status</th>
                             <th>Created</th>
                             <th>Actions</th>
@@ -115,7 +135,8 @@
                             <td>{{ case.customer_name|default:case.mobile }}</td>
                             <td>{{ case.mobile }}</td>
                             <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
-                            <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td> <!-- NEW -->
+                            <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- NEW -->
+                            <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
                             <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
                             <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
                             <td>
@@ -151,7 +172,7 @@
                     <select id="assignAgentId" class="form-select">
                         <option value="">-- Select Agent --</option>
                         {% for agent in agents_list %}
-                        <option value="{{ agent.id }}">{{ agent.name }} ({{ agent.role_display }})</option>
+                        <option value="{{ agent.id }}">{{ agent.name }} ({{ agent.role }})</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -181,17 +202,19 @@
 
     // ─── Filter state ────────────────────────────────────────────────
     let currentDepartment = 'all';
-    let currentSubgroup = 'all';
+    let currentSubgroup = '{{ selected_subgroup|default:"all" }}';
+    let currentCategory = '{{ selected_category|default:"all" }}';
     const todayStr = '{{ today_date }}';
 
     function refreshCases() {
-        loadCases(currentDepartment, currentSubgroup);
+        loadCases(currentDepartment, currentSubgroup, currentCategory);
     }
 
-    function loadCases(department, subgroup) {
+    function loadCases(department, subgroup, category) {
         currentDepartment = department || 'all';
         currentSubgroup = subgroup || 'all';
-        const url = `/messaging2/head-cases/?app={{ current_app }}&dept=${encodeURIComponent(currentDepartment)}&subgroup=${encodeURIComponent(currentSubgroup)}`;
+        currentCategory = category || 'all';
+        const url = `/messaging2/head-cases/?app={{ current_app }}&dept=${encodeURIComponent(currentDepartment)}&subgroup=${encodeURIComponent(currentSubgroup)}&category=${encodeURIComponent(currentCategory)}`;
         fetch(url)
             .then(res => res.json())
             .then(data => {
@@ -209,6 +232,7 @@
                     }
                 });
                 document.getElementById('subgroupFilter').value = currentSubgroup;
+                document.getElementById('categoryFilter').value = currentCategory;
             })
             .catch(err => console.error(err));
     }
@@ -228,6 +252,7 @@
                     <td>${escapeHtml(c.customer_name || c.mobile)}</td>
                     <td>${c.mobile}</td>
                     <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>
+                    <td><span class="badge bg-secondary">${c.category_name || '-'}</span></td>   <!-- NEW -->
                     <td><span class="badge bg-info">${c.subgroup_name || '-'}</span></td>
                     <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></td>
                     <td>${new Date(c.created_at).toLocaleString()}</td>
@@ -248,17 +273,27 @@
         const deptLabel = currentDepartment === 'all' ? 'All Departments' : currentDepartment;
         const subgroupLabel = currentSubgroup === 'all' ? 'All Subgroups' : 
             document.querySelector(`#subgroupFilter option[value="${currentSubgroup}"]`)?.textContent || 'All Subgroups';
-        document.getElementById('currentFilterBadge').innerText = `${deptLabel} | ${subgroupLabel}`;
+        const categoryLabel = currentCategory === 'all' ? 'All Categories' :
+            document.querySelector(`#categoryFilter option[value="${currentCategory}"]`)?.textContent || 'All Categories';
+        document.getElementById('currentFilterBadge').innerText = `${deptLabel} | ${subgroupLabel} | ${categoryLabel}`;
     }
 
     function applySubgroupFilter() {
         const subgroup = document.getElementById('subgroupFilter').value;
-        loadCases(currentDepartment, subgroup);
+        const category = document.getElementById('categoryFilter').value;
+        loadCases(currentDepartment, subgroup, category);
+    }
+
+    function applyCategoryFilter() {
+        const category = document.getElementById('categoryFilter').value;
+        const subgroup = document.getElementById('subgroupFilter').value;
+        loadCases(currentDepartment, subgroup, category);
     }
 
     function clearFilters() {
         document.getElementById('subgroupFilter').value = 'all';
-        loadCases('all', 'all');
+        document.getElementById('categoryFilter').value = 'all';
+        loadCases('all', 'all', 'all');
     }
 
     // ─── Assign Case ────────────────────────────────────────────────────
@@ -287,7 +322,7 @@
             if (data.success) {
                 alert('Case assigned successfully!');
                 $('#assignModal').modal('hide');
-                loadCases(currentDepartment, currentSubgroup);
+                loadCases(currentDepartment, currentSubgroup, currentCategory);
             } else {
                 alert('Error: ' + data.error);
             }
@@ -307,13 +342,13 @@
     document.querySelectorAll('.dept-card').forEach(card => {
         card.addEventListener('click', () => {
             const dept = card.getAttribute('data-dept');
-            loadCases(dept, currentSubgroup);
+            loadCases(dept, document.getElementById('subgroupFilter').value, document.getElementById('categoryFilter').value);
         });
     });
 
     // ─── Initial load ──────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function() {
-        loadCases('all', 'all');
+        loadCases('all', '{{ selected_subgroup|default:"all" }}', '{{ selected_category|default:"all" }}');
     });
 </script>
 {% endblock %}

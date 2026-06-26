@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>SMS Cases - WhatsApp Chat Dashboard</title>
+  <title>PSF Cases - WhatsApp Chat Dashboard</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -167,7 +167,7 @@
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="header-top">
-        <h4 onclick="goToDashboard()"><i class="fab fa-whatsapp"></i>SMS Chats</h4>
+        <h4 onclick="goToDashboard()"><i class="fab fa-whatsapp"></i> PSF Chats</h4>
         <span class="esc-number">{{ agent.level|default:"ESC1" }}</span>
         <span class="role-name">{{ agent.role|default:"Agent" }}</span>
         <div class="user-badge">{{ request.user.username|slice:":2"|upper }}</div>
@@ -242,6 +242,7 @@
     level: "{{ agent.level|default:'ESC1' }}"
   };
   let availableGroups = [];
+  let availableCategories = [];   // add this
 
   function updateUIBadge() {
     const userBadge = document.querySelector('.user-badge');
@@ -295,7 +296,22 @@ async function fetchSubgroups() {
     } catch(e) { console.error('Failed to load subgroups', e); allSubgroups = []; }
 }
 
-
+async function fetchCategories() {
+    try {
+        const resp = await fetch('/messaging2/api/categories/');
+        const data = await resp.json();
+        availableCategories = data.categories || [];
+        console.log('📦 Categories loaded:', availableCategories.length);
+        // If the create case form is open, refresh the category dropdown
+        const groupSelect = document.getElementById('newCaseGroup');
+        if (groupSelect && typeof window.filterCategories === 'function') {
+            window.filterCategories();
+        }
+    } catch(e) {
+        console.error('❌ Failed to load categories', e);
+        availableCategories = [];
+    }
+}
 
   // ========== MODIFIED: renderCasePanel ==========
   async function renderCasePanel() {
@@ -339,25 +355,25 @@ async function fetchSubgroups() {
         }
         let showResolve = (currentCaseData.status !== 'Resolved' && currentCaseData.status !== 'Closed');
 
-        let html = `
-          <div class="case-info-section">
-            <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-info-circle"></i> Case Information</h6>
-            <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(currentCaseData.case_id)}</strong></div>
-            <div class="mb-2"><label>Customer:</label> ${escapeHtml(currentCaseData.customer_name || selectedMobile)}</div>
-            <div class="mb-2"><label>Loan Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.loan_number || 'Not provided')}</span></div>
-            <div class="mb-2"><label>Vehicle Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.vehicle_number || 'Not provided')}</span></div>
-
-            <div class="mb-2"><label>Department:</label> ${escapeHtml(groupName)}</div>
-            <div class="mb-2"><label>Subgroup:</label> ${escapeHtml(currentCaseData.subgroup_name || 'None')}</div>
-            <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[currentCaseData.current_level] || 'secondary'}">${levelIcon} ${currentCaseData.current_level}</span></div>
-            <div class="mb-2"><label>Status:</label> <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span></div>
-            <div class="mb-2"><label>Assigned To:</label> ${escapeHtml(currentCaseData.assigned_to_name || 'Unassigned')}</div>
-            <div class="mb-2"><label>Issue:</label> <div class="border rounded p-2 bg-light small">${escapeHtml(currentCaseData.issue_description || 'No description')}</div></div>
-          </div>
-          <hr>
-          <div class="case-actions-section">
-            <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-cogs"></i> Actions</h6>
-        `;
+       let html = `
+  <div class="case-info-section">
+    <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-info-circle"></i> Case Information</h6>
+    <div class="mb-2"><label>Case ID:</label> <strong>${escapeHtml(currentCaseData.case_id)}</strong></div>
+    <div class="mb-2"><label>Customer:</label> ${escapeHtml(currentCaseData.customer_name || selectedMobile)}</div>
+    <div class="mb-2"><label>Loan Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.loan_number || 'Not provided')}</span></div>
+    <div class="mb-2"><label>Vehicle Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.vehicle_number || 'Not provided')}</span></div>
+    <div class="mb-2"><label>Department:</label> ${escapeHtml(groupName)}</div>
+    <div class="mb-2"><label>Subgroup:</label> ${escapeHtml(currentCaseData.subgroup_name || 'None')}</div>
+    <div class="mb-2"><label>Category:</label> ${escapeHtml(currentCaseData.category_name || 'None')}</div>   <!-- fixed -->
+    <div class="mb-2"><label>Current Level:</label> <span class="badge bg-${levelColors[currentCaseData.current_level] || 'secondary'}">${levelIcon} ${currentCaseData.current_level}</span></div>
+    <div class="mb-2"><label>Status:</label> <span class="badge bg-${currentCaseData.status === 'Resolved' ? 'success' : 'primary'}">${currentCaseData.status || 'Open'}</span></div>
+    <div class="mb-2"><label>Assigned To:</label> ${escapeHtml(currentCaseData.assigned_to_name || 'Unassigned')}</div>
+    <div class="mb-2"><label>Issue:</label> <div class="border rounded p-2 bg-light small">${escapeHtml(currentCaseData.issue_description || 'No description')}</div></div>
+  </div>
+  <hr>
+  <div class="case-actions-section">
+    <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-cogs"></i> Actions</h6>
+`;
 
         if (showEscalate) {
           html += `
@@ -451,12 +467,15 @@ async function fetchSubgroups() {
     });
     groupsHtml += '</select>';
 
-    // Build subgroups dropdown (initially all subgroups, but we'll filter by JS)
+    // Build subgroups dropdown
     let subgroupsHtml = '<select id="newCaseSubgroup" class="form-select form-select-sm mb-2"><option value="">Select Subgroup (optional)</option>';
     allSubgroups.forEach(s => {
         subgroupsHtml += `<option value="${s.id}" data-group-name="${escapeHtml(s.group_name)}">${escapeHtml(s.name)} (${escapeHtml(s.group_name)})</option>`;
     });
     subgroupsHtml += '</select>';
+
+    // Categories dropdown (initially empty)
+    let categoriesHtml = '<select id="newCaseCategory" class="form-select form-select-sm mb-2" required><option value="">Select Category</option></select>';
 
     let escalationOptions = '<option value="">-- No escalation (ESC1) --</option>';
     const creationLevels = ['ESC2', 'ESC3', 'ESC4', 'ESC5'];
@@ -491,6 +510,10 @@ async function fetchSubgroups() {
                     ${subgroupsHtml}
                 </div>
                 <div class="mb-2">
+                    <label class="form-label small fw-bold">Category <span class="text-danger">*</span></label>
+                    ${categoriesHtml}
+                </div>
+                <div class="mb-2">
                     <label class="form-label small fw-bold">Escalate To (Optional)</label>
                     <select id="newCaseEscalateTo" class="form-select form-select-sm">${escalationOptions}</select>
                     <small class="text-muted">If selected, case will be created at that level</small>
@@ -506,42 +529,62 @@ async function fetchSubgroups() {
         </div>
     `;
 
-    // ─── Add event listener to filter subgroups based on selected group ───
+    // ─── Event listeners ──────────────────────────────────────────────
     const groupSelect = document.getElementById('newCaseGroup');
     const subgroupSelect = document.getElementById('newCaseSubgroup');
-    if (groupSelect && subgroupSelect) {
-        // Store all subgroup options for filtering
-        const allSubOptions = Array.from(subgroupSelect.options);
-        const subgroupData = allSubOptions.map(opt => ({
-            value: opt.value,
-            text: opt.text,
-            groupName: opt.getAttribute('data-group-name')
-        }));
+    const categorySelect = document.getElementById('newCaseCategory');
 
-        function filterSubgroups() {
-            const selectedGroupName = groupSelect.value;
-            // Clear current options
-            subgroupSelect.innerHTML = '<option value="">Select Subgroup (optional)</option>';
-            // Filter and add matching subgroups
-            subgroupData.forEach(data => {
-                if (!selectedGroupName || data.groupName === selectedGroupName) {
-                    const opt = document.createElement('option');
-                    opt.value = data.value;
-                    opt.textContent = data.text;
-                    opt.setAttribute('data-group-name', data.groupName);
-                    subgroupSelect.appendChild(opt);
-                }
+    // Store all subgroup options for filtering
+    const allSubOptions = Array.from(subgroupSelect.options);
+    const subgroupData = allSubOptions.map(opt => ({
+        value: opt.value,
+        text: opt.text,
+        groupName: opt.getAttribute('data-group-name')
+    }));
+
+    function filterSubgroups() {
+        const selectedGroupName = groupSelect.value;
+        subgroupSelect.innerHTML = '<option value="">Select Subgroup (optional)</option>';
+        subgroupData.forEach(data => {
+            if (!selectedGroupName || data.groupName === selectedGroupName) {
+                const opt = document.createElement('option');
+                opt.value = data.value;
+                opt.textContent = data.text;
+                opt.setAttribute('data-group-name', data.groupName);
+                subgroupSelect.appendChild(opt);
+            }
+        });
+    }
+
+    // ---- Make filterCategories globally accessible ----
+    window.filterCategories = function() {
+        const selectedGroupName = groupSelect.value;
+        const group = availableGroups.find(g => g.name === selectedGroupName);
+        const groupId = group ? group.id : null;
+        console.log('🔍 Filtering categories for group:', selectedGroupName, 'Group ID:', groupId);
+        categorySelect.innerHTML = '<option value="">Select Category (optional)</option>';
+        if (groupId) {
+            const categories = availableCategories.filter(c => c.group_id === groupId);
+            console.log('📋 Matching categories:', categories);
+            categories.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                categorySelect.appendChild(opt);
             });
         }
+    };
 
-        // Initial filter (in case a group is pre-selected)
+    // Initial filter
+    filterSubgroups();
+    window.filterCategories();
+
+    // Listen for group changes
+    groupSelect.addEventListener('change', function() {
         filterSubgroups();
-
-        // Listen for group changes
-        groupSelect.addEventListener('change', filterSubgroups);
-    }
+        window.filterCategories();
+    });
 }
-
   // ========== Escalate / Resolve / Timeline (unchanged) ==========
   window.escalateCase = async function() {
     const level = document.getElementById('escalateLevelSelect')?.value;
@@ -685,6 +728,7 @@ async function fetchSubgroups() {
     const vehicleNoInput = document.getElementById('newCaseVehicleNo');   // NEW
     const escalateSelect = document.getElementById('newCaseEscalateTo');
     const subgroupSelect = document.getElementById('newCaseSubgroup');
+    const categorySelect = document.getElementById('newCaseCategory');
 
     if (!groupSelect) { showNotification('Group selector missing', 'error'); return; }
     const groupName = groupSelect.value;
@@ -693,9 +737,12 @@ async function fetchSubgroups() {
     const vehicleNo = vehicleNoInput ? vehicleNoInput.value.trim() : '';   // NEW
     const escalateTo = escalateSelect ? escalateSelect.value : '';
     const subgroupId = subgroupSelect ? subgroupSelect.value : '';
+    const categoryId=categorySelect?categorySelect.value:'';
 
     if (!description) { showNotification('Please describe the issue', 'warning'); return; }
     if (!groupName) { showNotification('Please select a department (group)', 'warning'); return; }
+    if (!categoryId) { showNotification('Please select a category', 'warning'); return; }
+
 
     try {
       const response = await fetch('/messaging2/case/create-from-chat/?app=sms', {
@@ -709,6 +756,7 @@ async function fetchSubgroups() {
           vehicle_no: vehicleNo,          // SEND IT
           group: groupName,
           subgroup_id: subgroupId, 
+          category_id: categoryId || null, 
           escalate_to: escalateTo || null,
           force_new: forceNew
         })
@@ -1019,7 +1067,7 @@ async function loadSingleCaseAndShowActions(caseId) {
             // Timeline and back buttons
             html += `
                     <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="viewCaseTimeline()"><i class="fas fa-history"></i> View Timeline</button>
-                                <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="viewDescriptionHistory('${currentCaseData.case_id}')"><i class="fas fa-file-alt"></i>View Descriptions</button>
+                    <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="viewDescriptionHistory('${currentCaseData.case_id}')"><i class="fas fa-file-alt"></i>View Descriptions</button>
 
                     <button class="btn btn-outline-secondary btn-sm w-100" onclick="renderCasePanel()"><i class="fas fa-arrow-left"></i> Back to All Cases</button>
                 </div>
@@ -1139,6 +1187,8 @@ function appendMessage(msg){ let wasAtBottom=messagesContainer.scrollHeight-mess
   connectWebSocket();
   fetchGroups();
   fetchSubgroups();
+  fetchCategories();
+
 </script>
 </body>
 </html>

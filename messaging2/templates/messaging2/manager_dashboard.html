@@ -22,20 +22,60 @@
 
     <!-- Stats Cards -->
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-white bg-warning">
                 <div class="card-body"><h6>Pending Cases (ESC3)</h6><h2>{{ stats.pending }}</h2></div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-white bg-success">
                 <div class="card-body"><h6>Resolved at ESC3</h6><h2>{{ stats.resolved }}</h2></div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-white bg-info">
                 <div class="card-body"><h6>Escalated from ESC3</h6><h2>{{ stats.escalated }}</h2></div>
             </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-secondary">
+                <div class="card-body"><h6>Closed</h6><h2>{{ stats.closed }}</h2></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== FILTER BAR ===== -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <input type="hidden" name="app" value="{{ current_app }}">
+                <div class="col-md-3">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for cat in all_categories %}
+                            <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
+                                {{ cat.name }} ({{ cat.group.name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Subgroup</label>
+                    <select name="subgroup" class="form-select">
+                        <option value="">All Subgroups</option>
+                        {% for sg in all_subgroups %}
+                            <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
+                                {{ sg.name }} ({{ sg.group.name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                    <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -63,32 +103,12 @@
         {% endfor %}
     </div>
 
-    <!-- Subgroup Filter Dropdown -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label for="subgroupFilter" class="form-label"><i class="fas fa-sitemap"></i> Filter by Subgroup:</label>
-            <select id="subgroupFilter" class="form-select" onchange="applySubgroupFilter()">
-                <option value="all">All Subgroups</option>
-                {% for subgroup in all_subgroups %}
-                <option value="{{ subgroup.id }}">{{ subgroup.name }} ({{ subgroup.group.name }})</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-6 d-flex align-items-end">
-            <button class="btn btn-outline-secondary" onclick="clearFilters()">Clear Filters</button>
-        </div>
-    </div>
-
     <!-- Tabs -->
     <ul class="nav nav-tabs" id="caseTabs" role="tablist">
         <li class="nav-item"><button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button">📋 Pending Cases</button></li>
         <li class="nav-item"><button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button">✅ Resolved Cases</button></li>
         <li class="nav-item"><button class="nav-link" id="escalated-tab" data-bs-toggle="tab" data-bs-target="#escalated" type="button">⬆️ Escalated Cases</button></li>
-        <li class="nav-item">
-    <button class="nav-link" id="closed-tab" data-bs-toggle="tab" data-bs-target="#closed" type="button" role="tab">
-        🔒 Closed <span class="badge bg-secondary">{{ stats.closed }}</span>
-    </button>
-</li>
+        <li class="nav-item"><button class="nav-link" id="closed-tab" data-bs-toggle="tab" data-bs-target="#closed" type="button">🔒 Closed</button></li>
     </ul>
 
     <div class="tab-content mt-3">
@@ -108,7 +128,8 @@
                                     <th>Customer</th>
                                     <th>Mobile</th>
                                     <th>Department</th>
-                                    <th>Subgroup</th>  <!-- NEW -->
+                                    <th>Subgroup</th>
+                                    <th>Category</th>   <!-- NEW -->
                                     <th>Description</th>
                                     <th>Status</th>
                                     <th>Created</th>
@@ -137,7 +158,8 @@
                                     <th>Customer</th>
                                     <th>Loan No</th>
                                     <th>Department</th>
-                                    <th>Subgroup</th>  <!-- NEW -->
+                                    <th>Subgroup</th>
+                                    <th>Category</th>   <!-- NEW -->
                                     <th>Resolved By</th>
                                     <th>Resolved At</th>
                                     <th>Actions</th>
@@ -150,7 +172,8 @@
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
                                     <td>{{ case.loan_number|default:"-" }}</td>
                                     <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
-                                    <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>  <!-- NEW -->
+                                    <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- NEW -->
                                     <td>{{ case.resolved_by|default:"System" }}</td>
                                     <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
                                     <td>
@@ -159,7 +182,7 @@
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="8" class="text-center">No resolved cases at ESC3 level.</td></tr>
+                                <tr><td colspan="9" class="text-center">No resolved cases at ESC3 level.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -180,6 +203,9 @@
                                     <th>Case ID</th>
                                     <th>Customer</th>
                                     <th>Loan No</th>
+                                    <th>Department</th>
+                                    <th>Subgroup</th>
+                                    <th>Category</th>   <!-- NEW -->
                                     <th>Current Level</th>
                                     <th>Escalated By</th>
                                     <th>Escalated At</th>
@@ -192,13 +218,16 @@
                                     <td>{{ case.case_id }}</td>
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
                                     <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- NEW -->
                                     <td>{{ case.current_level }}</td>
                                     <td>{% with last_log=case.escalation_logs.first %}{{ last_log.escalated_by|default:"System" }}{% endwith %}</td>
                                     <td>{% with last_log=case.escalation_logs.first %}{{ last_log.created_at|date:"d-m-Y H:i" }}{% endwith %}</td>
                                     <td><button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button></td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="text-center">No escalated cases from ESC3.</td></tr>
+                                <tr><td colspan="10" class="text-center">No escalated cases from ESC3.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -206,44 +235,51 @@
                 </div>
             </div>
         </div>
-    </div>
 
-
-    <div class="tab-pane fade" id="closed" role="tabpanel">
-    <div class="card">
-        <div class="card-header bg-secondary text-white">Closed Cases</div>
-        <div class="card-body">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Case ID</th>
-                        <th>Customer</th>
-                        <th>Mobile</th>
-                        <th>Loan No</th>
-                        <th>Closed At</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for case in closed_cases %}
-                    <tr>
-                        <td>{{ case.case_id }}</td>
-                        <td>{{ case.customer_name|default:case.mobile }}</td>
-                        <td>{{ case.mobile }}</td>
-                        <td>{{ case.loan_number|default:"-" }}</td>
-                        <td>{{ case.closed_at|date:"d-m-Y H:i" }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')">View</button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="6" class="text-center">No closed cases.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Closed Tab -->
+        <div class="tab-pane fade" id="closed" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">Closed Cases</div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Customer</th>
+                                <th>Mobile</th>
+                                <th>Loan No</th>
+                                <th>Department</th>
+                                <th>Subgroup</th>
+                                <th>Category</th>   <!-- NEW -->
+                                <th>Closed At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for case in closed_cases %}
+                            <tr>
+                                <td>{{ case.case_id }}</td>
+                                <td>{{ case.customer_name|default:case.mobile }}</td>
+                                <td>{{ case.mobile }}</td>
+                                <td>{{ case.loan_number|default:"-" }}</td>
+                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+                                <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- NEW -->
+                                <td>{{ case.closed_at|date:"d-m-Y H:i" }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')">View</button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="9" class="text-center">No closed cases.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
-</div>
+
     <!-- Level‑wise Stats -->
     <div class="row mt-4">
         <div class="col-12">
@@ -300,20 +336,23 @@
 
     // ─── Pending cases filter ───
     let currentDepartment = 'all';
-    let currentSubgroup = 'all';
+    let currentSubgroup = '{{ selected_subgroup|default:"all" }}';
+    let currentCategory = '{{ selected_category|default:"all" }}';
 
     function refreshCases() {
-        loadPendingCases(currentDepartment, currentSubgroup);
+        loadPendingCases(currentDepartment, currentSubgroup, currentCategory);
     }
 
-    function loadPendingCases(department, subgroup) {
+    function loadPendingCases(department, subgroup, category) {
         currentDepartment = department || 'all';
         currentSubgroup = subgroup || 'all';
-        const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(currentDepartment)}&subgroup=${encodeURIComponent(currentSubgroup)}`;
+        currentCategory = category || 'all';
+        const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(currentDepartment)}&subgroup=${encodeURIComponent(currentSubgroup)}&category=${encodeURIComponent(currentCategory)}`;
         fetch(url)
             .then(res => res.json())
             .then(data => {
                 renderPendingTable(data.cases);
+                // Update department card highlights
                 document.querySelectorAll('.dept-card').forEach(card => {
                     const d = card.getAttribute('data-dept');
                     if ((d === 'all' && currentDepartment === 'all') || d === currentDepartment) {
@@ -324,7 +363,9 @@
                         card.classList.add('bg-secondary');
                     }
                 });
+                // Update filter dropdowns to reflect current selections
                 document.getElementById('subgroupFilter').value = currentSubgroup;
+                document.getElementById('categoryFilter').value = currentCategory;
             })
             .catch(err => console.error(err));
     }
@@ -332,7 +373,7 @@
     function renderPendingTable(cases) {
         const tbody = document.getElementById('pendingTableBody');
         if (!cases || cases.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center">No pending cases</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">No pending cases</td></tr>';
             return;
         }
         let html = '';
@@ -343,6 +384,7 @@
                 <td>${c.mobile}</td>
                 <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>
                 <td><span class="badge bg-info">${c.subgroup_name || '-'}</span></td>
+                <td><span class="badge bg-secondary">${c.category_name || '-'}</span></td>   <!-- NEW -->
                 <td>${c.issue_description || '-'}</td>
                 <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></td>
                 <td>${new Date(c.created_at).toLocaleString()}</td>
@@ -358,14 +400,23 @@
         tbody.innerHTML = html;
     }
 
+    // ─── Filter dropdown handlers ──────────────────────────────────
     function applySubgroupFilter() {
         const subgroup = document.getElementById('subgroupFilter').value;
-        loadPendingCases(currentDepartment, subgroup);
+        const category = document.getElementById('categoryFilter').value;
+        loadPendingCases(currentDepartment, subgroup, category);
+    }
+
+    function applyCategoryFilter() {
+        const category = document.getElementById('categoryFilter').value;
+        const subgroup = document.getElementById('subgroupFilter').value;
+        loadPendingCases(currentDepartment, subgroup, category);
     }
 
     function clearFilters() {
         document.getElementById('subgroupFilter').value = 'all';
-        loadPendingCases('all', 'all');
+        document.getElementById('categoryFilter').value = 'all';
+        loadPendingCases('all', 'all', 'all');
     }
 
     // ─── Assign Case ────────────────────────────────────────────────────
@@ -389,7 +440,7 @@
             if (data.success) {
                 alert('Assigned!');
                 $('#assignModal').modal('hide');
-                loadPendingCases(currentDepartment, currentSubgroup);
+                loadPendingCases(currentDepartment, currentSubgroup, currentCategory);
             } else {
                 alert('Error: ' + data.error);
             }
@@ -427,7 +478,7 @@
     document.querySelectorAll('.dept-card').forEach(card => {
         card.addEventListener('click', function() {
             const dept = this.getAttribute('data-dept');
-            loadPendingCases(dept, currentSubgroup);
+            loadPendingCases(dept, document.getElementById('subgroupFilter').value, document.getElementById('categoryFilter').value);
         });
     });
 
@@ -441,7 +492,7 @@
             });
         });
         // Initial load
-        loadPendingCases('all', 'all');
+        loadPendingCases('all', '{{ selected_subgroup|default:"all" }}', '{{ selected_category|default:"all" }}');
     });
 </script>
 {% endblock %}

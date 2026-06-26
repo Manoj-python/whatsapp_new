@@ -35,6 +35,41 @@
         </div>
     </div>
 
+    <!-- ===== FILTER BAR ===== -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <input type="hidden" name="app" value="{{ current_app }}">
+                <div class="col-md-3">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for cat in all_categories %}
+                            <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
+                                {{ cat.name }} ({{ cat.group.name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Subgroup</label>
+                    <select name="subgroup" class="form-select">
+                        <option value="">All Subgroups</option>
+                        {% for sg in all_subgroups %}
+                            <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
+                                {{ sg.name }} ({{ sg.group.name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                    <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Tabs -->
     <ul class="nav nav-tabs" id="caseTabs" role="tablist">
         <li class="nav-item" role="presentation">
@@ -62,6 +97,8 @@
                                 <th>Mobile</th>
                                 <th>Department</th>
                                 <th>Subgroup</th>
+                                <th>Category</th> 
+                                <th>created at</th>  <!-- new -->
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -74,6 +111,9 @@
                                 <td>{{ case.mobile }}</td>
                                 <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
                                 <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+                                <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- new -->
+                                <td><span class="badge bg-secondary">{{ case.created_at|default:"-" }}</span></td>   <!-- new -->
+
                                 <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
@@ -103,6 +143,7 @@
                                 <th>Loan No</th>
                                 <th>Department</th>
                                 <th>Subgroup</th>
+                                <th>Category</th>   <!-- new -->
                                 <th>Resolved By</th>
                                 <th>Resolved At</th>
                                 <th>Actions</th>
@@ -116,6 +157,7 @@
                                 <td>{{ case.loan_number|default:"-" }}</td>
                                 <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
                                 <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+                                <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- new -->
                                 <td>{{ case.resolved_by|default:"System" }}</td>
                                 <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
                                 <td>
@@ -124,7 +166,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="8" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
+                            <tr><td colspan="9" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -144,6 +186,9 @@
                                 <th>Customer</th>
                                 <th>Loan No</th>
                                 <th>Current Level</th>
+                                <th>Group</th>
+                                <th>Category</th>   <!-- new -->
+                                <th>subgroup</th>
                                 <th>Escalated By</th>
                                 <th>Escalated At</th>
                                 <th>Actions</th>
@@ -156,6 +201,9 @@
                                 <td>{{ case.customer_name|default:case.mobile }}</td>
                                 <td>{{ case.loan_number|default:"-" }}</td>
                                 <td>{{ case.current_level }}</td>
+                                <td>{{ case.group.name }}</td>
+                                <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- new -->
+                                <td>{{ case.subgroup.name }}</td>
                                 <td>
                                     {% with last_log=case.escalation_logs.first %}
                                         {{ last_log.escalated_by|default:"System" }}
@@ -171,7 +219,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="7" class="text-center">No escalated cases from ESC2 in your departments.</td></tr>
+                            <tr><td colspan="8" class="text-center">No escalated cases from ESC2 in your departments.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -207,11 +255,6 @@
     });
 
     // ─── Close Case (Resolved tab) ───
-    // NOTE: This duplicates closeCase from the modal, but it's fine.
-    // The modal's closeCase is also guarded by agentPermissions.
-    // We can keep this or remove it – the modal version will work.
-    // If you keep this, ensure it uses the same addAppParam and csrftoken.
-    // Since csrftoken is already defined globally, no need to redeclare.
     function closeCase(caseId) {
         if (!agentPermissions.can_close) {
             alert('You do not have permission to close cases.');

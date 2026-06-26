@@ -62,6 +62,7 @@ path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
 
     path('api/groups/', views.get_groups_api, name='get_groups_api'),
     path('api/subgroups/', views.get_subgroups_api, name='get_subgroups_api'),
+    path('api/categories/', views.api_categories, name='api_categories'),
 
     path('manager-cases/', views.manager_cases_api, name='manager_cases_api'),
     path('head-cases/', views.head_cases_api, name='head_cases_api'),
