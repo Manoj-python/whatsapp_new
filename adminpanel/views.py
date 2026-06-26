@@ -4,8 +4,7 @@
 import json
 import csv
 from datetime import datetime, timedelta
-from messaging.models import CaseDescriptionLog as SmsCaseDescriptionLog
-from messaging2.models import CaseDescriptionLog as PsfCaseDescriptionLog
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -26,6 +25,8 @@ from messaging2.models import Agent, Case as psfCase, ChatContact2, SmsWhatsAppL
 from messaging.models import Case as smsCase, ChatContact, SmsWhatsAppLog
 from special_cases.models import Case as SplCase, SmsWhatsAppLog3, ChatContact3
 from django.conf import settings
+from messaging.models import CaseDescriptionLog as SmsCaseDescriptionLog
+from messaging2.models import CaseDescriptionLog as PsfCaseDescriptionLog
 # ============================================
 # APP CONFIGURATION
 # ============================================
@@ -361,6 +362,124 @@ def create_subgroup(request):
 
     return render(request, 'adminpanel/create_subgroup.html', {'groups': groups})
 
+
+@login_required
+def create_category(request):
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('agent_dashboard')
+
+    groups = SupportGroup.objects.all().order_by('name')
+
+    if request.method == "POST":
+        name = request.POST.get('name', '').strip()
+        group_id = request.POST.get('group')
+
+        if not name:
+            messages.error(request, "Category name is required")
+            return redirect('create_category')
+
+        if not group_id:
+            messages.error(request, "Please select a department (group)")
+            return redirect('create_category')
+
+        try:
+            parent_group = SupportGroup.objects.get(id=group_id)
+        except SupportGroup.DoesNotExist:
+            messages.error(request, "Selected group does not exist")
+            return redirect('create_category')
+
+        # Check duplicate Category under same group (case-insensitive)
+        if Category.objects.filter(name__iexact=name, group=parent_group).exists():
+            messages.error(request, f"A category named '{name}' already exists under group '{parent_group.name}'")
+        else:
+            Category.objects.create(name=name, group=parent_group)
+            messages.success(request, f"Category '{name}' created under group '{parent_group.name}'")
+
+        return redirect('create_category')
+
+    return render(request, 'adminpanel/create_category.html', {'groups': groups})
+
+
+
+
+@login_required
+def manage_categories(request):
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        messages.error(request, "Access denied")
+        return redirect('agent_dashboard')
+
+    groups = SupportGroup.objects.all().order_by('name')
+    filter_group = request.GET.get('group')
+    categories = Category.objects.select_related('group').all().order_by('name')
+    if filter_group:
+        categories = categories.filter(group_id=filter_group)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create':
+            name = request.POST.get('name', '').strip()
+            group_id = request.POST.get('group')
+            if not name or not group_id:
+                messages.error(request, "Name and department are required")
+            else:
+                try:
+                    group = SupportGroup.objects.get(id=group_id)
+                    if Category.objects.filter(name__iexact=name, group=group).exists():
+                        messages.error(request, f"Category '{name}' already exists under '{group.name}'")
+                    else:
+                        Category.objects.create(name=name, group=group)
+                        messages.success(request, f"Category '{name}' created")
+                except SupportGroup.DoesNotExist:
+                    messages.error(request, "Invalid department selected")
+            return redirect('manage_categories')
+
+        elif action == 'edit':
+            cat_id = request.POST.get('category_id')
+            name = request.POST.get('name', '').strip()
+            group_id = request.POST.get('group')
+            try:
+                category = Category.objects.get(id=cat_id)
+                if not name or not group_id:
+                    messages.error(request, "Name and department are required")
+                else:
+                    try:
+                        group = SupportGroup.objects.get(id=group_id)
+                        # Check duplicate except itself
+                        if Category.objects.filter(name__iexact=name, group=group).exclude(id=cat_id).exists():
+                            messages.error(request, f"Another category named '{name}' already exists under '{group.name}'")
+                        else:
+                            category.name = name
+                            category.group = group
+                            category.save()
+                            messages.success(request, "Category updated")
+                    except SupportGroup.DoesNotExist:
+                        messages.error(request, "Invalid department selected")
+            except Category.DoesNotExist:
+                messages.error(request, "Category not found")
+            return redirect('manage_categories')
+
+        elif action == 'delete':
+            cat_id = request.POST.get('category_id')
+            try:
+                category = Category.objects.get(id=cat_id)
+                category.delete()
+                messages.success(request, "Category deleted")
+            except Category.DoesNotExist:
+                messages.error(request, "Category not found")
+            return redirect('manage_categories')
+
+    context = {
+        'categories': categories,
+        'groups': groups,
+        'filter_group': filter_group,
+    }
+    return render(request, 'adminpanel/manage_category.html', context)
+
+
 @login_required
 def manage_groups_subgroups(request):
     agent = get_agent_from_user(request.user)
@@ -493,22 +612,39 @@ def dashboard(request):
     app_key = get_app_from_request(request)
     cfg = APP_CONFIG[app_key]
     CaseModel = cfg['case_model']
+
+    # ─── Base queryset ──────────────────────────────────────────
+    all_cases = CaseModel.objects.select_related('category')  # for categories
+
+    # ─── Stats ──────────────────────────────────────────────────
     stats = {
-        'total_cases': CaseModel.objects.count(),
-        'active_cases': CaseModel.objects.exclude(status__in=['Resolved', 'Closed']).count(),
-        'open_cases': CaseModel.objects.filter(status='Open').count(),
-        'in_progress_cases': CaseModel.objects.filter(status='In Progress').count(),
-        'resolved_cases': CaseModel.objects.filter(status='Resolved').count(),
-        'closed_cases': CaseModel.objects.filter(status='Closed').count(),
-        'reopened_cases': CaseModel.objects.filter(status='Reopened').count(),
-        'esc1': CaseModel.objects.filter(current_level='ESC1').count(),
-        'esc2': CaseModel.objects.filter(current_level='ESC2').count(),
-        'esc3': CaseModel.objects.filter(current_level='ESC3').count(),
-        'esc4': CaseModel.objects.filter(current_level='ESC4').count(),
-        'esc5': CaseModel.objects.filter(current_level='ESC5').count(),
+        'total_cases': all_cases.count(),
+        'active_cases': all_cases.exclude(status__in=['Resolved', 'Closed']).count(),
+        'open_cases': all_cases.filter(status='Open').count(),
+        'in_progress_cases': all_cases.filter(status='In Progress').count(),
+        'resolved_cases': all_cases.filter(status='Resolved').count(),
+        'closed_cases': all_cases.filter(status='Closed').count(),
+        'reopened_cases': all_cases.filter(status='Reopened').count(),
+        'esc1': all_cases.filter(current_level='ESC1').count(),
+        'esc2': all_cases.filter(current_level='ESC2').count(),
+        'esc3': all_cases.filter(current_level='ESC3').count(),
+        'esc4': all_cases.filter(current_level='ESC4').count(),
+        'esc5': all_cases.filter(current_level='ESC5').count(),
         'total_agents': Agent.objects.filter(is_active=True).count(),
     }
 
+    # ─── Category wise counts ──────────────────────────────────
+    category_stats = []
+    categories = Category.objects.all().order_by('name')
+    for cat in categories:
+        count = all_cases.filter(category=cat).count()
+        if count > 0:
+            category_stats.append({
+                'name': cat.name,
+                'count': count,
+            })
+
+    # ─── Users & Agents ──────────────────────────────────────────
     users = User.objects.all().order_by('id')
     users_with_agents = []
     for user in users:
@@ -517,8 +653,8 @@ def dashboard(request):
         except Agent.DoesNotExist:
             user_agent = None
         users_with_agents.append({'user': user, 'agent': user_agent})
+
     all_groups = SupportGroup.objects.all().order_by('name')
-    # ✅ Add all_subgroups
     all_subgroups_qs = Subgroup.objects.select_related('group').order_by('group__name', 'name')
     all_subgroups_json = json.dumps([
         {
@@ -534,6 +670,7 @@ def dashboard(request):
         'users': users,
         'users_with_agents': users_with_agents,
         'stats': stats,
+        'category_stats': category_stats,          # NEW
         'current_agent': agent,
         'current_app': app_key,
         'app_name': cfg['name'],
@@ -543,7 +680,6 @@ def dashboard(request):
         'all_subgroups_json': all_subgroups_json,
     }
     return render(request, 'adminpanel/dashboard.html', context)
-
 # ============================================
 # API ENDPOINTS (app-aware)
 # ============================================
@@ -598,7 +734,7 @@ from django.db.models import Count
 def get_filtered_cases_api(request):
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
-    queryset = CaseModel.objects.select_related('group', 'subgroup').all().order_by('-created_at')  # ✅ add subgroup
+    queryset = CaseModel.objects.select_related('group', 'subgroup', 'category').all().order_by('-created_at')
 
     status = request.GET.get('status')
     status_in = request.GET.get('status__in')
@@ -616,10 +752,14 @@ def get_filtered_cases_api(request):
     if department and department != 'all':
         queryset = queryset.filter(group__name=department)
 
-    # ✅ Subgroup filter
     subgroup = request.GET.get('subgroup')
     if subgroup and subgroup != 'all':
         queryset = queryset.filter(subgroup_id=subgroup)
+
+    # ─── Category filter ──────────────────────────────────────────
+    category = request.GET.get('category')
+    if category and category != 'all':
+        queryset = queryset.filter(category__name=category)
 
     # Department counts for the filtered queryset
     dept_counts = queryset.values('group__name').annotate(count=Count('id')).order_by('-count')
@@ -633,7 +773,8 @@ def get_filtered_cases_api(request):
         'mobile': c.mobile,
         'loan_number': c.loan_number,
         'group_name': c.group.name if c.group else None,
-        'subgroup_name': c.subgroup.name if c.subgroup else None,  # ✅ NEW
+        'subgroup_name': c.subgroup.name if c.subgroup else None,
+        'category_name': c.category.name if c.category else None,   # NEW
         'priority': c.priority,
         'current_level': c.current_level,
         'status': c.status,
@@ -645,7 +786,6 @@ def get_filtered_cases_api(request):
         'cases': case_list,
         'department_counts': department_counts,
     })
-
 # Keep original endpoints for backward compatibility
 @login_required
 def search_cases_api(request):
@@ -819,7 +959,7 @@ def get_case_detail_api(request, case_id):
             'status': case.status,
             'priority': case.priority,
             'loan_number': case.loan_number,
-            'vehicle_number':case.vehicle_number,
+            'vehicle_number': case.vehicle_number,
             'assigned_to_name': case.assigned_to_name,
             'created_by': case.created_by,
             'created_at': timezone.localtime(case.created_at).isoformat(),
@@ -831,10 +971,11 @@ def get_case_detail_api(request, case_id):
             'resolution_notes': case.resolution_notes,
             'reopen_count': case.reopen_count,
             'group_name': case.group.name if case.group else None,
-            'group_id': case.group.id if case.group else None, 
-            'subgroup_name':case.subgroup.name if case.subgroup else None,
-            'subgroup_id': case.subgroup.id if case.subgroup else None, 
-
+            'group_id': case.group.id if case.group else None,
+            'subgroup_name': case.subgroup.name if case.subgroup else None,
+            'subgroup_id': case.subgroup.id if case.subgroup else None,
+            'category_name': case.category.name if case.category else None,   # NEW
+            'category_id': case.category.id if case.category else None,       # NEW
         }
     })
 
@@ -1057,7 +1198,6 @@ def edit_case_api(request, case_id):
     case = get_object_or_404(CaseModel, case_id=case_id)
     data = json.loads(request.body)
 
-    # ─── Detect description change ──────────────────────────────
     old_description = case.issue_description
     description_changed = False
     new_description_value = None
@@ -1103,16 +1243,29 @@ def edit_case_api(request, case_id):
         else:
             case.subgroup = None
 
+    # ─── Category change ──────────────────────────────────────────
+    if 'category' in data:
+        category_name = data['category'].strip() if data['category'] else ''
+        if category_name:
+            category_obj = Category.objects.filter(name=category_name).first()
+            if category_obj:
+                if case.group and category_obj.group != case.group:
+                    return JsonResponse({'error': 'Category does not belong to the selected group'}, status=400)
+                case.category = category_obj
+            else:
+                return JsonResponse({'error': f'Category "{category_name}" not found'}, status=400)
+        else:
+            case.category = None
+
     # ─── If group changed, reassign ──────────────────────────────
     if group_changed:
         from messaging2.views import auto_assign
         auto_assign(case)
         case.assigned_to_name = case.assigned_to.name if case.assigned_to else None
 
-    # ─── Save the case (so current_level is final) ──────────────
     case.save()
 
-    # ─── If description changed, create a log AFTER save ──────────
+    # ─── Description log ──────────────────────────────────────────
     if description_changed:
         from messaging2.models import CaseDescriptionLog
         CaseDescriptionLog.objects.create(
@@ -1121,12 +1274,10 @@ def edit_case_api(request, case_id):
             new_description=new_description_value,
             changed_by=agent.name or "Unknown",
             changed_by_role=agent.role,
-            level=case.current_level,  # now the saved level
+            level=case.current_level,
         )
 
     return JsonResponse({'success': True, 'message': 'Case updated'})
-
-
 # ============================================
 # UNIFIED FAILED MESSAGES (supports ?app=...)
 # ============================================

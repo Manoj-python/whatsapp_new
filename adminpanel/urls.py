@@ -17,6 +17,9 @@ path('edit-group/<int:group_id>/', views.edit_group, name='edit_group'),
 path('delete-group/<int:group_id>/', views.delete_group, name='delete_group'),
 path('edit-subgroup/<int:subgroup_id>/', views.edit_subgroup, name='edit_subgroup'),
 path('delete-subgroup/<int:subgroup_id>/', views.delete_subgroup, name='delete_subgroup'),
+path('create-category/', views.create_category, name='create_category'),
+path('manage-categories/', views.manage_categories, name='manage_categories'),
+   
     # ============================================
     # DASHBOARD (supports ?app=psf|sms|spl)
     # ============================================

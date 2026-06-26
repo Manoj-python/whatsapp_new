@@ -333,13 +333,41 @@
         </div>
     </div>
 
-    <!-- ==================== FILTER BY SUBGROUP (with Group selector) ==================== -->
+    <!-- ===== NEW: Category Stats ===== -->
     <div class="section-card">
         <div class="section-title">
-            <span><i class="fas fa-sitemap"></i> Filter by Subgroup</span>
+            <span><i class="fas fa-tags"></i> Cases by Category</span>
+        </div>
+        <div class="row" id="categoryStats">
+            {% for cat in category_stats %}
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="filter-card text-center" data-category="{{ cat.name }}" onclick="filterByCategory('{{ cat.name }}')">
+                    <h4>{{ cat.count }}</h4>
+                    <p>{{ cat.name }}</p>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12"><p class="text-muted">No categories yet.</p></div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ==================== FILTER BY SUBGROUP + CATEGORY ==================== -->
+    <div class="section-card">
+        <div class="section-title">
+            <span><i class="fas fa-sitemap"></i> Filter by Subgroup &amp; Category</span>
         </div>
         <div class="row">
-            <div class="col-md-6 mb-2">
+            <div class="col-md-4 mb-2">
+                <label class="form-label">Category</label>
+                <select id="categoryFilter" class="form-select" onchange="applyCategoryFilter()">
+                    <option value="all">All Categories</option>
+                    {% for cat in category_stats %}
+                    <option value="{{ cat.name }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-2">
                 <label class="form-label">Department (Group)</label>
                 <select id="groupFilter" class="form-select" onchange="updateSubgroupOptions()">
                     <option value="all">All Departments</option>
@@ -348,7 +376,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-6 mb-2">
+            <div class="col-md-4 mb-2">
                 <label class="form-label">Subgroup</label>
                 <select id="subgroupFilter" class="form-select" onchange="applySubgroupFilter()">
                     <option value="all">All Subgroups</option>
@@ -507,6 +535,16 @@
                         <!-- Options populated by JS -->
                     </select>
                 </div>
+                <!-- NEW: Category dropdown -->
+                <div class="mb-3">
+                    <label>Category</label>
+                    <select id="editCategory" class="form-select">
+                        <option value="">-- Select Category --</option>
+                        {% for cat in category_stats %}
+                        <option value="{{ cat.name }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="mb-3">
                     <label>Issue Description</label>
                     <textarea id="editIssueDescription" class="form-control" rows="3"></textarea>
@@ -570,10 +608,11 @@
 <script>
     let csrftoken = '{{ csrf_token }}';
     let currentApp = '{{ current_app }}';
-    let currentFilter = { type: 'all', value: null };  // type: 'all', 'level', 'dept'
-    let currentTab = 'active';  // 'active', 'resolved', 'closed'
+    let currentFilter = { type: 'all', value: null };
+    let currentTab = 'active';
     let currentSubgroup = 'all';
     let currentDepartment = 'all';
+    let currentCategory = 'all';  // NEW
     let allSubgroups = JSON.parse('{{ all_subgroups_json|safe }}');
 
     // Helper: build URL with app param
@@ -582,13 +621,11 @@
         return `${baseUrl}${separator}app=${currentApp}`;
     }
 
-    // ========== Update Subgroup Options based on selected group ==========
+    // ========== Update Subgroup Options ==========
     function updateSubgroupOptions() {
         const groupId = document.getElementById('groupFilter').value;
         const subgroupSelect = document.getElementById('subgroupFilter');
-        // Clear and add default 'all'
         subgroupSelect.innerHTML = '<option value="all">All Subgroups</option>';
-        // Filter subgroups
         const filtered = allSubgroups.filter(s => groupId === 'all' || s.group_id == groupId);
         filtered.forEach(s => {
             const opt = document.createElement('option');
@@ -596,7 +633,6 @@
             opt.textContent = `${s.name} (${s.group_name})`;
             subgroupSelect.appendChild(opt);
         });
-        // Reset currentSubgroup to 'all' and reload
         currentSubgroup = 'all';
         subgroupSelect.value = 'all';
         updateFilterBadge();
@@ -636,7 +672,7 @@
         }
     }
 
-    // ========== Load Department-wise counts ==========
+    // ========== Load Department Stats ==========
     async function loadDepartmentStats() {
         try {
             const resp = await fetch(buildUrl('/adminpanel/api/department-stats/'));
@@ -678,8 +714,10 @@
         const deptLabel = currentDepartment === 'all' ? 'All Departments' : currentDepartment;
         const subgroupLabel = currentSubgroup === 'all' ? 'All Subgroups' : 
             document.querySelector(`#subgroupFilter option[value="${currentSubgroup}"]`)?.textContent || 'All Subgroups';
+        const categoryLabel = currentCategory === 'all' ? 'All Categories' :
+            document.querySelector(`#categoryFilter option[value="${currentCategory}"]`)?.textContent || 'All Categories';
         const tabLabel = currentTab.charAt(0).toUpperCase() + currentTab.slice(1);
-        document.getElementById('activeFilterBadge').innerText = `Tab: ${tabLabel} | ${deptLabel} | ${subgroupLabel}`;
+        document.getElementById('activeFilterBadge').innerText = `Tab: ${tabLabel} | ${deptLabel} | ${subgroupLabel} | ${categoryLabel}`;
     }
 
     // ========== Render Department Summary ==========
@@ -728,6 +766,11 @@
             params.append('subgroup', currentSubgroup);
         }
 
+        // Category filter
+        if (currentCategory && currentCategory !== 'all') {
+            params.append('category', currentCategory);
+        }
+
         const url = buildUrl('/adminpanel/api/cases/') + '&' + params.toString();
 
         try {
@@ -759,7 +802,7 @@
                     <thead>
                         <tr>
                             <th>Case ID</th><th>Customer</th><th>Mobile</th><th>Loan Number</th>
-                            <th>Department</th><th>Subgroup</th><th>Level</th><th>Status</th><th>Created</th><th>Actions</th>
+                            <th>Department</th><th>Subgroup</th><th>Category</th><th>Level</th><th>Status</th><th>Created</th><th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -778,6 +821,7 @@
                     <td>${c.loan_number || ''}</td>
                     <td><span class="badge bg-secondary">${escapeHtml(c.group_name || '-')}</span></td>
                     <td><span class="badge bg-info">${escapeHtml(c.subgroup_name || '-')}</span></td>
+                    <td><span class="badge bg-secondary">${escapeHtml(c.category_name || '-')}</span></td>
                     <td><span class="badge bg-${c.current_level === 'ESC1' ? 'success' : c.current_level === 'ESC2' ? 'info' : c.current_level === 'ESC3' ? 'warning' : c.current_level === 'ESC4' ? 'danger' : 'dark'}">${c.current_level}</span></td>
                     <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></td>
                     <td><small>${new Date(c.created_at).toLocaleString()}</small></td>
@@ -800,9 +844,11 @@
         currentFilter = { type: 'all', value: null };
         currentDepartment = 'all';
         currentSubgroup = 'all';
+        currentCategory = 'all';
         document.querySelectorAll('.filter-card').forEach(c => c.classList.remove('active'));
         document.getElementById('subgroupFilter').value = 'all';
         document.getElementById('groupFilter').value = 'all';
+        document.getElementById('categoryFilter').value = 'all';
         updateSubgroupOptions(); // resets subgroup list
         updateFilterBadge();
         loadCases();
@@ -833,6 +879,17 @@
         loadCases();
     }
 
+    function filterByCategory(categoryName) {
+        currentCategory = categoryName;
+        document.querySelectorAll('#categoryStats .filter-card').forEach(card => {
+            card.classList.remove('active');
+            if (card.getAttribute('data-category') === categoryName) card.classList.add('active');
+        });
+        document.getElementById('categoryFilter').value = categoryName;
+        updateFilterBadge();
+        loadCases();
+    }
+
     function filterByStatus(status) {
         if (status === 'Active') setTab('active');
         else if (status === 'Resolved') setTab('resolved');
@@ -846,11 +903,19 @@
         loadCases();
     }
 
+    function applyCategoryFilter() {
+        currentCategory = document.getElementById('categoryFilter').value;
+        updateFilterBadge();
+        loadCases();
+    }
+
     function clearFilters() {
         document.getElementById('subgroupFilter').value = 'all';
         document.getElementById('groupFilter').value = 'all';
+        document.getElementById('categoryFilter').value = 'all';
         currentSubgroup = 'all';
         currentDepartment = 'all';
+        currentCategory = 'all';
         currentFilter = { type: 'all', value: null };
         document.querySelectorAll('.filter-card').forEach(c => c.classList.remove('active'));
         updateSubgroupOptions(); // resets subgroup list
@@ -907,6 +972,7 @@
                         <tr><th>Mobile:</th><td>${caseData.mobile}</td>
                         <tr><th>Loan No:</th><td>${caseData.loan_number || ''}</td>
                         <tr><th>Group (Dept):</th><td>${escapeHtml(caseData.group_name || 'Not assigned')}</td>
+                        <tr><th>Category:</th><td>${escapeHtml(caseData.category_name || 'None')}</td>
                         <tr><th>Current Level:</th><td>${caseData.current_level}</td>
                         <tr><th>Status:</th><td>${caseData.status}</td>
                     </table>
@@ -1027,7 +1093,15 @@
                         }
                     });
 
-                    // Re-filter when group changes
+                    // Populate category
+                    const categorySelect = document.getElementById('editCategory');
+                    if (data.case.category_name) {
+                        categorySelect.value = data.case.category_name;
+                    } else {
+                        categorySelect.value = '';
+                    }
+
+                    // Re-filter subgroups when group changes
                     groupSelect.onchange = function() {
                         const gId = this.value;
                         subgroupSelect.innerHTML = '<option value="">-- Select Subgroup (optional) --</option>';
@@ -1056,6 +1130,7 @@
         const issueDesc = document.getElementById('editIssueDescription').value;
         const groupId = document.getElementById('editGroup').value;
         const subgroupId = document.getElementById('editSubgroup').value;
+        const categoryName = document.getElementById('editCategory').value;
 
         const payload = {
             loan_number: loanNumber,
@@ -1067,6 +1142,9 @@
         }
         if (subgroupId) {
             payload.subgroup = parseInt(subgroupId);
+        }
+        if (categoryName) {
+            payload.category = categoryName;
         }
 
         fetch(buildUrl(`/adminpanel/case/${caseId}/edit/`), {
@@ -1131,7 +1209,6 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadGlobalStats();
         loadDepartmentStats();
-        // Populate subgroup dropdown initially (all subgroups)
         updateSubgroupOptions();
         setTab('active');
         updateFilterBadge();
