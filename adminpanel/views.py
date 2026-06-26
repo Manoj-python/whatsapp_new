@@ -4,7 +4,8 @@
 import json
 import csv
 from datetime import datetime, timedelta
-
+from messaging.models import CaseDescriptionLog as SmsCaseDescriptionLog
+from messaging2.models import CaseDescriptionLog as PsfCaseDescriptionLog
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -42,6 +43,7 @@ APP_CONFIG = {
         'log_model': SmsWhatsAppLog2,
         'contact_model': ChatContact2,
         'channel_group': 'global_contacts2',
+        'description_log_model': PsfCaseDescriptionLog,
         'templates': {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
@@ -61,6 +63,7 @@ APP_CONFIG = {
         'log_model': SmsWhatsAppLog,
         'contact_model': ChatContact,
         'channel_group': 'global_contacts',
+        'description_log_model': SmsCaseDescriptionLog,
         'get_template_text': get_template_text_from_whatsapp,
         'render_template_text': render_template_text,
         'templates': {

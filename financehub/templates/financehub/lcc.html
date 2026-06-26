@@ -118,6 +118,7 @@
                             <th>Borrower</th>
                             <th>Guarantor</th>
                             <th>Co-Borrower</th>
+                            <th>Lokadtalt</th>
 
                             <th>Division</th>
                             <th>BLC</th>
@@ -187,6 +188,11 @@
                             <td>
                                 {% if row.co_borrower_pdf %}
                                     <a href="{{ row.co_borrower_pdf }}" target="_blank" class="btn btn-sm btn-warning">View</a>
+                                {% else %}-{% endif %}
+                            </td>
+                             <td>
+                                {% if row.lokadtalt_pdf %}
+                                    <a href="{{ row.lokadtalt_pdf }}" target="_blank" class="btn btn-sm btn-danger">View</a>
                                 {% else %}-{% endif %}
                             </td>
 

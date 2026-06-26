@@ -254,6 +254,11 @@ def normalize_excel_text(text):
 
 
 
+
+
+
+
+
 import boto3
 from django.conf import settings
 from django.db.models import Q
@@ -302,6 +307,33 @@ def get_all_notice_files():
                 # normalize filename
                 filename = filename.replace(" ", "_")
 
+                # ✅ CHECK FOR SIMPLE LOAN NUMBER PDF (no underscore)
+                if "_" not in filename and filename.endswith(".pdf"):
+                    loan_number = filename.replace(".pdf", "").upper()
+                    
+                    # Initialize the map for this loan
+                    if loan_number not in file_map:
+                        file_map[loan_number] = {
+                            "borrower": None,
+                            "guarantor": None,
+                            "co_borrower": None,
+                            "lokadtalt": None
+                        }
+                    
+                    url = s3.generate_presigned_url(
+                        "get_object",
+                        Params={
+                            "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                            "Key": key
+                        },
+                        ExpiresIn=3600
+                    )
+                    
+                    # Store as lokadtalt (simple loan number PDF)
+                    file_map[loan_number]["lokadtalt"] = url
+                    continue  # Skip further processing for this file
+
+                # Existing logic for borrower/guarantor/co_borrower
                 if "_" not in filename:
                     continue
 
@@ -315,7 +347,8 @@ def get_all_notice_files():
                     file_map[loan_number] = {
                         "borrower": None,
                         "guarantor": None,
-                        "co_borrower": None
+                        "co_borrower": None,
+                        "lokadtalt": None
                     }
 
                 # 🔐 secure URL (IMPORTANT)
@@ -362,8 +395,6 @@ def get_all_notice_files_cached():
         cache.set("notice_files", data, timeout=300)  # 5 minutes
 
     return data
-
-
 # -----------------------------------------------------
 # ✅ MAIN VIEW
 # -----------------------------------------------------
@@ -446,6 +477,7 @@ def lcc_list(request):
         obj.borrower_pdf = files.get("borrower")
         obj.guarantor_pdf = files.get("guarantor")
         obj.co_borrower_pdf = files.get("co_borrower")
+        obj.lokadtalt_pdf = files.get("lokadtalt")  # ✅ ADDED: Simple loan number PDF
 
     # -----------------------------------------------------
     # ✅ QUERY STRING
@@ -459,6 +491,9 @@ def lcc_list(request):
         "search": search_clean,
         "query_string": params.urlencode(),
     })
+
+
+
 
 
 def build_latest_payment_map(loan_numbers):
