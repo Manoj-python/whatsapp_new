@@ -157,6 +157,7 @@
                                     <th>Case ID</th>
                                     <th>Customer</th>
                                     <th>Loan No</th>
+                                    <th>Vehicle No</th>
                                     <th>Department</th>
                                     <th>Subgroup</th>
                                     <th>Category</th>   <!-- NEW -->
@@ -171,6 +172,7 @@
                                     <td>{{ case.case_id }}</td>
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
                                     <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td>{{ case.vehicle_number|default:"-" }}</td>
                                     <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
                                     <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
                                     <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- NEW -->
@@ -203,6 +205,7 @@
                                     <th>Case ID</th>
                                     <th>Customer</th>
                                     <th>Loan No</th>
+                                    <t>Vehicle No</t>
                                     <th>Department</th>
                                     <th>Subgroup</th>
                                     <th>Category</th>   <!-- NEW -->
@@ -218,6 +221,7 @@
                                     <td>{{ case.case_id }}</td>
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
                                     <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td>{{ case.vehicle_number|default:"-" }}</td>
                                     <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
                                     <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
                                     <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- NEW -->
@@ -248,6 +252,7 @@
                                 <th>Customer</th>
                                 <th>Mobile</th>
                                 <th>Loan No</th>
+                                <th>Vehicle No</th>
                                 <th>Department</th>
                                 <th>Subgroup</th>
                                 <th>Category</th>   <!-- NEW -->
@@ -262,6 +267,7 @@
                                 <td>{{ case.customer_name|default:case.mobile }}</td>
                                 <td>{{ case.mobile }}</td>
                                 <td>{{ case.loan_number|default:"-" }}</td>
+                                <td>{{ case.vehicle_number|default:"-" }}</td>
                                 <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
                                 <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
                                 <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- NEW -->
@@ -427,6 +433,7 @@
         for (let c of cases) {
             html += `<tr>
                 <td>${c.loan_number || '-'}</td>
+                <td>${c.vehicle_number || '-'}</td>
                 <td>${escapeHtml(c.customer_name || c.mobile)}</td>
                 <td>${c.mobile}</td>
                 <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>

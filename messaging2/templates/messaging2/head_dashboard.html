@@ -118,6 +118,7 @@
                     <thead>
                         <tr>
                             <th>Loan No</th>
+                            <th>Vehicle No</th>
                             <th>Customer</th>
                             <th>Mobile</th>
                             <th>Department</th>
@@ -132,6 +133,7 @@
                         {% for case in cases %}
                         <tr class="{% if case.created_at|date:'Y-m-d' == today_date %}table-info{% endif %}">
                             <td>{{ case.loan_number|default:"-" }}</td>
+                            <td>{{ case.vehicle_number|default:"-" }}</td>
                             <td>{{ case.customer_name|default:case.mobile }}</td>
                             <td>{{ case.mobile }}</td>
                             <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
@@ -249,6 +251,7 @@
             html += `
                 <tr ${isToday ? 'class="table-info"' : ''}>
                     <td>${c.loan_number || '-'}</td>
+                    <td>${c.vehicle_number || '-'}</td>
                     <td>${escapeHtml(c.customer_name || c.mobile)}</td>
                     <td>${c.mobile}</td>
                     <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>

@@ -3,6 +3,7 @@
 {% for case in cases %}
 <tr>
     <td>{{ case.loan_number|default:"-" }}</td>
+    <td>{{ case.vehicle_number|default:"-" }}</td>
     <td>{{ case.customer_name|default:case.mobile }}</td>
     <td>{{ case.mobile }}</td>
     <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>

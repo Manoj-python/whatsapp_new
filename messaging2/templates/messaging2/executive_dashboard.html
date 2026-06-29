@@ -84,165 +84,185 @@
     </ul>
 
     <div class="tab-content mt-3">
-        <!-- Pending Cases Tab -->
+        <!-- ==================== PENDING TAB ==================== -->
         <div class="tab-pane fade show active" id="pending" role="tabpanel">
             <div class="card">
-                <div class="card-header bg-primary text-white">Pending ESC2 Cases</div>
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-chart-line"></i> Pending ESC2 Cases</span>
+                    <div>
+                        <input type="text" id="searchPending" class="form-control form-control-sm d-inline-block" style="width:200px;" placeholder="Search Vehicle No...">
+                        <button class="btn btn-sm btn-light" onclick="exportExcel('pending')"><i class="fas fa-file-excel"></i> Export Excel</button>
+                    </div>
+                </div>
                 <div class="card-body">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Loan No</th>
-                                <th>Customer</th>
-                                <th>Mobile</th>
-                                <th>Department</th>
-                                <th>Subgroup</th>
-                                <th>Category</th> 
-                                <th>created at</th>  <!-- new -->
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for case in pending_cases %}
-                            <tr>
-                                <td>{{ case.loan_number|default:"-" }}</td>
-                                <td>{{ case.customer_name|default:case.mobile }}</td>
-                                <td>{{ case.mobile }}</td>
-                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
-                                <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
-                                <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- new -->
-                                <td><span class="badge bg-secondary">{{ case.created_at|default:"-" }}</span></td>   <!-- new -->
-
-                                <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
-                                    <button class="btn btn-sm btn-secondary" onclick="editCase('{{ case.case_id }}')" title="Edit"><i class="fas fa-edit"></i></button>
-                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')" title="Resolve"><i class="fas fa-check-circle"></i></button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="8" class="text-center">No pending ESC2 cases in your departments.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="pendingTable">
+                            <thead>
+                                <tr>
+                                    <th>Loan No</th>
+                                    <th>Vehicle No</th>
+                                    <th>Customer</th>
+                                    <th>Mobile</th>
+                                    <th>Department</th>
+                                    <th>Subgroup</th>
+                                    <th>Category</th>
+                                    <th>Created At</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingBody">
+                                {% for case in pending_cases %}
+                                <tr>
+                                    <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td class="vehicle-col">{{ case.vehicle_number|default:"-" }}</td>
+                                    <td>{{ case.customer_name|default:case.mobile }}</td>
+                                    <td>{{ case.mobile }}</td>
+                                    <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>
+                                    <td>{{ case.created_at|date:"d-m-Y H:i" }}</td>
+                                    <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
+                                        <button class="btn btn-sm btn-secondary" onclick="editCase('{{ case.case_id }}')" title="Edit"><i class="fas fa-edit"></i></button>
+                                        <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id|escapejs }}')" title="Resolve"><i class="fas fa-check-circle"></i></button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="10" class="text-center">No pending ESC2 cases in your departments.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Resolved Cases Tab -->
+        <!-- ==================== RESOLVED TAB ==================== -->
         <div class="tab-pane fade" id="resolved" role="tabpanel">
             <div class="card">
-                <div class="card-header bg-success text-white">Resolved at ESC2 Level</div>
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-check-circle"></i> Resolved at ESC2 Level</span>
+                    <div>
+                        <input type="text" id="searchResolved" class="form-control form-control-sm d-inline-block" style="width:200px;" placeholder="Search Vehicle No...">
+                        <button class="btn btn-sm btn-light" onclick="exportExcel('resolved')"><i class="fas fa-file-excel"></i> Export Excel</button>
+                    </div>
+                </div>
                 <div class="card-body">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Case ID</th>
-                                <th>Customer</th>
-                                <th>Loan No</th>
-                                <th>Department</th>
-                                <th>Subgroup</th>
-                                <th>Category</th>   <!-- new -->
-                                <th>Resolved By</th>
-                                <th>Resolved At</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for case in resolved_cases %}
-                            <tr>
-                                <td>{{ case.case_id }}</td>
-                                <td>{{ case.customer_name|default:case.mobile }}</td>
-                                <td>{{ case.loan_number|default:"-" }}</td>
-                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
-                                <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
-                                <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- new -->
-                                <td>{{ case.resolved_by|default:"System" }}</td>
-                                <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
-                                    <button class="btn btn-sm btn-danger" onclick="closeCase('{{ case.case_id }}')" title="Close Permanently"><i class="fas fa-times-circle"></i> Close</button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="9" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="resolvedTable">
+                            <thead>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Vehicle No</th>
+                                    <th>Customer</th>
+                                    <th>Loan No</th>
+                                    <th>Department</th>
+                                    <th>Subgroup</th>
+                                    <th>Category</th>
+                                    <th>Resolved By</th>
+                                    <th>Resolved At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resolvedBody">
+                                {% for case in resolved_cases %}
+                                <tr>
+                                    <td>{{ case.case_id }}</td>
+                                    <td class="vehicle-col">{{ case.vehicle_number|default:"-" }}</td>
+                                    <td>{{ case.customer_name|default:case.mobile }}</td>
+                                    <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-info">{{ case.subgroup.name|default:"-" }}</span></td>
+                                    <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>
+                                    <td>{{ case.resolved_by|default:"System" }}</td>
+                                    <td>{{ case.resolved_at|date:"d-m-Y H:i" }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
+                                        <button class="btn btn-sm btn-danger" onclick="closeCase('{{ case.case_id }}')" title="Close Permanently"><i class="fas fa-times-circle"></i> Close</button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="10" class="text-center">No resolved cases at ESC2 level in your departments.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Escalated Cases Tab -->
+        <!-- ==================== ESCALATED TAB ==================== -->
         <div class="tab-pane fade" id="escalated" role="tabpanel">
             <div class="card">
-                <div class="card-header bg-info text-white">Escalated from ESC2 to Higher Levels</div>
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-arrow-up"></i> Escalated from ESC2</span>
+                    <div>
+                        <input type="text" id="searchEscalated" class="form-control form-control-sm d-inline-block" style="width:200px;" placeholder="Search Vehicle No...">
+                        <button class="btn btn-sm btn-light" onclick="exportExcel('escalated')"><i class="fas fa-file-excel"></i> Export Excel</button>
+                    </div>
+                </div>
                 <div class="card-body">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Case ID</th>
-                                <th>Customer</th>
-                                <th>Loan No</th>
-                                <th>Current Level</th>
-                                <th>Group</th>
-                                <th>Category</th>   <!-- new -->
-                                <th>subgroup</th>
-                                <th>Escalated By</th>
-                                <th>Escalated At</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for case in escalated_cases %}
-                            <tr>
-                                <td>{{ case.case_id }}</td>
-                                <td>{{ case.customer_name|default:case.mobile }}</td>
-                                <td>{{ case.loan_number|default:"-" }}</td>
-                                <td>{{ case.current_level }}</td>
-                                <td>{{ case.group.name }}</td>
-                                <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>   <!-- new -->
-                                <td>{{ case.subgroup.name }}</td>
-                                <td>
-                                    {% with last_log=case.escalation_logs.first %}
-                                        {{ last_log.escalated_by|default:"System" }}
-                                    {% endwith %}
-                                </td>
-                                <td>
-                                    {% with last_log=case.escalation_logs.first %}
-                                        {{ last_log.created_at|date:"d-m-Y H:i" }}
-                                    {% endwith %}
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="8" class="text-center">No escalated cases from ESC2 in your departments.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="escalatedTable">
+                            <thead>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Vehicle No</th>
+                                    <th>Customer</th>
+                                    <th>Loan No</th>
+                                    <th>Current Level</th>
+                                    <th>Department</th>
+                                    <th>Subgroup</th>
+                                    <th>Category</th>
+                                    <th>Escalated By</th>
+                                    <th>Escalated At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="escalatedBody">
+                                {% for case in escalated_cases %}
+                                <tr>
+                                    <td>{{ case.case_id }}</td>
+                                    <td class="vehicle-col">{{ case.vehicle_number|default:"-" }}</td>
+                                    <td>{{ case.customer_name|default:case.mobile }}</td>
+                                    <td>{{ case.loan_number|default:"-" }}</td>
+                                    <td>{{ case.current_level }}</td>
+                                    <td>{{ case.group.name|default:"-" }}</td>
+                                    <td>{{ case.subgroup.name|default:"-" }}</td>
+                                    <td><span class="badge bg-secondary">{{ case.category.name|default:"-" }}</span></td>
+                                    <td>{% with last_log=case.escalation_logs.first %}{{ last_log.escalated_by|default:"System" }}{% endwith %}</td>
+                                    <td>{% with last_log=case.escalation_logs.first %}{{ last_log.created_at|date:"d-m-Y H:i" }}{% endwith %}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')" title="View"><i class="fas fa-eye"></i></button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="11" class="text-center">No escalated cases from ESC2 in your departments.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ✅ STEP 1: Define JavaScript permissions BEFORE including modals -->
+<!-- Include modals -->
+{% include "messaging2/_case_modals.html" %}
+
+<!-- ==================== JAVASCRIPT ==================== -->
 <script>
+    // Agent permissions
     var agentPermissions = {
         can_edit: {{ agentPermissions.can_edit|yesno:"true,false" }},
         can_resolve: {{ agentPermissions.can_resolve|yesno:"true,false" }},
         can_close: {{ agentPermissions.can_close|yesno:"true,false" }}
     };
-</script>
 
-<!-- Include modals (case details, escalate, resolve, edit) -->
-{% include "messaging2/_case_modals.html" %}
-
-<script>
-    // Ensure Bootstrap tabs work
+    // ---- Tab switching (Bootstrap) ----
     document.addEventListener('DOMContentLoaded', function() {
         var triggerTabList = [].slice.call(document.querySelectorAll('#caseTabs button'));
         triggerTabList.forEach(function(triggerEl) {
@@ -254,7 +274,59 @@
         });
     });
 
-    // ─── Close Case (Resolved tab) ───
+    // ---- Vehicle Number Search ----
+    function filterTable(tbodyId, query) {
+        const tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+        const rows = tbody.getElementsByTagName('tr');
+        const q = query.toLowerCase().trim();
+        for (let row of rows) {
+            // Find the vehicle column (index 1 in all tables)
+            const vehicleCell = row.cells[1];
+            if (vehicleCell) {
+                const text = vehicleCell.textContent.toLowerCase();
+                row.style.display = text.includes(q) ? '' : 'none';
+            }
+        }
+    }
+
+    // Attach search listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchPending = document.getElementById('searchPending');
+        if (searchPending) {
+            searchPending.addEventListener('keyup', function() {
+                filterTable('pendingBody', this.value);
+            });
+        }
+        const searchResolved = document.getElementById('searchResolved');
+        if (searchResolved) {
+            searchResolved.addEventListener('keyup', function() {
+                filterTable('resolvedBody', this.value);
+            });
+        }
+        const searchEscalated = document.getElementById('searchEscalated');
+        if (searchEscalated) {
+            searchEscalated.addEventListener('keyup', function() {
+                filterTable('escalatedBody', this.value);
+            });
+        }
+    });
+
+    // ---- Export Excel ----
+    function exportExcel(tab) {
+        const params = new URLSearchParams(window.location.search);
+        const app = params.get('app') || '{{ current_app }}';
+        const category = params.get('category') || '';
+        const subgroup = params.get('subgroup') || '';
+
+        let url = `{% url 'export_executive_cases' %}?tab=${tab}&app=${app}`;
+        if (category) url += `&category=${category}`;
+        if (subgroup) url += `&subgroup=${subgroup}`;
+
+        window.location.href = url;
+    }
+
+    // ---- Close Case (for resolved tab) ----
     function closeCase(caseId) {
         if (!agentPermissions.can_close) {
             alert('You do not have permission to close cases.');
@@ -263,11 +335,11 @@
         const reason = prompt("Enter reason for closing this case (optional):");
         if (reason === null) return;
 
-        fetch(addAppParam(`/adminpanel/case/${caseId}/close/`), {
+        fetch(`/adminpanel/case/${caseId}/close/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken  // global variable from base template
+                'X-CSRFToken': csrftoken  // defined in base template
             },
             body: JSON.stringify({ close_reason: reason || "" })
         })

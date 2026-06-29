@@ -69,7 +69,7 @@ path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
     path('export-cases-excel/', views.export_cases_excel, name='export_cases_excel'),
 path('export-group-cases/', views.export_group_cases_excel, name='export_group_cases_excel'),
      path('api/fetch-padmasai/', views.fetch_padmasai_details, name='fetch_padmasai'),
-
+     path('executive/export/', views.export_executive_cases, name='export_executive_cases'),
      # -----------------------------
     # Real-time Chat Features (App2)
     # -----------------------------

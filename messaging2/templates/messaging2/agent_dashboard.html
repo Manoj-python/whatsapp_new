@@ -98,6 +98,7 @@
                         <thead>
                             <tr>
                                 <th>Loan No</th>
+                                <th>Vehicle No</th>
                                 <th>Customer</th>
                                 <th>Mobile</th>
                                 <th>Department</th>
@@ -110,6 +111,7 @@
                             {% for case in assigned_cases %}
                             <tr>
                                 <td>{{ case.loan_number|default:"-" }}</small></td>
+                                <td>{{ case.vehicle_number|default:"-" }}</small></td>
                                 <td>{{ case.customer_name|default:case.mobile }}</small></td>
                                 <td>{{ case.mobile }}</small></td>
                                 <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
