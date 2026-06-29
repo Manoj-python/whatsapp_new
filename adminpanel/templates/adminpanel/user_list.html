@@ -133,6 +133,7 @@
                         <th>Can Edit</th>
                         <th>Can Resolve</th>
                         <th>Can Close</th>
+                        <th>Login Access</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -220,6 +221,23 @@
                             {% endif %}
                         </td>
                         <td>
+    {% if user_data.agent %}
+        <form method="post" action="{% url 'toggle_can_login' user_data.user.id %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm {% if user_data.agent.can_login %}btn-success{% else %}btn-danger{% endif %}" 
+                    title="{% if user_data.agent.can_login %}Disable login{% else %}Enable login{% endif %}">
+                {% if user_data.agent.can_login %}
+                    <i class="fas fa-check-circle"></i> Enabled
+                {% else %}
+                    <i class="fas fa-times-circle"></i> Disabled
+                {% endif %}
+            </button>
+        </form>
+    {% else %}
+        <span class="text-muted">No agent</span>
+    {% endif %}
+</td>
+                        <td>
                             <a href="{% url 'admin_user_edit' user_data.user.id %}" class="btn-edit" title="Edit">
                                 <i class="fas fa-edit"></i> Edit
                             </a>
@@ -233,7 +251,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="13" class="text-center py-5">
+                        <td colspan="14" class="text-center py-5">
                             <i class="fas fa-inbox fa-3x text-muted mb-3 d-block"></i>
                             <p>No users found. <a href="{% url 'admin_user_create' %}">Create your first user</a></p>
                         </td>

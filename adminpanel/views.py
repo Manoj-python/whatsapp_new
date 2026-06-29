@@ -271,7 +271,15 @@ def login_view(request):
         username = request.POST.get('username')
         password = request.POST.get('password')
         user = authenticate(request, username=username, password=password)
-        if user:
+        if user is not None:
+            try:
+                agent = user.agent_profile  # related_name from Agent
+                if not agent.can_login:
+                    messages.error(request, "Your account is disabled. Please contact admin.")
+                    return render(request, 'adminpanel/login.html')
+            except Agent.DoesNotExist:
+                messages.error(request, "Agent profile not found.")
+                return render(request, 'adminpanel/login.html')
             login(request, user)
             request.session["messaging_user"] = user.id
             request.session["messaging2_user"] = user.id
@@ -297,6 +305,167 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('admin_login')
+from django.contrib.admin.views.decorators import staff_member_required
+
+@staff_member_required  # only admins/staff can toggle
+def toggle_can_login(request, user_id):
+    agent = get_object_or_404(Agent, user_id=user_id)
+    agent.can_login = not agent.can_login
+    agent.save(update_fields=['can_login'])
+    status = "enabled" if agent.can_login else "disabled"
+    messages.success(request, f"Login access {status} for {agent.user.username}.")
+    return redirect('admin_user_list')  # name of your user list URL
+
+import random
+from datetime import timedelta
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.contrib.auth import authenticate, login as auth_login
+from django.contrib.auth.models import User
+from django.utils.timezone import now
+from django.contrib.auth.decorators import login_required
+
+# Import forms
+from .forms import ForgotPasswordForm, OTPVerificationForm, ResetPasswordForm
+
+# Import the WhatsApp utility
+from .utils import send_whatsapp_otp
+
+# OTP expiry time (in minutes)
+OTP_EXPIRY_MINUTES = 5
+
+
+
+
+# ------------------- STEP 1: FORGOT PASSWORD -------------------
+def forgot_password(request):
+    """
+    Step 1: User enters username/email -> Send OTP via WhatsApp
+    """
+    if request.user.is_authenticated:
+        return redirect('agent_dashboard')
+
+    if request.method == 'POST':
+        form = ForgotPasswordForm(request.POST)
+        if form.is_valid():
+            user = form.cleaned_data['user']
+            otp = str(random.randint(100000, 999999))
+            
+            request.session['reset_user_id'] = user.id
+            request.session['reset_otp'] = otp
+            request.session['reset_otp_time'] = now().isoformat()
+
+            try:
+                agent = user.agent_profile
+                phone = agent.mobile
+                if not phone:
+                    messages.error(request, "No mobile number registered.")
+                    return render(request, 'adminpanel/forgot_password.html', {'form': form})
+                
+                # Format phone number for Meta
+                if phone.startswith('+'):
+                    phone = phone[1:]
+                if not phone.startswith('91'):   # India country code
+                    phone = '91' + phone
+                
+                send_whatsapp_otp(phone, otp)
+                messages.success(request, f"OTP sent to WhatsApp ({phone[-4:]})")
+                return redirect('verify_otp')
+                
+            except User.agent_profile.RelatedObjectDoesNotExist:
+                messages.error(request, "Agent profile not found.")
+                return render(request, 'adminpanel/forgot_password.html', {'form': form})
+            except Exception as e:
+                messages.error(request, f"Failed to send OTP: {e}")
+                return render(request, 'adminpanel/forgot_password.html', {'form': form})
+    else:
+        form = ForgotPasswordForm()
+    
+    return render(request, 'adminpanel/forgot_password.html', {'form': form})
+
+# ------------------- STEP 2: VERIFY OTP -------------------
+def verify_otp(request):
+    """
+    Step 2: User enters the OTP received on WhatsApp
+    """
+    # Check if session has required data
+    if 'reset_user_id' not in request.session or 'reset_otp' not in request.session:
+        messages.error(request, "Session expired. Please start over.")
+        return redirect('forgot_password')
+
+    if request.method == 'POST':
+        form = OTPVerificationForm(request.POST)
+        if form.is_valid():
+            entered_otp = form.cleaned_data['otp']
+            stored_otp = request.session.get('reset_otp')
+            otp_time_str = request.session.get('reset_otp_time')
+            
+            if not stored_otp or not otp_time_str:
+                messages.error(request, "Session expired. Please request a new OTP.")
+                return redirect('forgot_password')
+
+            # Check if OTP has expired
+            otp_time = datetime.fromisoformat(otp_time_str)
+            if now() > otp_time + timedelta(minutes=OTP_EXPIRY_MINUTES):
+                # Clear the OTP from session
+                request.session.pop('reset_otp', None)
+                request.session.pop('reset_otp_time', None)
+                messages.error(request, f"OTP has expired. Please request a new one.")
+                return redirect('forgot_password')
+
+            # Verify OTP
+            if entered_otp == stored_otp:
+                # Mark as verified and clear OTP fields
+                request.session['reset_verified'] = True
+                request.session.pop('reset_otp', None)
+                request.session.pop('reset_otp_time', None)
+                messages.success(request, "OTP verified! Now set your new password.")
+                return redirect('reset_password')
+            else:
+                messages.error(request, "Invalid OTP. Please try again.")
+    else:
+        form = OTPVerificationForm()
+    
+    return render(request, 'adminpanel/verify_otp.html', {'form': form})
+
+def reset_password(request):
+    """
+    Step 3: Set new password after OTP verification
+    """
+    # Ensure user has verified OTP
+    if not request.session.get('reset_verified'):
+        messages.error(request, "You must verify your OTP first.")
+        return redirect('forgot_password')
+
+    user_id = request.session.get('reset_user_id')
+    if not user_id:
+        messages.error(request, "Session expired. Please start over.")
+        return redirect('forgot_password')
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        messages.error(request, "User not found.")
+        return redirect('forgot_password')
+
+    if request.method == 'POST':
+        form = ResetPasswordForm(request.POST)
+        if form.is_valid():
+            new_password = form.cleaned_data['new_password']
+            
+            # Set the new password
+            user.set_password(new_password)
+            user.save()
+            
+            # Clear the entire session to log out any pending state
+            request.session.flush()
+            
+            messages.success(request, "✅ Password reset successfully! Please login with your new password.")
+            return redirect('admin_login')
+    else:
+        form = ResetPasswordForm()
+    
+    return render(request, 'adminpanel/reset_password.html', {'form': form})
 
 
 # views.py
@@ -595,7 +764,6 @@ def delete_subgroup(request, subgroup_id):
 
 # ============================================
 # UNIFIED ADMIN DASHBOARD (supports ?app=...)
-# ============================================
 @login_required
 def dashboard(request):
     agent = get_agent_from_user(request.user)
@@ -665,7 +833,15 @@ def dashboard(request):
         }
         for s in all_subgroups_qs
     ])
-
+    all_categories_qs = Category.objects.select_related('group').order_by('group__name', 'name')
+    all_categories_json = json.dumps([
+    {
+        'id': c.id,
+        'name': c.name,
+        'group_id': c.group_id,
+    }
+    for c in all_categories_qs
+])
     context = {
         'users': users,
         'users_with_agents': users_with_agents,
@@ -678,8 +854,14 @@ def dashboard(request):
         'all_groups': all_groups,
         'all_subgroups_queryset': all_subgroups_qs,
         'all_subgroups_json': all_subgroups_json,
+        'all_categories_json': all_categories_json
+
     }
     return render(request, 'adminpanel/dashboard.html', context)
+
+
+
+# ============================================
 # ============================================
 # API ENDPOINTS (app-aware)
 # ============================================
@@ -794,9 +976,11 @@ def search_cases_api(request):
     query = request.GET.get('q', '').strip()
     if not query:
         return JsonResponse({'success': False, 'error': 'No search query provided'})
-    cases = CaseModel.objects.filter(
+    
+    cases = CaseModel.objects.select_related('group', 'subgroup', 'category').filter(
         Q(case_id__icontains=query) | Q(loan_number__icontains=query)
     ).order_by('-created_at')
+    
     cases_data = [{
         'case_id': c.case_id,
         'customer_name': c.customer_name,
@@ -806,9 +990,12 @@ def search_cases_api(request):
         'priority': c.priority,
         'created_at': c.created_at.isoformat(),
         'current_level': c.current_level,
+        'group_name': c.group.name if c.group else None,
+        'subgroup_name': c.subgroup.name if c.subgroup else None,
+        'category_name': c.category.name if c.category else None,
     } for c in cases]
+    
     return JsonResponse({'success': True, 'cases': cases_data, 'count': len(cases_data)})
-
 
 def get_level_distribution_api(request):
     app_key = get_app_from_request(request)
@@ -1186,98 +1373,140 @@ def get_case_timeline_api(request, case_id):
         } for log in logs]
     })
 
+
+import logging
+logger = logging.getLogger(__name__)
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def edit_case_api(request, case_id):
-    agent = get_agent_from_user(request.user)
-    if not agent.has_edit_permission():
-        return JsonResponse({'error': 'You do not have permission to edit cases'}, status=403)
+    try:
+        agent = get_agent_from_user(request.user)
+        if not agent.has_edit_permission():
+            return JsonResponse({'error': 'You do not have permission to edit cases'}, status=403)
 
-    app_key = get_app_from_request(request)
-    CaseModel = APP_CONFIG[app_key]['case_model']
-    case = get_object_or_404(CaseModel, case_id=case_id)
-    data = json.loads(request.body)
+        app_key = get_app_from_request(request)
+        CaseModel = APP_CONFIG[app_key]['case_model']
+        case = get_object_or_404(CaseModel, case_id=case_id)
 
-    old_description = case.issue_description
-    description_changed = False
-    new_description_value = None
-    if 'issue_description' in data and data['issue_description'] != old_description:
-        description_changed = True
-        new_description_value = data['issue_description']
+        data = json.loads(request.body)
+        logger.info(f"Editing case {case_id} | data: {data}")
 
-    # ─── Metadata fields ──────────────────────────────────────────
-    if 'loan_number' in data:
-        case.loan_number = data['loan_number']
-    if 'customer_name' in data:
-        case.customer_name = data['customer_name']
-    if 'issue_description' in data:
-        case.issue_description = data['issue_description']
+        old_description = case.issue_description
+        description_changed = False
+        new_description_value = None
 
-    # ─── Group change ─────────────────────────────────────────────
-    group_changed = False
-    if 'group' in data:
-        group_val = data['group']
-        group_obj = None
-        if isinstance(group_val, int) or (isinstance(group_val, str) and group_val.isdigit()):
-            group_obj = SupportGroup.objects.filter(id=int(group_val)).first()
-        elif isinstance(group_val, str):
-            group_obj = SupportGroup.objects.filter(name=group_val).first()
-        if group_obj:
-            if case.group != group_obj:
-                group_changed = True
-            case.group = group_obj
-        else:
-            return JsonResponse({'error': 'Invalid group specified'}, status=400)
+        if 'issue_description' in data and data['issue_description'] != old_description:
+            description_changed = True
+            new_description_value = data['issue_description']
 
-    # ─── Subgroup change ──────────────────────────────────────────
-    if 'subgroup' in data:
-        subgroup_val = data['subgroup']
-        if subgroup_val:
-            try:
-                subgroup_obj = Subgroup.objects.get(id=int(subgroup_val))
-                if case.group and subgroup_obj.group != case.group:
-                    return JsonResponse({'error': 'Subgroup does not belong to the selected group'}, status=400)
-                case.subgroup = subgroup_obj
-            except (ValueError, Subgroup.DoesNotExist):
-                return JsonResponse({'error': 'Invalid subgroup ID'}, status=400)
-        else:
-            case.subgroup = None
+        # ─── Metadata fields ──────────────────────────
+        if 'loan_number' in data:
+            case.loan_number = data['loan_number']
+        if 'customer_name' in data:
+            case.customer_name = data['customer_name']
+        if 'issue_description' in data:
+            case.issue_description = data['issue_description']
 
-    # ─── Category change ──────────────────────────────────────────
-    if 'category' in data:
-        category_name = data['category'].strip() if data['category'] else ''
-        if category_name:
-            category_obj = Category.objects.filter(name=category_name).first()
-            if category_obj:
-                if case.group and category_obj.group != case.group:
-                    return JsonResponse({'error': 'Category does not belong to the selected group'}, status=400)
-                case.category = category_obj
+        # ─── Group change ─────────────────────────────
+        group_changed = False
+        if 'group' in data:
+            group_val = data['group']
+            group_obj = None
+            if isinstance(group_val, int) or (isinstance(group_val, str) and group_val.isdigit()):
+                group_obj = SupportGroup.objects.filter(id=int(group_val)).first()
+            elif isinstance(group_val, str):
+                group_obj = SupportGroup.objects.filter(name=group_val).first()
+            if group_obj:
+                if case.group != group_obj:
+                    group_changed = True
+                case.group = group_obj
             else:
-                return JsonResponse({'error': f'Category "{category_name}" not found'}, status=400)
-        else:
-            case.category = None
+                return JsonResponse({'error': 'Invalid group specified'}, status=400)
 
-    # ─── If group changed, reassign ──────────────────────────────
-    if group_changed:
-        from messaging2.views import auto_assign
-        auto_assign(case)
-        case.assigned_to_name = case.assigned_to.name if case.assigned_to else None
+        # ─── Subgroup change ──────────────────────────
+        if 'subgroup' in data:
+            subgroup_val = data['subgroup']
+            if subgroup_val:
+                try:
+                    subgroup_obj = Subgroup.objects.get(id=int(subgroup_val))
+                    if case.group and subgroup_obj.group != case.group:
+                        return JsonResponse({'error': 'Subgroup does not belong to the selected group'}, status=400)
+                    case.subgroup = subgroup_obj
+                except (ValueError, Subgroup.DoesNotExist):
+                    return JsonResponse({'error': 'Invalid subgroup ID'}, status=400)
+            else:
+                case.subgroup = None
 
-    case.save()
+        # ─── Category change ──────────────────────────
+        if 'category' in data:
+            category_name = data['category'].strip() if data['category'] else ''
+            if category_name:
+                category_obj = Category.objects.filter(name=category_name).first()
+                if category_obj:
+                    if case.group and category_obj.group != case.group:
+                        return JsonResponse({'error': 'Category does not belong to the selected group'}, status=400)
+                    case.category = category_obj
+                else:
+                    return JsonResponse({'error': f'Category "{category_name}" not found'}, status=400)
+            else:
+                case.category = None
 
-    # ─── Description log ──────────────────────────────────────────
-    if description_changed:
-        from messaging2.models import CaseDescriptionLog
-        CaseDescriptionLog.objects.create(
-            case=case,
-            previous_description=old_description or "",
-            new_description=new_description_value,
-            changed_by=agent.name or "Unknown",
-            changed_by_role=agent.role,
-            level=case.current_level,
-        )
+        # ─── If group changed, reassign and clear orphaned relations ──
+        if group_changed:
+            # Clear subgroup/category if they don't belong to the new group
+            if case.subgroup and case.subgroup.group_id != case.group_id:
+                case.subgroup = None
+            if case.category and case.category.group_id != case.group_id:
+                case.category = None
 
-    return JsonResponse({'success': True, 'message': 'Case updated'})
+            try:
+                from messaging2.views import auto_assign
+                auto_assign(case)
+                case.assigned_to_name = case.assigned_to.name if case.assigned_to else None
+            except Exception as e:
+                logger.error(f"auto_assign failed: {e}")
+
+        # ─── Save ──────────────────────────────────────
+        case.save(update_fields=['loan_number', 'customer_name', 'issue_description',
+                                 'group', 'subgroup', 'category', 'assigned_to_name', 'updated_at'])
+        logger.info(f"Case {case_id} saved successfully")
+        app_key = get_app_from_request(request)
+        DescriptionLogModel = APP_CONFIG[app_key]['description_log_model']
+        # ─── Description log ──────────────────────────
+        if description_changed:
+            DescriptionLogModel.objects.create(
+                case=case,
+                previous_description=old_description or "",
+                new_description=new_description_value,
+                changed_by=agent.name or "Unknown",
+                changed_by_role=agent.role,
+                level=case.current_level,
+            )
+
+        # ─── Return updated data ──────────────────────
+        return JsonResponse({
+            'success': True,
+            'message': 'Case updated',
+            'case': {
+                'group_id': case.group_id,
+                'group_name': case.group.name if case.group else None,
+                'subgroup_id': case.subgroup_id,
+                'subgroup_name': case.subgroup.name if case.subgroup else None,
+                'category_id': case.category_id,
+                'category_name': case.category.name if case.category else None,
+                'issue_description': case.issue_description,
+                'loan_number': case.loan_number,
+                'customer_name': case.customer_name,
+                'assigned_to_name': case.assigned_to_name,
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error in edit_case_api: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 # ============================================
 # UNIFIED FAILED MESSAGES (supports ?app=...)
 # ============================================

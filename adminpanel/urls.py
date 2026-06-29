@@ -19,7 +19,10 @@ path('edit-subgroup/<int:subgroup_id>/', views.edit_subgroup, name='edit_subgrou
 path('delete-subgroup/<int:subgroup_id>/', views.delete_subgroup, name='delete_subgroup'),
 path('create-category/', views.create_category, name='create_category'),
 path('manage-categories/', views.manage_categories, name='manage_categories'),
-   
+
+    path('forgot-password/', views.forgot_password, name='forgot_password'),
+    path('verify-otp/', views.verify_otp, name='verify_otp'),
+    path('reset-password/', views.reset_password, name='reset_password'),   
     # ============================================
     # DASHBOARD (supports ?app=psf|sms|spl)
     # ============================================
@@ -32,6 +35,7 @@ path('manage-categories/', views.manage_categories, name='manage_categories'),
     path('users/create/', views.user_create, name='admin_user_create'),
     path('users/edit/<int:user_id>/', views.user_edit, name='admin_user_edit'),
     path('users/delete/<int:user_id>/', views.user_delete, name='admin_user_delete'),
+    path('users/toggle-login/<int:user_id>/', views.toggle_can_login, name='toggle_can_login'),
 
     # ============================================
     # FAILED MESSAGES – unified with app in path

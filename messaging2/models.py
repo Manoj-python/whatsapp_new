@@ -163,6 +163,8 @@ class Agent(models.Model):
         ('app2', 'App 2 - messaging2'),
         ('app3', 'App 3 - splcase'),
     ])
+    can_login = models.BooleanField(default=True, help_text="If unchecked, this user cannot log in.")
+
     can_edit = models.BooleanField(default=False, help_text="Can edit case metadata")
     can_resolve = models.BooleanField(default=False, help_text="Can resolve cases")
     can_close = models.BooleanField(default=False, help_text="Can close resolved cases")

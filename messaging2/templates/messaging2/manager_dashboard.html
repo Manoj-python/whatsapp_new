@@ -312,6 +312,53 @@
         </div>
     </div>
 
+<!-- Subgroup‑wise Stats -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                Subgroup‑wise Case Distribution (All Levels)
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr>
+                                <th>Department</th>
+                                <th>Subgroup</th>
+                                <th>ESC1</th>
+                                <th>ESC2</th>
+                                <th>ESC3</th>
+                                <th>ESC4</th>
+                                <th>ESC5</th>
+                                <th>Total Open</th>
+                                <th>Resolved</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sg in subgroup_level_stats %}
+                            <tr>
+                                <td>{{ sg.group_name|default:"-" }}</td>
+                                <td><strong>{{ sg.subgroup_name }}</strong></td>
+                                <td>{{ sg.levels.ESC1|default:0 }}</td>
+                                <td>{{ sg.levels.ESC2|default:0 }}</td>
+                                <td>{{ sg.levels.ESC3|default:0 }}</td>
+                                <td>{{ sg.levels.ESC4|default:0 }}</td>
+                                <td>{{ sg.levels.ESC5|default:0 }}</td>
+                                <td><strong>{{ sg.total_cases }}</strong></td>
+                                <td>{{ sg.total_resolved }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="9" class="text-center">No subgroups available</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
     <!-- Assign Modal -->
     <div class="modal fade" id="assignModal" tabindex="-1">
         <div class="modal-dialog"><div class="modal-content">

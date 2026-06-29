@@ -132,3 +132,66 @@ def render_template_text(template_body: str, parameters: list) -> str:
     for i, p in enumerate(parameters, start=1):
         out = out.replace(f"{{{{{i}}}}}", str(p.get("text", "")))
     return out
+
+
+# utils/whatsapp.py
+import requests
+import logging
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+def send_whatsapp_otp(to_phone, otp):
+    url = f"https://graph.facebook.com/v18.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    # Ensure phone number format
+    to_phone = str(to_phone).replace(" ", "")
+    if not to_phone.startswith("+"):
+        to_phone = f"+{to_phone}"
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": to_phone,
+        "type": "template",
+        "template": {
+            "name": "reset_password",
+            "language": {
+                "code": "en"
+            },
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": otp
+                        }
+                    ]
+                },
+                {
+                    "type": "button",
+                    "sub_type": "url",
+                    "index": "0",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": otp
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    print("Payload:", data)
+    print("Status:", response.status_code)
+    print("Response:", response.text)
+
+    response.raise_for_status()
+    return response.json()

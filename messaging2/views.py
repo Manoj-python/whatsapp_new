@@ -1662,7 +1662,6 @@ def executive_dashboard2(request):
     })
 # Manager Dashboard (ESC3)
 
-@messaging2_required
 def manager_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
@@ -1677,25 +1676,22 @@ def manager_dashboard2(request):
     category_id = request.GET.get('category')
     subgroup_id = request.GET.get('subgroup')
 
-    # ─── Filter logic ──────────────────────────────────────────
+    # ─── Base filter logic ──────────────────────────────────────
     if manager_subgroups.exists():
         case_filter = Q(subgroup__in=manager_subgroups)
     elif manager_groups.exists():
         case_filter = Q(group__in=manager_groups)
     else:
+        # No permissions – show empty dashboard
         context = {
             'pending_cases': CaseModel.objects.none(),
             'resolved_cases': CaseModel.objects.none(),
             'escalated_cases': CaseModel.objects.none(),
             'closed_cases': CaseModel.objects.none(),
-            'stats': {
-                'pending': 0,
-                'resolved': 0,
-                'escalated': 0,
-                'closed': 0
-            },
+            'stats': {'pending': 0, 'resolved': 0, 'escalated': 0, 'closed': 0},
             'dept_stats': [],
             'level_wise_stats': [],
+            'subgroup_level_stats': [],   # <-- new
             'agents_list': [],
             'agent': agent,
             'current_app': request.GET.get('app', 'psf'),
@@ -1777,35 +1773,17 @@ def manager_dashboard2(request):
     }
 
     # ─── Department Wise Stats ──────────────────────────────────
-    today_start = timezone.now().replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     dept_stats = []
-    dept_ids = (
-        CaseModel.objects.filter(case_filter)
-        .values_list('group_id', flat=True)
-        .distinct()
-    )
+    dept_ids = CaseModel.objects.filter(case_filter).values_list('group_id', flat=True).distinct()
     groups_with_cases = SupportGroup.objects.filter(id__in=dept_ids)
 
     for group in groups_with_cases:
         dept_pending = pending_cases.filter(group=group).count()
-        dept_today = (
-            CaseModel.objects.filter(
-                group=group,
-                created_at__gte=today_start
-            )
-            .filter(case_filter)
-            .count()
-        )
-        dept_stats.append({
-            'name': group.name,
-            'pending': dept_pending,
-            'today': dept_today,
-        })
+        dept_today = CaseModel.objects.filter(group=group, created_at__gte=today_start).filter(case_filter).count()
+        dept_stats.append({'name': group.name, 'pending': dept_pending, 'today': dept_today})
 
-    # ─── Level Wise Stats ───────────────────────────────────────
+    # ─── Level Wise Stats (Department level) ────────────────────
     all_levels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5']
     level_wise_stats = []
 
@@ -1817,7 +1795,6 @@ def manager_dashboard2(request):
             'total_cases': 0,
             'total_resolved': 0,
         }
-
         for level in all_levels:
             open_cases = (
                 CaseModel.objects.filter(
@@ -1832,54 +1809,66 @@ def manager_dashboard2(request):
             group_stats['levels'][level] = open_cases
             group_stats['total_cases'] += open_cases
 
-            resolved = (
-                CaseModel.objects.filter(
-                    group=group,
-                    resolved_at_level=level
-                )
-                .filter(case_filter)
-                .count()
-            )
+            resolved = CaseModel.objects.filter(group=group, resolved_at_level=level).filter(case_filter).count()
             group_stats['resolved_by_level'][level] = resolved
             group_stats['total_resolved'] += resolved
 
         level_wise_stats.append(group_stats)
 
+    # ─── SUBGROUP WISE STATS (NEW) ─────────────────────────────
+    subgroup_level_stats = []
+
+    if manager_subgroups.exists():
+        subgroups_to_use = manager_subgroups
+    elif manager_groups.exists():
+        subgroups_to_use = Subgroup.objects.filter(group__in=manager_groups)
+    else:
+        subgroups_to_use = Subgroup.objects.none()
+
+    subgroups_to_use = subgroups_to_use.select_related('group').order_by('group__name', 'name')
+
+    for subgroup in subgroups_to_use:
+        base_qs = CaseModel.objects.filter(case_filter).filter(subgroup=subgroup)
+
+        subgroup_data = {
+            'subgroup_name': subgroup.name,
+            'group_name': subgroup.group.name if subgroup.group else None,
+            'levels': {},
+            'resolved_by_level': {},
+            'total_cases': 0,
+            'total_resolved': 0,
+        }
+
+        for level in all_levels:
+            open_count = (
+                base_qs
+                .filter(
+                    current_level=level,
+                    status__in=['Open', 'In Progress', 'Reopened']
+                )
+                .exclude(status='Closed')
+                .count()
+            )
+            subgroup_data['levels'][level] = open_count
+            subgroup_data['total_cases'] += open_count
+
+            resolved_count = base_qs.filter(resolved_at_level=level).count()
+            subgroup_data['resolved_by_level'][level] = resolved_count
+            subgroup_data['total_resolved'] += resolved_count
+
+        subgroup_level_stats.append(subgroup_data)
+
     # ─── Agents List ─────────────────────────────────────────────
     if manager_subgroups.exists():
-        agents_list = (
-            Agent.objects.filter(
-                is_active=True,
-                subgroup__in=manager_subgroups
-            )
-            .distinct()
-            .values('id', 'name', 'role')
-        )
+        agents_list = Agent.objects.filter(is_active=True, subgroup__in=manager_subgroups).distinct().values('id', 'name', 'role')
     else:
-        agents_list = (
-            Agent.objects.filter(
-                is_active=True,
-                groups__in=manager_groups
-            )
-            .distinct()
-            .values('id', 'name', 'role')
-        )
+        agents_list = Agent.objects.filter(is_active=True, groups__in=manager_groups).distinct().values('id', 'name', 'role')
 
     all_groups = SupportGroup.objects.all().order_by('name')
     if manager_subgroups.exists():
-        all_subgroups = (
-            manager_subgroups
-            .select_related('group')
-            .order_by('group__name', 'name')
-        )
+        all_subgroups = manager_subgroups.select_related('group').order_by('group__name', 'name')
     elif manager_groups.exists():
-        all_subgroups = (
-            Subgroup.objects.filter(
-                group__in=manager_groups
-            )
-            .select_related('group')
-            .order_by('group__name', 'name')
-        )
+        all_subgroups = Subgroup.objects.filter(group__in=manager_groups).select_related('group').order_by('group__name', 'name')
     else:
         all_subgroups = Subgroup.objects.none()
 
@@ -1893,6 +1882,7 @@ def manager_dashboard2(request):
         'stats': stats,
         'dept_stats': dept_stats,
         'level_wise_stats': level_wise_stats,
+        'subgroup_level_stats': subgroup_level_stats,   # <-- new
         'agents_list': agents_list,
         'today_date': timezone.now().date().isoformat(),
         'agent': agent,
@@ -1900,12 +1890,13 @@ def manager_dashboard2(request):
         'app_list': APP_CONFIG.items(),
         'all_groups': all_groups,
         'all_subgroups': all_subgroups,
-        'all_categories': all_categories,   # new
+        'all_categories': all_categories,
         'selected_category': category_id,
         'selected_subgroup': subgroup_id,
     }
 
     return render(request, 'messaging2/manager_dashboard.html', context)
+
 
 def manager_cases_api(request):
     agent = get_agent_from_user(request.user)

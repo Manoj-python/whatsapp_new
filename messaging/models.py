@@ -193,7 +193,7 @@ class Case(models.Model):
     
     # Issue Details
     issue_description = models.TextField(blank=True, null=True)
-    category = models.ForeignKey(Category,on_delete=models.SET_NULL,null=True,blank=True,related_name='categories')
+    category = models.ForeignKey(Category,on_delete=models.SET_NULL,null=True,blank=True,related_name='app1_categories')
     group = models.ForeignKey(SupportGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='app1_cases')
     subgroup=models.ForeignKey(Subgroup,on_delete=models.SET_NULL,null=True,blank=True,related_name='app1_subcases')
 

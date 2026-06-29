@@ -281,6 +281,9 @@ s3 = boto3.client(
 # -----------------------------------------------------
 # ✅ FETCH ALL NOTICE FILES (WITH PAGINATION + FIXES)
 # -----------------------------------------------------
+# -----------------------------------------------------
+# ✅ FETCH ALL NOTICE FILES (WITH PAGINATION + FIXES)
+# -----------------------------------------------------
 def get_all_notice_files():
 
     file_map = {}
@@ -311,13 +314,13 @@ def get_all_notice_files():
                 if "_" not in filename and filename.endswith(".pdf"):
                     loan_number = filename.replace(".pdf", "").upper()
                     
-                    # Initialize the map for this loan
                     if loan_number not in file_map:
                         file_map[loan_number] = {
                             "borrower": None,
                             "guarantor": None,
                             "co_borrower": None,
-                            "lokadtalt": None
+                            "lokadtalt": None,
+                            "arbitration": None  # ✅ ADDED
                         }
                     
                     url = s3.generate_presigned_url(
@@ -329,9 +332,8 @@ def get_all_notice_files():
                         ExpiresIn=3600
                     )
                     
-                    # Store as lokadtalt (simple loan number PDF)
                     file_map[loan_number]["lokadtalt"] = url
-                    continue  # Skip further processing for this file
+                    continue
 
                 # Existing logic for borrower/guarantor/co_borrower
                 if "_" not in filename:
@@ -348,7 +350,8 @@ def get_all_notice_files():
                         "borrower": None,
                         "guarantor": None,
                         "co_borrower": None,
-                        "lokadtalt": None
+                        "lokadtalt": None,
+                        "arbitration": None  # ✅ ADDED
                     }
 
                 # 🔐 secure URL (IMPORTANT)
@@ -371,6 +374,9 @@ def get_all_notice_files():
                 elif file_type == "borrower":
                     file_map[loan_number]["borrower"] = url
 
+                elif file_type == "arbitration":  # ✅ ADDED
+                    file_map[loan_number]["arbitration"] = url
+
             # pagination check
             if response.get("IsTruncated"):
                 continuation_token = response.get("NextContinuationToken")
@@ -384,6 +390,8 @@ def get_all_notice_files():
     return file_map
 
 
+
+
 # -----------------------------------------------------
 # ✅ CACHE WRAPPER (VERY IMPORTANT 🚀)
 # -----------------------------------------------------
@@ -395,6 +403,10 @@ def get_all_notice_files_cached():
         cache.set("notice_files", data, timeout=300)  # 5 minutes
 
     return data
+# -----------------------------------------------------
+# ✅ MAIN VIEW
+# -----------------------------------------------------
+@financehub_required
 # -----------------------------------------------------
 # ✅ MAIN VIEW
 # -----------------------------------------------------
@@ -477,7 +489,8 @@ def lcc_list(request):
         obj.borrower_pdf = files.get("borrower")
         obj.guarantor_pdf = files.get("guarantor")
         obj.co_borrower_pdf = files.get("co_borrower")
-        obj.lokadtalt_pdf = files.get("lokadtalt")  # ✅ ADDED: Simple loan number PDF
+        obj.lokadtalt_pdf = files.get("lokadtalt")
+        obj.arbitration_pdf = files.get("arbitration")  # ✅ ADDED
 
     # -----------------------------------------------------
     # ✅ QUERY STRING
@@ -491,7 +504,6 @@ def lcc_list(request):
         "search": search_clean,
         "query_string": params.urlencode(),
     })
-
 
 
 

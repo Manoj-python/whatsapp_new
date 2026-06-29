@@ -119,7 +119,7 @@
                             <th>Guarantor</th>
                             <th>Co-Borrower</th>
                             <th>Lokadtalt</th>
-
+                            <th>Arbitration</th>
                             <th>Division</th>
                             <th>BLC</th>
                             <th>Vehicle No</th>
@@ -195,7 +195,12 @@
                                     <a href="{{ row.lokadtalt_pdf }}" target="_blank" class="btn btn-sm btn-danger">View</a>
                                 {% else %}-{% endif %}
                             </td>
-
+                             
+                             <td>
+                                {% if row.arbitration_pdf %}
+                                   <a href="{{ row.arbitration_pdf }}" target="_blank" class="btn btn-sm btn-dark">View</a>
+                                {% else %}-{% endif %}
+                              </td>
                             <td>{{ row.division }}</td>
                             <td>{{ row.blc_cases }}</td>
                             <td>{{ row.vehicle_no }}</td>

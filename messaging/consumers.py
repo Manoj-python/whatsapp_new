@@ -34,42 +34,65 @@ def ws_group_name(mobile: str) -> str:
 # -------------------------
 # Database Queries
 # -------------------------
+from django.db.models import Q, OuterRef, Subquery
+from django.core.cache import cache
+from .models import ChatContact, Case, SmsWhatsAppLog
+import re
+
+
+from django.db.models import Q, OuterRef, Subquery
+from django.core.cache import cache
+from .models import ChatContact, Case, SmsWhatsAppLog
+from .utils import format_mobile
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
 @sync_to_async
 def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, group_ids=None, subgroup_ids=None):
     """
-    Returns contacts/cases respecting user role:
-      - ESC1 and ESC5: all contacts (no group/subgroup filter)
-      - ESC2/3/4: cases from assigned subgroups (if any) else assigned groups
-    Includes category_name and category_id.
+    Returns contacts/cases respecting user role.
+    Optimized for speed – uses exact mobile matching and avoids annotations during search.
     """
-    import re
-
-    # ----- ESC2, ESC3, ESC4: show CASES (with permission filter) -----
+    # ----- ESC2, ESC3, ESC4: show CASES -----
     if level and level not in ['ESC1', 'ESC5']:
         case_qs = Case.objects.filter(current_level=level).select_related('group', 'subgroup', 'category')
 
-        # Permission filter: subgroups over groups
         if subgroup_ids:
             case_qs = case_qs.filter(subgroup_id__in=subgroup_ids)
         elif group_ids:
             case_qs = case_qs.filter(group_id__in=group_ids)
         else:
-            case_qs = case_qs.none()  # no access
+            case_qs = case_qs.none()
 
         case_qs = case_qs.exclude(status='Closed')
 
-        # Search
+        # ✅ Annotate with ChatContact (still needed for speed)
+        cc_subquery = ChatContact.objects.filter(mobile=OuterRef('mobile')).order_by('-last_time')
+        case_qs = case_qs.annotate(
+            cc_last_msg=Subquery(cc_subquery.values('last_msg')[:1]),
+            cc_unread=Subquery(cc_subquery.values('unread')[:1]),
+            cc_last_time=Subquery(cc_subquery.values('last_time')[:1]),
+        )
+
+        # 🔥 Search: use exact mobile after normalization
         if q:
             raw_q = q.strip()
+            # Normalize to the same format as stored (e.g., +919...)
+            normalized_mobile = format_mobile(raw_q)  # assume this returns '+91...' if needed
             digits = re.sub(r"\D", "", raw_q)
             filters = Q()
+            if normalized_mobile:
+                # Exact match is fastest
+                filters |= Q(mobile=normalized_mobile)
             if digits:
+                # Fallback: if no exact match, try icontains (but this is slower)
                 filters |= Q(mobile__icontains=digits)
             filters |= Q(case_id__icontains=raw_q) | Q(customer_name__icontains=raw_q)
             case_qs = case_qs.filter(filters)
 
         case_qs = case_qs.order_by('-created_at')
-
         total = case_qs.count()
         start = (page - 1) * size
         end = start + size
@@ -77,25 +100,20 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
 
         contacts = []
         for case in cases:
-            cc = ChatContact.objects.filter(mobile=case.mobile).first()
-            last_msg = cc.last_msg if cc else "No messages yet"
-            unread = cc.unread if cc else 0
-            last_time = cc.last_time if cc else case.created_at
-
             contacts.append({
                 "mobile": case.mobile,
                 "case_id": case.case_id,
                 "customer_name": case.customer_name or "",
-                "last_msg": last_msg,
+                "last_msg": case.cc_last_msg or "No messages yet",
                 "last_type": "Case",
                 "last_status": case.status,
-                "unread": unread,
-                "last_time": last_time.isoformat() if last_time else None,
+                "unread": case.cc_unread or 0,
+                "last_time": (case.cc_last_time or case.created_at).isoformat() if (case.cc_last_time or case.created_at) else None,
                 "current_level": case.current_level,
                 "group_name": case.group.name if case.group else "",
                 "subgroup_name": case.subgroup.name if case.subgroup else "",
-                "category_name": case.category.name if case.category else "",      # NEW
-                "category_id": case.category.id if case.category else None,       # NEW
+                "category_name": case.category.name if case.category else "",
+                "category_id": case.category.id if case.category else None,
                 "is_case": True,
             })
 
@@ -109,45 +127,79 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
             "unread_count": 0
         }
 
-    # ----- ESC1 and ESC5: show CONTACTS (NO group/subgroup filter) -----
-    # Annotate with latest case's group/subgroup/category for display
-    latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
-    qs = ChatContact.objects.annotate(
-        latest_group_name=Subquery(latest_case.values('group__name')[:1]),
-        latest_subgroup_name=Subquery(latest_case.values('subgroup__name')[:1]),
-        latest_category_name=Subquery(latest_case.values('category__name')[:1]),
-        latest_category_id=Subquery(latest_case.values('category_id')[:1])
-    )
+    # ----- ESC1 and ESC5: show CONTACTS -----
+    # 1) Start with a simple queryset – no annotations yet (will add later if needed)
+    base_qs = ChatContact.objects.all()
 
-    # For ESC1: we do NOT filter by current_level (to show all levels)
-    # For ESC5: we do NOT filter by current_level
-    # (if we ever need to restrict, we can add a condition, but user wants "no filters")
-
-    # Apply unread filter if needed
     if filter_type == "unread":
-        qs = qs.filter(unread__gt=0)
-        qs = qs.exclude(last_msg__icontains="No messages yet")
-        qs = qs.exclude(last_msg="")
-        qs = qs.exclude(last_msg__isnull=True)
+        base_qs = base_qs.filter(unread__gt=0).exclude(last_msg__icontains="No messages yet").exclude(last_msg="").exclude(last_msg__isnull=True)
     elif filter_type == "assigned":
-        # For assigned, we don't apply any level filter either
-        qs = qs.exclude(last_msg__icontains="No messages yet")
+        base_qs = base_qs.exclude(last_msg__icontains="No messages yet")
 
-    # Search filter
+    # 2) 🚀 SEARCH – use exact mobile after normalization
     if q:
         raw_q = q.strip()
+        normalized_mobile = format_mobile(raw_q)  # e.g., '+919885152879'
         digits = re.sub(r"\D", "", raw_q)
-        filters = Q()
-        if digits:
-            filters |= Q(mobile__icontains=digits)
-        filters |= Q(last_msg__icontains=raw_q)
-        filters |= Q(latest_group_name__icontains=raw_q)
-        filters |= Q(latest_subgroup_name__icontains=raw_q)
-        filters |= Q(latest_category_name__icontains=raw_q)   # search by category
-        qs = qs.filter(filters)
 
-    qs = qs.order_by('-last_time')
+        # Get mobiles from ChatContact that match (fast exact match)
+        chat_mobiles = []
+        if normalized_mobile:
+            chat_mobiles = list(base_qs.filter(mobile=normalized_mobile).values_list('mobile', flat=True))
+        if not chat_mobiles and digits:
+            # Fallback: use icontains (but only if exact didn't find anything)
+            chat_mobiles = list(base_qs.filter(mobile__icontains=digits).values_list('mobile', flat=True))
 
+        # Also get mobiles from Case (even if no ChatContact)
+        case_mobiles = []
+        if normalized_mobile:
+            case_mobiles = list(Case.objects.filter(mobile=normalized_mobile).exclude(status='Closed').values_list('mobile', flat=True).distinct())
+        if not case_mobiles and digits:
+            case_mobiles = list(Case.objects.filter(mobile__icontains=digits).exclude(status='Closed').values_list('mobile', flat=True).distinct())
+
+        # Combine unique mobiles
+        all_mobiles = list(set(chat_mobiles) | set(case_mobiles))
+
+        if not all_mobiles:
+            # No matches – return empty list
+            return {
+                "contacts": [],
+                "total_pages": 1,
+                "current_page": page,
+                "total": 0,
+                "has_more": False,
+                "unread_count": 0
+            }
+
+        # Now fetch ChatContact records for these mobiles (with annotations for display)
+        latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
+        qs = ChatContact.objects.filter(mobile__in=all_mobiles).annotate(
+            latest_group_name=Subquery(latest_case.values('group__name')[:1]),
+            latest_subgroup_name=Subquery(latest_case.values('subgroup__name')[:1]),
+            latest_category_name=Subquery(latest_case.values('category__name')[:1]),
+            latest_category_id=Subquery(latest_case.values('category_id')[:1]),
+            latest_customer_name=Subquery(latest_case.values('customer_name')[:1]),
+        )
+        # Re-apply filter_type if needed (since we fetched extra mobiles from cases, they might not satisfy unread/assigned)
+        if filter_type == "unread":
+            qs = qs.filter(unread__gt=0).exclude(last_msg__icontains="No messages yet").exclude(last_msg="").exclude(last_msg__isnull=True)
+        elif filter_type == "assigned":
+            qs = qs.exclude(last_msg__icontains="No messages yet")
+
+        qs = qs.order_by('-last_time')
+
+    else:
+        # No search – use the base queryset with annotations for display
+        latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
+        qs = base_qs.annotate(
+            latest_group_name=Subquery(latest_case.values('group__name')[:1]),
+            latest_subgroup_name=Subquery(latest_case.values('subgroup__name')[:1]),
+            latest_category_name=Subquery(latest_case.values('category__name')[:1]),
+            latest_category_id=Subquery(latest_case.values('category_id')[:1]),
+        )
+        qs = qs.order_by('-last_time')
+
+    # Paginate
     total = qs.count()
     start = (page - 1) * size
     end = start + size
@@ -176,13 +228,11 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
             "current_level": c.current_level or "ESC1",
             "group_name": c.latest_group_name or "",
             "subgroup_name": c.latest_subgroup_name or "",
-            "category_name": c.latest_category_name or "",     # NEW
-            "category_id": c.latest_category_id,               # NEW
+            "category_name": c.latest_category_name or "",
+            "category_id": c.latest_category_id,
         })
 
     total_pages = (total + size - 1) // size if total > 0 else 1
-    unread_count = 0
-    # Unread count for the whole system (ESC1/ESC5 see all)
     unread_count = ChatContact.objects.filter(
         unread__gt=0
     ).exclude(

@@ -614,6 +614,7 @@
     let currentDepartment = 'all';
     let currentCategory = 'all';  // NEW
     let allSubgroups = JSON.parse('{{ all_subgroups_json|safe }}');
+    let allCategories = JSON.parse('{{ all_categories_json|safe }}');
 
     // Helper: build URL with app param
     function buildUrl(baseUrl) {
@@ -1061,67 +1062,76 @@
     }
 
     // ========== EDIT CASE ==========
-    function openEditCaseModal(caseId) {
-        fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('editCaseId').value = caseId;
-                    document.getElementById('editLoanNumber').value = data.case.loan_number || '';
-                    document.getElementById('editName').value = data.case.customer_name || '';
-                    document.getElementById('editIssueDescription').value = data.case.issue_description || '';
+   // Helper: Populate category dropdown based on group
+function populateCategoryDropdown(selectElement, groupId, selectedCategoryName) {
+    selectElement.innerHTML = '<option value="">-- Select Category --</option>';
+    const filtered = allCategories.filter(c => !groupId || c.group_id == groupId);
+    filtered.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        opt.textContent = c.name;
+        if (selectedCategoryName && c.name === selectedCategoryName) {
+            opt.selected = true;
+        }
+        selectElement.appendChild(opt);
+    });
+}
 
-                    // Populate groups
-                    const groupSelect = document.getElementById('editGroup');
-                    if (data.case.group_id) {
-                        groupSelect.value = data.case.group_id;
-                    } else {
-                        groupSelect.value = '';
+// Updated openEditCaseModal
+function openEditCaseModal(caseId) {
+    fetch(buildUrl(`/adminpanel/case/${caseId}/detail/`))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('editCaseId').value = caseId;
+                document.getElementById('editLoanNumber').value = data.case.loan_number || '';
+                document.getElementById('editName').value = data.case.customer_name || '';
+                document.getElementById('editIssueDescription').value = data.case.issue_description || '';
+
+                const groupSelect = document.getElementById('editGroup');
+                groupSelect.value = data.case.group_id || '';
+
+                const subgroupSelect = document.getElementById('editSubgroup');
+                const selectedGroupId = groupSelect.value;
+                subgroupSelect.innerHTML = '<option value="">-- Select Subgroup (optional) --</option>';
+                allSubgroups.forEach(s => {
+                    if (!selectedGroupId || s.group_id == selectedGroupId) {
+                        const opt = document.createElement('option');
+                        opt.value = s.id;
+                        opt.textContent = `${s.name} (${s.group_name})`;
+                        if (s.id == data.case.subgroup_id) opt.selected = true;
+                        subgroupSelect.appendChild(opt);
                     }
+                });
 
-                    // Populate subgroups (filtered by selected group)
-                    const subgroupSelect = document.getElementById('editSubgroup');
-                    const selectedGroupId = groupSelect.value;
+                // ✅ Populate categories dynamically
+                const categorySelect = document.getElementById('editCategory');
+                populateCategoryDropdown(categorySelect, selectedGroupId, data.case.category_name);
+
+                // ✅ When group changes, update both subgroups and categories
+                groupSelect.onchange = function() {
+                    const gId = this.value;
+                    // Update subgroups
                     subgroupSelect.innerHTML = '<option value="">-- Select Subgroup (optional) --</option>';
                     allSubgroups.forEach(s => {
-                        if (!selectedGroupId || s.group_id == selectedGroupId) {
+                        if (!gId || s.group_id == gId) {
                             const opt = document.createElement('option');
                             opt.value = s.id;
                             opt.textContent = `${s.name} (${s.group_name})`;
-                            if (s.id == data.case.subgroup_id) opt.selected = true;
                             subgroupSelect.appendChild(opt);
                         }
                     });
+                    // Update categories
+                    populateCategoryDropdown(categorySelect, gId, null);
+                };
 
-                    // Populate category
-                    const categorySelect = document.getElementById('editCategory');
-                    if (data.case.category_name) {
-                        categorySelect.value = data.case.category_name;
-                    } else {
-                        categorySelect.value = '';
-                    }
-
-                    // Re-filter subgroups when group changes
-                    groupSelect.onchange = function() {
-                        const gId = this.value;
-                        subgroupSelect.innerHTML = '<option value="">-- Select Subgroup (optional) --</option>';
-                        allSubgroups.forEach(s => {
-                            if (!gId || s.group_id == gId) {
-                                const opt = document.createElement('option');
-                                opt.value = s.id;
-                                opt.textContent = `${s.name} (${s.group_name})`;
-                                subgroupSelect.appendChild(opt);
-                            }
-                        });
-                    };
-
-                    $('#editCaseModal').modal('show');
-                } else {
-                    alert('Error loading case');
-                }
-            })
-            .catch(err => alert('Error: ' + err.message));
-    }
+                $('#editCaseModal').modal('show');
+            } else {
+                alert('Error loading case');
+            }
+        })
+        .catch(err => alert('Error: ' + err.message));
+}
 
     function submitEditCase() {
         const caseId = document.getElementById('editCaseId').value;
