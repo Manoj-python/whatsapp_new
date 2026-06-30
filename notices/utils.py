@@ -942,6 +942,7 @@ def generate_pre_sale_sms(excel_path, template_path, output_dir, progress_callba
             "notice_date": format_date(row.get("notice_date")),
             "borrower_name": safe(row.get("borrower_name")),
             "borrower_address": force_address_breaks(safe(row.get("borrower_address"))),
+            "pincode":(safe(row.get("pincode"))),
             "borrower_mobile": format_mobile(row.get("borrower_mobile")),
             "loan_account": safe(row.get("loan_account")),
             "vehicle_no": safe(row.get("vehicle_no")),

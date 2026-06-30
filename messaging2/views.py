@@ -2759,7 +2759,7 @@ def create_case_from_chat_api2(request):
         agent_name = data.get('agent_name', 'Agent')
         issue_description = data.get('issue_description', '')
         loan_number = data.get('loan_number', '')
-        vehicle_number = data.get('vehicle_number', '')
+        vehicle_number = data.get('vehicle_no', data.get('vehicle_number', ''))
         group_name = data.get('group', 'Collections')
         subgroup_id = data.get('subgroup_id', None)
         category_id = data.get('category_id', None)   # now required

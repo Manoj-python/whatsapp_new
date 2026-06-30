@@ -230,7 +230,7 @@
                         <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td></tr>
                         <tr><th>Mobile:</th><td>${caseData.mobile}</td></tr>
                         <tr><th>Loan Number:</th><td>${caseData.loan_number || '-'}</td></tr>
-                        <tr><th>Loan Number:</th><td>${caseData.vehicle_number || '-'}</td></tr>
+                        <tr><th>Vehicle Number:</th><td>${caseData.vehicle_number || '-'}</td></tr>
                         <tr><th>Department:</th><td>${caseData.group_name || 'Not assigned'}</td></tr>
                         <tr><th>Subgroup:</th><td>${caseData.subgroup_name || 'None'}</td></tr>
                         <tr><th>Current Level:</th><td><span class="badge bg-${levelBadges[caseData.current_level]}">${caseData.current_level}</span></td></tr>
@@ -289,65 +289,87 @@
     }
 
 
-     function viewDescriptionHistory(caseId) {
-        if (!caseId) {
-            showNotification('No case ID provided', 'error');
-            return;
-        }
+ function viewDescriptionHistory(caseId) {
+    if (!caseId) {
+        showNotification('No case ID', 'error');
+        return;
+    }
+    const modalEl = document.getElementById('descriptionHistoryModal');
+    if (!modalEl) return;
 
-        const modalElement = document.getElementById('descriptionHistoryModal');
-        if (!modalElement) {
-            showNotification('Modal not found', 'error');
-            return;
-        }
-
-        // Show modal using Bootstrap 5 API
-        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-        } else {
-            // Fallback
-            modalElement.classList.add('show');
-            modalElement.style.display = 'block';
-            document.body.classList.add('modal-open');
+    // Show modal
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    } else {
+        modalEl.style.display = 'block';
+        modalEl.classList.add('show');
+        document.body.classList.add('modal-open');
+        if (!document.querySelector('.modal-backdrop')) {
             const backdrop = document.createElement('div');
             backdrop.className = 'modal-backdrop fade show';
             document.body.appendChild(backdrop);
         }
-
-        const body = document.getElementById('descriptionHistoryBody');
-        body.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div><p>Loading...</p></div>';
-
-        fetch(addAppParam(`/messaging2/case/${caseId}/description-history/`))
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.logs.length > 0) {
-                    let html = '<div class="timeline">';
-                    // Show all logs (already ordered by changed_at descending from backend)
-                    data.logs.forEach(log => {
-                        html += `
-                            <div class="border-bottom pb-3 mb-3">
-                                <small class="text-muted">${new Date(log.changed_at).toLocaleString()}</small>
-                                <div><strong>Level:</strong> ${log.level}</div>
-                                <div><strong>Updated By:</strong> ${escapeHtml(log.changed_by)}</div>
-                                <div class="mt-2 p-2 bg-light rounded">
-                                    <strong>Description:</strong> ${escapeHtml(log.new_description)}
-                                </div>
-                                ${log.previous_description ? `<div class="small text-muted mt-1">Previous: ${escapeHtml(log.previous_description)}</div>` : ''}
-                            </div>
-                        `;
-                    });
-                    html += '</div>';
-                    body.innerHTML = html;
-                } else {
-                    body.innerHTML = '<div class="alert alert-info">No description history available.</div>';
-                }
-            })
-            .catch(err => {
-                body.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
-            });
     }
 
+    const body = document.getElementById('descriptionHistoryBody');
+    body.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div><p>Loading...</p></div>';
+
+    fetch(`/messaging2/case/${caseId}/description-history/`)
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        })
+        .then(data => {
+            console.log('📜 History data:', data);
+            if (data.success && data.logs && data.logs.length > 0) {
+                let html = '<div class="timeline">';
+                data.logs.forEach(log => {
+                    // Use either format: try to pick correct fields
+                    const changedAt = log.changed_at || log.created_at || log.timestamp || null;
+                    let dateStr = 'Unknown date';
+                    if (changedAt) {
+                        try {
+                            const d = new Date(changedAt);
+                            if (!isNaN(d.getTime())) {
+                                dateStr = d.toLocaleString('en-IN', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit', hour12: true
+                                });
+                            }
+                        } catch(e) { /* ignore */ }
+                    }
+
+                    const updatedBy = log.changed_by || log.updated_by || log.changed_by_name || 'Unknown';
+                    const role = log.changed_by_role || log.role || '';
+                    const level = log.level || log.current_level || 'N/A';
+                    // Description: new description might be in `new_description` or `description`
+                    const newDesc = log.new_description || log.description || '';
+                    const prevDesc = log.previous_description || log.old_description || '';
+
+                    html += `
+                        <div class="border-bottom pb-3 mb-3">
+                            <small class="text-muted">${dateStr}</small>
+                            <div><strong>Level:</strong> ${escapeHtml(level)}</div>
+                            <div><strong>Updated By:</strong> ${escapeHtml(updatedBy)} ${role ? '('+escapeHtml(role)+')' : ''}</div>
+                            <div class="mt-2 p-2 bg-light rounded">
+                                <strong>Description:</strong><br>${escapeHtml(newDesc) || '<em>(empty)</em>'}
+                            </div>
+                            ${prevDesc ? `<div class="small text-muted mt-1"><strong>Previous:</strong> ${escapeHtml(prevDesc)}</div>` : ''}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                body.innerHTML = html;
+            } else {
+                body.innerHTML = '<div class="alert alert-info">No description history available.</div>';
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            body.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+        });
+}
 
     function loadTimeline(caseId) {
         fetch(addAppParam(`/messaging2/case/${caseId}/timeline/`))
