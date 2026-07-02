@@ -44,9 +44,20 @@
 <nav class="navbar navbar-expand-lg navbar-dark" style="background:#0b5ed7;">
     <div class="container-fluid">
 
-        <a class="navbar-brand" href="/splcases_app/upload/">
-            Special Cases
-        </a>
+        {% if agent.role == 'AGENT' %}
+<a class="navbar-brand" href="{% url 'agent_dashboard' %}"><i class="fas fa-tasks"></i> My Cases</a>
+{% elif agent.role == 'EXECUTIVE' %}
+<a class="nav-brand" href="{% url 'executive_dashboard' %}"><i class="fas fa-star"></i>Executive Cases (ESC2)</a>
+{% elif agent.role == 'MANAGER' %}
+<a class="nav-brand" href="{% url 'manager_dashboard' %}"><i class="fas fa-chart-line"></i> Manager Cases (ESC3)</a>
+{% elif agent.role == 'HEAD' %}
+<a class="nav-brand" href="{% url 'head_dashboard' %}"><i class="fas fa-user-tie"></i> Head Cases (ESC4)</a>
+{% elif agent.role == 'ADMIN' %}
+<a class="nav-brand" href="{% url 'admin_dashboard' %}"><i class="fas fa-crown"></i> Admin Dashboard</a>
+{% endif %}
+         <a class="navbar-brand" href="{% url 'upload_data' %}">
+            Upload Data
+        </a> 
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
                 data-bs-target="#navMenu" aria-controls="navMenu" aria-expanded="false">

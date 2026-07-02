@@ -16,6 +16,7 @@
     <div class="container-fluid">
 
         <a class="navbar-brand fw-bold" href="{% url 'upload_data' %}">Special Cases</a>
+        <a class="navbar-brand fw-bold" href="{% url 'upload' %}">Upload Template</a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
                 data-bs-target="#navbarNav">
@@ -35,7 +36,11 @@
 
             <div class="d-flex align-items-center">
                 <span class="text-white me-3">👤 {{ request.user.username }}</span>
-                <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
+                
+                <a class="nav-link" href="/splcases_app/chat3/">Chat Dashboard</a>
+               
+
+                <a href="{% url 'admin_logout' %}" class="btn btn-light btn-sm">Logout</a>
             </div>
 
         </div>

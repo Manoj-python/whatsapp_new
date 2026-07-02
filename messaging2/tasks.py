@@ -641,6 +641,7 @@ def send_ticket_open_message(app_key, case_id):
         open_template = cfg['templates']['open']
         get_template_text = cfg.get('get_template_text')
         render_template = cfg.get('render_template_text')
+        chat_prefix = cfg.get('chat_prefix', 'chat2')
         whatsapp_creds = cfg.get('whatsapp', {})
         app_name = cfg['app_name']   # Get the company name
     except KeyError:
@@ -754,8 +755,9 @@ def send_ticket_open_message(app_key, case_id):
         channel_layer = get_channel_layer()
         gm = re.sub(r"\D", "", mobile)
         if gm:
+            chat_group = f"{chat_prefix}_{gm}"
             async_to_sync(channel_layer.group_send)(
-                f"chat2_{gm}",
+                chat_group,
                 {
                     "type": "new_message",
                     "message": {
@@ -801,6 +803,7 @@ def send_ticket_close_message(app_key, case_id):
         channel_group = cfg['channel_group']
         close_template = cfg['templates']['close']
         get_template_text = cfg.get('get_template_text')
+        chat_prefix = cfg.get('chat_prefix', 'chat2')
         render_template = cfg.get('render_template_text')
         whatsapp_creds = cfg.get('whatsapp', {})
     except KeyError:
@@ -888,8 +891,9 @@ def send_ticket_close_message(app_key, case_id):
         channel_layer = get_channel_layer()
         gm = re.sub(r"\D", "", mobile)
         if gm:
+            chat_group = f"{chat_prefix}_{gm}"
             async_to_sync(channel_layer.group_send)(
-                f"chat2_{gm}",
+                chat_group,
                 {
                     "type": "new_message",
                     "message": {
@@ -932,6 +936,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
         app_name = cfg['app_name']
+        chat_prefix = cfg.get('chat_prefix', 'chat2')
         whatsapp_creds = cfg.get('whatsapp', {})
 
     except KeyError:
@@ -998,8 +1003,9 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         gm = re.sub(r"\D", "", mobile)
 
         if gm:
+            chat_group = f"{chat_prefix}_{gm}"
             async_to_sync(channel_layer.group_send)(
-                f"chat2_{gm}",
+                chat_group,
                 {
                     "type": "new_message",
                     "message": {

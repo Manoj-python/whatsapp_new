@@ -59,10 +59,13 @@ def get_contacts_page(page=1, size=30, q="", filter_type="all", level=None, grou
     if level and level not in ['ESC1', 'ESC5']:
         case_qs = Case.objects.filter(current_level=level).select_related('group', 'subgroup', 'category')
 
-        if subgroup_ids:
-            case_qs = case_qs.filter(subgroup_id__in=subgroup_ids)
-        elif group_ids:
-            case_qs = case_qs.filter(group_id__in=group_ids)
+        if group_ids or subgroup_ids:
+            filter_condition = Q()
+            if group_ids:
+                filter_condition |= Q(group_id__in=group_ids)
+            if subgroup_ids:
+                filter_condition |= Q(subgroup_id__in=subgroup_ids)
+            case_qs = case_qs.filter(filter_condition)
         else:
             case_qs = case_qs.none()
 
@@ -598,7 +601,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             user = self.scope.get("user")
             if user and user.is_authenticated:
                 try:
-                    from .models import Agent
+                    from messaging2.models import Agent
                     agent = await sync_to_async(Agent.objects.get)(user=user)
                     if agent.role == 'ADMIN':
                         level = None          # ESC5 – sees all contacts (no filter)

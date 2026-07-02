@@ -1588,14 +1588,14 @@ def executive_dashboard2(request):
     subgroup_id = request.GET.get('subgroup')
 
     # ─── Build combined filter (groups/subgroups) ─────────────
-    if executive_groups and executive_subgroups:
-        combined_filter = Q(group__in=executive_groups) & Q(subgroup__in=executive_subgroups)
-    elif executive_groups:
-        combined_filter = Q(group__in=executive_groups)
-    elif executive_subgroups:
-        combined_filter = Q(subgroup__in=executive_subgroups)
-    else:
-        combined_filter = Q(pk__in=[])  # no access
+    combined_filter = Q()
+    if executive_groups:
+        combined_filter |= Q(group__in=executive_groups)
+    if executive_subgroups:
+        combined_filter |= Q(subgroup__in=executive_subgroups)
+
+    if not combined_filter:
+        combined_filter = Q(pk__in=[])   # no access
 
     # ─── Apply category filter ─────────────────────────────────
     if category_id:
@@ -2749,11 +2749,11 @@ def create_case_from_chat_api2(request):
         CaseModel, ContactModel, LogModel, _ = get_models_for_app(request)
 
         # ✅ Dynamic log check – uses correct app's log table
-        if not LogModel.objects.filter(mobile=mobile).exists():
-            app_key = request.GET.get('app', 'psf')
-            return JsonResponse({
-                'error': f'This number has no WhatsApp messages in the {app_key} app. Cannot create case here.'
-            }, status=400)
+        # if not LogModel.objects.filter(mobile=mobile).exists():
+        #     app_key = request.GET.get('app', 'psf')
+        #     return JsonResponse({
+        #         'error': f'This number has no WhatsApp messages in the {app_key} app. Cannot create case here.'
+        #     }, status=400)
 
         customer_name = data.get('customer_name') or mobile
         agent_name = data.get('agent_name', 'Agent')
@@ -2876,6 +2876,7 @@ def create_case_from_chat_api2(request):
         changed_by_role="System",
         level=case.current_level,  # initial level
     )
+        send_ticket_open_message.delay(app_key, case.id)
 
         # ─── Response ────────────────────────────────────────────────────
         return JsonResponse({

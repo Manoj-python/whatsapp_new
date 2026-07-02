@@ -27,6 +27,8 @@ from special_cases.models import Case as SplCase, SmsWhatsAppLog3, ChatContact3
 from django.conf import settings
 from messaging.models import CaseDescriptionLog as SmsCaseDescriptionLog
 from messaging2.models import CaseDescriptionLog as PsfCaseDescriptionLog
+from special_cases.models import CaseDescriptionLog as SplCaseDescriptionLog
+
 # ============================================
 # APP CONFIGURATION
 # ============================================
@@ -44,6 +46,7 @@ APP_CONFIG = {
         'log_model': SmsWhatsAppLog2,
         'contact_model': ChatContact2,
         'channel_group': 'global_contacts2',
+        'chat_prefix': 'chat2', 
         'description_log_model': PsfCaseDescriptionLog,
         'templates': {
             'open': 'ticket_open',    # Replace with actual template name for PSF
@@ -64,6 +67,7 @@ APP_CONFIG = {
         'log_model': SmsWhatsAppLog,
         'contact_model': ChatContact,
         'channel_group': 'global_contacts',
+        'chat_prefix': 'chat', 
         'description_log_model': SmsCaseDescriptionLog,
         'get_template_text': get_template_text_from_whatsapp,
         'render_template_text': render_template_text,
@@ -79,10 +83,25 @@ APP_CONFIG = {
     },
     'spl': {
         'name': 'SPL Cases',
+        'app_name':'Padma Sai Holdings Private Limited',
+
         'case_model': SplCase,
         'log_model': SmsWhatsAppLog3,
         'contact_model': ChatContact3,
         'channel_group': 'global_contacts3',
+        'chat_prefix': 'chat3', 
+        'description_log_model': SplCaseDescriptionLog,
+        'get_template_text': get_template_text_from_whatsapp,
+        'render_template_text': render_template_text,
+        'templates': {
+            'open': 'ticket_opened',    # Replace with actual template name for PSF
+            'close': 'ticket_closed',
+            'welcome':'welcome_message',
+        },
+        'whatsapp': {
+            'phone_number_id': settings.WHATSAPP3_PHONE_NUMBER_ID,   # Use PSF's
+            'access_token': settings.WHATSAPP3_ACCESS_TOKEN,
+        },
     },
 }
 # ============================================
@@ -134,7 +153,7 @@ import uuid
 
 
 from adminpanel.models import SupportGroup, Subgroup  # ensure this import exists
-
+from messaging2.tasks import send_ticket_open_message
 @csrf_exempt
 def create_case_from_chat_api2(request):
     if request.method != 'POST':
@@ -244,6 +263,7 @@ def create_case_from_chat_api2(request):
             mobile=mobile,
             defaults={'current_level': case.current_level}
         )
+        send_ticket_open_message.delay(app_key, case.id)
 
         return JsonResponse({
             'success': True,

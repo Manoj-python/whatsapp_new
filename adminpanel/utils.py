@@ -31,7 +31,7 @@ def send_whatsapp_template4(to_number, template_name, parameters=None,
             "name": template_name,
             "language": {"code": language_code},
             "components": [
-                {"type": "body", "parameters": parameters}
+                {"type": "body", "parameters": parameters} 
             ]
         }
     }
@@ -44,7 +44,7 @@ def send_whatsapp_text4(to_number, text, phone_number_id, access_token):
     """
     Send a plain text message via WhatsApp Cloud API.
     """
-    url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
+    url = f"https://graph.facebook.com/v22.0/{phone_number_id}/messages"
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -86,12 +86,15 @@ def send_message_based_on_window(
 
     if window_open:
         try:
+            print(f"📤 Sending text to {mobile} with creds: {whatsapp_creds.get('phone_number_id')}")
+
             resp = send_whatsapp_text4(
                 to_number=mobile,
                 text=free_text,
                 phone_number_id=whatsapp_creds.get('phone_number_id'),
                 access_token=whatsapp_creds.get('access_token')
             )
+            print("✅ Response:", resp)
             msg_id = resp.get("messages", [{}])[0].get("id", "")
             status = "Sent"
             error = ""
@@ -103,6 +106,8 @@ def send_message_based_on_window(
             used_template = False
     else:
         try:
+            print(f"📤 Sending text to {mobile} with creds: {whatsapp_creds.get('phone_number_id')}")
+
             resp = send_whatsapp_template4(
                 to_number=mobile,
                 template_name=template_name,
@@ -110,6 +115,7 @@ def send_message_based_on_window(
                 phone_number_id=whatsapp_creds.get('phone_number_id'),
                 access_token=whatsapp_creds.get('access_token')
             )
+            print("✅ Response:", resp)
             msg_id = resp.get("messages", [{}])[0].get("id", "")
             status = "Sent"
             error = ""
@@ -142,7 +148,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 def send_whatsapp_otp(to_phone, otp):
-    url = f"https://graph.facebook.com/v18.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v22.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
 
     headers = {
         "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",

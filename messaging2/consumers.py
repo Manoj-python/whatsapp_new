@@ -51,12 +51,17 @@ def get_contacts_page2(page=1, size=30, q="", filter_type="all", level=None, gro
         case_qs = Case.objects.filter(current_level=level).select_related('group', 'subgroup', 'category')
 
         # Permission filter: subgroups over groups
-        if subgroup_ids:
-            case_qs = case_qs.filter(subgroup_id__in=subgroup_ids)
-        elif group_ids:
-            case_qs = case_qs.filter(group_id__in=group_ids)
+        if group_ids or subgroup_ids:
+            filter_condition = Q()
+            if group_ids:
+                filter_condition |= Q(group_id__in=group_ids)
+            if subgroup_ids:
+                filter_condition |= Q(subgroup_id__in=subgroup_ids)
+            case_qs = case_qs.filter(filter_condition)
         else:
-            case_qs = case_qs.none()  # no access
+            case_qs = case_qs.none()
+
+        
 
         case_qs = case_qs.exclude(status='Closed')
 

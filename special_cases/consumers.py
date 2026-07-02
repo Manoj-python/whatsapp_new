@@ -33,48 +33,169 @@ def ws_group_name3(mobile: str) -> str:
 # -------------------------
 # Database Queries
 # -------------------------
+from django.db.models import Q, OuterRef, Subquery
+from django.core.cache import cache
+from .models import ChatContact3, Case, SmsWhatsAppLog3
+from .utils import format_mobile3
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
 @sync_to_async
-def get_contacts_page3(page=1, size=30, q="", filter_type="all", level=None):
+def get_contacts_page3(page=1, size=30, q="", filter_type="all", level=None, group_ids=None, subgroup_ids=None):
     """
-    Get contacts with pagination and filtering
-    filter_type: 'all', 'unread', 'assigned'
-    level: 'ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5' - for role-based filtering
+    Returns contacts/cases respecting user role.
+    Optimized for speed – uses exact mobile matching and avoids annotations during search.
     """
+    # ----- ESC2, ESC3, ESC4: show CASES -----
+    if level and level not in ['ESC1', 'ESC5']:
+        case_qs = Case.objects.filter(current_level=level).select_related('group', 'subgroup', 'category')
 
-    qs = ChatContact3.objects.all()
+        if group_ids or subgroup_ids:
+            filter_condition = Q()
+            if group_ids:
+                filter_condition |= Q(group_id__in=group_ids)
+            if subgroup_ids:
+                filter_condition |= Q(subgroup_id__in=subgroup_ids)
+            case_qs = case_qs.filter(filter_condition)
+        else:
+            case_qs = case_qs.none()
 
-    # Apply role-based level filter FIRST
-    if level and level != 'ESC1':  # Only filter non-agent roles
-        # Non-agents should ONLY see chats at their level
-        qs = qs.filter(current_level=level)
-    
-    # Apply additional filters
+        case_qs = case_qs.exclude(status='Closed')
+
+        # ✅ Annotate with ChatContact (still needed for speed)
+        cc_subquery = ChatContact3.objects.filter(mobile=OuterRef('mobile')).order_by('-last_time')
+        case_qs = case_qs.annotate(
+            cc_last_msg=Subquery(cc_subquery.values('last_msg')[:1]),
+            cc_unread=Subquery(cc_subquery.values('unread')[:1]),
+            cc_last_time=Subquery(cc_subquery.values('last_time')[:1]),
+        )
+
+        # 🔥 Search: use exact mobile after normalization
+        if q:
+            raw_q = q.strip()
+            # Normalize to the same format as stored (e.g., +919...)
+            normalized_mobile = format_mobile3(raw_q)  # assume this returns '+91...' if needed
+            digits = re.sub(r"\D", "", raw_q)
+            filters = Q()
+            if normalized_mobile:
+                # Exact match is fastest
+                filters |= Q(mobile=normalized_mobile)
+            if digits:
+                # Fallback: if no exact match, try icontains (but this is slower)
+                filters |= Q(mobile__icontains=digits)
+            filters |= Q(case_id__icontains=raw_q) | Q(customer_name__icontains=raw_q)
+            case_qs = case_qs.filter(filters)
+
+        case_qs = case_qs.order_by('-created_at')
+        total = case_qs.count()
+        start = (page - 1) * size
+        end = start + size
+        cases = case_qs[start:end]
+
+        contacts = []
+        for case in cases:
+            contacts.append({
+                "mobile": case.mobile,
+                "case_id": case.case_id,
+                "customer_name": case.customer_name or "",
+                "last_msg": case.cc_last_msg or "No messages yet",
+                "last_type": "Case",
+                "last_status": case.status,
+                "unread": case.cc_unread or 0,
+                "last_time": (case.cc_last_time or case.created_at).isoformat() if (case.cc_last_time or case.created_at) else None,
+                "current_level": case.current_level,
+                "group_name": case.group.name if case.group else "",
+                "subgroup_name": case.subgroup.name if case.subgroup else "",
+                "category_name": case.category.name if case.category else "",
+                "category_id": case.category.id if case.category else None,
+                "is_case": True,
+            })
+
+        total_pages = (total + size - 1) // size if total > 0 else 1
+        return {
+            "contacts": contacts,
+            "total_pages": total_pages,
+            "current_page": page,
+            "total": total,
+            "has_more": page < total_pages,
+            "unread_count": 0
+        }
+
+    # ----- ESC1 and ESC5: show CONTACTS -----
+    # 1) Start with a simple queryset – no annotations yet (will add later if needed)
+    base_qs = ChatContact3.objects.all()
+
     if filter_type == "unread":
-        qs = qs.filter(unread__gt=0)
-        qs = qs.exclude(last_msg__icontains="No messages yet")
-        qs = qs.exclude(last_msg="")
-        qs = qs.exclude(last_msg__isnull=True)
+        base_qs = base_qs.filter(unread__gt=0).exclude(last_msg__icontains="No messages yet").exclude(last_msg="").exclude(last_msg__isnull=True)
     elif filter_type == "assigned":
-        # For LEGAL, LEAD, MANAGER - show only their level chats
-        if level:
-            qs = qs.filter(current_level=level)
-        qs = qs.exclude(last_msg__icontains="No messages yet")
+        base_qs = base_qs.exclude(last_msg__icontains="No messages yet")
 
-    # Search filter
+    # 2) 🚀 SEARCH – use exact mobile after normalization
     if q:
         raw_q = q.strip()
+        normalized_mobile = format_mobile3(raw_q)  # e.g., '+919885152879'
         digits = re.sub(r"\D", "", raw_q)
 
-        filters = Q()
-        if digits:
-            filters |= Q(mobile__icontains=digits)
-        filters |= Q(last_msg__icontains=raw_q)
-        qs = qs.filter(filters)
+        # Get mobiles from ChatContact that match (fast exact match)
+        chat_mobiles = []
+        if normalized_mobile:
+            chat_mobiles = list(base_qs.filter(mobile=normalized_mobile).values_list('mobile', flat=True))
+        if not chat_mobiles and digits:
+            # Fallback: use icontains (but only if exact didn't find anything)
+            chat_mobiles = list(base_qs.filter(mobile__icontains=digits).values_list('mobile', flat=True))
 
-    # Order by last_time DESC
-    qs = qs.order_by('-last_time')
+        # Also get mobiles from Case (even if no ChatContact)
+        case_mobiles = []
+        if normalized_mobile:
+            case_mobiles = list(Case.objects.filter(mobile=normalized_mobile).exclude(status='Closed').values_list('mobile', flat=True).distinct())
+        if not case_mobiles and digits:
+            case_mobiles = list(Case.objects.filter(mobile__icontains=digits).exclude(status='Closed').values_list('mobile', flat=True).distinct())
 
-    # Pagination
+        # Combine unique mobiles
+        all_mobiles = list(set(chat_mobiles) | set(case_mobiles))
+
+        if not all_mobiles:
+            # No matches – return empty list
+            return {
+                "contacts": [],
+                "total_pages": 1,
+                "current_page": page,
+                "total": 0,
+                "has_more": False,
+                "unread_count": 0
+            }
+
+        # Now fetch ChatContact records for these mobiles (with annotations for display)
+        latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
+        qs = ChatContact3.objects.filter(mobile__in=all_mobiles).annotate(
+            latest_group_name=Subquery(latest_case.values('group__name')[:1]),
+            latest_subgroup_name=Subquery(latest_case.values('subgroup__name')[:1]),
+            latest_category_name=Subquery(latest_case.values('category__name')[:1]),
+            latest_category_id=Subquery(latest_case.values('category_id')[:1]),
+            latest_customer_name=Subquery(latest_case.values('customer_name')[:1]),
+        )
+        # Re-apply filter_type if needed (since we fetched extra mobiles from cases, they might not satisfy unread/assigned)
+        if filter_type == "unread":
+            qs = qs.filter(unread__gt=0).exclude(last_msg__icontains="No messages yet").exclude(last_msg="").exclude(last_msg__isnull=True)
+        elif filter_type == "assigned":
+            qs = qs.exclude(last_msg__icontains="No messages yet")
+
+        qs = qs.order_by('-last_time')
+
+    else:
+        # No search – use the base queryset with annotations for display
+        latest_case = Case.objects.filter(mobile=OuterRef('mobile')).order_by('-created_at')
+        qs = base_qs.annotate(
+            latest_group_name=Subquery(latest_case.values('group__name')[:1]),
+            latest_subgroup_name=Subquery(latest_case.values('subgroup__name')[:1]),
+            latest_category_name=Subquery(latest_case.values('category__name')[:1]),
+            latest_category_id=Subquery(latest_case.values('category_id')[:1]),
+        )
+        qs = qs.order_by('-last_time')
+
+    # Paginate
     total = qs.count()
     start = (page - 1) * size
     end = start + size
@@ -101,20 +222,20 @@ def get_contacts_page3(page=1, size=30, q="", filter_type="all", level=None):
             "unread": c.unread,
             "last_time": c.last_time.isoformat() if c.last_time else None,
             "current_level": c.current_level or "ESC1",
+            "group_name": c.latest_group_name or "",
+            "subgroup_name": c.latest_subgroup_name or "",
+            "category_name": c.latest_category_name or "",
+            "category_id": c.latest_category_id,
         })
 
-    total_pages = (total + size - 1) // size
-    
-    # Calculate unread count for agent/admin
-    unread_count = 0
-    if not level or level == 'ESC1':  # Only for agents/admins
-        unread_count = ChatContact3.objects.filter(
-            unread__gt=0
-        ).exclude(
-            last_msg__icontains="No messages yet"
-        ).exclude(
-            last_msg=""
-        ).count()
+    total_pages = (total + size - 1) // size if total > 0 else 1
+    unread_count = ChatContact3.objects.filter(
+        unread__gt=0
+    ).exclude(
+        last_msg__icontains="No messages yet"
+    ).exclude(
+        last_msg=""
+    ).count()
 
     return {
         "contacts": contacts,
@@ -320,7 +441,6 @@ def create_outgoing_log3(mobile: str, text: str, message_id: str, content_type: 
         "status": log.status,
         "sender_name": log.customer_name,
     }
-
 @sync_to_async
 def mark_messages_read_db3(mobile: str):
     """Mark all messages as read for a mobile- DON'T update last_time"""
@@ -465,21 +585,64 @@ class ChatConsumer3(AsyncJsonWebsocketConsumer):
     async def _handle_get_contacts(self, content):
         try:
             page = int(content.get("page", 1))
+            size = int(content.get("size", 30))
             q = content.get("q", "")
             filter_type = content.get("filter", "all")
-            level = content.get("level", None)
+            level = None
+            group_ids = None
+            subgroup_ids = None
 
-            if not level and hasattr(self, 'mobile') and self.mobile:
+            # Get the authenticated user from the WebSocket scope
+            user = self.scope.get("user")
+            if user and user.is_authenticated:
                 try:
-                    from django.contrib.auth.models import User
-                    from .models import Agent
-                    user = await sync_to_async(User.objects.get)(username=self.mobile)
+                    from messaging2.models import Agent
                     agent = await sync_to_async(Agent.objects.get)(user=user)
-                    level = agent.level
-                except:
-                    level = None
+                    if agent.role == 'ADMIN':
+                        level = None          # ESC5 – sees all contacts (no filter)
+                        group_ids = None
+                        subgroup_ids = None
+                    else:
+                        level = agent.level
+                        if level != 'ESC1':   # ESC2, ESC3, ESC4 – need permissions
+                            group_ids = await sync_to_async(lambda: list(agent.groups.values_list('id', flat=True)))()
+                            subgroup_ids = await sync_to_async(lambda: list(agent.subgroup.values_list('id', flat=True)))()
+                        # For ESC1 – level remains 'ESC1', group_ids/subgroup_ids remain None → no filter in get_contacts_page2
+                except Agent.DoesNotExist:
+                    pass
+            else:
+                # Fallback: try session key (legacy)
+                session = self.scope.get("session", {})
+                user_id = session.get("messaging3_user")
+                if user_id:
+                    from django.contrib.auth.models import User
+                    try:
+                        user = await sync_to_async(User.objects.get)(id=user_id)
+                        agent = await sync_to_async(Agent.objects.get)(user=user)
+                        if agent.role == 'ADMIN':
+                            level = None
+                            group_ids = None
+                            subgroup_ids = None
+                        else:
+                            level = agent.level
+                            if level != 'ESC1':
+                                group_ids = await sync_to_async(lambda: list(agent.groups.values_list('id', flat=True)))()
+                                subgroup_ids = await sync_to_async(lambda: list(agent.subgroup.values_list('id', flat=True)))()
+                    except Exception:
+                        pass
 
-            res = await get_contacts_page3(page=page, q=q, filter_type=filter_type,level=level)
+            # Debug logging
+            print(f"📌 _handle_get_contacts: level={level}, group_ids={group_ids}, subgroup_ids={subgroup_ids}")
+
+            res = await get_contacts_page3(
+                page=page,
+                size=size,
+                q=q,
+                filter_type=filter_type,
+                level=level,
+                group_ids=group_ids,
+                subgroup_ids=subgroup_ids
+            )
 
             if self.connection_active:
                 await self.send_json({
@@ -487,15 +650,14 @@ class ChatConsumer3(AsyncJsonWebsocketConsumer):
                     "contacts": res["contacts"],
                     "page": page,
                     "total_pages": res["total_pages"],
-                    "has_more": page < res["total_pages"],
+                    "has_more": res["has_more"],
                     "unread_count": res.get("unread_count", 0),
                     "total": res["total"],
                     "filter": filter_type
                 })
         except Exception as e:
-            print(f"Error in _handle_get_contacts: {e}")
+            print(f"❌ Error in _handle_get_contacts: {e}")
             traceback.print_exc()
-
     async def _handle_join(self, content):
         try:
             mobile = content.get("mobile")

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>PSF Cases - WhatsApp Chat Dashboard</title>
+  <title>psf Cases - WhatsApp Chat Dashboard</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -167,10 +167,12 @@
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="header-top">
-        <h4 onclick="goToDashboard()"><i class="fab fa-whatsapp"></i> PSF Chats</h4>
+        <h4 onclick="goToDashboard()"><i class="fab fa-whatsapp"></i>PSF Chats</h4>
         <span class="esc-number">{{ agent.level|default:"ESC1" }}</span>
         <span class="role-name">{{ agent.role|default:"Agent" }}</span>
         <div class="user-badge">{{ request.user.username|slice:":2"|upper }}</div>
+         <button class="btn btn-sm btn-light ms-2" id="sidebarCreateCaseBtn" title="Create case for new number" style="border-radius:50%; padding:4px 8px;">
+      <i class="fas fa-plus-circle text-success fa-lg"></i></button>
       </div>
     </div>
     <div class="chat-tabs">
@@ -227,6 +229,76 @@
             </div>
         </div>
     </div>
+</div>
+
+
+<!-- New Case Modal (always accessible) -->
+<div class="modal fade" id="newCaseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="fas fa-plus-circle"></i> Create New Case</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="newCaseForm">
+          <div class="mb-3">
+            <label>Mobile Number <span class="text-danger">*</span></label>
+            <input type="text" id="newCaseMobile" class="form-control" placeholder="e.g., +919876543210" required>
+          </div>
+          <div class="mb-3">
+            <label>Customer Name</label>
+            <input type="text" id="newCaseCustomerNameModal" class="form-control" placeholder="Customer name">
+          </div>
+          <div class="mb-3">
+            <label>Loan Number</label>
+            <input type="text" id="newCaseLoanNumberModal" class="form-control" placeholder="Loan number">
+          </div>
+          <div class="mb-3">
+            <label>Vehicle Number</label>
+            <input type="text" id="newCaseVehicleNoModal" class="form-control" placeholder="Vehicle number">
+          </div>
+          <div class="mb-3">
+            <label>Department (Group) <span class="text-danger">*</span></label>
+            <select id="newCaseGroupModal" class="form-select" required>
+              <option value="">-- Select --</option>
+              <!-- populated by JS -->
+            </select>
+          </div>
+          <div class="mb-3">
+            <label>Subgroup (optional)</label>
+            <select id="newCaseSubgroupModal" class="form-select">
+              <option value="">-- Select --</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label>Category <span class="text-danger">*</span></label>
+            <select id="newCaseCategoryModal" class="form-select" required>
+              <option value="">-- Select --</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label>Escalate To (optional)</label>
+            <select id="newCaseEscalateModal" class="form-select">
+              <option value="">-- None (ESC1) --</option>
+              <option value="ESC2">Executive (ESC2)</option>
+              <option value="ESC3">Manager (ESC3)</option>
+              <option value="ESC4">Head (ESC4)</option>
+              <option value="ESC5">Admin (ESC5)</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label>Issue Description <span class="text-danger">*</span></label>
+            <textarea id="newCaseDescModal" class="form-control" rows="3" placeholder="Describe the issue" required></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" onclick="submitNewCaseFromModal()">Create Case</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -772,6 +844,11 @@ async function fetchCategories() {
             closeCaseSidebar();
             await loadCaseForMobile(selectedMobile);
             renderCasePanel();
+             contactPage = 1;
+        contacts = [];
+        hasMoreContacts = true;
+        lastProcessedPage = 0;
+        loadContacts(1); 
           }
           return;
         }
@@ -779,11 +856,114 @@ async function fetchCategories() {
         closeCaseSidebar();
         await loadCaseForMobile(selectedMobile);
         renderCasePanel();
+         contactPage = 1;
+    contacts = [];
+    hasMoreContacts = true;
+    lastProcessedPage = 0;
+    loadContacts(1);
       } else {
         showNotification(data.error || 'Failed to create case', 'error');
       }
     } catch(e) { showNotification('Error: ' + e.message, 'error'); }
   };
+   document.getElementById('sidebarCreateCaseBtn').addEventListener('click', function() {
+    openNewCaseModal();   // no selectedMobile check – always opens the modal
+});
+
+// ─── Open the modal (populate dropdowns) ──────────────────────
+
+function normalizeMobile(num) {
+    if (!num) return '';
+    num = num.trim();
+    // Remove all non-digit characters
+    let digits = num.replace(/\D/g, '');
+    // If 10-digit, add 91
+    if (digits.length === 10) {
+        digits = '91' + digits;
+    }
+    // Ensure it starts with '+'
+    if (!digits.startsWith('+')) {
+        digits = '+' + digits;
+    }
+    return digits;   // e.g., "+919948457293"
+}
+
+function openNewCaseModal() {
+    // Pre-fill mobile if a contact is selected (optional)
+    if (selectedMobile) {
+        document.getElementById('newCaseMobile').value = selectedMobile;
+        document.getElementById('newCaseCustomerNameModal').value = headerName.textContent;
+    } else {
+        document.getElementById('newCaseMobile').value = '';
+        document.getElementById('newCaseCustomerNameModal').value = '';
+    }
+    // Clear other fields
+    document.getElementById('newCaseLoanNumberModal').value = '';
+    document.getElementById('newCaseVehicleNoModal').value = '';
+    document.getElementById('newCaseDescModal').value = '';
+    // Populate dropdowns
+    populateNewCaseModalDropdowns();
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('newCaseModal'));
+    modal.show();
+}
+
+// ─── Populate dropdowns ──────────────────────────────────────────
+function populateNewCaseModalDropdowns() {
+    // Groups
+    const groupSelect = document.getElementById('newCaseGroupModal');
+    groupSelect.innerHTML = '<option value="">-- Select --</option>';
+    availableGroups.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.name;
+        opt.textContent = g.name;
+        groupSelect.appendChild(opt);
+    });
+
+    // Subgroups (will filter on group change)
+    const subgroupSelect = document.getElementById('newCaseSubgroupModal');
+    subgroupSelect.innerHTML = '<option value="">-- Select --</option>';
+    allSubgroups.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.group_name})`;
+        opt.dataset.groupName = s.group_name;
+        subgroupSelect.appendChild(opt);
+    });
+
+    // Categories (initially empty)
+    const catSelect = document.getElementById('newCaseCategoryModal');
+    catSelect.innerHTML = '<option value="">-- Select --</option>';
+
+    // Event listeners for filtering
+    groupSelect.onchange = function() {
+        const selectedGroup = this.value;
+        // Filter subgroups
+        const subOptions = subgroupSelect.querySelectorAll('option');
+        subOptions.forEach(opt => {
+            if (opt.value === '') return;
+            const groupName = opt.dataset.groupName;
+            opt.style.display = (selectedGroup && groupName === selectedGroup) ? '' : 'none';
+        });
+        // Filter categories
+        filterCategoriesModal(selectedGroup);
+    };
+}
+
+function filterCategoriesModal(groupName) {
+    const group = availableGroups.find(g => g.name === groupName);
+    const groupId = group ? group.id : null;
+    const catSelect = document.getElementById('newCaseCategoryModal');
+    catSelect.innerHTML = '<option value="">-- Select --</option>';
+    if (groupId) {
+        availableCategories.filter(c => c.group_id === groupId).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            catSelect.appendChild(opt);
+        });
+    }
+}
 
   // ========== loadCaseForMobile (unchanged) ==========
   async function loadCaseForMobile(mobile) {
@@ -800,6 +980,84 @@ async function fetchCategories() {
   function openCreateAnotherCaseForm() {
     startCreateCase();  // re‑use the same fetch+form logic
   }
+
+  async function submitNewCaseFromModal() {
+    let mobile = document.getElementById('newCaseMobile').value.trim();
+    mobile = normalizeMobile(mobile);
+    const customerName = document.getElementById('newCaseCustomerNameModal').value.trim();
+    const loanNumber = document.getElementById('newCaseLoanNumberModal').value.trim();
+    const vehicleNo = document.getElementById('newCaseVehicleNoModal').value.trim();
+    const group = document.getElementById('newCaseGroupModal').value;
+    const subgroupId = document.getElementById('newCaseSubgroupModal').value;
+    const categoryId = document.getElementById('newCaseCategoryModal').value;
+    const escalateTo = document.getElementById('newCaseEscalateModal').value;
+    const description = document.getElementById('newCaseDescModal').value.trim();
+
+    if (!mobile) { showNotification('Mobile number is required', 'error'); return; }
+    if (!group) { showNotification('Please select a department', 'error'); return; }
+    if (!categoryId) { showNotification('Please select a category', 'error'); return; }
+    if (!description) { showNotification('Please describe the issue', 'error'); return; }
+
+    try {
+        const response = await fetch('/messaging2/case/create-from-chat/?app=spl', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                mobile: mobile,
+                customer_name: customerName || '',
+                agent_name: currentUser.name,
+                issue_description: description,
+                loan_number: loanNumber,
+                vehicle_no: vehicleNo,
+                group: group,
+                subgroup_id: subgroupId || null,
+                category_id: categoryId || null,
+                escalate_to: escalateTo || null,
+                force_new: false
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showNotification(`Case ${data.case.case_id} created at level ${data.case.current_level}!`, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('newCaseModal')).hide();
+
+            // Refresh contact list
+            contactPage = 1;
+            contacts = [];
+            hasMoreContacts = true;
+            lastProcessedPage = 0;
+            loadContacts(1);
+
+            // --- NEW: Poll for the case before selecting ---
+            let attempts = 0;
+            const pollAndSelect = () => {
+                fetch(`/messaging2/case/by-mobile/?mobile=${encodeURIComponent(mobile)}&app=sms`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.case) {
+                            // Case exists – select contact
+                            selectContact(mobile);
+                        } else if (attempts < 10) {
+                            attempts++;
+                            setTimeout(pollAndSelect, 500);
+                        } else {
+                            showNotification('Case created but not yet visible – please refresh', 'warning');
+                            selectContact(mobile); // fallback
+                        }
+                    })
+                    .catch(() => {
+                        // On error, still select after a delay
+                        setTimeout(() => selectContact(mobile), 1500);
+                    });
+            };
+            pollAndSelect();
+        } else {
+            showNotification(data.error || 'Failed to create case', 'error');
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
 
   // ========== WEBSOCKET & CHAT FUNCTIONS (unchanged) ==========
   function showNotification(message, type='info') {
@@ -830,12 +1088,33 @@ async function fetchCategories() {
         filteredContacts = contactsData.filter(c => c.current_level === currentUser.level);
 
     // Deduplicate: for contacts use mobile; for cases use mobile+case_id
+    // --- NEW DEDUP LOGIC: Keep contacts, remove duplicate cases ---
+    let contactMap = new Map();   // mobile -> contact object (only for is_case=false)
+    let caseList = [];
+
+    filteredContacts.forEach(c => {
+        if (c.is_case) {
+            caseList.push(c);
+        } else {
+            contactMap.set(c.mobile, c);
+        }
+    });
+
+    // Build final list: first all contacts, then only cases without a contact
+    let finalList = Array.from(contactMap.values());
+    caseList.forEach(c => {
+        if (!contactMap.has(c.mobile)) {
+            finalList.push(c);
+        }
+    });
+
+    // Now assign to `contacts` (replace or merge)
     if (replace) {
-        contacts = filteredContacts;
+        contacts = finalList;
     } else {
-        let existing = new Set(contacts.map(c => c.mobile + (c.is_case ? c.case_id : '')));
-        let newContacts = filteredContacts.filter(c => !existing.has(c.mobile + (c.is_case ? c.case_id : '')));
-        contacts = [...contacts, ...newContacts];
+        let existingMobiles = new Set(contacts.map(c => c.mobile));
+        let newItems = finalList.filter(c => !existingMobiles.has(c.mobile));
+        contacts = [...contacts, ...newItems];
     }
 
     // Update unread badge

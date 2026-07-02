@@ -7,7 +7,7 @@ from django.apps import apps
 PANDAS_CHUNK_SIZE = 5000
 BULK_BATCH_SIZE = 2000
 
-
+from .models import SmsWhatsAppLog3
 # -------------------------------------------------------
 # SMART HEADER MAP (FULL INCLUDING DIALER FIXES)
 # -------------------------------------------------------
@@ -230,6 +230,22 @@ from django.core.files.uploadedfile import UploadedFile
 from django.conf import settings
 
 PAYMENT_LINK3 = "https://smsquare.co.in/pay2"
+
+def format_whatsapp_date3(value) -> str:
+    if not value:
+        return ""
+    s = str(value).strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.strftime("%d-%m-%Y")
+        except Exception:
+            continue
+    try:
+        dt = datetime.fromisoformat(s)
+        return dt.strftime("%d-%m-%Y")
+    except Exception:
+        return s
 
 
 def upload_whatsapp_media3(file_obj):
@@ -580,472 +596,48 @@ def render_template_text3(template_body: str, parameters: list) -> str:
 # ---------------------------
 from io import BytesIO
 
-def build_payload3(choice: str, row: dict, media_id: Optional[str] = None) -> Tuple[dict, str]:
-    templates = {
-        "1": ("emi_reminder", "en", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("total_dues", ""))},
-            {"type": "text", "text": str(row.get("loan_number", ""))},
-            {"type": "text", "text": format_whatsapp_date2(row.get("installment_date", ""))},
-            {"type": "text", "text": PAYMENT_LINK3},
-        ]),
-        "2": ("emi_tenure_reminder", "te", [
-            {"type": "text", "text": str(row.get("CustomerName", ""))},
-            {"type": "text", "text": str(row.get("VehicleNo", ""))},
-        ]),
-        "3": ("cibil_report", "en", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-        ]),
-        "4": ("vehicle_registration_slot", "te", [
-            {"type": "text", "text": str(row.get("CustomerName", ""))},
-            {"type": "text", "text": format_whatsapp_date2(row.get("registration_date", ""))},
-        ]),
-        "5": ("nach_bounce_payment_reminder", "en", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("due_amount", ""))},
-            {"type": "text", "text": format_whatsapp_date2(row.get("due_date", ""))},
-            {"type": "text", "text": str(row.get("loan_number", ""))},
-            {"type": "text", "text": PAYMENT_LINK3},
-        ]),
-        "6": ("nach_balance_reminder", "en", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("balance_amount", ""))},
-            {"type": "text", "text": str(row.get("loan_number", ""))},
-            {"type": "text", "text": str(row.get("urm_number", ""))},
-            {"type": "text", "text": format_whatsapp_date2(row.get("due_date", ""))},
-            {"type": "text", "text": str(row.get("bank_account_number", ""))},
-        ]),
-        "7": ("vehicle_registration_reminder", "en", [
-            {"type": "text", "text": str(row.get("CustomerName", ""))},
-            {"type": "text", "text": str(row.get("Vehicle_No", ""))},
-            {"type": "text", "text": str(row.get("Loan_number", ""))},
-        ]),
-        "8": ("wel", "en", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-        ]),
-        "9": ("noc_dispatch", "en", [
-            {"type": "text", "text": str(row.get("Customer Name", ""))},
-            {"type": "text", "text": str(row.get("Agreement No", ""))},
-            {"type": "text", "text": str(row.get("Vehicle No", ""))},
-            {"type": "text", "text": str(row.get("Couirer Status", ""))},
-            {"type": "text", "text": str(row.get("PODS", ""))},
-            {"type": "text", "text": format_whatsapp_date2(row.get("Couirer Date", ""))},
-            {"type": "text", "text": "7"},
-        ]),
-        "10": ("whatsapp_noc", "en", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("loan_number", ""))},
-            {"type": "text", "text": str(row.get("vehicle_number", ""))},
-            {"type": "text", "text": format_mobile2(row.get("cust_mobile", ""))},
-        ]),
-        "11": ("guarantor", "te", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("loan_number", ""))},
-            {"type": "text", "text": str(row.get("vehicle_number", ""))},
-            {"type": "text", "text": str(row.get("pending_emis", ""))},
-        ]),
-        "12": ("noc_address_confirmation_v2", "en", [
-            {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("loan_number", ""))},
-            {"type": "text", "text": str(row.get("vehicle_number", ""))},
-            {"type": "text", "text": str(row.get("customer_address", ""))}
-        ]),
-        "13": (
-            "customer_notice",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-                {"type": "text", "text": format_whatsapp_date2(row.get("timeline", ""))},
-            ],
-        ),
-        "14": (
-            "guarantor_notice",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-                {"type": "text", "text": format_whatsapp_date2(row.get("timeline", ""))},
-            ],
-        ),
-        "15": (
-            "public_notice",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("branch_name", ""))},
-                {"type": "text", "text": str(row.get("employee_name", ""))},
-            ],
-        ),
-        "16": (
-            "lok_adalat_notice",
-            "te",
-            [
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-            ],
-        ),
-        "17": (
-            "disposal",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-                {"type": "text", "text": str(row.get("vechile_number", ""))},
-            ],
-        ),
-        "18": (
-            "kannada_lok",
-            "kn",
-            [
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": format_whatsapp_date2(row.get("hearing_date", ""))},
-            ],
-        ),
-        "19": (
-            "lok_hr",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("emp_name", ""))},
-            ],
-        ),
-        "20": (
-            "loss_sale",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "21": (
-            "smf_lok_doc",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": format_whatsapp_date2(row.get("hearing_date", ""))},
-            ],
-        ),
-        "22": (
-            "guarantor_smf_doc_lok",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": format_whatsapp_date2(row.get("hearing_date", ""))},
-            ],
-        ),
-        "23": (
-            "customer_psf_lok_doc",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": format_whatsapp_date2(row.get("hearing_date", ""))},
-            ],
-        ),
-        "24": (
-            "psf_guarantor_lok_doc",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": format_whatsapp_date2(row.get("hearing_date", ""))},
-            ],
-        ),
-        "25": (
-            "loss_sale_smf",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "26": (
-            "smf_loss_sale_guarantor",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "27": (
-            "psf_loss_sale_guarantor",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "28": (
-            "emp_lok_psf",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("emp_name", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "29": (
-            "smf_write_off",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "30": (
-            "write_off_psf",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "30": (
-            "write_off_psf",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-        "31": (
-            "doc_noc_psf",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-            ],
-        ),
-        "32": (
-            "guarantor_psf_registration_notice",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-            ],
-        ),
-        "33": (
-            "guarantor_smf_registration_notice",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-            ],
-        ),
-        "34": (
-            "psf_registration_borrower_notice",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-            ],
-        ),
-        "35": (
-            "smf_registration_borrower_notice_",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-            ],
-        ),
-        "36": (
-            "notice_registration_telugu_psf",
-            "te",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-            ],
-        ),
-        "37": (
-            "smf_notice_registration_telugu",
-            "te",
-            [
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-            ],
-        ),
-        "38": (
-            "gur_telugu_registration_psf_notice",
-            "te",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-            ],
-        ),
-        "39": (
-            "cust_registration_notice_smf",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("customer_name", ""))},
-            ],
-        ),
-        "40": (
-            "gur_psf_writeoff",
-            "en",
-            [
-                {"type": "text", "text": str(row.get("guarantor_name", ""))},
-                {"type": "text", "text": str(row.get("loan_number", ""))},
-                {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                {"type": "text", "text": str(row.get("amount", ""))},
-            ],
-        ),
-    }
-
-    template_name, lang, parameters = templates.get(choice, templates["8"])
-    mobile = format_mobile2(
-    row.get("cust_mobile") or row.get("CustMobile") or ""
-)
-
+def build_payload3(choice: str, row: dict) -> Tuple[dict, str]:
+    """
+    Supports two templates:
+        "1" -> wel (en, 1 param: customer_name)
+        "2" -> hello_world (en_US, no params)
+    """
+    mobile = format_mobile3(row.get("cust_mobile") or row.get("CustMobile") or "")
     if not mobile:
         raise ValueError("Mobile number missing")
 
-    # --------------------------------------------------
-    # TEMPLATES WITH DOCUMENT HEADER (FIXED - UPLOADS PDF HERE)
-    # --------------------------------------------------
-    if choice in (
-        "13","14","21","22","23","24","30","31","32","33","34","35","36","37","38","39","40"
-    ):
-        # ==================================================
-        # 📄 SELECT PDF FILE
-        # ==================================================
-        pdf_filename = None
-        folder = "legal_pdfs"
-        
-        if choice == "13":
-            pdf_filename = row.get("customer_pdf_file")
-        elif choice == "14":
-            pdf_filename = row.get("guarantor_pdf_file")
-        elif choice == "21":
-            pdf_filename = row.get("smf_lok_doc_file")
-        elif choice == "22":
-            pdf_filename = row.get("smf_guarantor_pdf_file")
-        elif choice == "23":
-            pdf_filename = row.get("psf_customer_pdf_file")
-        elif choice == "24":
-            pdf_filename = row.get("psf_guarantor_pdf_file")
-        elif choice == "30":
-            pdf_filename=row.get("writeoff_pdf_file")
-        elif choice == "31":
-            pdf_filename = row.get("doc_noc_pdf_file")
-            folder = "noc_pdfs"
-        elif choice in ("32", "33", "38", "39"):
-            pdf_filename = row.get("guarantor_pdf_file")
-        elif choice in ("34", "35", "36", "37"):
-            pdf_filename = row.get("customer_pdf_file")
-        elif choice == "40":
-            pdf_filename = row.get("writeoff_pdf_file")
+    # Define templates mapping
+    templates = {
+        "1": {
+            "name": "wel",
+            "lang": "en",
+            "params": [{"type": "text", "text": str(row.get("customer_name", ""))}],
+        },
+        "2": {
+            "name": "hello_world",
+            "lang": "en_US",
+            "params": [],   # no parameters
+        },
+    }
 
-        if not pdf_filename:
-            raise ValueError(f"PDF filename missing for template {choice}")
+    # Fallback to "1" if choice not found
+    template = templates.get(choice, templates["1"])
+    template_name = template["name"]
+    lang = template["lang"]
+    parameters = template["params"]
 
-        filename = Path(pdf_filename).name
-        
-        # ==================================================
-        # 📤 UPLOAD PDF TO WHATSAPP (CRITICAL FIX)
-        # ==================================================
-        pdf_bytes = open_legal_pdf3(pdf_filename, folder)
-        if not pdf_bytes:
-            raise ValueError(f"Empty PDF: {pdf_filename}")
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": mobile,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"policy": "deterministic", "code": lang},
+            "components": [{"type": "body", "parameters": parameters}],
+        },
+    }
 
-        file_obj = BytesIO(pdf_bytes)
-        file_obj.name = filename
-        file_obj.content_type = "application/pdf"
-
-        upload_result = upload_whatsapp_media3(file_obj)
-        media_id = upload_result.get("id")
-        
-        print(f"✅ PDF uploaded to WhatsApp with ID: {media_id}")
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": mobile,
-            "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {
-                    "policy": "deterministic",
-                    "code": lang
-                },
-                "components": [
-                    {
-                        "type": "header",
-                        "parameters": [
-                            {
-                                "type": "document",
-                                "document": {
-                                    "id": media_id,
-                                    "filename": filename
-                                }
-                            }
-                        ],
-                    },
-                    {
-                        "type": "body",
-                        "parameters": parameters,
-                    },
-                ],
-            },
-        }
-
-    # --------------------------------------------------
-    # NORMAL TEMPLATES (NO HEADER)
-    # --------------------------------------------------
-    else:
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": mobile,
-            "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {
-                    "policy": "deterministic",
-                    "code": lang
-                },
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": parameters,
-                    }
-                ],
-            },
-        }
-
-    # --------------------------------------------------
-    # PREVIEW TEXT (SANITIZED)
-    # --------------------------------------------------
+    # Preview text (for logs)
     try:
         template_body = get_template_text_from_whatsapp3(template_name)
         rendered_text = sanitize_template_text3(
@@ -1062,7 +654,7 @@ def send_second_message_for_mobile3(all_rows, mobile):
     lines = []
 
     for row in all_rows:
-        row_mobile = format_mobile(
+        row_mobile = format_mobile3(
             row.get("cust_mobile") or row.get("CustMobile") or ""
         )
 
