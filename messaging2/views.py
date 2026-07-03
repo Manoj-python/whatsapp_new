@@ -1355,49 +1355,55 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import CaseEscalationLog
 
+from django.utils import timezone
+
 @messaging2_required
 def agent_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
 
-    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    username = agent.user.username
 
-    # ----- AGENT PERSONAL STATS (no department) -----
-    total_cases_created = CaseModel.objects.filter(created_by=agent.name).count()
+    today_start = timezone.localtime().replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0
+    )
+
+    # Personal stats
+    total_cases_created = CaseModel.objects.filter(
+        created_by=username
+    ).count()
+
     created_today = CaseModel.objects.filter(
-        created_by=agent.name,
+        created_by=username,
         created_at__gte=today_start
     ).count()
 
-    total_escalated = CaseEscalationLog.objects.filter(escalated_by=agent.name).count()
+    total_escalated = CaseEscalationLog.objects.filter(
+        escalated_by=username
+    ).count()
+
     escalated_today = CaseEscalationLog.objects.filter(
-        escalated_by=agent.name,
+        escalated_by=username,
         created_at__gte=today_start
     ).count()
 
-    resolved = CaseModel.objects.filter(resolved_by=agent.name).count()
+    resolved = CaseModel.objects.filter(
+        resolved_by=username
+    ).count()
+
     resolved_today = CaseModel.objects.filter(
-        resolved_by=agent.name,
+        resolved_by=username,
         resolved_at__gte=today_start
     ).count()
 
-    # Cases assigned to this agent (department‑wide, but scoped to agent)
+    # My assigned cases only
     assigned_cases = CaseModel.objects.filter(
         assigned_to=agent,
-        current_level='ESC1',
         status__in=['Open', 'In Progress', 'Reopened']
     ).exclude(status='Closed')
-
-    # Available cases – still uses groups if agent has any, otherwise empty
-    if agent.groups.exists():
-        available_cases = CaseModel.objects.filter(
-            current_level='ESC1',
-            group__in=agent.groups.all(),
-            assigned_to__isnull=True,
-            status__in=['Open', 'In Progress', 'Reopened']
-        ).exclude(status='Closed')
-    else:
-        available_cases = CaseModel.objects.none()
 
     stats = {
         'total_cases_created': total_cases_created,
@@ -1407,11 +1413,8 @@ def agent_dashboard2(request):
         'resolved': resolved,
         'resolved_today': resolved_today,
         'my_cases': assigned_cases.count(),
-        'available_cases': available_cases.count(),
+        'available_cases': 0,
     }
-
-    from adminpanel.models import SupportGroup
-    all_groups = SupportGroup.objects.all().order_by('name')
 
     context = {
         'cases': assigned_cases,
@@ -1420,57 +1423,48 @@ def agent_dashboard2(request):
         'agent': agent,
         'current_app': request.GET.get('app', 'psf'),
         'app_list': APP_CONFIG.items(),
-        'all_groups': all_groups,
     }
-    return render(request, 'messaging2/agent_dashboard.html', context)
 
-
-from django.utils import timezone
-
+    return render(
+        request,
+        'messaging2/agent_dashboard.html',
+        context
+    )
 @messaging2_required
 def agent_case_list_api(request):
     agent = get_agent_from_user(request.user)
     CaseModel = get_case_model_for_app(request)
+
+    username = agent.user.username
     tab = request.GET.get('tab', 'assigned')
 
-    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = timezone.localtime().replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0
+    )
 
     if tab == 'assigned':
-        # Cases assigned to this agent (already scoped to agent's groups)
         cases = CaseModel.objects.filter(
             assigned_to=agent,
-            current_level='ESC1',
             status__in=['Open', 'In Progress', 'Reopened']
         ).exclude(status='Closed')
 
-    elif tab == 'available':
-        # Cases available for assignment (within agent's groups)
-        if agent.groups.exists():
-            cases = CaseModel.objects.filter(
-                current_level='ESC1',
-                group__in=agent.groups.all(),
-                assigned_to__isnull=True,
-                status__in=['Open', 'In Progress', 'Reopened']
-            ).exclude(status='Closed')
-        else:
-            cases = CaseModel.objects.none()
-
     elif tab == 'today_created':
-        # ✅ Fix: Cases created by this agent today (no group restriction)
         cases = CaseModel.objects.filter(
-            created_by=agent.name,
+            created_by=username,
             created_at__gte=today_start
         ).order_by('-created_at')
 
     elif tab == 'resolved_by_me':
         cases = CaseModel.objects.filter(
-            resolved_by=agent.name
+            resolved_by=username
         ).order_by('-resolved_at')
 
     elif tab == 'escalated_by_me':
-        # ✅ Fix: Use the reverse relation escalation_logs (app‑aware)
         cases = CaseModel.objects.filter(
-            escalation_logs__escalated_by=agent.name
+            escalation_logs__escalated_by=username
         ).distinct().order_by('-created_at')
 
     else:
@@ -1481,15 +1475,14 @@ def agent_case_list_api(request):
         'customer_name': c.customer_name,
         'mobile': c.mobile,
         'loan_number': c.loan_number,
-        'vehicle_number':c.vehicle_number,
+        'vehicle_number': c.vehicle_number,
         'group_name': c.group.name if c.group else None,
         'priority': c.priority,
         'status': c.status,
-        'created_at': c.created_at.isoformat(),
+        'created_at': timezone.localtime(c.created_at).isoformat(),
     } for c in cases]
 
     return JsonResponse({'cases': case_list})
-
 
 # Executive Dashboard (ESC2)
 
@@ -1571,7 +1564,7 @@ def enrich_case_details(cases):
                 f"Name={case.customer_name}, "
                 f"Loan={case.loan_number}"
             )
-from adminpanel.models import SupportGroup, Subgroup   # add at top if missing
+from adminpanel.models import SupportGroup, Subgroup,Category   # add at top if missing
 
 @messaging2_required
 def executive_dashboard2(request):
@@ -1589,13 +1582,18 @@ def executive_dashboard2(request):
 
     # ─── Build combined filter (groups/subgroups) ─────────────
     combined_filter = Q()
-    if executive_groups:
-        combined_filter |= Q(group__in=executive_groups)
-    if executive_subgroups:
-        combined_filter |= Q(subgroup__in=executive_subgroups)
+# Per‑group logic
+    for group in executive_groups:
+        group_subgroups = executive_subgroups.filter(group=group)
+        if group_subgroups.exists():
+            combined_filter |= Q(group=group, subgroup__in=group_subgroups)
+        else:
+            combined_filter |= Q(group=group)
+# Also include any subgroups that may not have a group in executive_groups
+    combined_filter |= Q(subgroup__in=executive_subgroups)
 
     if not combined_filter:
-        combined_filter = Q(pk__in=[])   # no access
+        combined_filter = Q(pk__in=[])  # no access
 
     # ─── Apply category filter ─────────────────────────────────
     if category_id:
@@ -1789,10 +1787,13 @@ def manager_dashboard2(request):
 
     # ─── Build combined filter (OR) for groups and subgroups ──
     case_filter = Q()
-    if manager_groups.exists():
-        case_filter |= Q(group__in=manager_groups)
-    if manager_subgroups.exists():
-        case_filter |= Q(subgroup__in=manager_subgroups)
+    for group in manager_groups:
+        group_subgroups = manager_subgroups.filter(group=group)
+        if group_subgroups.exists():
+            case_filter |= Q(group=group, subgroup__in=group_subgroups)
+        else:
+            case_filter |= Q(group=group)
+    case_filter |= Q(subgroup__in=manager_subgroups)
 
     # If no permissions, show empty dashboard
     if not case_filter:
@@ -2137,75 +2138,87 @@ def manager_cases_api(request):
 # Head Dashboard (ESC4)
 from django.db.models import Q
 from adminpanel.models import Subgroup
+from django.db.models import Q
+
+def build_case_permission_filter(agent):
+    """
+    Build a Q filter for cases based on agent's groups and subgroups.
+    For each group: if agent has subgroups under it, restrict to those subgroups.
+    Otherwise, include the whole group.
+    Also include any subgroups that may not have a parent group in agent.groups.
+    """
+    filters = Q()
+    head_groups = agent.groups.all()
+    head_subgroups = agent.subgroup.all()
+
+    if not head_groups and not head_subgroups:
+        return Q(pk__in=[])  # no permission → empty queryset
+
+    for group in head_groups:
+        group_subgroups = head_subgroups.filter(group=group)
+        if group_subgroups.exists():
+            filters |= Q(group=group, subgroup__in=group_subgroups)
+        else:
+            filters |= Q(group=group)
+
+    # Include subgroups even if their group is not directly assigned
+    filters |= Q(subgroup__in=head_subgroups)
+
+    return filters
+
 @messaging2_required
 def head_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
+
     if agent.role != 'HEAD':
         return redirect('agent_dashboard')
 
-    head_groups = agent.groups.all()
-    head_subgroups = agent.subgroup.all()
-
-    # ─── Filters from request ──────────────────────────────────
+    # ─── Optional filters from request ──────────────────────
     category_id = request.GET.get('category')
     subgroup_id = request.GET.get('subgroup')
 
-    # ─── Build OR filter for groups/subgroups ──────────────────
-    group_subgroup_filter = Q()
-    if head_groups:
-        group_subgroup_filter |= Q(group__in=head_groups)
-    if head_subgroups:
-        group_subgroup_filter |= Q(subgroup__in=head_subgroups)
-
-    if not group_subgroup_filter:
-        # No groups/subgroups → nothing to see
-        context = {
-            'cases': CaseModel.objects.none(),
-            'stats': {'pending': 0, 'resolved': 0, 'escalated_to_admin': 0},
-            'dept_stats': [],
-            'agents_list': Agent.objects.filter(is_active=True).values('id', 'name', 'role'),
-            'today_date': timezone.now().date().isoformat(),
-            'agent': agent,
-            'current_app': request.GET.get('app', 'psf'),
-            'app_list': APP_CONFIG.items(),
-            'all_subgroups': Subgroup.objects.select_related('group').order_by('group__name', 'name'),
-            'all_categories': Category.objects.select_related('group').order_by('group__name', 'name'),
-            'selected_category': None,
-            'selected_subgroup': None,
-        }
-        return render(request, 'messaging2/head_dashboard.html', context)
-
-    # ─── Apply category and subgroup filters ──────────────────
-    if category_id:
-        group_subgroup_filter &= Q(category_id=category_id)
-    if subgroup_id:
-        group_subgroup_filter &= Q(subgroup_id=subgroup_id)
-
-    # ─── Base queryset for pending cases (ESC4) ──────────────
+    # ─── Base queryset: all ESC4 cases (no group/subgroup restriction) ──
     base_qs = CaseModel.objects.filter(
-        current_level='ESC4',
+        current_level='ESC4'
+    ).exclude(status='Closed').select_related('group', 'subgroup', 'category')
+
+    # Apply optional filters if present
+    if category_id:
+        base_qs = base_qs.filter(category_id=category_id)
+    if subgroup_id:
+        base_qs = base_qs.filter(subgroup_id=subgroup_id)
+
+    # ─── Pending (Open, In Progress, Reopened) ──────────────
+    pending_qs = base_qs.filter(
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').filter(group_subgroup_filter).select_related('group', 'subgroup', 'category')
+    )
 
     # ─── Stats ──────────────────────────────────────────────────
     stats = {
-        'pending': base_qs.count(),
+        'pending': pending_qs.count(),
         'resolved': CaseModel.objects.filter(
-            resolved_at_level='ESC4'
-        ).filter(group_subgroup_filter).select_related('category').count(),
+            current_level='ESC4',   # still at ESC4 but resolved
+            resolved_at_level='ESC4',
+            status='Resolved'
+        ).count(),
+        'closed': CaseModel.objects.filter(
+            current_level='ESC4',   # if we keep closed at ESC4 (or CLOSED)
+            status='Closed'
+        ).count(),
         'escalated_to_admin': CaseModel.objects.filter(
             current_level='ESC5'
-        ).filter(group_subgroup_filter).select_related('category').count(),
+        ).count(),
     }
 
-    # ─── Department Stats ──────────────────────────────────────
+    # ─── Department Stats (only for pending cases) ────────────
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     dept_stats = []
-    dept_ids = CaseModel.objects.filter(group_subgroup_filter).values_list('group_id', flat=True).distinct()
+    dept_ids = pending_qs.values_list('group_id', flat=True).distinct()
     groups_with_cases = SupportGroup.objects.filter(id__in=dept_ids)
+
     for group in groups_with_cases:
-        dept_cases = base_qs.filter(group=group)
+        dept_cases = pending_qs.filter(group=group)
         dept_today = dept_cases.filter(created_at__gte=today_start).count()
         dept_stats.append({
             'name': group.name,
@@ -2213,16 +2226,17 @@ def head_dashboard2(request):
             'today': dept_today,
         })
 
-    # ─── Agents list ────────────────────────────────────────────
+    # ─── Agents list (for assignment modal) ────────────────────
     agents_list = Agent.objects.filter(is_active=True).values('id', 'name', 'role')
 
-    # ─── Enrich cases with names ───────────────────────────────
-    cases = base_qs.order_by('-priority', '-created_at')
+    # ─── Enrich cases ──────────────────────────────────────────
+    cases = pending_qs.order_by('-priority', '-created_at')
     for case in cases:
         case.group_name = case.group.name if case.group else None
         case.subgroup_name = case.subgroup.name if case.subgroup else None
         case.category_name = case.category.name if case.category else None
 
+    # ─── All groups/subgroups/categories for filter dropdowns ──
     all_groups = SupportGroup.objects.all().order_by('name')
     all_subgroups = Subgroup.objects.select_related('group').order_by('group__name', 'name')
     all_categories = Category.objects.select_related('group').order_by('group__name', 'name')
@@ -2238,37 +2252,33 @@ def head_dashboard2(request):
         'app_list': APP_CONFIG.items(),
         'all_groups': all_groups,
         'all_subgroups': all_subgroups,
-        'all_categories': all_categories,   # new
+        'all_categories': all_categories,
         'selected_category': category_id,
         'selected_subgroup': subgroup_id,
     }
     return render(request, 'messaging2/head_dashboard.html', context)
 
+@messaging2_required
 def head_cases_api(request):
     agent = get_agent_from_user(request.user)
     CaseModel = get_case_model_for_app(request)
 
     department = request.GET.get('dept', 'all')
     subgroup_id = request.GET.get('subgroup', 'all')
-    category_id = request.GET.get('category', 'all')   # new
+    category_id = request.GET.get('category', 'all')
 
-    # Build OR filter for groups/subgroups
-    group_subgroup_filter = Q()
-    if agent.groups.exists():
-        group_subgroup_filter |= Q(group__in=agent.groups.all())
-    if agent.subgroup.exists():
-        group_subgroup_filter |= Q(subgroup__in=agent.subgroup.all())
-
+    # Start with all ESC4 cases (pending only)
     base_qs = CaseModel.objects.filter(
         current_level='ESC4',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').filter(group_subgroup_filter).select_related('group', 'subgroup', 'category')
+    ).exclude(status='Closed').select_related('group', 'subgroup', 'category')
 
+    # Apply filters
     if department != 'all':
         base_qs = base_qs.filter(group__name=department)
     if subgroup_id != 'all':
         base_qs = base_qs.filter(subgroup_id=subgroup_id)
-    if category_id != 'all':   # new
+    if category_id != 'all':
         base_qs = base_qs.filter(category_id=category_id)
 
     cases = base_qs.order_by('-created_at')
@@ -2278,7 +2288,7 @@ def head_cases_api(request):
         'customer_name': c.customer_name,
         'mobile': c.mobile,
         'loan_number': c.loan_number,
-        'vehicle_number':c.vehicle_number,
+        'vehicle_number': c.vehicle_number,
         'group_name': c.group.name if c.group else None,
         'subgroup_name': c.subgroup.name if c.subgroup else None,
         'category_name': c.category.name if c.category else None,
@@ -2288,7 +2298,6 @@ def head_cases_api(request):
     } for c in cases]
 
     return JsonResponse({'cases': case_list})
-
 
 import json
 import uuid

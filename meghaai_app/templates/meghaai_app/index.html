@@ -20,28 +20,28 @@
             --bg-message-assistant: #ffffff;
             --bg-input: #ffffff;
             --bg-card: #ffffff;
-            
+
             --text-primary: #1a1a2e;
             --text-secondary: #65676b;
             --text-light: #e4e6eb;
             --text-white: #ffffff;
-            
+
             --border-color: #e4e6eb;
             --shadow-color: rgba(0,0,0,0.08);
-            
+
             --primary: #0084ff;
             --primary-dark: #0066cc;
             --primary-light: #e6f0ff;
-            
+
             --success: #198754;
             --warning: #ffc107;
             --danger: #dc3545;
-            
+
             --radius-sm: 0.25rem;
             --radius-md: 0.5rem;
             --radius-lg: 1rem;
             --radius-xl: 1.5rem;
-            
+
             --transition: 0.3s ease;
         }
 
@@ -54,15 +54,15 @@
             --bg-message-assistant: #161b22;
             --bg-input: #161b22;
             --bg-card: #161b22;
-            
+
             --text-primary: #e4e6eb;
             --text-secondary: #8b949e;
             --text-light: #e4e6eb;
             --text-white: #ffffff;
-            
+
             --border-color: #30363d;
             --shadow-color: rgba(0,0,0,0.3);
-            
+
             --primary: #1f6feb;
             --primary-dark: #1158c7;
             --primary-light: #1f6feb33;
@@ -469,14 +469,33 @@
         }
 
         /* ============================================
-           INPUT AREA
+           INPUT AREA - IMPROVED RESPONSIVE
            ============================================ */
         .input-area {
             background: var(--bg-card);
             border-top: 1px solid var(--border-color);
-            padding: 1rem;
+            padding: 0.75rem;
             flex-shrink: 0;
             transition: background var(--transition), border-color var(--transition);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-end;
+            flex-wrap: nowrap; /* Keep all items on one line */
+        }
+
+        .input-row .col {
+            flex: 1 1 0;
+            min-width: 0; /* Prevents overflow */
+        }
+
+        .input-row .col-auto {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
         }
 
         #chat-input {
@@ -488,6 +507,7 @@
             transition: border-color 0.2s, background var(--transition), color var(--transition);
             background: var(--bg-input);
             color: var(--text-primary);
+            width: 100%;
         }
 
         #chat-input:focus {
@@ -510,6 +530,7 @@
             background: var(--primary);
             border: none;
             transition: all 0.2s;
+            flex-shrink: 0;
         }
 
         #send-btn:hover:not(:disabled) {
@@ -580,6 +601,7 @@
             font-size: 0.85rem;
             color: var(--text-secondary);
             flex-shrink: 0;
+            white-space: nowrap;
         }
 
         .voice-indicator.show {
@@ -796,28 +818,66 @@
                 padding: 0.75rem;
             }
 
+            /* Input Area Mobile Fixes */
             .input-area {
-                padding: 0.6rem;
+                padding: 0.5rem;
+            }
+
+            .input-row {
+                gap: 0.35rem;
+                flex-wrap: nowrap; /* enforce single line */
+            }
+
+            .input-row .col {
+                flex: 1 1 0;
+                min-width: 0;
+            }
+
+            .input-row .col-auto {
+                flex: 0 0 auto;
+                gap: 0.35rem;
             }
 
             #chat-input {
-                font-size: 16px;
-                padding: 0.6rem 1rem;
-                min-height: 44px;
+                font-size: 16px !important; /* Prevents iOS zoom */
+                padding: 0.5rem 0.6rem;
+                min-height: 40px;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             #send-btn {
-                width: 44px;
-                height: 44px;
+                width: 40px;
+                height: 40px;
+                min-width: 40px;
+                min-height: 40px;
+                padding: 0;
             }
 
             .voice-btn {
-                width: 44px;
-                height: 44px;
+                width: 40px;
+                height: 40px;
+                min-width: 40px;
+                min-height: 40px;
+                padding: 0;
             }
 
             .voice-btn .bi {
                 font-size: 1rem;
+            }
+
+            /* Voice indicator compact on mobile */
+            .voice-indicator {
+                padding: 0.2rem 0.4rem;
+                font-size: 0.7rem;
+                gap: 0.25rem;
+            }
+            .voice-indicator .recording-timer {
+                min-width: 30px;
+            }
+            /* Hide the word "Recording" on small screens */
+            .voice-indicator span:not(.recording-dot):not(.recording-timer) {
+                display: none;
             }
 
             .chat-header {
@@ -877,12 +937,15 @@
             }
 
             .mobile-header {
-                display: flex;
+                display: flex !important;
                 align-items: center;
                 justify-content: space-between;
                 padding: 0.5rem 0.75rem;
                 background: var(--bg-card);
                 border-bottom: 1px solid var(--border-color);
+                position: sticky;
+                top: 0;
+                z-index: 100;
             }
 
             .mobile-header .brand {
@@ -939,17 +1002,24 @@
                 padding: 0.3rem 0.5rem;
             }
 
-            .voice-indicator {
-                font-size: 0.75rem;
-                padding: 0.2rem 0.5rem;
-            }
-
             .voice-transcript {
                 font-size: 0.7rem;
             }
 
             .voice-confirmation-modal {
                 padding: 1.5rem;
+            }
+
+            /* Fix for the info text at bottom */
+            .input-area .mt-1 {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.25rem 0.5rem;
+            }
+
+            .input-area .mt-1 small {
+                font-size: 0.6rem;
+                white-space: nowrap;
             }
         }
 
@@ -996,12 +1066,15 @@
             }
 
             .mobile-header {
-                display: flex;
+                display: flex !important;
                 align-items: center;
                 justify-content: space-between;
                 padding: 0.5rem 1rem;
                 background: var(--bg-card);
                 border-bottom: 1px solid var(--border-color);
+                position: sticky;
+                top: 0;
+                z-index: 100;
             }
 
             .mobile-header .brand {
@@ -1034,6 +1107,10 @@
             .message.assistant .content table {
                 font-size: 0.8rem;
                 min-width: 280px;
+            }
+
+            .input-area {
+                padding: 0.75rem 1rem;
             }
         }
 
@@ -1075,16 +1152,19 @@
                 display: flex;
                 gap: 0.5rem;
                 align-items: flex-end;
+                flex-wrap: nowrap;
             }
 
             .input-row .col {
-                flex: 1;
+                flex: 1 1 0;
+                min-width: 0;
             }
 
             .input-row .col-auto {
                 display: flex;
                 gap: 0.5rem;
                 align-items: center;
+                flex: 0 0 auto;
             }
         }
 
@@ -1133,6 +1213,63 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
+/* --- Make containers use dynamic viewport height --- */
+body, .chat-container {
+    height: 100dvh;
+}
+
+/* --- Sticky input area --- */
+.input-area {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: var(--bg-card);
+}
+
+/* --- Mobile overrides --- */
+@media (max-width: 576px) {
+    .input-row {
+        gap: 0.25rem;
+        flex-wrap: nowrap;
+        overflow: visible;
+    }
+    .input-row .col {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+    #chat-input {
+        font-size: 16px !important;
+        padding: 0.4rem 0.5rem;
+        min-height: 36px;
+    }
+    #send-btn, .voice-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+    .voice-btn .bi {
+        font-size: 0.9rem;
+    }
+    .voice-indicator:not(.show) {
+        display: none !important;
+    }
+    .voice-indicator.show {
+        padding: 0.1rem 0.3rem;
+        font-size: 0.6rem;
+        gap: 0.2rem;
+    }
+    .voice-indicator .recording-timer {
+        min-width: 24px;
+    }
+    .voice-indicator span:not(.recording-dot):not(.recording-timer) {
+        display: none;
+    }
+    .input-area .mt-1 small {
+        font-size: 0.55rem;
+    }
+}
     </style>
 </head>
 <body>
@@ -1321,7 +1458,7 @@
                             </small>
                             <small class="text-secondary ms-3">
                                 <i class="bi bi-mic"></i>
-                                Click mic to speak a command
+                                Click mic to speak
                             </small>
                         </div>
                     </div>
