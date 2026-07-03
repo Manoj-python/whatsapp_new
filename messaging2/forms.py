@@ -47,7 +47,9 @@ TEMPLATE_CHOICES = [
     ("40", "Guarantor PSF Write Off Notice (English)-[40]"),
     ("41", "psf_due_notice_borrower (English)"),
     ("42", "smf_due_notice_borrower (English)"),
-    ("43", "new loans template (telugu)-[43]")
+    ("43", "new loans template (telugu)-[43]"),
+    ("44", "Presale Notices PSF Borrower (English)-[44]"),
+    ("45", "Presale Notices SMF Borrower (English)-[45]")
 ]
 
 

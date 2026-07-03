@@ -266,6 +266,19 @@
             </select>
           </div>
           <div class="mb-3">
+            <label>source</label>
+            <select id="newCaseSourceModal" class="form-select">
+             <option value="Whatsapp">Whatsapp</option>
+              <option value="Call">Incoming Call</option>
+              <option value="email">Email</option>
+              <option value="socialmedia">Social Media</option>
+               <option value="Physicalvisit">Physical Visit</option>
+<option value="Notice">Notice</option>
+
+              
+            </select>
+          </div>
+          <div class="mb-3">
             <label>Subgroup (optional)</label>
             <select id="newCaseSubgroupModal" class="form-select">
               <option value="">-- Select --</option>
@@ -434,6 +447,8 @@ async function fetchCategories() {
     <div class="mb-2"><label>Customer:</label> ${escapeHtml(currentCaseData.customer_name || selectedMobile)}</div>
     <div class="mb-2"><label>Loan Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.loan_number || 'Not provided')}</span></div>
     <div class="mb-2"><label>Vehicle Number:</label> <span class="badge bg-secondary">${escapeHtml(currentCaseData.vehicle_number || 'Not provided')}</span></div>
+    <div class="mb-2"><label>Subgroup:</label> ${escapeHtml(currentCaseData.source || 'None')}</div>
+
     <div class="mb-2"><label>Department:</label> ${escapeHtml(groupName)}</div>
     <div class="mb-2"><label>Subgroup:</label> ${escapeHtml(currentCaseData.subgroup_name || 'None')}</div>
     <div class="mb-2"><label>Category:</label> ${escapeHtml(currentCaseData.category_name || 'None')}</div>   <!-- fixed -->
@@ -546,6 +561,18 @@ async function fetchCategories() {
     });
     subgroupsHtml += '</select>';
 
+    let sourceOptions = `
+        <select id="newCaseSource" class="form-select form-select-sm mb-2">
+          <option value="Whatsapp">Whatsapp</option>
+            <option value="Call">Incoming Call</option>
+            <option value="email">Email</option>
+            <option value="socialmedia">Social Media</option>
+ <option value="Physicalvisit">Physical Visit</option>
+<option value="Notice">Notice</option>
+
+        </select>
+    `;
+
     // Categories dropdown (initially empty)
     let categoriesHtml = '<select id="newCaseCategory" class="form-select form-select-sm mb-2" required><option value="">Select Category</option></select>';
 
@@ -572,6 +599,10 @@ async function fetchCategories() {
                 <div class="mb-2">
                     <label class="form-label small fw-bold">Vehicle No</label>
                     <input type="text" id="newCaseVehicleNo" class="form-control form-control-sm" value="${escapeHtml(vehicleNo)}" placeholder="Vehicle number">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Source</label>
+                    ${sourceOptions}
                 </div>
                 <div class="mb-2">
                     <label class="form-label small fw-bold">Department (Group)</label>
@@ -801,6 +832,8 @@ async function fetchCategories() {
     const escalateSelect = document.getElementById('newCaseEscalateTo');
     const subgroupSelect = document.getElementById('newCaseSubgroup');
     const categorySelect = document.getElementById('newCaseCategory');
+    const source = document.getElementById('newCaseSource');
+
 
     if (!groupSelect) { showNotification('Group selector missing', 'error'); return; }
     const groupName = groupSelect.value;
@@ -808,12 +841,15 @@ async function fetchCategories() {
     const loanNumber = loanNumberInput ? loanNumberInput.value.trim() : '';
     const vehicleNo = vehicleNoInput ? vehicleNoInput.value.trim() : '';   // NEW
     const escalateTo = escalateSelect ? escalateSelect.value : '';
+        const sourceTo = source ? source.value : '';
     const subgroupId = subgroupSelect ? subgroupSelect.value : '';
     const categoryId=categorySelect?categorySelect.value:'';
 
     if (!description) { showNotification('Please describe the issue', 'warning'); return; }
     if (!groupName) { showNotification('Please select a department (group)', 'warning'); return; }
     if (!categoryId) { showNotification('Please select a category', 'warning'); return; }
+    if (!sourceTo) { showNotification('Please select a source', 'warning'); return; }
+
 
 
     try {
@@ -825,7 +861,8 @@ async function fetchCategories() {
           agent_name: currentUser.name,
           issue_description: description,
           loan_number: loanNumber,
-          vehicle_no: vehicleNo,          // SEND IT
+          vehicle_no: vehicleNo, 
+          source:sourceTo,         // SEND IT
           group: groupName,
           subgroup_id: subgroupId, 
           category_id: categoryId || null, 
@@ -992,14 +1029,16 @@ function filterCategoriesModal(groupName) {
     const categoryId = document.getElementById('newCaseCategoryModal').value;
     const escalateTo = document.getElementById('newCaseEscalateModal').value;
     const description = document.getElementById('newCaseDescModal').value.trim();
+    const source = document.getElementById('newCaseSourceModal').value;
 
     if (!mobile) { showNotification('Mobile number is required', 'error'); return; }
     if (!group) { showNotification('Please select a department', 'error'); return; }
     if (!categoryId) { showNotification('Please select a category', 'error'); return; }
     if (!description) { showNotification('Please describe the issue', 'error'); return; }
+    if (!source) { showNotification('Please select a source', 'error'); return; }
 
     try {
-        const response = await fetch('/messaging2/case/create-from-chat/', {
+        const response = await fetch('/messaging2/case/create-from-chat/?app=spl', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
             body: JSON.stringify({
@@ -1010,6 +1049,7 @@ function filterCategoriesModal(groupName) {
                 loan_number: loanNumber,
                 vehicle_no: vehicleNo,
                 group: group,
+                source:source,
                 subgroup_id: subgroupId || null,
                 category_id: categoryId || null,
                 escalate_to: escalateTo || null,

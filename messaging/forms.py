@@ -35,9 +35,10 @@ TEMPLATE_CHOICES = [
     ("33", "registration_notice_borrower_pdf_english-[33]"),
     ("34", "apologize english-[34]"),
     ("35", "due_notice_borrower (English)-[35]"),
-    ("36", "new_loans_te (Telugu)-[36]")
+    ("36", "new_loans_te (Telugu)-[36]"),
+    ("37", "presale_notices_borrower (English)-[37]")
 
-
+ 
 ]
 
 class UploadForm(forms.Form):

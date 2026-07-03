@@ -43,7 +43,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 @sync_to_async
-def get_contacts_page3(page=1, size=30, q="", filter_type="all", level=None, group_ids=None, subgroup_ids=None):
+def get_contacts_page3(page=1, size=30, q="", filter_type="all", level=None, agent=None):
     """
     Returns contacts/cases respecting user role.
     Optimized for speed – uses exact mobile matching and avoids annotations during search.
@@ -52,13 +52,21 @@ def get_contacts_page3(page=1, size=30, q="", filter_type="all", level=None, gro
     if level and level not in ['ESC1', 'ESC5']:
         case_qs = Case.objects.filter(current_level=level).select_related('group', 'subgroup', 'category')
 
-        if group_ids or subgroup_ids:
-            filter_condition = Q()
-            if group_ids:
-                filter_condition |= Q(group_id__in=group_ids)
-            if subgroup_ids:
-                filter_condition |= Q(subgroup_id__in=subgroup_ids)
-            case_qs = case_qs.filter(filter_condition)
+        
+        if agent:
+            filters = Q()
+            # 1. For each group the agent belongs to
+            for group in agent.groups.all():
+                group_subgroups = agent.subgroup.filter(group=group)
+                if group_subgroups.exists():
+                    # Only these subgroups under this group
+                    filters |= Q(group=group, subgroup__in=group_subgroups)
+                else:
+                    # Entire group (no subgroup restriction)
+                    filters |= Q(group=group)
+            # 2. Also include any subgroups even if their group is not directly assigned
+            filters |= Q(subgroup__in=agent.subgroup.all())
+            case_qs = case_qs.filter(filters)
         else:
             case_qs = case_qs.none()
 
@@ -640,8 +648,7 @@ class ChatConsumer3(AsyncJsonWebsocketConsumer):
                 q=q,
                 filter_type=filter_type,
                 level=level,
-                group_ids=group_ids,
-                subgroup_ids=subgroup_ids
+                agent=agent
             )
 
             if self.connection_active:

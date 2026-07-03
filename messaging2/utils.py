@@ -787,8 +787,28 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             
                 ],
             ),
+          
+         
+        "44": (
+                "presale_notices_borrower_psf",
+                "en",
+                [    {"type": "text", "text": str(row.get("customer_name", ""))},
+                     {"type": "text", "text": str(row.get("vehicle_number", ""))},
+                     {"type": "text", "text": str(row.get("loan_number", ""))},             
+                ],
+                ),
+        "45": (
+                "presale_notices_borrower_smf",
+                "en",
+                [    {"type": "text", "text": str(row.get("customer_name", ""))},
+                     {"type": "text", "text": str(row.get("vehicle_number", ""))},
+                     {"type": "text", "text": str(row.get("loan_number", ""))},             
+   
 
+                ],
+                ),
 
+     
     }
 
 
@@ -805,7 +825,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
     # TEMPLATES WITH DOCUMENT HEADER (FIXED - UPLOADS PDF HERE)
     # --------------------------------------------------
     if choice in (
-        "13","14","21","22","23","24","30","31","32","33","34","35","36","37","38","39","40","41","42"
+        "13","14","21","22","23","24","30","31","32","33","34","35","36","37","38","39","40","41","42","44","45"
     ):
         # ==================================================
         # 📄 SELECT PDF FILE
@@ -838,6 +858,10 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             pdf_filename = row.get("writeoff_pdf_file")
         elif choice in ("41", "42"):
             pdf_filename = row.get("due_notice_pdf_file")
+        elif choice == "44":
+            pdf_filename = row.get("presale_notices_borrower_pdf")
+        elif choice == "45":
+            pdf_filename = row.get("presale_notices_borrower_pdf")
 
         if not pdf_filename:
             raise ValueError(f"PDF filename missing for template {choice}")

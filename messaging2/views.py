@@ -2392,6 +2392,7 @@ def get_case_detail_api2(request, case_id):
                 'subgroup_name': case.subgroup.name if case.subgroup else None,
                 'category_id': case.category.id if case.category else None,
                 'category_name': case.category.name if case.category else None,
+                'source': case.source, 
             }
         })
     except CaseModel.DoesNotExist:
@@ -2740,6 +2741,7 @@ def get_case_by_mobile2(request):
                 'priority': case.priority,
                 'issue_description': case.issue_description or '',
                 'created_at': case.created_at.isoformat(),
+                'source':case.source
             }
         })
     return JsonResponse({'case': None})
@@ -2774,7 +2776,7 @@ def create_case_from_chat_api2(request):
         category_id = data.get('category_id', None)   # now required
         escalate_to = data.get('escalate_to', None)
         force_new = data.get('force_new', False)
-
+        source=data.get('source','')
         # ─── Validate group ─────────────────────────────────────────────
         group_obj = SupportGroup.objects.filter(name=group_name).first()
         if not group_obj:
@@ -2837,7 +2839,7 @@ def create_case_from_chat_api2(request):
             loan_number=loan_number,
             vehicle_number=vehicle_number,
             issue_description=issue_description[:500],
-            source='WhatsApp',
+            source=source if source else 'Whatsapp',
             current_level=initial_level,
             status='Open',
             priority='Medium',

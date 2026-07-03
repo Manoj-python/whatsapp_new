@@ -231,7 +231,8 @@ class Case(models.Model):
     reopen_reason = models.TextField(blank=True, null=True)
     
     # Metadata
-    source = models.CharField(max_length=100, default='WhatsApp', blank=True, null=True)
+    source = models.CharField(max_length=100,choices=[('Call','Call'),('email','email'),('Whatsapp','Whatsapp'),('socialmedia','socialmedia'),('Physicalvisit','Physicalvisit'),('Notice','Notice')],default='WhatsApp', blank=True, null=True)
+
     source_app = models.CharField(max_length=20, default='app1', choices=[
         ('app1', 'App 1 - messaging'),
         ('app2', 'App 2 - messaging2'),

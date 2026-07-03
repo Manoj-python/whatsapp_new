@@ -208,7 +208,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             # 📁 SELECT PDF + FOLDER (FIXED)
             # ==================================================
-            if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42"):
+            if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42","44","45"):
                 is_document = True
 
                 if template_choice == "14":
@@ -243,6 +243,9 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     folder = "legal_pdfs"
                 elif template_choice in ("41", "42"):
                     pdf_filename = row.get("due_notice_pdf_file")
+                    folder = "legal_pdfs"
+                elif template_choice in ("44", "45"):
+                    pdf_filename = row.get("presale_notices_borrower_pdf")
                     folder = "legal_pdfs"
                 else:
                     pdf_filename = row.get("customer_pdf_file")

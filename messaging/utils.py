@@ -832,6 +832,16 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 ],
                 ),
 
+                 "37": (
+                "presale_notices_borrower",
+                "en",
+                [    {"type": "text", "text": str(row.get("customer_name", ""))},
+                     {"type": "text", "text": str(row.get("vehicle_number", ""))},
+                     {"type": "text", "text": str(row.get("loan_number", ""))},             
+   
+
+                ],
+                ),
 
     }
 
@@ -849,7 +859,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
     # --------------------------------------------------
    # --------------------------------------------------
-    if choice in ("19", "20", "21", "25","30","31","32","33","35"):
+    if choice in ("19", "20", "21", "25","30","31","32","33","35","37"):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
@@ -873,6 +883,8 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
             pdf_source = row.get("customer_registration_pdf")
         elif choice == "35":
             pdf_source = row.get("due_notice_pdf_file")
+        elif choice == "37":
+            pdf_source = row.get("presale_notices_borrower_pdf")
 
         else:  # choice == "19"
             pdf_source = (

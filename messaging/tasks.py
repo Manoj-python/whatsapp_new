@@ -302,6 +302,10 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 pdf_filename = row.get("due_notice_pdf_file")
                 folder = "legal_pdfs"
 
+            elif template_choice == "37":
+                pdf_filename = row.get("presale_notices_borrower_pdf")
+                folder = "legal_pdfs"
+             
             elif template_choice == "19":
                 pdf_filename = (
                     row.get("borrower_pdf_file")
