@@ -2277,7 +2277,7 @@ def download_employee_report(request):
         (
             master_df["curr_department"]
             .str.upper()
-            .isin(["COLLECTION", "SALES/COLLECTION"])
+            .isin(["COLLECTIONS", "SALES/COLLECTION"])
         )
     ]
 

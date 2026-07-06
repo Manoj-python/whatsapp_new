@@ -627,14 +627,9 @@ def clear_button_clicked(mobile):
 # MAIN TASK: Send Ticket Open Message
 # ----------------------------------------------
 # ----------------------------------------------
+
 @shared_task(queue="messaging2")
 def send_ticket_open_message(app_key, case_id):
-    """
-    Send a ticket‑open message to the customer.
-    - Uses template if 24‑h window is open, else plain text.
-    - Skips sending if the customer clicked a button in the last 5 minutes.
-    - Sets sender_name = app_name (company name) on the WebSocket broadcast.
-    """
     try:
         cfg = APP_CONFIG[app_key]
         CaseModel = cfg['case_model']
@@ -646,7 +641,7 @@ def send_ticket_open_message(app_key, case_id):
         render_template = cfg.get('render_template_text')
         chat_prefix = cfg.get('chat_prefix', 'chat2')
         whatsapp_creds = cfg.get('whatsapp', {})
-        app_name = cfg['app_name']   # Get the company name
+        app_name = cfg['app_name']
     except KeyError:
         return
 
@@ -658,16 +653,11 @@ def send_ticket_open_message(app_key, case_id):
     if not mobile:
         return
 
-    # ----------------------------------------------------------
-    # 🚫 SKIP if this mobile clicked a button recently
-    # ----------------------------------------------------------
+    # skip if button clicked recently
     if was_button_clicked_recently(mobile):
-        clear_button_clicked(mobile)   # clean up
-        return   # exit early – no ticket‑open message
+        clear_button_clicked(mobile)
+        return
 
-    # ----------------------------------------------------------
-    # Prepare template parameters and fallback text
-    # ----------------------------------------------------------
     customer_name = case.customer_name or "Customer"
     case_id_str = case.case_id
     group_name = case.group.name if case.group else "General"
@@ -691,9 +681,6 @@ def send_ticket_open_message(app_key, case_id):
         "Thank you for your patience."
     )
 
-    # ----------------------------------------------------------
-    # Send the appropriate message (template or free text)
-    # ----------------------------------------------------------
     msg_id, status, error, used_template = send_message_based_on_window(
         mobile=mobile,
         template_name=open_template,
@@ -702,7 +689,6 @@ def send_ticket_open_message(app_key, case_id):
         whatsapp_creds=whatsapp_creds,
         LogModel=LogModel
     )
-    # template_body = get_template_text_from_whatsapp2(open_template)
 
     if used_template and get_template_text and render_template:
         template_body = get_template_text(open_template)
@@ -710,9 +696,6 @@ def send_ticket_open_message(app_key, case_id):
     else:
         sent_text = free_text
 
-    # ----------------------------------------------------------
-    # Log the outgoing message
-    # ----------------------------------------------------------
     log = LogModel.objects.create(
         customer_name=app_name,
         mobile=mobile,
@@ -725,9 +708,7 @@ def send_ticket_open_message(app_key, case_id):
         error_message=error,
     )
 
-    # ----------------------------------------------------------
-    # Update Contact (last message summary)
-    # ----------------------------------------------------------
+    # Update or create contact – preserve unread for existing
     contact, created = ContactModel.objects.get_or_create(
         mobile=mobile,
         defaults={
@@ -744,16 +725,13 @@ def send_ticket_open_message(app_key, case_id):
             last_time=timezone.now(),
             last_type="Sent",
             last_status=status,
-            unread=0,
         )
+        contact.refresh_from_db()
 
-    # Mark as sent on the case
     case.ticket_open_message_sent = True
     case.save(update_fields=["ticket_open_message_sent"])
 
-    # ----------------------------------------------------------
-    # WebSocket broadcast – with app_name as sender
-    # ----------------------------------------------------------
+    # WebSocket broadcast with real unread count
     try:
         channel_layer = get_channel_layer()
         gm = re.sub(r"\D", "", mobile)
@@ -773,7 +751,7 @@ def send_ticket_open_message(app_key, case_id):
                         "message_type": "Sent",
                         "message_id": log.message_id,
                         "status": log.status,
-                        "sender_name": app_name,   # ✅ Company name, not "System"
+                        "sender_name": app_name,
                     }
                 }
             )
@@ -787,28 +765,27 @@ def send_ticket_open_message(app_key, case_id):
                     "last_time": timezone.now().isoformat(),
                     "last_type": "Sent",
                     "last_status": status,
-                    "unread": 0,
+                    "unread": contact.unread,   # ✅ preserve
                 }
             }
         )
     except Exception:
         pass
 
-
 @shared_task(queue="messaging2")
 def send_ticket_close_message(app_key, case_id):
     try:
         cfg = APP_CONFIG[app_key]
         CaseModel = cfg['case_model']
-        app_name=cfg['app_name']
         LogModel = cfg['log_model']
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
         close_template = cfg['templates']['close']
         get_template_text = cfg.get('get_template_text')
-        chat_prefix = cfg.get('chat_prefix', 'chat2')
         render_template = cfg.get('render_template_text')
+        chat_prefix = cfg.get('chat_prefix', 'chat2')
         whatsapp_creds = cfg.get('whatsapp', {})
+        app_name = cfg['app_name']
     except KeyError:
         return
 
@@ -833,7 +810,7 @@ def send_ticket_close_message(app_key, case_id):
     ]
 
     free_text = (
-         "Dear Customer,\n\n"
+        "Dear Customer,\n\n"
         f"Your request associated with Ticket Number: {case_id_str} has been successfully resolved and the ticket has now been closed.\n\n"
         "If you have any further questions or require additional assistance, please feel free to contact us. We will be happy to help.\n\n"
         "Thank you for choosing our services."
@@ -847,16 +824,15 @@ def send_ticket_close_message(app_key, case_id):
         whatsapp_creds=whatsapp_creds,
         LogModel=LogModel
     )
-    # template_body = get_template_text_from_whatsapp2(close_template)
+
     if used_template and get_template_text and render_template:
         template_body = get_template_text(close_template)
         sent_text = render_template(template_body, template_params)
     else:
         sent_text = free_text
 
-
     log = LogModel.objects.create(
-        customer_name=app_name or "",
+        customer_name=app_name,
         mobile=mobile,
         template_name=close_template if used_template else "",
         sent_text_message=sent_text,
@@ -867,6 +843,7 @@ def send_ticket_close_message(app_key, case_id):
         error_message=error,
     )
 
+    # Update or create contact – preserve unread
     contact, created = ContactModel.objects.get_or_create(
         mobile=mobile,
         defaults={
@@ -883,13 +860,13 @@ def send_ticket_close_message(app_key, case_id):
             last_time=timezone.now(),
             last_type="Sent",
             last_status=status,
-            unread=0,
         )
+        contact.refresh_from_db()
 
     case.ticket_close_message_sent = True
     case.save(update_fields=["ticket_close_message_sent"])
 
-    # WebSocket broadcast (same as previous)
+    # WebSocket broadcast with real unread count
     try:
         channel_layer = get_channel_layer()
         gm = re.sub(r"\D", "", mobile)
@@ -923,25 +900,25 @@ def send_ticket_close_message(app_key, case_id):
                     "last_time": timezone.now().isoformat(),
                     "last_type": "Sent",
                     "last_status": status,
-                    "unread": 0,
+                    "unread": contact.unread,   # ✅ preserve
                 }
             }
         )
     except Exception:
         pass
 
+
+
 @shared_task(queue="messaging2")
 def send_welcome_message(app_key, mobile, customer_name=""):
     try:
         cfg = APP_CONFIG[app_key]
-
         LogModel = cfg['log_model']
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
         app_name = cfg['app_name']
         chat_prefix = cfg.get('chat_prefix', 'chat2')
         whatsapp_creds = cfg.get('whatsapp', {})
-
     except KeyError:
         return
 
@@ -960,6 +937,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         f"Type your query or select a service to get started."
     )
 
+    # Send WhatsApp message
     try:
         resp = send_whatsapp_text4(
             to_number=mobile,
@@ -967,16 +945,15 @@ def send_welcome_message(app_key, mobile, customer_name=""):
             phone_number_id=whatsapp_creds["phone_number_id"],
             access_token=whatsapp_creds["access_token"]
         )
-
         msg_id = resp.get("messages", [{}])[0].get("id", "")
         status = "Sent"
         error = ""
-
     except Exception as e:
         msg_id = ""
         status = "Failed"
         error = str(e)
 
+    # Log the sent message
     log = LogModel.objects.create(
         customer_name=app_name,
         mobile=mobile,
@@ -989,22 +966,31 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         error_message=error,
     )
 
-    ContactModel.objects.update_or_create(
+    # Update or create contact – DO NOT reset unread for existing contacts
+    contact, created = ContactModel.objects.get_or_create(
         mobile=mobile,
         defaults={
             "last_msg": "👋 Welcome message sent",
             "last_time": timezone.now(),
             "last_type": "Sent",
             "last_status": status,
-            "unread": 0,
+            "unread": 0,          # only for new contacts
         }
     )
+    if not created:
+        # Update only non‑unread fields
+        ContactModel.objects.filter(mobile=mobile).update(
+            last_msg="👋 Welcome message sent",
+            last_time=timezone.now(),
+            last_type="Sent",
+            last_status=status,
+        )
+        contact.refresh_from_db()   # get current unread count
 
+    # WebSocket broadcast – send the real unread count
     try:
         channel_layer = get_channel_layer()
-
         gm = re.sub(r"\D", "", mobile)
-
         if gm:
             chat_group = f"{chat_prefix}_{gm}"
             async_to_sync(channel_layer.group_send)(
@@ -1017,9 +1003,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
                         "sent_text_message": free_text,
                         "content_type": "text",
                         "media_file": "",
-                        "sent_at": timezone.localtime(
-                            log.sent_at
-                        ).isoformat(),
+                        "sent_at": timezone.localtime(log.sent_at).isoformat(),
                         "message_type": "Sent",
                         "message_id": msg_id,
                         "status": status,
@@ -1038,10 +1022,9 @@ def send_welcome_message(app_key, mobile, customer_name=""):
                     "last_time": timezone.now().isoformat(),
                     "last_type": "Sent",
                     "last_status": status,
-                    "unread": 0,
+                    "unread": contact.unread,   # ✅ preserve unread count
                 }
             }
         )
-
     except Exception as e:
         print("Welcome websocket error:", str(e))
