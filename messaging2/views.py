@@ -1236,6 +1236,47 @@ def mark_read2(request, mobile):
         return JsonResponse({"status": "ok"})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+    
+@csrf_exempt
+def mark_unread_api2(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    mobile = request.POST.get('mobile') or request.GET.get('mobile')
+    if not mobile:
+        return JsonResponse({'error': 'mobile required'}, status=400)
+    mobile = format_mobile2(mobile)
+
+    # 👇 Get the correct app's models
+    CaseModel, ContactModel, LogModel, channel_group = get_models_for_app(request)
+    
+    contact, created = ContactModel.objects.get_or_create(mobile=mobile)
+    contact.unread = 1
+    contact.save(update_fields=['unread'])
+
+    # Broadcast update for this app
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        channel_group,  # use app‑specific group
+        {
+            "type": "contact.update",
+            "contact": {
+                "mobile": mobile,
+                "unread": 1
+            }
+        }
+    )
+    total_unread = ContactModel.objects.filter(unread__gt=0).count()
+    async_to_sync(channel_layer.group_send)(
+        channel_group,
+        {
+            "type": "unread.update",
+            "unread_count": total_unread
+        }
+    )
+
+    return JsonResponse({'success': True, 'unread': 1})
 
 def get_contact_messages2(request):
     mobile = request.GET.get('mobile')

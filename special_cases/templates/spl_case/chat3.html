@@ -159,6 +159,24 @@
     color: #ccc;
     font-weight: 300;
 }
+.case-panel-btn { background: linear-gradient(135deg, #4361ee, #3f37c9); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; margin-left: 10px; cursor: pointer; transition: all 0.2s; }
+
+/* NEW: Mark as Unread button */
+.mark-unread-btn {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin-left: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mark-unread-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(243, 156, 18, 0.4);
+}
     @media (max-width: 768px) { .message-bubble { max-width: 85%; min-width: 50px; padding: 6px 10px; } .composer { padding: 8px 12px; } }
   </style>
 </head>
@@ -194,6 +212,9 @@
         <div class="chat-header-status" id="headerStatus"></div>
       </div>
       <button class="case-panel-btn" id="casePanelBtn" title="View Case Details"><i class="fas fa-folder-open"></i></button>
+      <button class="mark-unread-btn" id="markUnreadBtn" title="Mark as Unread">
+  <i class="fas fa-envelope"></i>
+</button>
     </div>
     <div class="messages-container" id="messagesContainer"><div class="empty-state">Select a contact to start chatting</div></div>
     <div class="typing-indicator" id="typingIndicator" style="display: none;">Typing...</div>
@@ -359,6 +380,43 @@
     }
     window.location.href = url;
   }
+
+  async function markUnread() {
+  if (!selectedMobile) {
+    showNotification('Select a contact first', 'warning');
+    return;
+  }
+  try {
+    const formData = new FormData();
+    formData.append('mobile', selectedMobile);
+    const response = await fetch('/messaging2/api/mark-unread/?app=spl', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: formData
+    });
+    const data = await response.json();
+    if (data.success) {
+      showNotification('Marked as unread', 'success');
+      // Update local contact list
+      let idx = contacts.findIndex(c => c.mobile === selectedMobile);
+      if (idx !== -1) {
+        contacts[idx].unread = 1;
+        renderContacts(contacts, true, totalUnreadCount, hasMoreContacts, contactPage);
+      }
+      // Update total unread badge
+      totalUnreadCount += 1;
+      let badge = document.getElementById('unreadCountBadge');
+      if (badge) {
+        badge.textContent = totalUnreadCount;
+        badge.style.display = 'inline';
+      }
+    } else {
+      showNotification(data.error || 'Failed to mark unread', 'error');
+    }
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  }
+}
 
   function openCaseSidebar() { if (!selectedMobile) { showNotification('Select a contact first', 'warning'); return; } document.getElementById('caseSidebar').classList.add('show'); renderCasePanel(); }
   function closeCaseSidebar() { document.getElementById('caseSidebar').classList.remove('show'); }
@@ -1502,7 +1560,26 @@ function appendMessage(msg){ let wasAtBottom=messagesContainer.scrollHeight-mess
   function escapeHtml(text){ if(!text) return ''; let div=document.createElement('div'); div.textContent=text; return div.innerHTML; }
   function formatTime(iso){ let d=new Date(iso),now=new Date(),diff=now-d; if(diff<86400000) return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); if(diff<604800000) return d.toLocaleDateString('en-IN',{weekday:'short'}); return d.toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit'}); }
   function handleWebSocketMessage(data){ console.log('WS msg:',data.type); switch(data.type){ case 'contacts.page': renderContacts(data.contacts,data.page===1,data.unread_count,data.has_more,data.page); break; case 'messages.page': if(data.mobile===selectedMobile){ if(data.messages&&data.messages.length) renderMessages(data.messages,data.has_more,data.next_cursor_date,data.is_initial||messages.length===0); else messagesContainer.innerHTML='<div class="empty-state">No messages</div>'; } break; case 'new.message': if(data.message.mobile===selectedMobile) appendMessage(data.message); updateContactInList(data.message); break; case 'delivery.update': updateMessageTickImproved(data.message_id,data.status); if(data.mobile) updateContactStatus(data.mobile,data.status); break; case 'unread.update': totalUnreadCount=data.unread_count; let badge=document.getElementById('unreadCountBadge'); if(badge){ if(totalUnreadCount>0){ badge.style.display='inline'; badge.textContent=totalUnreadCount; } else badge.style.display='none'; } if(currentFilter==='unread') loadContacts(1); break; case 'contact.update': if(data.contact){ let existing=contacts.find(c=>c.mobile===data.contact.mobile); if(existing&&!data.contact.last_time) data.contact.last_time=existing.last_time; updateContactInList(data.contact); } break; case 'typing': if(data.mobile===selectedMobile) typingIndicator.style.display=data.state?'block':'none'; break; case 'error': showNotification(data.message,'error'); break; } }
-  sendBtn.onclick=sendMessage; messageInput.addEventListener('keypress',e=>{if(e.key==='Enter') sendMessage();}); messageInput.addEventListener('input',onTyping); attachBtn.onclick=()=>mediaInput.click(); backBtn.onclick=()=>{document.getElementById('sidebar').classList.remove('hide'); chatArea.style.display='none';}; mediaInput.addEventListener('change',e=>{if(e.target.files[0]){ filePreview.classList.add('show'); document.querySelector('.preview-info').textContent=e.target.files[0].name; }}); searchInput.addEventListener('input',e=>{clearTimeout(window.searchTimeout); window.searchTimeout=setTimeout(()=>{if(e.target.value.trim()) searchContacts(e.target.value.trim()); else{ contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; loadContacts(1); }},300);}); contactListEl.addEventListener('scroll',handleContactsScroll); document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMediaModal();}); document.getElementById('mediaModal').addEventListener('click',function(e){if(e.target===this) closeMediaModal();}); let casePanelBtn=document.getElementById('casePanelBtn'); if(casePanelBtn) casePanelBtn.onclick=function(e){ e.preventDefault(); openCaseSidebar(); }; document.addEventListener('contextmenu',e=>{e.preventDefault(); showNotification('Right-click disabled','warning'); return false;});
+  sendBtn.onclick=sendMessage; messageInput.addEventListener('keypress',e=>{if(e.key==='Enter') sendMessage();}); messageInput.addEventListener('input',onTyping); attachBtn.onclick=()=>mediaInput.click(); backBtn.onclick=()=>{document.getElementById('sidebar').classList.remove('hide'); chatArea.style.display='none';}; mediaInput.addEventListener('change',e=>{if(e.target.files[0]){ filePreview.classList.add('show'); document.querySelector('.preview-info').textContent=e.target.files[0].name; }}); searchInput.addEventListener('input',e=>{clearTimeout(window.searchTimeout); window.searchTimeout=setTimeout(()=>{if(e.target.value.trim()) searchContacts(e.target.value.trim()); else{ contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; loadContacts(1); }},300);}); contactListEl.addEventListener('scroll',handleContactsScroll); document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMediaModal();}); document.getElementById('mediaModal').addEventListener('click',function(e){if(e.target===this) closeMediaModal();}); 
+  let casePanelBtn = document.getElementById('casePanelBtn');
+if (casePanelBtn) {
+  casePanelBtn.onclick = function(e) {
+    e.preventDefault();
+    openCaseSidebar();
+  };
+}
+
+// --- NEW: Mark as Unread button ---
+let markUnreadBtn = document.getElementById('markUnreadBtn');
+if (markUnreadBtn) {
+  markUnreadBtn.addEventListener('click', markUnread);
+}
+
+document.addEventListener('contextmenu', function(e) {
+  e.preventDefault();
+  showNotification('Right-click disabled', 'warning');
+  return false;
+});
   connectWebSocket();
   fetchGroups();
   fetchSubgroups();

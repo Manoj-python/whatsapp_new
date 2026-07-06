@@ -210,7 +210,12 @@ CELERY_TASK_ROUTES = {
     "notices.tasks.*": {"queue": "notices"},
 }
 
-
+CELERY_BEAT_SCHEDULE = {
+    'revert-unread-every-30-min': {
+        'task': 'messaging2.tasks.revert_unread_after_timeout',
+        'schedule': 1800.0,  # 30 minutes
+    },
+}
 # -------------------------------------------------------
 # CSRF
 # -------------------------------------------------------

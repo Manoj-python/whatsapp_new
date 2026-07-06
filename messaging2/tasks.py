@@ -349,7 +349,8 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             # 📝 UPDATE CONTACT
             # ==================================================
-            ChatContact2.objects.update_or_create(
+            # Update contact – but preserve existing unread count
+            contact, created = ChatContact2.objects.get_or_create(
                 mobile=mobile,
                 defaults={
                     "last_msg": rendered_text or "[Media]",
@@ -359,6 +360,16 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     "unread": 0
                 }
             )
+            if not created:
+                # Only update non‑unread fields
+                ChatContact2.objects.filter(mobile=mobile).update(
+                    last_msg=rendered_text or "[Media]",
+                    last_time=timezone.now(),
+                    last_type="Sent",
+                    last_status="Sent"
+                    # ❌ 'unread' is NOT updated – it stays as it was
+                )
+                contact.refresh_from_db()   # fetch the current unread value
 
             # ==================================================
             # 🔄 WEBSOCKET BROADCAST
@@ -400,7 +411,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                         "last_time": timezone.now().isoformat(),
                         "last_type": "Sent",
                         "last_status": "Sent",
-                        "unread": 0
+                        "unread": contact.unread
                     }
                 }
             )
@@ -1028,3 +1039,66 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         )
     except Exception as e:
         print("Welcome websocket error:", str(e))
+
+
+@shared_task(queue="messaging2")
+def revert_unread_after_timeout():
+    """
+    Loop through all configured apps (psf, sms, etc.) and revert unread status
+    for contacts that have been read but not replied to within 1 hour.
+    """
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    from django.utils import timezone
+    from datetime import timedelta
+
+    channel_layer = get_channel_layer()
+    timeout = timezone.now() - timedelta(hours=1)
+    total_updated = 0
+
+    for app_key, cfg in APP_CONFIG.items():
+        ContactModel = cfg.get('contact_model')
+        channel_group = cfg.get('channel_group')
+        
+        if not ContactModel or not channel_group:
+            continue  # skip if misconfigured
+
+        # Find contacts that are read (unread=0) but have a recent incoming message
+        contacts = ContactModel.objects.filter(
+            unread=0,
+            last_type='Received',
+            last_time__lt=timeout
+        )
+
+        updated_contacts = []
+        for contact in contacts:
+            contact.unread = 1
+            contact.save(update_fields=['unread'])
+            updated_contacts.append(contact)
+            total_updated += 1
+
+        if updated_contacts:
+            # Broadcast individual contact updates
+            for contact in updated_contacts:
+                async_to_sync(channel_layer.group_send)(
+                    channel_group,
+                    {
+                        "type": "contact.update",
+                        "contact": {
+                            "mobile": contact.mobile,
+                            "unread": 1
+                        }
+                    }
+                )
+
+            # Broadcast total unread count update for this app
+            total_unread = ContactModel.objects.filter(unread__gt=0).count()
+            async_to_sync(channel_layer.group_send)(
+                channel_group,
+                {
+                    "type": "unread.update",
+                    "unread_count": total_unread
+                }
+            )
+
+    return f"Reverted {total_updated} contacts to unread across all apps"

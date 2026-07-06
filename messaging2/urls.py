@@ -55,6 +55,7 @@ path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
     # ============================================
     # STATISTICS APIs
     # ============================================
+    path('api/mark-unread/', views.mark_unread_api2, name='mark_unread_api2'),
     path('api/resolved-cases/', views.get_resolved_cases_api2, name='get_resolved_cases'),
     path('api/dashboard-stats/', views.get_dashboard_stats_api2, name='dashboard_stats'),
     path('api/user-role/', views.get_user_role_api2, name='user_role_api'),

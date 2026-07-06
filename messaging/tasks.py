@@ -404,7 +404,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             # ==================================================
             # 📝 UPDATE CONTACT
             # ==================================================
-            ChatContact.objects.update_or_create(
+            contact, created = ChatContact.objects.get_or_create(
                 mobile=mobile,
                 defaults={
                     "last_msg": rendered_text or "[Media]",
@@ -414,6 +414,16 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     "unread": 0
                 }
             )
+            if not created:
+                # Only update non‑unread fields
+                ChatContact.objects.filter(mobile=mobile).update(
+                    last_msg=rendered_text or "[Media]",
+                    last_time=timezone.now(),
+                    last_type="Sent",
+                    last_status="Sent"
+                    # ❌ 'unread' is NOT updated – it stays as it was
+                )
+                contact.refresh_from_db()   # fe
 
             # ==================================================
             # 🔄 WEBSOCKET BROADCAST
@@ -454,7 +464,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                         "last_time": timezone.now().isoformat(),
                         "last_type": "Sent",
                         "last_status": "Sent",
-                        "unread": 0
+                        "unread": contact.unread
                     }
                 }
             )
