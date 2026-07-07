@@ -84,56 +84,87 @@ def lcc_details(mobile):
 #         print(f"Response: {resp.text if 'resp' in locals() else 'No response'}")
 #         raise
 
+
+
 def upload_whatsapp_media(file_obj):
     """
-    Upload media to WhatsApp Cloud API
-    Returns media ID
+    Upload media to WhatsApp Cloud API - WebM direct (NO ffmpeg)
     """
     import mimetypes
+    import requests
 
     access_token = settings.WHATSAPP_ACCESS_TOKEN
     phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
-    url = f"https://graph.facebook.com/v22.0/{phone_number_id}/media"
-    headers = {"Authorization": f"Bearer {access_token}"}
 
-    # ✅ Handle bytes input
+    url = f"https://graph.facebook.com/v22.0/{phone_number_id}/media"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+
+    # Handle bytes input
     if isinstance(file_obj, bytes):
         from io import BytesIO
-        file_obj = BytesIO(file_obj)
-        file_obj.name = "document.pdf"
+        temp = BytesIO(file_obj)
+        temp.name = "document.pdf"
+        file_obj = temp
 
-    # Reset file pointer to beginning
-    if hasattr(file_obj, 'seek'):
+    if hasattr(file_obj, "seek"):
         file_obj.seek(0)
 
-    # Get file name and content type
-    if hasattr(file_obj, 'name'):
+    if hasattr(file_obj, "name"):
         filename = file_obj.name
     else:
-        filename = "media_file"
+        filename = "media"
 
-    content_type = getattr(file_obj, 'content_type', None)
+    content_type = getattr(file_obj, "content_type", None)
     if not content_type:
-        content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
-    # ✅ Read content properly
-    content = file_obj.read() if hasattr(file_obj, 'read') else file_obj
+    # ✅ NO CONVERSION - Upload WebM directly
+    print(f"📤 Uploading: {filename} ({content_type})")
+
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
+
+    content = file_obj.read() if hasattr(file_obj, "read") else file_obj
 
     files = {
-        'file': (filename, content, content_type)
+        "file": (
+            filename,
+            content,
+            content_type,
+        )
     }
-    data = {'messaging_product': 'whatsapp'}
+
+    data = {
+        "messaging_product": "whatsapp"
+    }
 
     try:
-        resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+        resp = requests.post(
+            url,
+            headers=headers,
+            files=files,
+            data=data,
+            timeout=60
+        )
+
+        print(f"Upload Status: {resp.status_code}")
+        if resp.status_code != 200:
+            print(f"Upload Error: {resp.text}")
+
         resp.raise_for_status()
         result = resp.json()
-        print(f"Media uploaded successfully. ID: {result.get('id')}")
+        print(f"✅ Media uploaded successfully. ID: {result.get('id')}")
         return result
+
     except Exception as e:
-        print(f"Media upload error: {e}")
-        print(f"Response: {resp.text if 'resp' in locals() else 'No response'}")
+        print(f"❌ Media upload error: {e}")
+        if 'resp' in locals():
+            print(f"Response: {resp.text}")
         raise
+
 
 # -----------------------------------------------------
 # Send media (image/video/audio/document)
