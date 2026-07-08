@@ -3116,3 +3116,200 @@ def close_case_api2(request, case_id):
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+
+# ======================================== Payement views ========================================
+# utils/payment_views.py
+
+# messaging2/views.py (append to existing file)
+
+# messaging2/views.py (add these)
+
+import json
+import logging
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .utils import get_payment_details, generate_payment_link, send_whatsapp_payment_template
+
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+def get_payment_details_view(request):
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'GET required'}, status=405)
+
+    app_key = request.GET.get('app','psf')
+    mobile = request.GET.get('mobile')
+    if not app_key:
+        return JsonResponse({'success': False, 'error': 'app parameter required'}, status=200)
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile required'}, status=200)
+
+    # Normalise mobile to 10 digits
+    mobile = ''.join(filter(str.isdigit, mobile))
+    if len(mobile) > 10:
+        mobile = mobile[-10:]
+
+    try:
+        data = get_payment_details(app_key, mobile)
+        data['total_due'] = round(
+            data['due_amount'] + data['lpi_due'] + data['vas_due'] + data['collection_charges'], 2
+        )
+        # Remove internal fields
+        # data.pop('finance_id', None)
+        # data.pop('lpi_due', None)
+        # data.pop('vas_due', None)
+        # data.pop('collection_charges', None)
+        return JsonResponse({'success': True, **data})
+    except Exception as e:
+        logger.error(f"Payment details error for {app_key}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=200)
+
+
+@csrf_exempt
+def send_payment_template_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    app_key = request.GET.get('app')
+    current_chat = request.GET.get('current_chat')   # the chat we are viewing
+    if not app_key:
+        return JsonResponse({'success': False, 'error': 'app parameter required'}, status=200)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    mobile_to_send = data.get('mobile')      # the edited number
+    amount = data.get('amount')
+    if not mobile_to_send or not amount:
+        return JsonResponse({'success': False, 'error': 'Mobile and amount required'})
+
+    # Normalize for API (10 digits) for the number we are sending to
+    mobile_for_api = ''.join(filter(str.isdigit, mobile_to_send))
+    if len(mobile_for_api) > 10:
+        mobile_for_api = mobile_for_api[-10:]
+
+    # 🆕 Determine which number to use for payment link generation
+    # Use current_chat if provided, else fallback to mobile_to_send
+    link_generation_mobile = current_chat if current_chat else mobile_to_send
+    link_mobile_api = ''.join(filter(str.isdigit, link_generation_mobile))
+    if len(link_mobile_api) > 10:
+        link_mobile_api = link_mobile_api[-10:]
+
+    # Broadcast target: original chat number (or fallback)
+    broadcast_mobile = current_chat if current_chat else mobile_to_send
+    broadcast_mobile_db = broadcast_mobile.strip()   # preserve +91 if present
+
+    logger.info(f"📞 Sending to: {mobile_to_send} | Link from: {link_generation_mobile} | Broadcast to: {broadcast_mobile_db}")
+
+    try:
+        from adminpanel.views import APP_CONFIG
+        cfg = APP_CONFIG[app_key]
+        LogModel = cfg['log_model']
+        ContactModel = cfg['contact_model']
+        channel_group = cfg['channel_group']
+        chat_prefix = cfg['chat_prefix']
+        app_name = cfg.get('app_name', '')
+        get_template_text = cfg.get('get_template_text')
+        render_template_text = cfg.get('render_template_text')
+        template_name = cfg['templates'].get('payment', 'payment_gateway')
+
+        # ✅ Generate payment link using the original chat number
+        payment_url = generate_payment_link(app_key, link_mobile_api, amount)
+        logger.info(f"✅ Payment link: {payment_url}")
+
+        # Fetch and render template
+        if get_template_text and render_template_text:
+            template_body = get_template_text(template_name)
+            logger.info(f"📄 Template body from Meta: {template_body}")
+            if template_body:
+                parameters = [
+                    {"type": "text", "text": payment_url},
+                    {"type": "text", "text": str(amount)}
+                ]
+                rendered_message = render_template_text(template_body, parameters)
+                # Append a note about the target number
+                rendered_message += f"\n\n(Link sent to {mobile_to_send})"
+            else:
+                rendered_message = f"Dear Customer, Click on {payment_url} to make payment of INR {amount} Regards 7799795111.-padmasai holdings private limited\n\n(Link sent to {mobile_to_send})"
+        else:
+            rendered_message = f"Dear Customer, Click on {payment_url} to make payment of INR {amount} Regards 7799795111.-padmasai holdings private limited\n\n(Link sent to {mobile_to_send})"
+
+        # Send template to the edited number
+        result = send_whatsapp_payment_template(app_key, mobile_for_api, amount, payment_url)
+        logger.info(f"📨 WhatsApp response: {result}")
+
+        # Save log under the broadcast mobile (the chat we are viewing)
+        msg_id = result.get('messages', [{}])[0].get('id', '')
+        log_entry = LogModel.objects.create(
+            customer_name=app_name,
+            mobile=broadcast_mobile_db,
+            sent_text_message=rendered_message,
+            message_type="Sent",
+            content_type="template",
+            status="Sent",
+            template_name=template_name,
+            message_id=msg_id,
+        )
+
+        # Update contact for the broadcast mobile
+        ContactModel.objects.update_or_create(
+            mobile=broadcast_mobile_db,
+            defaults={
+                'last_msg': rendered_message[:50] + "..." if len(rendered_message) > 50 else rendered_message,
+                'last_time': timezone.now(),
+                'last_type': "Sent",
+                'last_status': "Sent",
+                'unread': 0,
+            }
+        )
+
+        # Broadcast to the chat we are viewing
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        import re
+        channel_layer = get_channel_layer()
+        gm = re.sub(r"\D", "", broadcast_mobile_db)
+        if gm:
+            async_to_sync(channel_layer.group_send)(
+                f"{chat_prefix}_{gm}",
+                {
+                    "type": "new_message",
+                    "message": {
+                        "id": log_entry.id,
+                        "mobile": broadcast_mobile_db,
+                        "sent_text_message": rendered_message,
+                        "content_type": "template",
+                        "media_file": "",
+                        "sent_at": timezone.localtime(log_entry.sent_at).isoformat(),
+                        "message_type": "Sent",
+                        "message_id": log_entry.message_id,
+                        "status": "Sent",
+                        "sender_name": app_name
+                    }
+                }
+            )
+
+        # Also update the sidebar for the broadcast mobile
+        async_to_sync(channel_layer.group_send)(
+            channel_group,
+            {
+                "type": "contact.update",
+                "contact": {
+                    "mobile": broadcast_mobile_db,
+                    "last_msg": rendered_message[:50] + "..." if len(rendered_message) > 50 else rendered_message,
+                    "last_type": "Sent",
+                    "last_status": "Sent",
+                    "last_time": timezone.now().isoformat(),
+                }
+            }
+        )
+
+        return JsonResponse({'success': True, 'result': result})
+
+    except Exception as e:
+        logger.error(f"Send payment error for {app_key}: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)})

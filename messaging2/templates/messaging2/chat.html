@@ -351,6 +351,9 @@
         <i class="fas fa-microphone"></i>
       </button>
       <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+       <button id="paymentBtn" title="Send Payment Link" style="background: #128C7E; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
+    <i class="fas fa-rupee-sign"></i>
+</button>
       <input type="file" id="mediaInput" style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
     </div>
 <!-- VOICE RECORDER -->
@@ -484,6 +487,68 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- 3. Payment Modal (place anywhere, before </body>) -->
+<div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-credit-card"></i> Send Payment Link</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="paymentForm">
+                    <div class="mb-2">
+                        <label>Customer Name</label>
+                        <input type="text" id="payCustName" class="form-control" readonly>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <label>Loan Number</label>
+                        <input type="text" id="payLoanNo" class="form-control" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label>Vehicle Number</label>
+                        <input type="text" id="payVehicleNo" class="form-control" readonly>
+                    </div>
+                  <div class="mb-2">
+    <label>EMI Dues (INR)</label>
+    <input type="text" id="payEmiDues" class="form-control" readonly>
+</div>
+<div class="mb-2">
+    <label>LPI (INR)</label>
+    <input type="text" id="payLpi" class="form-control" readonly>
+</div>
+<div class="mb-2">
+    <label>Vas Due (INR)</label>
+    <input type="text" id="payVasDue" class="form-control" readonly>
+</div>
+<div class="mb-2">
+    <label>Total Due (INR) <span class="text-muted">(Auto-calculated)</span></label>
+    <input type="text" id="payTotalDue" class="form-control" readonly>
+</div>
+<div class="mb-2">
+    <label>Due Amount (INR) <span class="text-danger">*</span></label>
+    <input type="number" step="0.01" id="payAmount" class="form-control" required>
+    <small class="text-muted">Edit this if you want to adjust the amount for payment.</small>
+</div>
+<div class="mb-2">
+                        <label>Mobile Number <span class="text-danger">*</span></label>
+                        <!-- 🆕 Editable field -->
+                        <input type="text" id="payMobile" class="form-control" required>
+                        <small class="text-muted">Edit this number to send the link to a different customer.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="paySubmitBtn">
+                    <i class="fas fa-paper-plane"></i> Send Payment Link
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -2131,7 +2196,141 @@ console.log('🎤 Voice recording loaded - MP3 format (no ffmpeg required!)');
   function isSameDay(d1,d2){ return d1.getDate()===d2.getDate()&&d1.getMonth()===d2.getMonth()&&d1.getFullYear()===d2.getFullYear(); }
   function formatMessageDate(date){ let today=new Date(); let yesterday=new Date(today); yesterday.setDate(yesterday.getDate()-1); let todayDate=new Date(today.getFullYear(),today.getMonth(),today.getDate()); let yesterdayDate=new Date(yesterday.getFullYear(),yesterday.getMonth(),yesterday.getDate()); let msgDate=new Date(date.getFullYear(),date.getMonth(),date.getDate()); if(msgDate.getTime()===todayDate.getTime()) return 'Today'; if(msgDate.getTime()===yesterdayDate.getTime()) return 'Yesterday'; let options={day:'numeric',month:'long'}; if(date.getFullYear()!==today.getFullYear()) options.year='numeric'; return date.toLocaleDateString('en-IN',options); }
   function renderMessages(messagesData,hasMore,nextCursorDateParam,isInitial=false){ if(messagesData.length===0&&messages.length===0){ messagesContainer.innerHTML='<div class="empty-state">No messages yet</div>'; return; } hasMoreMessages=hasMore; let sorted=[...messagesData].sort((a,b)=>new Date(a.sent_at)-new Date(b.sent_at)); let newMessages=[]; if(isInitial||messages.length===0) newMessages=sorted; else{ let existingIds=new Set(messages.map(m=>m.message_id||m.id)); newMessages=[...sorted.filter(m=>!existingIds.has(m.message_id||m.id)),...messages]; } let lastDate=null,html=''; for(let msg of newMessages){ let msgDate=new Date(msg.sent_at); let currentLabel=formatMessageDate(msgDate); if(lastDate!==currentLabel){ html+=`<div class="date-separator"><span>${currentLabel}</span></div>`; lastDate=currentLabel; } html+=renderMessage(msg); } if(isInitial||messages.length===0){ messages=newMessages; messagesContainer.innerHTML=html; if(hasMoreMessages) addLoadOlderButton(); else removeLoadOlderButton(); scrollToBottom(); } else{ let oldHeight=messagesContainer.scrollHeight; messages=newMessages; messagesContainer.innerHTML=html; messagesContainer.scrollTop=messagesContainer.scrollHeight-oldHeight; if(hasMoreMessages) addLoadOlderButton(); else removeLoadOlderButton(); } isLoadingMessages=false; }
-  function renderMessage(msg){ let isSent=msg.message_type==='Sent'; let timeDisplay=''; try{ let d=new Date(msg.sent_at); if(!isNaN(d.getTime())) timeDisplay=d.toLocaleString('en-IN',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}); else timeDisplay='Just now'; }catch(e){ timeDisplay='Just now'; } let senderName=''; if(isSent) senderName=msg.sender_name||'Agent'; else senderName=msg.sender_name||msg.customer_name||'Customer'; let contentHtml=''; if(msg.content_type==='image'&&msg.media_file) contentHtml=`<img src="${msg.media_file}" class="message-image" onclick="openMedia('${msg.media_file}','image')">${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='video'&&msg.media_file) contentHtml=`<video class="message-video" onclick="openMedia('${msg.media_file}','video')"><source src="${msg.media_file}"></video>${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='audio'&&msg.media_file) contentHtml=`<audio controls src="${msg.media_file}"></audio>${msg.sent_text_message?`<div class="message-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; else if(msg.content_type==='document'&&msg.media_file){ let fileName=decodeURIComponent(msg.media_file.split('/').pop().split('?')[0]); let isNoc=fileName.toLowerCase().includes('noc'); let displayName=fileName.length>30?fileName.substring(0,25)+'...'+fileName.split('.').pop():fileName; let fileExt=fileName.split('.').pop().toLowerCase(); let fileIcon='fa-file-pdf',iconColor='#dc4a2c',fileTypeName='PDF'; let types={doc:{icon:'fa-file-word',color:'#2b579a',name:'Word'},docx:{icon:'fa-file-word',color:'#2b579a',name:'Word'},xls:{icon:'fa-file-excel',color:'#1e7145',name:'Excel'},xlsx:{icon:'fa-file-excel',color:'#1e7145',name:'Excel'},pdf:{icon:'fa-file-pdf',color:'#dc4a2c',name:'PDF'},jpg:{icon:'fa-file-image',color:'#f39c12',name:'Image'},png:{icon:'fa-file-image',color:'#f39c12',name:'Image'},mp4:{icon:'fa-file-video',color:'#27ae60',name:'Video'}}; if(types[fileExt]){ fileIcon=types[fileExt].icon; iconColor=types[fileExt].color; fileTypeName=types[fileExt].name; } if(isNoc) contentHtml=`<div class="document-bubble noc-document" style="cursor:default;background:#f5f5f5;border-left:4px solid #dc3545;opacity:0.7;"><div class="document-content" style="display:flex;padding:10px;"><div class="document-icon" style="background:#dc3545;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-file-contract" style="color:white;"></i><i class="fas fa-lock" style="color:white;font-size:10px;position:absolute;margin-left:14px;margin-top:14px;"></i></div><div class="document-details"><div class="document-filename" style="color:#dc3545;">🔒 NOC Restricted</div><div class="document-meta"><span class="document-type" style="background:#dc3545;color:white;padding:2px 6px;border-radius:10px;font-size:10px;">Cannot View</span></div></div></div></div>${msg.sent_text_message?`<div class="doc-text" style="margin-top:6px;padding:6px;background:#ffe5e5;border-left:3px solid #dc3545;font-size:12px;">⚠️ ${escapeHtml(msg.sent_text_message)}</div>`:''}`; else contentHtml=`<div class="document-bubble" onclick="downloadDocument('${msg.media_file}','${escapeHtml(fileName)}',event)" style="cursor:pointer;background:white;border-radius:12px;"><div class="document-content" style="display:flex;gap:12px;padding:10px;"><div class="document-icon" style="background:${iconColor}15;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;"><i class="fas ${fileIcon}" style="color:${iconColor};font-size:20px;"></i></div><div class="document-details"><div class="document-filename">${escapeHtml(displayName)}</div><div class="document-meta"><span>${fileTypeName}</span><span><i class="fas fa-download"></i> Click to download</span></div></div><div class="document-download"><i class="fas fa-download" style="color:${iconColor};"></i></div></div></div>${msg.sent_text_message?`<div class="doc-text">${escapeHtml(msg.sent_text_message)}</div>`:''}`; } else contentHtml=`<div class="message-text">${escapeHtml(msg.sent_text_message||'')}</div>`; let tickHtml=''; let messageId=msg.message_id||msg.id; if(isSent){ if(msg.status==='Read') tickHtml=`<span class="message-tick read" data-msg-id="${messageId}">✓✓</span>`; else if(msg.status==='Delivered') tickHtml=`<span class="message-tick delivered" data-msg-id="${messageId}">✓✓</span>`; else if(msg.status==='Failed'||msg.status==='Blocked'||msg.status==='Invalid'||msg.status==='Re-engagement Required') tickHtml=`<span class="message-tick failed" data-msg-id="${messageId}" title="${msg.status}">❌</span>`; else tickHtml=`<span class="message-tick sent" data-msg-id="${messageId}">✓</span>`; } return `<div class="message-row ${isSent?'sent':'received'}" data-msg-id="${messageId}"><div class="message-bubble ${isSent?'sent':'received'}">${contentHtml}<div class="message-footer"><span class="message-sender">${escapeHtml(senderName)}</span><span class="message-time">${timeDisplay}</span>${tickHtml}</div></div></div>`; }
+
+function linkify(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function(url) {
+        return '<a href="' + url + '" target="_blank">' + url + '</a>';
+    });
+}
+
+
+function renderMessage(msg){ 
+    let isSent = msg.message_type === 'Sent'; 
+    let timeDisplay = ''; 
+    try { 
+        let d = new Date(msg.sent_at); 
+        if (!isNaN(d.getTime())) 
+            timeDisplay = d.toLocaleString('en-IN', {
+                day: '2-digit', month: 'short', year: '2-digit',
+                hour: '2-digit', minute: '2-digit', hour12: true
+            }); 
+        else 
+            timeDisplay = 'Just now'; 
+    } catch(e) { 
+        timeDisplay = 'Just now'; 
+    } 
+    
+    let senderName = ''; 
+    if (isSent) 
+        senderName = msg.sender_name || 'Agent'; 
+    else 
+        senderName = msg.sender_name || msg.customer_name || 'Customer'; 
+    
+    let contentHtml = ''; 
+    
+    if (msg.content_type === 'image' && msg.media_file) {
+        contentHtml = `<img src="${msg.media_file}" class="message-image" onclick="openMedia('${msg.media_file}','image')">`;
+        if (msg.sent_text_message) {
+            contentHtml += `<div class="message-text">${linkify(escapeHtml(msg.sent_text_message))}</div>`;
+        }
+    } 
+    else if (msg.content_type === 'video' && msg.media_file) {
+        contentHtml = `<video class="message-video" onclick="openMedia('${msg.media_file}','video')"><source src="${msg.media_file}"></video>`;
+        if (msg.sent_text_message) {
+            contentHtml += `<div class="message-text">${linkify(escapeHtml(msg.sent_text_message))}</div>`;
+        }
+    } 
+    else if (msg.content_type === 'audio' && msg.media_file) {
+        contentHtml = `<audio controls src="${msg.media_file}"></audio>`;
+        if (msg.sent_text_message) {
+            contentHtml += `<div class="message-text">${linkify(escapeHtml(msg.sent_text_message))}</div>`;
+        }
+    } 
+    else if (msg.content_type === 'document' && msg.media_file) {
+        let fileName = decodeURIComponent(msg.media_file.split('/').pop().split('?')[0]); 
+        let isNoc = fileName.toLowerCase().includes('noc'); 
+        let displayName = fileName.length > 30 ? fileName.substring(0,25)+'...'+fileName.split('.').pop() : fileName; 
+        let fileExt = fileName.split('.').pop().toLowerCase(); 
+        let fileIcon = 'fa-file-pdf', iconColor = '#dc4a2c', fileTypeName = 'PDF'; 
+        let types = {
+            doc: {icon:'fa-file-word', color:'#2b579a', name:'Word'},
+            docx: {icon:'fa-file-word', color:'#2b579a', name:'Word'},
+            xls: {icon:'fa-file-excel', color:'#1e7145', name:'Excel'},
+            xlsx: {icon:'fa-file-excel', color:'#1e7145', name:'Excel'},
+            pdf: {icon:'fa-file-pdf', color:'#dc4a2c', name:'PDF'},
+            jpg: {icon:'fa-file-image', color:'#f39c12', name:'Image'},
+            png: {icon:'fa-file-image', color:'#f39c12', name:'Image'},
+            mp4: {icon:'fa-file-video', color:'#27ae60', name:'Video'}
+        }; 
+        if (types[fileExt]) {
+            fileIcon = types[fileExt].icon; 
+            iconColor = types[fileExt].color; 
+            fileTypeName = types[fileExt].name;
+        } 
+        if (isNoc) {
+            contentHtml = `<div class="document-bubble noc-document" style="cursor:default;background:#f5f5f5;border-left:4px solid #dc3545;opacity:0.7;">
+                <div class="document-content" style="display:flex;padding:10px;">
+                    <div class="document-icon" style="background:#dc3545;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                        <i class="fas fa-file-contract" style="color:white;"></i>
+                        <i class="fas fa-lock" style="color:white;font-size:10px;position:absolute;margin-left:14px;margin-top:14px;"></i>
+                    </div>
+                    <div class="document-details">
+                        <div class="document-filename" style="color:#dc3545;">🔒 NOC Restricted</div>
+                        <div class="document-meta"><span class="document-type" style="background:#dc3545;color:white;padding:2px 6px;border-radius:10px;font-size:10px;">Cannot View</span></div>
+                    </div>
+                </div>
+            </div>`;
+            if (msg.sent_text_message) {
+                contentHtml += `<div class="doc-text" style="margin-top:6px;padding:6px;background:#ffe5e5;border-left:3px solid #dc3545;font-size:12px;">⚠️ ${linkify(escapeHtml(msg.sent_text_message))}</div>`;
+            }
+        } else {
+            contentHtml = `<div class="document-bubble" onclick="downloadDocument('${msg.media_file}','${escapeHtml(fileName)}',event)" style="cursor:pointer;background:white;border-radius:12px;">
+                <div class="document-content" style="display:flex;gap:12px;padding:10px;">
+                    <div class="document-icon" style="background:${iconColor}15;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                        <i class="fas ${fileIcon}" style="color:${iconColor};font-size:20px;"></i>
+                    </div>
+                    <div class="document-details">
+                        <div class="document-filename">${escapeHtml(displayName)}</div>
+                        <div class="document-meta"><span>${fileTypeName}</span><span><i class="fas fa-download"></i> Click to download</span></div>
+                    </div>
+                    <div class="document-download"><i class="fas fa-download" style="color:${iconColor};"></i></div>
+                </div>
+            </div>`;
+            if (msg.sent_text_message) {
+                contentHtml += `<div class="doc-text">${linkify(escapeHtml(msg.sent_text_message))}</div>`;
+            }
+        }
+    } 
+    else { 
+        // Plain text (or template) – this is where payment messages go
+        contentHtml = `<div class="message-text">${linkify(escapeHtml(msg.sent_text_message||''))}</div>`;
+    } 
+    
+    let tickHtml = ''; 
+    let messageId = msg.message_id || msg.id; 
+    if (isSent) { 
+        if (msg.status === 'Read') 
+            tickHtml = `<span class="message-tick read" data-msg-id="${messageId}">✓✓</span>`; 
+        else if (msg.status === 'Delivered') 
+            tickHtml = `<span class="message-tick delivered" data-msg-id="${messageId}">✓✓</span>`; 
+        else if (msg.status === 'Failed' || msg.status === 'Blocked' || msg.status === 'Invalid' || msg.status === 'Re-engagement Required') 
+            tickHtml = `<span class="message-tick failed" data-msg-id="${messageId}" title="${msg.status}">❌</span>`; 
+        else 
+            tickHtml = `<span class="message-tick sent" data-msg-id="${messageId}">✓</span>`; 
+    } 
+    return `<div class="message-row ${isSent?'sent':'received'}" data-msg-id="${messageId}">
+        <div class="message-bubble ${isSent?'sent':'received'}">
+            ${contentHtml}
+            <div class="message-footer">
+                <span class="message-sender">${escapeHtml(senderName)}</span>
+                <span class="message-time">${timeDisplay}</span>
+                ${tickHtml}
+            </div>
+        </div>
+    </div>`;
+}
+
   function updateMessageTickImproved(messageId, status) {
     if (!messageId || messageId === '') {
         console.warn('⚠️ Ignoring delivery.update with empty message_id');
@@ -2223,6 +2422,109 @@ function appendMessage(msg){ let wasAtBottom=messagesContainer.scrollHeight-mess
   function formatTime(iso){ let d=new Date(iso),now=new Date(),diff=now-d; if(diff<86400000) return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); if(diff<604800000) return d.toLocaleDateString('en-IN',{weekday:'short'}); return d.toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit'}); }
   function handleWebSocketMessage(data){ console.log('WS msg:',data.type); switch(data.type){ case 'contacts.page': renderContacts(data.contacts,data.page===1,data.unread_count,data.has_more,data.page); break; case 'messages.page': if(data.mobile===selectedMobile){ if(data.messages&&data.messages.length) renderMessages(data.messages,data.has_more,data.next_cursor_date,data.is_initial||messages.length===0); else messagesContainer.innerHTML='<div class="empty-state">No messages</div>'; } break; case 'new.message': if(data.message.mobile===selectedMobile) appendMessage(data.message); updateContactInList(data.message); break; case 'delivery.update': updateMessageTickImproved(data.message_id,data.status); if(data.mobile) updateContactStatus(data.mobile,data.status); break; case 'unread.update': totalUnreadCount=data.unread_count; let badge=document.getElementById('unreadCountBadge'); if(badge){ if(totalUnreadCount>0){ badge.style.display='inline'; badge.textContent=totalUnreadCount; } else badge.style.display='none'; } if(currentFilter==='unread') loadContacts(1); break; case 'contact.update': if(data.contact){ let existing=contacts.find(c=>c.mobile===data.contact.mobile); if(existing&&!data.contact.last_time) data.contact.last_time=existing.last_time; updateContactInList(data.contact); } break; case 'typing': if(data.mobile===selectedMobile) typingIndicator.style.display=data.state?'block':'none'; break; case 'error': showNotification(data.message,'error'); break; } }
   sendBtn.onclick=sendMessage; messageInput.addEventListener('keypress',e=>{if(e.key==='Enter') sendMessage();}); messageInput.addEventListener('input',onTyping); attachBtn.onclick=()=>mediaInput.click(); backBtn.onclick=()=>{document.getElementById('sidebar').classList.remove('hide'); chatArea.style.display='none';}; mediaInput.addEventListener('change',e=>{if(e.target.files[0]){ filePreview.classList.add('show'); document.querySelector('.preview-info').textContent=e.target.files[0].name; }}); searchInput.addEventListener('input',e=>{clearTimeout(window.searchTimeout); window.searchTimeout=setTimeout(()=>{if(e.target.value.trim()) searchContacts(e.target.value.trim()); else{ contactPage=1; contacts=[]; hasMoreContacts=true; lastProcessedPage=0; loadContacts(1); }},300);}); contactListEl.addEventListener('scroll',handleContactsScroll); document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMediaModal();}); document.getElementById('mediaModal').addEventListener('click',function(e){if(e.target===this) closeMediaModal();}); 
+
+// ========== PAYMENT FUNCTIONS ==========
+
+
+// Helper: get 'app' from URL (matches existing pattern)
+function getAppFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('app') || 'psf';   // fallback to 'psf' if not present
+}
+const APP_KEY = getAppFromURL();
+console.log('💰 Current app for payment:', APP_KEY);
+
+async function openPaymentModal() {
+    if (!selectedMobile) {
+        showNotification('Select a contact first', 'warning');
+        return;
+    }
+    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+    modal.show();
+
+    // Pre‑fill the mobile field
+    document.getElementById('payMobile').value = selectedMobile;
+    document.getElementById('payCustName').value = 'Loading...';
+    document.getElementById('payLoanNo').value = '...';
+    document.getElementById('payVehicleNo').value = '...';
+    document.getElementById('payEmiDues').value = '...';
+    document.getElementById('payLpi').value = '...';
+    document.getElementById('payVasDue').value = '...';
+    document.getElementById('payTotalDue').value = '...';
+    document.getElementById('payAmount').value = '';
+
+    try {
+        const resp = await fetch(`/messaging2/api/payment-details/?app=${APP_KEY}&mobile=${encodeURIComponent(selectedMobile)}`);
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('payCustName').value = data.customer_name || '';
+            document.getElementById('payLoanNo').value = data.loan_number || '';
+            document.getElementById('payVehicleNo').value = data.vehicle_no || '';
+            
+            // ✅ Display with 2 decimal places
+            document.getElementById('payEmiDues').value = parseFloat(data.due_amount || 0).toFixed(2);
+            document.getElementById('payLpi').value = parseFloat(data.lpi_due || 0).toFixed(2);
+            document.getElementById('payVasDue').value = parseFloat(data.vas_due || 0).toFixed(2);
+            document.getElementById('payTotalDue').value = parseFloat(data.total_due || 0).toFixed(2);
+            
+            // Pre‑fill editable amount with total_due (2 decimals)
+            const defaultAmount = data.total_due || data.due_amount || 0;
+            document.getElementById('payAmount').value = parseFloat(defaultAmount).toFixed(2);
+        } else {
+            showNotification(data.error || 'Could not fetch details', 'error');
+            modal.hide();
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+        modal.hide();
+    }
+}
+
+async function sendPaymentTemplate() {
+    // 🆕 Read the mobile from the editable field
+    const mobileToSend = document.getElementById('payMobile').value.trim();
+    const amount = document.getElementById('payAmount').value;
+    if (!mobileToSend) {
+        showNotification('Please enter a valid mobile number', 'warning');
+        return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+        showNotification('Please enter a valid amount', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('paySubmitBtn');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    btn.disabled = true;
+
+    try {
+        const payload = {
+            mobile: mobileToSend,          // 🆕 Send the edited number
+            amount: parseFloat(amount)
+        };
+        // 🆕 Pass the current chat as a query parameter
+        const resp = await fetch(`/messaging2/api/send-payment-template/?app=${APP_KEY}&current_chat=${encodeURIComponent(selectedMobile)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showNotification(`Payment link sent to ${mobileToSend}`, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+        } else {
+            showNotification(data.error || 'Failed to send payment link', 'error');
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
+}
+
+
  let casePanelBtn = document.getElementById('casePanelBtn');
 if (casePanelBtn) {
   casePanelBtn.onclick = function(e) {
@@ -2236,6 +2538,15 @@ let markUnreadBtn = document.getElementById('markUnreadBtn');
 if (markUnreadBtn) {
   markUnreadBtn.addEventListener('click', markUnread);
 }
+
+// Place these AFTER the payment functions are defined (openPaymentModal, sendPaymentTemplate)
+document.addEventListener('DOMContentLoaded', function() {
+    const paymentBtn = document.getElementById('paymentBtn');
+    if (paymentBtn) paymentBtn.addEventListener('click', openPaymentModal);
+    const submitBtn = document.getElementById('paySubmitBtn');
+    if (submitBtn) submitBtn.addEventListener('click', sendPaymentTemplate);
+});
+
 
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();

@@ -52,6 +52,7 @@ APP_CONFIG = {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
             'welcome':'welcome_message',
+            'payment':'payment_gateway'
         },
         'get_template_text': get_template_text_from_whatsapp2,
         'render_template_text': render_template_text,
@@ -75,12 +76,16 @@ APP_CONFIG = {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
             'welcome':'welcome_message',
+            'payment':'payment_gateway'
         },
         'whatsapp': {
             'phone_number_id': settings.WHATSAPP_PHONE_NUMBER_ID,   # Use PSF's
             'access_token': settings.WHATSAPP_ACCESS_TOKEN,
         },
     },
+
+
+
     'spl': {
         'name': 'SPL Cases',
         'app_name':'Padma Sai Holdings Private Limited',
