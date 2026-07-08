@@ -417,10 +417,11 @@ def chat_messages_api2(request, mobile):
     })
 
 
+
 @csrf_exempt
 def send_reply_api2(request):
     """
-    Send reply with media support - SAVE FIRST to prevent NO DB MATCH
+    Send reply with media support - FIXED VOICE MESSAGES
     """
     try:
         if request.method != "POST":
@@ -430,11 +431,13 @@ def send_reply_api2(request):
         if "multipart/form-data" in request.META.get("CONTENT_TYPE", ""):
             mobile = request.POST.get("mobile", "").strip()
             text = request.POST.get("text", "").strip()
+            is_voice = request.POST.get("is_voice", "false") == "true"
             media_file = request.FILES.get("media")
         else:
             payload = json.loads(request.body.decode("utf-8") or "{}")
             mobile = payload.get("mobile", "").strip()
             text = payload.get("text", "").strip()
+            is_voice = payload.get("is_voice", False)
             media_file = None
 
         if not mobile:
@@ -447,7 +450,10 @@ def send_reply_api2(request):
             file_size_mb = media_file.size / (1024 * 1024)
             file_name = media_file.name.lower()
 
-            if file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+            # Voice messages max 16MB
+            if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm')):
+                max_size = 16
+            elif file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
                 max_size = 5
             elif file_name.endswith(('.mp4', '.mov', '.avi', '.mkv', '.3gp')):
                 max_size = 16
@@ -461,14 +467,14 @@ def send_reply_api2(request):
 
         # Get agent name
         agent_name = None
-        if request.session.get("messaging2_user"):
+        if request.session.get("messaging_user"):
             from django.contrib.auth.models import User
-            u = User.objects.filter(id=request.session["messaging2_user"]).first()
+            u = User.objects.filter(id=request.session["messaging_user"]).first()
             if u:
                 agent_name = u.username
 
         # =============================================
-        # STEP 1: CREATE DATABASE RECORD FIRST (with temp ID)
+        # STEP 1: CREATE DATABASE RECORD FIRST
         # =============================================
         temp_id = str(uuid.uuid4())
 
@@ -476,65 +482,72 @@ def send_reply_api2(request):
             customer_name=agent_name or "",
             mobile=mobile,
             sent_text_message=text or "",
-            status="Sending",  # Status while sending
+            status="Sending",
             message_id=temp_id,
             message_type="Sent",
-            content_type="text",  # Will update later
+            content_type="audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm'))) else "text",
         )
         clear_chat_cache2(mobile)
-
-
-        # print(f"📝 [STEP 1] Saved pending message with temp ID: {temp_id}")
 
         # =============================================
         # STEP 2: SEND TO WHATSAPP
         # =============================================
         msg_id = ""
-        content_type_val = "text"
+        content_type_val = "audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm'))) else "text"
         media_url = ""
         saved_path = None
 
         try:
             if media_file:
-                # Determine media type
                 file_name = media_file.name.lower()
                 original_filename = media_file.name
-                if file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
-                    WHATSAPP2_media_type = "image"
+                
+                # Determine media type
+                if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm')):
+                    whatsapp_media_type = "audio"
+                    content_type_val = "audio"
+                elif file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+                    whatsapp_media_type = "image"
                     content_type_val = "image"
                 elif file_name.endswith(('.mp4', '.mov', '.avi', '.mkv')):
-                    WHATSAPP2_media_type = "video"
+                    whatsapp_media_type = "video"
                     content_type_val = "video"
-                elif file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a')):
-                    WHATSAPP2_media_type = "audio"
-                    content_type_val = "audio"
                 else:
-                    WHATSAPP2_media_type = "document"
+                    whatsapp_media_type = "document"
                     content_type_val = "document"
 
                 # Update content type in database
                 SmsWhatsAppLog2.objects.filter(id=log.id).update(content_type=content_type_val)
 
-                # print(f"📤 Uploading {WHATSAPP2_media_type}...")
-
-                # Upload to WhatsApp
+                # Upload to WhatsApp (this will handle WebM -> OGG conversion)
                 upload_resp = upload_whatsapp_media2(media_file)
                 media_id = upload_resp.get("id")
 
                 if media_id:
-                    send_resp = send_whatsapp_media2(
-                        to_number=mobile,
-                        media_id=media_id,
-                        media_type=WHATSAPP2_media_type,
-                        caption=text if text else "",
-                        filename=original_filename
-                    )
+                    # For audio, we MUST send as audio type - captions are NOT allowed
+                    if whatsapp_media_type == "audio":
+                        send_resp = send_whatsapp_media2(
+                            to_number=mobile,
+                            media_id=media_id,
+                            media_type="audio",
+                            caption="",  # IMPORTANT: audio messages CANNOT have captions
+                            filename=original_filename
+                        )
+                    else:
+                        send_resp = send_whatsapp_media2(
+                            to_number=mobile,
+                            media_id=media_id,
+                            media_type=whatsapp_media_type,
+                            caption=text if text else "",
+                            filename=original_filename
+                        )
+                    
                     msg_id = send_resp.get("messages", [{}])[0].get("id", "")
 
                     # Save media file to storage
                     media_file.seek(0)
                     saved_path = default_storage.save(
-                        f"chat2_media/{media_file.name}",
+                        f"chat_media/{media_file.name}",
                         ContentFile(media_file.read())
                     )
                     media_url = default_storage.url(saved_path)
@@ -543,13 +556,10 @@ def send_reply_api2(request):
                 send_resp = send_whatsapp_text2(mobile, text)
                 msg_id = send_resp.get("messages", [{}])[0].get("id", "")
 
-            # print(f"📨 [STEP 2] WhatsApp returned ID: {msg_id}")
-
             # =============================================
             # STEP 3: UPDATE RECORD WITH REAL WHATSAPP ID
             # =============================================
             if msg_id:
-                # Update the existing record
                 update_data = {
                     'message_id': msg_id,
                     'status': 'Sent'
@@ -559,20 +569,17 @@ def send_reply_api2(request):
 
                 SmsWhatsAppLog2.objects.filter(id=log.id).update(**update_data)
                 log.refresh_from_db()
-                # print(f"✅ [STEP 3] Updated message from {temp_id} to {msg_id}")
             else:
                 SmsWhatsAppLog2.objects.filter(id=log.id).update(
                     status="Failed",
                     error_message="No message ID returned from WhatsApp"
                 )
-                # print(f"❌ No WhatsApp ID returned")
 
         except Exception as e:
             SmsWhatsAppLog2.objects.filter(id=log.id).update(
                 status="Failed",
                 error_message=str(e)
             )
-            # print(f"❌ Send failed: {e}")
             return JsonResponse({"error": f"Send failed: {str(e)}"}, status=500)
 
         # Update contact
@@ -590,7 +597,7 @@ def send_reply_api2(request):
         # WebSocket broadcast
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
-            "global_contacts2",
+            "global_contacts",
             {
                 "type": "contact.update",
                 "contact": {
@@ -607,7 +614,7 @@ def send_reply_api2(request):
 
         if gm:
             async_to_sync(channel_layer.group_send)(
-                f"chat2_{gm}",
+                f"chat_{gm}",
                 {
                     "type": "new_message",
                     "message": {
@@ -618,7 +625,7 @@ def send_reply_api2(request):
                         "media_file": media_url,
                         "sent_at": log.sent_at.isoformat(),
                         "message_type": "Sent",
-                        "message_id": log.message_id,  # Now has real ID!
+                        "message_id": log.message_id,
                         "status": log.status,
                         "sender_name": agent_name or "",
                     }
@@ -634,13 +641,8 @@ def send_reply_api2(request):
         })
 
     except Exception as e:
-        # print(f"Send reply error: {e}")
         traceback.print_exc()
         return JsonResponse({"error": str(e)}, status=500)
-
-
-
-
 
 
 # =============================================

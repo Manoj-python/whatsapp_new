@@ -35,10 +35,27 @@ def send_whatsapp_template4(to_number, template_name, parameters=None,
             ]
         }
     }
+    import json
+
+    print("========== WHATSAPP TEMPLATE REQUEST ==========")
+    print(json.dumps(payload, indent=4))
+
     resp = requests.post(url, headers=headers, json=payload, timeout=30)
+
+    print("========== META RESPONSE ==========")
+    print("Status Code:", resp.status_code)
+    print("Response:", resp.text)
+    resp = requests.post(url, headers=headers, json=payload, timeout=30)
+
+    print("====================================")
+    print("Mobile:", to_number)
+    print("Template:", template_name)
+    print("Status:", resp.status_code)
+    print("Response:", resp.text)
+    print("====================================")
+
     resp.raise_for_status()
     return resp.json()
-
 
 def send_whatsapp_text4(to_number, text, phone_number_id, access_token):
     """
@@ -56,6 +73,8 @@ def send_whatsapp_text4(to_number, text, phone_number_id, access_token):
         "text": {"body": text}
     }
     response = requests.post(url, headers=headers, json=payload)
+    print("Status Code:", response.status_code)
+    print("Response:", response.text)
     response.raise_for_status()
     return response.json()
 
@@ -201,3 +220,18 @@ def send_whatsapp_otp(to_phone, otp):
 
     response.raise_for_status()
     return response.json()
+
+
+import re
+
+def clean_whatsapp_text(text):
+    if not text:
+        return ""
+
+    text = str(text)
+    text = text.replace("\n", " ")
+    text = text.replace("\r", " ")
+    text = text.replace("\t", " ")
+    text = re.sub(r"\s{2,}", " ", text)
+
+    return text.strip()

@@ -639,6 +639,7 @@ def clear_button_clicked(mobile):
 # ----------------------------------------------
 # ----------------------------------------------
 
+
 @shared_task(queue="messaging2")
 def send_ticket_open_message(app_key, case_id):
     try:
@@ -669,11 +670,11 @@ def send_ticket_open_message(app_key, case_id):
         clear_button_clicked(mobile)
         return
 
-    customer_name = case.customer_name or "Customer"
+    customer_name = clean_whatsapp_text(case.customer_name or "Customer")
     case_id_str = case.case_id
     group_name = case.group.name if case.group else "General"
     created_at = timezone.localtime(case.created_at).strftime('%d-%m-%Y %I:%M %p')
-    description = case.issue_description or "Opened"
+    description = clean_whatsapp_text(case.issue_description or "Opened")
 
     template_params = [
         {"type": "text", "text": customer_name},
@@ -808,9 +809,9 @@ def send_ticket_close_message(app_key, case_id):
     if not mobile:
         return
 
-    customer_name = case.customer_name or "Customer"
+    customer_name = clean_whatsapp_text(case.customer_name or "Customer")
     case_id_str = case.case_id
-    summary = case.resolution_notes or "Resolved"
+    summary = clean_whatsapp_text(case.resolution_notes or "Resolved")
     closed_at = timezone.localtime(case.resolved_at or case.updated_at).strftime('%d-%m-%Y %I:%M %p')
 
     template_params = [
