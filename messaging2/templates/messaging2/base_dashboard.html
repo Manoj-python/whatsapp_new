@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -229,6 +230,14 @@
         // CSRF token setup for fetch
         const csrftoken = document.querySelector('[name=csrf-token]')?.content || '{{ csrf_token }}';
     </script>
+{% if user.is_authenticated %}
+    <script>
+        // Build the logout URL with the inactivity flag
+        const LOGOUT_URL = "{% url 'admin_logout' %}?inactivity=1";
+    </script>
+    
+    <script src="{% static 'js/session_timeout.js' %}"></script>
+{% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

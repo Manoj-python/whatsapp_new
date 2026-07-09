@@ -21,6 +21,7 @@ from django.db.models import F
 
 from .models import *
 from .utils import *
+from adminpanel.utils import clean_whatsapp_text
 
 logger = get_task_logger(__name__)
 logger.setLevel(logging.INFO)

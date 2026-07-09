@@ -327,9 +327,16 @@ def login_view(request):
     return render(request, 'adminpanel/login.html')
 
 
+# views.py
+from django.contrib.auth import logout
+from django.shortcuts import redirect
+from django.urls import reverse
+
 def logout_view(request):
     logout(request)
-    return redirect('admin_login')
+    # Redirect to your login page with a timeout flag
+    return redirect(reverse('admin_login') + '?timeout=1')
+
 from django.contrib.admin.views.decorators import staff_member_required
 
 @staff_member_required  # only admins/staff can toggle
@@ -1608,17 +1615,53 @@ def user_list(request):
         users_with_agents.append({'user': user, 'agent': user_agent})
     return render(request, 'adminpanel/user_list.html', {'users_with_agents': users_with_agents})
 
+import re
+
+def validate_password_strength(password):
+    """
+    Returns a list of error messages if password is invalid.
+    Returns an empty list if password meets all requirements.
+    """
+    errors = []
+    if len(password) < 6:
+        errors.append("Password must be at least 6 characters long.")
+    if not re.search(r'[A-Za-z]', password):
+        errors.append("Password must contain at least one letter.")
+    if not re.search(r'\d', password):
+        errors.append("Password must contain at least one digit.")
+    if not re.search(r'[^A-Za-z0-9]', password):
+        errors.append("Password must contain at least one special character (e.g., @, #, $).")
+    return errors
 
 @login_required
 def user_create(request):
     agent = get_agent_from_user(request.user)
-
     if agent.role != 'ADMIN':
         messages.error(request, "Access denied. Admin only.")
         return redirect('agent_dashboard')
 
     groups = SupportGroup.objects.all().order_by('name')
     subgroups = Subgroup.objects.all().order_by('name')
+
+    # Helper to build context from POST data (for re‑rendering)
+    def build_context(post):
+        return {
+            'role_choices': Agent.ROLE_CHOICES,
+            'groups': groups,
+            'subgroups': subgroups,
+            # Field values
+            'username': post.get('username', ''),
+            'email': post.get('email', ''),
+            'mobile': post.get('mobile', ''),
+            'name': post.get('name', ''),
+            'role': post.get('role', 'AGENT'),
+            'can_edit': post.get('can_edit') == 'on',
+            'can_resolve': post.get('can_resolve') == 'on',
+            'can_close': post.get('can_close') == 'on',
+            # Preserve selections
+            'selected_groups': post.getlist('groups'),
+            'selected_subgroups': post.getlist('subgroups'),
+        }
 
     if request.method == "POST":
         username = request.POST.get('username')
@@ -1627,40 +1670,38 @@ def user_create(request):
         role = request.POST.get('role', 'AGENT')
         mobile = request.POST.get('mobile', '')
         display_name = request.POST.get('name', '')
-
         selected_groups = request.POST.getlist('groups')
         selected_subgroups = request.POST.getlist('subgroups')
 
-        # ─── New permission flags ───────────────────────────────
-        can_edit = request.POST.get('can_edit') == 'on'
-        can_resolve = request.POST.get('can_resolve') == 'on'
-        can_close = request.POST.get('can_close') == 'on'
+        # ─── 1️⃣ PASSWORD VALIDATION ───────────────────────────────
+        password_errors = validate_password_strength(password)
+        if password_errors:
+            for err in password_errors:
+                messages.error(request, err)
+            return render(request, 'adminpanel/user_create.html', build_context(request.POST))
 
-        # --- Server-side validation for subgroups ---
+        # ─── 2️⃣ OTHER CHECKS ──────────────────────────────────────
+        # (username exists, subgroups validation, etc.)
+        if User.objects.filter(username=username).exists():
+            messages.error(request, "Username already exists")
+            return render(request, 'adminpanel/user_create.html', build_context(request.POST))
+
+        # Subgroup validation (unchanged)
         if selected_groups:
             allowed_subgroup_ids = Subgroup.objects.filter(
                 group__id__in=selected_groups
             ).values_list('id', flat=True)
-            
             selected_subgroup_ids = [int(sid) for sid in selected_subgroups if sid.isdigit()]
             invalid_subgroups = set(selected_subgroup_ids) - set(allowed_subgroup_ids)
-            
             if invalid_subgroups:
                 selected_subgroups = [str(sid) for sid in selected_subgroup_ids if sid in allowed_subgroup_ids]
-                messages.warning(request, "Some invalid subgroups were removed because they don't belong to any selected group.")
+                messages.warning(request, "Some invalid subgroups were removed.")
         else:
             if selected_subgroups:
                 messages.error(request, "You must select at least one group to assign subgroups.")
                 selected_subgroups = []
 
-        if User.objects.filter(username=username).exists():
-            messages.error(request, "Username already exists")
-            return render(request, 'adminpanel/user_create.html', {
-                'role_choices': Agent.ROLE_CHOICES,
-                'groups': groups,
-                'subgroups': subgroups,
-            })
-
+        # ─── 3️⃣ CREATE USER ──────────────────────────────────────
         with transaction.atomic():
             is_staff = role in ['ADMIN', 'MANAGER']
             user = User.objects.create_user(
@@ -1669,7 +1710,6 @@ def user_create(request):
                 email=email,
                 is_staff=is_staff,
             )
-
             agent_obj = Agent.objects.create(
                 user=user,
                 agent_id=f"AGT-{user.id}",
@@ -1677,22 +1717,23 @@ def user_create(request):
                 email=email,
                 mobile=mobile,
                 role=role,
-                can_edit=can_edit,
-                can_resolve=can_resolve,
-                can_close=can_close,
+                can_edit=request.POST.get('can_edit') == 'on',
+                can_resolve=request.POST.get('can_resolve') == 'on',
+                can_close=request.POST.get('can_close') == 'on',
             )
-
             agent_obj.groups.set(selected_groups)
             agent_obj.subgroup.set(selected_subgroups)
 
-            messages.success(request, f"User '{username}' created successfully")
-            return redirect('admin_user_list')
+        messages.success(request, f"User '{username}' created successfully")
+        return redirect('admin_user_list')
 
+    # GET – empty form
     return render(request, 'adminpanel/user_create.html', {
         'role_choices': Agent.ROLE_CHOICES,
         'groups': groups,
         'subgroups': subgroups,
     })
+
 
 @login_required
 def user_edit(request, user_id):
@@ -1744,8 +1785,22 @@ def user_edit(request, user_id):
         user.username = username
         user.email = email
         user.is_staff = role in ['ADMIN', 'MANAGER']
-        pwd = request.POST.get('password')
+        pwd = request.POST.get('password', '').strip()
+
+# Validate password only if a new password is entered
         if pwd:
+            password_errors = validate_password_strength(pwd)
+            if password_errors:
+                for error in password_errors:
+                    messages.error(request, error)
+
+                return render(request, 'adminpanel/user_edit.html', {
+                    'user': user,
+                    'user_agent': user_agent,
+                    'role_choices': Agent.ROLE_CHOICES,
+                    'groups': groups,
+                    'subgroups': subgroups,
+                })
             user.set_password(pwd)
         user.save()
 

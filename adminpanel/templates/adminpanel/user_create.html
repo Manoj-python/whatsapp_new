@@ -3,76 +3,109 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Create New User</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
     <form method="POST">
         {% csrf_token %}
+
         <div class="mb-3">
             <label>Username</label>
-            <input type="text" name="username" class="form-control" required>
+            <input type="text" name="username" class="form-control" required
+                   value="{{ username|default:'' }}">
         </div>
+
         <div class="mb-3">
             <label>Password</label>
             <input type="password" name="password" class="form-control" required>
+            <div class="form-text">Must be at least 6 characters, contain a letter, a digit, and a special character.</div>
         </div>
+
         <div class="mb-3">
             <label>Email</label>
-            <input type="email" name="email" class="form-control">
+            <input type="email" name="email" class="form-control"
+                   value="{{ email|default:'' }}">
         </div>
+
         <div class="mb-3">
             <label>Display Name</label>
-            <input type="text" name="name" class="form-control">
+            <input type="text" name="name" class="form-control"
+                   value="{{ name|default:'' }}">
         </div>
+
         <div class="mb-3">
             <label>Mobile</label>
-            <input type="text" name="mobile" class="form-control">
+            <input type="text" name="mobile" class="form-control"
+                   value="{{ mobile|default:'' }}">
         </div>
+
         <div class="mb-3">
             <label>Role</label>
             <select name="role" class="form-select">
                 {% for value, label in role_choices %}
-                    <option value="{{ value }}">{{ label }}</option>
+                    <option value="{{ value }}"
+                            {% if role == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
                 {% endfor %}
             </select>
         </div>
 
-        <!-- Groups (always visible) -->
+        <!-- Groups -->
         <div class="mb-3">
             <label>Groups (Departments)</label>
             <select name="groups" id="groupsSelect" multiple class="form-select" size="4">
                 {% for group in groups %}
-                    <option value="{{ group.id }}">{{ group.name }}</option>
+                    <option value="{{ group.id }}"
+                            {% if group.id|stringformat:"s" in selected_groups %}selected{% endif %}>
+                        {{ group.name }}
+                    </option>
                 {% endfor %}
             </select>
             <div class="form-text">Hold Ctrl/Cmd to select multiple</div>
         </div>
 
-        <!-- Subgroups (filtered by selected groups) -->
+        <!-- Subgroups -->
         <div class="mb-3">
             <label>Subgroups</label>
             <select name="subgroups" id="subgroupsSelect" multiple class="form-select" size="4">
                 {% for subgroup in subgroups %}
-                    <option value="{{ subgroup.id }}" data-parent-group="{{ subgroup.group.name }}">
+                    <option value="{{ subgroup.id }}"
+                            data-parent-group="{{ subgroup.group.name }}"
+                            {% if subgroup.id|stringformat:"s" in selected_subgroups %}selected{% endif %}>
                         {{ subgroup.name }} ({{ subgroup.group.name }})
                     </option>
                 {% endfor %}
             </select>
             <div class="form-text">Hold Ctrl/Cmd to select multiple. Only subgroups of selected groups will appear.</div>
         </div>
-        <!-- Permissions Section -->
-<div class="mb-3">
-    <label class="form-label"><i class="fas fa-lock"></i> Permissions</label>
-    <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="can_edit" id="canEdit">
-        <label class="form-check-label" for="canEdit">Can Edit Cases</label>
-    </div>
-    <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="can_resolve" id="canResolve">
-        <label class="form-check-label" for="canResolve">Can Resolve Cases</label>
-    </div>
-    <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="can_close" id="canClose">
-        <label class="form-check-label" for="canClose">Can Close Cases</label>
-    </div>
-</div>
+
+        <!-- Permissions -->
+        <div class="mb-3">
+            <label class="form-label"><i class="fas fa-lock"></i> Permissions</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="can_edit" id="canEdit"
+                       {% if can_edit %}checked{% endif %}>
+                <label class="form-check-label" for="canEdit">Can Edit Cases</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="can_resolve" id="canResolve"
+                       {% if can_resolve %}checked{% endif %}>
+                <label class="form-check-label" for="canResolve">Can Resolve Cases</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="can_close" id="canClose"
+                       {% if can_close %}checked{% endif %}>
+                <label class="form-check-label" for="canClose">Can Close Cases</label>
+            </div>
+        </div>
 
         <button type="submit" class="btn btn-primary">Create</button>
         <a href="{% url 'admin_user_list' %}" class="btn btn-secondary">Cancel</a>

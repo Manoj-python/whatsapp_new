@@ -24,7 +24,9 @@ ALLOWED_HOSTS = [
     ".ap-south-1.compute.amazonaws.com",
 ]
 ADMIN_USER= os.getenv("ADMIN_USER")
-
+# Session expires after 30 minutes of no requests
+SESSION_COOKIE_AGE = 30 * 60          # 30 minutes in seconds
+SESSION_SAVE_EVERY_REQUEST = True     # Resets the expiry time on every request
 
 # -------------------------------------------------------
 # INSTALLED APPS
