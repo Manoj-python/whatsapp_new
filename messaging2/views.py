@@ -451,7 +451,7 @@ def send_reply_api2(request):
             file_name = media_file.name.lower()
 
             # Voice messages max 16MB
-            if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm')):
+            if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm', '.mpeg', '.mpga', '.aac')):
                 max_size = 16
             elif file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
                 max_size = 5
@@ -485,7 +485,7 @@ def send_reply_api2(request):
             status="Sending",
             message_id=temp_id,
             message_type="Sent",
-            content_type="audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm'))) else "text",
+            content_type="audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3','.mpeg', '.wav', '.ogg', '.m4a', '.webm'))) else "text",
         )
         clear_chat_cache2(mobile)
 
@@ -493,7 +493,7 @@ def send_reply_api2(request):
         # STEP 2: SEND TO WHATSAPP
         # =============================================
         msg_id = ""
-        content_type_val = "audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm'))) else "text"
+        content_type_val = "audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.wav','.mpeg', '.ogg', '.m4a', '.webm'))) else "text"
         media_url = ""
         saved_path = None
 
@@ -503,7 +503,7 @@ def send_reply_api2(request):
                 original_filename = media_file.name
                 
                 # Determine media type
-                if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm')):
+                if file_name.endswith(('.mp3', '.wav', '.ogg','.mpeg', '.m4a', '.webm')):
                     whatsapp_media_type = "audio"
                     content_type_val = "audio"
                 elif file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
@@ -3203,7 +3203,7 @@ def send_payment_template_view(request):
     broadcast_mobile = current_chat if current_chat else mobile_to_send
     broadcast_mobile_db = broadcast_mobile.strip()   # preserve +91 if present
 
-    logger.info(f"📞 Sending to: {mobile_to_send} | Link from: {link_generation_mobile} | Broadcast to: {broadcast_mobile_db}")
+    # logger.info(f"📞 Sending to: {mobile_to_send} | Link from: {link_generation_mobile} | Broadcast to: {broadcast_mobile_db}")
 
     try:
         from adminpanel.views import APP_CONFIG
@@ -3219,7 +3219,9 @@ def send_payment_template_view(request):
 
         # ✅ Generate payment link using the original chat number
         payment_url = generate_payment_link(app_key, link_mobile_api, amount)
-        logger.info(f"✅ Payment link: {payment_url}")
+        details = get_payment_details(app_key, link_mobile_api)
+        customer_name = details['customer_name']
+        # logger.info(f"✅ Payment link: {payment_url}")
 
         # Fetch and render template
         if get_template_text and render_template_text:
@@ -3227,8 +3229,10 @@ def send_payment_template_view(request):
             logger.info(f"📄 Template body from Meta: {template_body}")
             if template_body:
                 parameters = [
-                    {"type": "text", "text": payment_url},
-                    {"type": "text", "text": str(amount)}
+                    {"type": "text", "text": customer_name},
+                    {"type": "text", "text": str(amount)},
+                    {"type": "text", "text": payment_url}
+                    
                 ]
                 rendered_message = render_template_text(template_body, parameters)
                 # Append a note about the target number
@@ -3238,8 +3242,9 @@ def send_payment_template_view(request):
         else:
             rendered_message = f"Dear Customer, Click on {payment_url} to make payment of INR {amount} Regards 7799795111.-padmasai holdings private limited\n\n(Link sent to {mobile_to_send})"
 
+        
         # Send template to the edited number
-        result = send_whatsapp_payment_template(app_key, mobile_for_api, amount, payment_url)
+        result = send_whatsapp_payment_template(app_key, mobile_for_api,customer_name, amount, payment_url)
         logger.info(f"📨 WhatsApp response: {result}")
 
         # Save log under the broadcast mobile (the chat we are viewing)

@@ -1061,55 +1061,66 @@ def send_second_message_for_mobile2(all_rows, mobile):
 # ================================== Payment auto generate======================================================
 # ========== PAYMENT GATEWAY CONFIGURATION ==========
 # ========== PAYMENT CONFIGURATION ==========
+
 PAYMENT_CONFIG = {
     'psf': {
         'app_name': 'Padma Sai Holdings Private Limited',
-        'smsquare': {
-            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb",
-            'base_url': "https://uat-apiv2-smsquare.allcloud.app/api",
-            'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
-            'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
-            'get_qr': "/paymentgateway/GetQRCode",
+        'lcc_api': {
+            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e",
+            'base_url': "https://prod-api-padmasai.allcloud.app/api",
+           'endpoint':'/voicecall/GetLccDetailsByAgreementNo'
+        },
+        'qr_api': {
+            'base_url': 'https://prod-apiv2-padmasai.allcloud.app/api',
+            'endpoint': '/paymentgateway/GetQRCode',
+            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e',   # as per your new example
         },
         'whatsapp': {
             'phone_number_id': settings.WHATSAPP2_PHONE_NUMBER_ID,
             'access_token': settings.WHATSAPP2_ACCESS_TOKEN,
             'api_version': "v22.0",
         },
-        'template_name': 'payment_gateway',
+        'template_name': 'pay_now_link',
     },
-    'sms': {
+    'sms': {   # or whatever app_key you use, e.g. 'psf'
         'app_name': 'SM SQUARE CREDIT SERVICES PRIVATE LIMITED',
-        'smsquare': {
-            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:H9LLQ6iq811dT/DTrCsi6JX+jrazDif0hOmd8ZbDGZA=:mvBBtj6rsxIljCJglNpFOFFDW7Tjg8dj:19302908:38cbfcbd-c82e-48fe-ac81-090295f8bdeb",
-            'base_url': "https://uat-apiv2-smsquare.allcloud.app/api",
-            'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
-            'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
-            'get_qr': "/paymentgateway/GetQRCode",
+        # ----- LCC API (to fetch loan details) -----
+        'lcc_api': {
+            'base_url': 'https://prod-api-smsquare.allcloud.app/api',
+            'endpoint': '/VoiceCall/GetLccDetailsByAgreementNo',
+            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb',
         },
+        # ----- QR Code API (to generate payment link) -----
+        'qr_api': {
+            'base_url': 'https://prod-api-smsquare.allcloud.app/api',
+            'endpoint': '/paymentgateway/GetQRCode',
+            'auth_token': '584',   # as per your new example
+        },
+        # ----- WhatsApp config (unchanged) -----
         'whatsapp': {
             'phone_number_id': settings.WHATSAPP_PHONE_NUMBER_ID,
             'access_token': settings.WHATSAPP_ACCESS_TOKEN,
-            'api_version': "v22.0",
+            'api_version': 'v22.0',
         },
-        'template_name': 'payment_gateway',
+        'template_name': 'pay_now_link',
     },
-    'spl': {
-        'app_name': 'Padma Sai Holdings Private Limited',
-        'smsquare': {
-            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:6S2KpETjIY/f8EIwql/xMh3s9ks9lWOUvQexCQEcEAs=:rdICQaUzp091Y1DTEFAw5o4Qjo8wxB4u:19301462:38cbfcbd-c82e-48fe-ac81-090295f8bdeb",
-            'base_url': "https://uat-apiv2-smsquare.allcloud.app/api",
-            'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
-            'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
-            'get_qr': "/paymentgateway/GetQRCode",
-        },
-        'whatsapp': {
-            'phone_number_id': "your_spl_phone_id",
-            'access_token': "your_spl_access_token",
-            'api_version': "v18.0",
-        },
-        'template_name': 'payment_gateway',
-    },
+
+    # 'spl': {
+    #     'app_name': 'Padma Sai Holdings Private Limited',
+    #     'smsquare': {
+    #         'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:6S2KpETjIY/f8EIwql/xMh3s9ks9lWOUvQexCQEcEAs=:rdICQaUzp091Y1DTEFAw5o4Qjo8wxB4u:19301462:38cbfcbd-c82e-48fe-ac81-090295f8bdeb",
+    #         'base_url': "https://uat-apiv2-smsquare.allcloud.app/api",
+    #         'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
+    #         'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
+    #         'get_qr': "/paymentgateway/GetQRCode",
+    #     },
+    #     'whatsapp': {
+    #         'phone_number_id': "your_spl_phone_id",
+    #         'access_token': "your_spl_access_token",
+    #         'api_version': "v18.0",
+    #     },
+    #     'template_name': 'payment_gateway',
+    # },
 }
 
 # messaging2/utils.py
@@ -1124,6 +1135,26 @@ def get_payment_config(app_key):
     if not config:
         raise ValueError(f"Invalid app key: {app_key}")
     return config
+
+from financehub.models import Lcc   # adjust import to your actual model
+
+def get_agreement_no_from_mobile(mobile):
+    mobile_clean = ''.join(filter(str.isdigit, mobile))
+    if len(mobile_clean) > 10:
+        mobile_clean = mobile_clean[-10:]
+    
+    # Try exact match
+    lccs = Lcc.objects.filter(cust_mobile=mobile_clean)
+    if lccs.exists():
+        # If multiple, pick the first (maybe order by loan_date descending?)
+        return lccs.first().loan_number
+    
+    # Fallback: endswith (for numbers with country code)
+    lccs = Lcc.objects.filter(cust_mobile__endswith=mobile_clean)
+    if lccs.exists():
+        return lccs.first().loan_number
+    
+    raise ValueError("No loan found for this mobile number")
 
 def call_smsquare_api(app_key, endpoint, method='GET', params=None, payload=None):
     config = get_payment_config(app_key)
@@ -1147,46 +1178,64 @@ def call_smsquare_api(app_key, endpoint, method='GET', params=None, payload=None
         logger.error(f"SMSquare API error for {app_key}: {e}")
         raise
 
+import logging
+logger = logging.getLogger(__name__)
+
+import json
+
 def get_payment_details(app_key, mobile):
     config = get_payment_config(app_key)
-    sms_config = config['smsquare']
+    lcc_api = config['lcc_api']
 
-    # 1. Get loans
-    params = {"ContactNumber": mobile}
-    loans_data = call_smsquare_api(app_key, sms_config['get_loan_by_mobile'], method='GET', params=params)
-    if not loans_data:
-        raise ValueError("No loans found for this mobile")
+    agreement_no = get_agreement_no_from_mobile(mobile)
+    # logger.info(f"🔢 Agreement No for {mobile}: {agreement_no}")
 
-    first_loan = loans_data[0]
-    finance_id = first_loan.get('FinanceId')
-    agreement_no = first_loan.get('AgreementNo')
-    customer_name = first_loan.get('BorrowerName', 'Customer')
+    url = lcc_api['base_url'] + lcc_api['endpoint']
+    headers = {
+        "Authorization": lcc_api['auth_token'],
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    payload = {"AgreementNo": agreement_no, "FinanceId": 0}
+
+    # logger.info(f"🔍 Calling LCC API: {url}")
+    # logger.info(f"📦 Payload: {payload}")
+
+    response = requests.post(url, json=payload, headers=headers, timeout=10)
+    response.raise_for_status()
+
+    # ✅ Handle double-encoded JSON
+    data = response.json()
+    if isinstance(data, str):
+        data = json.loads(data)
+
+    finance_id = data.get('FinanceId')
     if not finance_id:
-        raise ValueError("FinanceId not found")
+        raise ValueError("FinanceId not found in LCC response")
 
-    # 2. Get repayment details
-    repayment_params = {"FinanceId": finance_id}
-    repayment_data = call_smsquare_api(app_key, sms_config['get_repayment'], method='GET', params=repayment_params)
+    customer_name = data.get('CustomerName', 'Customer')
+    vehicle_no = data.get('RegistrationNo', '')
+    due_amount = float(data.get('TotalDues', 0.0) or 0.0)
+    lpi_due = float(data.get('LPCDue', 0.0) or 0.0)
+    vas_due = float(data.get('VasDueAmount', 0.0) or 0.0)
 
-    balance_amount = float(repayment_data.get('BalanceAmount', 0.0) or 0.0)
-    lpi_due = float(repayment_data.get('LPIDue', 0.0) or 0.0)
-    vas_due = float(repayment_data.get('VasDue', 0.0) or 0.0)
-    collection_charges = float(repayment_data.get('CollectionCharges', 0.0) or 0.0)
+    # CollectionCharges is not provided by this API – set to 0
+    collection_charges = 0.0
 
     return {
         'customer_name': customer_name,
         'loan_number': agreement_no,
-        'vehicle_no': first_loan.get('VehicleNo', ''),
-        'due_amount': balance_amount,
+        'vehicle_no': vehicle_no,
+        'due_amount': due_amount,
         'finance_id': finance_id,
         'lpi_due': lpi_due,
         'vas_due': vas_due,
         'collection_charges': collection_charges,
     }
 
+
 def generate_payment_link(app_key, mobile, amount):
     config = get_payment_config(app_key)
-    sms_config = config['smsquare']
 
     details = get_payment_details(app_key, mobile)
     finance_id = details['finance_id']
@@ -1194,70 +1243,130 @@ def generate_payment_link(app_key, mobile, amount):
     vas_due = details['vas_due']
     collection_charges = details['collection_charges']
 
-    due_amount = float(amount)
-    total_amount = due_amount + collection_charges + lpi_due + vas_due
+    # amount = the total amount the user entered (includes all components)
+    total_amount = float(amount)
 
+    # Compute base due (excluding penalties and vas)
+    base_due = total_amount - lpi_due - vas_due - collection_charges
+    if base_due < 0:
+        # User entered less than penalties – you may want to raise an error
+        raise ValueError(f"Amount must be at least {lpi_due + vas_due + collection_charges}")
+
+    # Build QR payload matching the working Postman example
     qr_payload = {
         "FinanceId": finance_id,
-        "DueAmount": due_amount,
-        "CollectionCharges": collection_charges,
-        "LPIAmount": lpi_due,
-        "ShowQR": True,
+        "DueAmount": round(base_due, 2),           # base EMI (without LPI)
+        "CollectionCharges": round(collection_charges, 2),
+        "LPIAmount": round(lpi_due, 2),
+        "ShowQR": False,
         "SMSLink": False,
         "HandLoan": 0,
-        "VasDue": vas_due,
-        "IsAdvanceReceipt": "true",
-        "CollectionType": 5,
-        "TotalAmount": total_amount
+        "VasDue": round(vas_due, 2),
+        "IsAdvanceReceipt": True,                  # boolean, not string
+        "CollectionType": 0,
+        "TotalAmount": round(total_amount, 2)      # final total the customer pays
     }
-    qr_response = call_smsquare_api(app_key, sms_config['get_qr'], method='POST', payload=qr_payload)
+
+    qr_api = config['qr_api']
+    url = qr_api['base_url'] + qr_api['endpoint']
+    headers = {
+        "Authorization": qr_api['auth_token'],
+        "Content-Type": "application/json"
+    }
+
+    # logger.info(f"🔍 Calling QR API: {url}")
+    # logger.info(f"📦 QR Payload: {qr_payload}")
+
+    # Increase timeout to 30 seconds
+    response = requests.post(url, json=qr_payload, headers=headers, timeout=30)
+    response.raise_for_status()
+    qr_response = response.json()
+
     payment_url = qr_response.get('URL')
     if not payment_url:
         raise ValueError("Payment URL not generated")
     return payment_url
 
-def send_whatsapp_payment_template(app_key, to, amount, payment_url):
+def send_whatsapp_payment_template(app_key, to, customer_name, amount, payment_url):
     config = get_payment_config(app_key)
     wa_config = config['whatsapp']
-    logger.info(f"📞 Sending payment template for {app_key}")
-    logger.info(f"📱 Phone ID: {wa_config['phone_number_id']}")
-    logger.info(f"🔑 Token (first 20 chars): {wa_config['access_token'][:20]}...")
-    logger.info(f"Using token: {wa_config['access_token'][:20]}...")
-    wa_config = config['whatsapp']
-    print(wa_config,"88888")
-    template_name = config.get('template_name', 'payment_gateway')
+
+    template_name = config.get("template_name", "pay_now_link")
 
     url = f"https://graph.facebook.com/{wa_config['api_version']}/{wa_config['phone_number_id']}/messages"
+
     headers = {
         "Authorization": f"Bearer {wa_config['access_token']}",
         "Content-Type": "application/json"
     }
+
+    # Extract only the dynamic part from the URL
+    # Example:
+    # https://alcd.in/XscHQI
+    # becomes
+    # XscHQI
+
+    short_code = payment_url.rstrip("/").split("/")[-1]
+
     payload = {
         "messaging_product": "whatsapp",
         "to": to,
         "type": "template",
         "template": {
             "name": template_name,
-            "language": {"code": "en"},
+            "language": {
+                "code": "en"
+            },
             "components": [
                 {
                     "type": "body",
                     "parameters": [
-                        {"type": "text", "text": payment_url},
-                        {"type": "text", "text": str(amount)}
+                        {
+                            "type": "text",
+                            "text": customer_name
+                        },
+                        {
+                            "type": "text",
+                            "text": str(amount)
+                        }
+                    ]
+                },
+                {
+                    "type": "button",
+                    "sub_type": "url",
+                    "index": "0",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": short_code
+                        }
                     ]
                 }
             ]
         }
     }
+
+    # logger.info("WhatsApp Payload:")
+    # logger.info(payload)
+
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        if response.status_code != 200:
-            logger.error(f"WhatsApp API error: {response.status_code} - {response.text}")
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=15
+        )
+
+        logger.info(response.text)
+
         response.raise_for_status()
         return response.json()
+
     except requests.exceptions.RequestException as e:
         logger.error(f"WhatsApp request failed: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            logger.error(e.response.text)  # 👈 this will show the detailed error
+
+        if getattr(e, "response", None):
+            pass
+            # logger.error(e.response.text)
+
         raise

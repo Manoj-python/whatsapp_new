@@ -2406,7 +2406,7 @@ function appendMessage(msg){ const exists=messages.some(m=>{ if(m.id&&msg.id&&m.
 // Helper: get 'app' from URL (matches existing pattern)
 function getAppFromURL() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('app') || 'psf';   // fallback to 'psf' if not present
+    return params.get('app') || 'sms';   // fallback to 'psf' if not present
 }
 const APP_KEY = getAppFromURL();
 console.log('💰 Current app for payment:', APP_KEY);

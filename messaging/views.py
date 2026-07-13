@@ -470,7 +470,7 @@ def send_reply_api(request):
             file_name = media_file.name.lower()
 
             # Voice messages max 16MB
-            if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm')):
+            if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm', '.mpeg', '.mpga', '.aac')):
                 max_size = 16
             elif file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
                 max_size = 5
@@ -504,7 +504,7 @@ def send_reply_api(request):
             status="Sending",
             message_id=temp_id,
             message_type="Sent",
-            content_type="audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm'))) else "text",
+            content_type="audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3','.mpeg', '.wav', '.ogg', '.m4a', '.webm'))) else "text",
         )
         clear_chat_cache(mobile)
 
@@ -512,7 +512,7 @@ def send_reply_api(request):
         # STEP 2: SEND TO WHATSAPP
         # =============================================
         msg_id = ""
-        content_type_val = "audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm'))) else "text"
+        content_type_val = "audio" if is_voice or (media_file and media_file.name.lower().endswith(('.mp3', '.mpeg','.wav', '.ogg', '.m4a', '.webm'))) else "text"
         media_url = ""
         saved_path = None
 
@@ -522,7 +522,7 @@ def send_reply_api(request):
                 original_filename = media_file.name
                 
                 # Determine media type
-                if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm')):
+                if file_name.endswith(('.mp3', '.wav', '.ogg', '.m4a', '.webm','.mpeg')):
                     whatsapp_media_type = "audio"
                     content_type_val = "audio"
                 elif file_name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):

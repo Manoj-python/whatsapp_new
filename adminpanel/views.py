@@ -76,7 +76,7 @@ APP_CONFIG = {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
             'welcome':'welcome_message',
-            'payment':'payment_gateway'
+            'payment':'pay_now_link'
         },
         'whatsapp': {
             'phone_number_id': settings.WHATSAPP_PHONE_NUMBER_ID,   # Use PSF's
