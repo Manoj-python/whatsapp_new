@@ -1822,6 +1822,230 @@ from django.contrib import messages
 from messaging2.models import Agent, SupportGroup, Subgroup, Category
 from .models import Case as CaseModel  # adjust import if you use a dynamic get_case_model_for_app
 
+import openpyxl
+from openpyxl.styles import Font, Alignment
+from django.http import HttpResponse
+from django.db.models import Q
+from django.utils import timezone
+from datetime import datetime
+
+import openpyxl
+from openpyxl.styles import Font, Alignment
+from django.http import HttpResponse
+from django.db.models import Q
+from django.utils import timezone
+from datetime import datetime, date
+from decimal import Decimal
+
+def export_manager_cases(request):
+    """
+    Export all case types (pending, resolved, escalated, closed) in one Excel file,
+    each on a separate sheet. Respects department/subgroup/category filters.
+    """
+    # ─── User & permissions ──────────────────────────────────────────
+    try:
+        agent = request.user.agent_profile
+    except AttributeError:
+        return HttpResponse("Agent not found", status=403)
+
+    if agent.role != 'MANAGER':
+        return HttpResponse("Unauthorized", status=403)
+
+    CaseModel = get_case_model_for_app(request)
+    manager_groups = agent.groups.all()
+    manager_subgroups = agent.subgroup.all()
+
+    # ─── Permission filter ──────────────────────────────────────────
+    case_filter = Q()
+    for group in manager_groups:
+        group_subgroups = manager_subgroups.filter(group=group)
+        if group_subgroups.exists():
+            case_filter |= Q(group=group, subgroup__in=group_subgroups)
+        else:
+            case_filter |= Q(group=group)
+    case_filter |= Q(subgroup__in=manager_subgroups)
+
+    if not case_filter:
+        return HttpResponse("No permissions", status=403)
+
+    # ─── Filters from request ──────────────────────────────────────
+    category_id = request.GET.get('category')
+    subgroup_id = request.GET.get('subgroup')
+    dept_name = request.GET.get('dept')
+
+    # ✅ Only apply filters if they have a real value (not 'all' or empty)
+    if category_id and category_id != 'all':
+        case_filter &= Q(category_id=category_id)
+    if subgroup_id and subgroup_id != 'all':
+        case_filter &= Q(subgroup_id=subgroup_id)
+    if dept_name and dept_name != 'all':
+        case_filter &= Q(group__name=dept_name)
+
+    # ─── Base queryset ──────────────────────────────────────────────
+    base_qs = CaseModel.objects.filter(case_filter).select_related('group', 'subgroup', 'category')
+
+    # ─── Helper to safely get attribute ────────────────────────────
+    def safe_getattr(obj, path, default=''):
+        parts = path.split('__')
+        value = obj
+        for part in parts:
+            value = getattr(value, part, None)
+            if value is None:
+                return default
+        return value if value is not None else default
+
+    # ─── Helper to convert any value to a string for Excel ────────
+    def to_excel_value(value):
+        if value is None:
+            return ''
+        if isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (datetime, timezone.datetime, date)):
+            return value.strftime('%Y-%m-%d %H:%M') if isinstance(value, (datetime, timezone.datetime)) else value.strftime('%Y-%m-%d')
+        if isinstance(value, Decimal):
+            return float(value)
+        return str(value)  # catch‑all: model objects, lists, etc.
+
+    # ─── Define each tab's queryset and columns ────────────────────
+    tabs = {
+        'pending': {
+            'qs': base_qs.filter(
+                current_level='ESC3',
+                status__in=['Open', 'In Progress', 'Reopened']
+            ).exclude(status='Closed').order_by('-priority', '-created_at'),
+            'columns': [
+                ('Case ID', 'id'),
+                ('Loan No', 'loan_number'),
+                ('Vehicle No', 'vehicle_number'),
+                ('Customer', 'customer_name'),
+                ('Mobile', 'mobile'),
+                ('Department', 'group__name'),
+                ('Subgroup', 'subgroup__name'),
+                ('Category', 'category__name'),
+                ('Description', 'issue_description'),
+                ('Status', 'status'),
+                ('Created At', 'created_at'),
+            ]
+        },
+        'resolved': {
+            'qs': base_qs.filter(
+                resolved_at_level='ESC3',
+                status='Resolved'
+            ).order_by('-resolved_at'),
+            'columns': [
+                ('Case ID', 'id'),
+                ('Customer', 'customer_name'),
+                ('Loan No', 'loan_number'),
+                ('Vehicle No', 'vehicle_number'),
+                ('Department', 'group__name'),
+                ('Subgroup', 'subgroup__name'),
+                ('Category', 'category__name'),
+                ('Resolved By', 'resolved_by'),
+                ('Resolved At', 'resolved_at'),
+            ]
+        },
+        'escalated': {
+            'qs': base_qs.filter(
+                previous_level='ESC3'
+            ).order_by('-updated_at'),
+            'columns': [
+                ('Case ID', 'id'),
+                ('Customer', 'customer_name'),
+                ('Loan No', 'loan_number'),
+                ('Vehicle No', 'vehicle_number'),
+                ('Department', 'group__name'),
+                ('Subgroup', 'subgroup__name'),
+                ('Category', 'category__name'),
+                ('Current Level', 'current_level'),
+            ]
+        },
+        'closed': {
+            'qs': base_qs.filter(
+                status='Closed',
+                resolved_at_level='ESC3'
+            ).order_by('-closed_at'),
+            'columns': [
+                ('Case ID', 'id'),
+                ('Customer', 'customer_name'),
+                ('Mobile', 'mobile'),
+                ('Loan No', 'loan_number'),
+                ('Vehicle No', 'vehicle_number'),
+                ('Department', 'group__name'),
+                ('Subgroup', 'subgroup__name'),
+                ('Category', 'category__name'),
+                ('Closed At', 'closed_at'),
+            ]
+        }
+    }
+
+    # If escalation logs exist, add those columns to the escalated sheet
+    if hasattr(CaseModel, 'escalation_logs'):
+        tabs['escalated']['columns'].append(('Escalated By', 'escalated_by'))
+        tabs['escalated']['columns'].append(('Escalated At', 'escalated_at'))
+        tabs['escalated']['qs'] = tabs['escalated']['qs'].prefetch_related('escalation_logs')
+
+    # ─── Create workbook ────────────────────────────────────────────
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    header_font = Font(bold=True)
+
+    for tab_name, tab_data in tabs.items():
+        qs = tab_data['qs']
+        columns = tab_data['columns']
+        if not qs.exists():
+            continue
+
+        ws = wb.create_sheet(title=tab_name.capitalize())
+
+        # Write headers
+        for col_idx, (col_name, _) in enumerate(columns, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+
+        # Write data rows
+        for row_idx, case in enumerate(qs, start=2):
+            for col_idx, (_, field_path) in enumerate(columns, start=1):
+                value = ''
+                if tab_name == 'escalated' and field_path in ('escalated_by', 'escalated_at'):
+                    if hasattr(case, 'escalation_logs'):
+                        last_log = case.escalation_logs.first() if case.escalation_logs.exists() else None
+                        if last_log:
+                            if field_path == 'escalated_by':
+                                value = getattr(last_log, 'escalated_by', '')
+                            elif field_path == 'escalated_at':
+                                value = getattr(last_log, 'created_at', '')
+                else:
+                    value = safe_getattr(case, field_path, '')
+
+                excel_value = to_excel_value(value)
+                ws.cell(row=row_idx, column=col_idx, value=excel_value)
+
+        # Auto-size columns
+        for col in ws.columns:
+            max_length = 0
+            col_letter = col[0].column_letter
+            for cell in col:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = min(max_length + 2, 40)
+
+    if not wb.sheetnames:
+        return HttpResponse("No data to export", status=404)
+
+    # ─── Return response ────────────────────────────────────────────
+    filename = f"manager_all_cases_{timezone.now().date()}.xlsx"
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
 def manager_dashboard2(request):
     # Use the correct Agent model from messaging2 (matching login)
     try:

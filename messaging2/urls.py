@@ -72,8 +72,8 @@ path('export-group-cases/', views.export_group_cases_excel, name='export_group_c
      path('api/fetch-padmasai/', views.fetch_padmasai_details, name='fetch_padmasai'),
      path('executive/export/', views.export_executive_cases, name='export_executive_cases'),
       path('api/payment-details/', views.get_payment_details_view, name='payment_details'),
-    path('api/send-payment-template/', views.send_payment_template_view, name='send_payment_template'),
-
+     path('api/send-payment-template/', views.send_payment_template_view, name='send_payment_template'),
+     path('export-manager-cases/', views.export_manager_cases, name='export_manager_cases'),
      # -----------------------------
     # Real-time Chat Features (App2)
     # -----------------------------

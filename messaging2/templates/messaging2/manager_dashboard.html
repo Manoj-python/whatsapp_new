@@ -45,39 +45,46 @@
     </div>
 
     <!-- ===== FILTER BAR ===== -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <form method="get" class="row g-3">
-                <input type="hidden" name="app" value="{{ current_app }}">
-                <div class="col-md-3">
-                    <label class="form-label">Category</label>
-                    <select name="category" class="form-select">
-                        <option value="">All Categories</option>
-                        {% for cat in all_categories %}
-                            <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
-                                {{ cat.name }} ({{ cat.group.name }})
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Subgroup</label>
-                    <select name="subgroup" class="form-select">
-                        <option value="">All Subgroups</option>
-                        {% for sg in all_subgroups %}
-                            <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
-                                {{ sg.name }} ({{ sg.group.name }})
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <input type="hidden" name="app" value="{{ current_app }}">
+            <div class="col-md-3">
+                <label class="form-label">Category</label>
+                <select name="category" class="form-select">
+                    <option value="">All Categories</option>
+                    {% for cat in all_categories %}
+                        <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
+                            {{ cat.name }} ({{ cat.group.name }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Subgroup</label>
+                <select name="subgroup" class="form-select">
+                    <option value="">All Subgroups</option>
+                    {% for sg in all_subgroups %}
+                        <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
+                            {{ sg.name }} ({{ sg.group.name }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end justify-content-between">
+                <div>
                     <button type="submit" class="btn btn-primary">Apply Filters</button>
                     <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
                 </div>
-            </form>
-        </div>
+                <button type="button" class="btn btn-success" onclick="exportAllCases()">
+                    <i class="fas fa-file-excel"></i> Export All
+                </button>
+            </div>
+        </form>
     </div>
+</div>
+
 
     <!-- Department Cards -->
     <div class="row mb-4" id="deptCards">
@@ -455,6 +462,8 @@
         tbody.innerHTML = html;
     }
 
+
+
     // ─── Filter dropdown handlers ──────────────────────────────────
     function applySubgroupFilter() {
         const subgroup = document.getElementById('subgroupFilter').value;
@@ -473,6 +482,14 @@
         document.getElementById('categoryFilter').value = 'all';
         loadPendingCases('all', 'all', 'all');
     }
+
+    function exportAllCases() {
+    const dept = currentDepartment || 'all';
+    const subgroup = currentSubgroup || 'all';
+    const category = currentCategory || 'all';
+    const url = `/messaging2/export-manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(dept)}&subgroup=${encodeURIComponent(subgroup)}&category=${encodeURIComponent(category)}`;
+    window.location.href = url;
+}
 
     // ─── Assign Case ────────────────────────────────────────────────────
     function showAssignModal(caseId) {
