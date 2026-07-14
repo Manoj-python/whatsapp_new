@@ -36,6 +36,7 @@ path('manage-categories/', views.manage_categories, name='manage_categories'),
     path('users/edit/<int:user_id>/', views.user_edit, name='admin_user_edit'),
     path('users/delete/<int:user_id>/', views.user_delete, name='admin_user_delete'),
     path('users/toggle-login/<int:user_id>/', views.toggle_can_login, name='toggle_can_login'),
+        path('users/<int:user_id>/cases-excel/', views.download_user_cases_excel, name='download_user_cases_excel'),
 
     # ============================================
     # FAILED MESSAGES – unified with app in path

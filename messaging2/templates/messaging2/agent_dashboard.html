@@ -37,7 +37,6 @@
                 </div>
             </div>
         </div>
-        
     </div>
 
     <!-- Today’s Activity -->
@@ -58,7 +57,6 @@
                 </div>
             </div>
         </div>
-       
     </div>
 
     <!-- Case Tabs with Export Buttons -->
@@ -78,10 +76,9 @@
                     </button>
                     <ul class="dropdown-menu" id="groupExportDropdown">
                         <li><a class="dropdown-item" href="#" onclick="exportGroupCases('all')">All Departments</a></li>
-
-                     {% for group in all_groups %}
-        <li><a class="dropdown-item" href="#" onclick="exportGroupCases('{{ group.id }}')">{{ group.name }}</a></li>
-        {% endfor %}
+                        {% for group in all_groups %}
+                        <li><a class="dropdown-item" href="#" onclick="exportGroupCases('{{ group.id }}')">{{ group.name }}</a></li>
+                        {% endfor %}
                     </ul>
                 </div>
             </div>
@@ -90,6 +87,8 @@
             <ul class="nav nav-tabs mb-3" id="agentCaseTabs">
                 <li class="nav-item"><a class="nav-link active" data-tab="assigned" onclick="loadCaseTab('assigned')">My Assigned Cases</a></li>
                 <li class="nav-item"><a class="nav-link" data-tab="today_created" onclick="loadCaseTab('today_created')">Today’s Created Cases</a></li>
+                <!-- NEW TAB -->
+                <li class="nav-item"><a class="nav-link" data-tab="esc1" onclick="loadCaseTab('esc1')">All ESC1 Cases</a></li>
             </ul>
             <div id="casesContainer">
                 <!-- initial load: assigned cases -->
@@ -110,21 +109,22 @@
                         <tbody>
                             {% for case in assigned_cases %}
                             <tr>
-                                <td>{{ case.loan_number|default:"-" }}</small></td>
-                                <td>{{ case.vehicle_number|default:"-" }}</small></td>
-                                <td>{{ case.customer_name|default:case.mobile }}</small></td>
-                                <td>{{ case.mobile }}</small></td>
-                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></small></td>
-                                <td><span class="badge bg-secondary">{{ case.subgroup.name|default:"-" }}</span></small></td>
-
-                                <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></small></td>
-                                <td>{{ case.created_at|date:"d/m/Y H:i" }}</small></td>
+                                <td>{{ case.loan_number|default:"-" }}</td>
+                                <td>{{ case.vehicle_number|default:"-" }}</td>
+                                <td>{{ case.customer_name|default:case.mobile }}</td>
+                                <td>{{ case.mobile }}</td>
+                                <td><span class="badge bg-secondary">{{ case.group.name|default:"-" }}</span></td>
+                                <td><span class="badge bg-{% if case.status == 'Open' %}primary{% else %}warning{% endif %}">{{ case.status }}</span></td>
+                                <td>{{ case.created_at|date:"d/m/Y H:i" }}</td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" onclick="viewCase('{{ case.case_id }}')"><i class="fas fa-eye"></i></button>
-                                </small></td>
+                                    {% if can_resolve and case.status != 'Closed' and case.status != 'Resolved' %}
+                                    <button class="btn btn-sm btn-success" onclick="resolveCase('{{ case.case_id }}')"><i class="fas fa-check"></i> Resolve</button>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="8">No assigned cases</small></td>
+                            <tr><td colspan="8">No assigned cases</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -135,6 +135,17 @@
 </div>
 
 <script>
+// Permission flag from Django context (now uses full permission check)
+
+var canResolve = {{ can_resolve|yesno:"true,false" }};
+
+// 👇 ADD THIS BLOCK – sets agentPermissions for the modal
+var agentPermissions = {
+    can_resolve: canResolve,
+    can_edit: {{ agent.can_edit|yesno:"true,false" }},
+    can_close: {{ agent.can_close|yesno:"true,false" }}
+};
+
 function loadCaseTab(tab) {
     document.querySelectorAll('#agentCaseTabs .nav-link').forEach(link => link.classList.remove('active'));
     document.querySelector(`#agentCaseTabs .nav-link[data-tab="${tab}"]`).classList.add('active');
@@ -150,8 +161,21 @@ function renderCaseTable(cases) {
         container.innerHTML = '<div class="alert alert-info">No cases found</div>';
         return;
     }
-    let html = `<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Loan No</th><th>Customer</th><th>Mobile</th><th>Department</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>`;
+    let html = `<div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>Loan No</th>
+        <th>Customer</th>
+        <th>Mobile</th>
+        <th>Department</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+    </tr></thead><tbody>`;
     for (let c of cases) {
+        let actionsHtml = `<button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>`;
+        // Show resolve button only if user has permission AND case is not closed/resolved
+        if (canResolve && c.status !== 'Closed' && c.status !== 'Resolved') {
+            actionsHtml += ` <button class="btn btn-sm btn-success" onclick="resolveCase('${c.case_id}')"><i class="fas fa-check"></i> Resolve</button>`;
+        }
         html += `<tr>
             <td>${c.loan_number || '-'}</td>
             <td>${escapeHtml(c.customer_name || c.mobile)}</td>
@@ -159,13 +183,39 @@ function renderCaseTable(cases) {
             <td><span class="badge bg-secondary">${c.group_name || '-'}</span></td>
             <td><span class="badge bg-${c.status === 'Open' ? 'primary' : 'warning'}">${c.status}</span></td>
             <td>${new Date(c.created_at).toLocaleString()}</td>
-            <td>
-                <button class="btn btn-sm btn-primary" onclick="viewCase('${c.case_id}')"><i class="fas fa-eye"></i></button>
-            </td>
+            <td>${actionsHtml}</td>
         </tr>`;
     }
     html += `</tbody></table></div>`;
     container.innerHTML = html;
+}
+
+function resolveCase(caseId) {
+    if (!canResolve) {
+        alert('You do not have permission to resolve cases.');
+        return;
+    }
+    if (!confirm('Are you sure you want to resolve this case?')) return;
+    fetch(`/messaging2/case/${caseId}/resolve/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+            resolution_notes: 'Resolved by agent via ESC1 dashboard'
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('Case resolved successfully!');
+            refreshCases();  // Reload the current tab
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => alert('Request failed: ' + err));
 }
 
 function refreshCases() {
@@ -191,6 +241,16 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+function getCSRFToken() {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+    return csrf ? csrf.value : '';
+}
+
+function viewCase(caseId) {
+    window.location.href = `/messaging2/case/${caseId}/`; // adjust to your URL
+}
 </script>
+
 {% include "messaging2/_case_modals.html" %}
 {% endblock %}

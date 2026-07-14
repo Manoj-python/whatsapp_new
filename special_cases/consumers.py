@@ -599,7 +599,7 @@ class ChatConsumer3(AsyncJsonWebsocketConsumer):
             level = None
             group_ids = None
             subgroup_ids = None
-
+            agent = None  
             # Get the authenticated user from the WebSocket scope
             user = self.scope.get("user")
             if user and user.is_authenticated:

@@ -1400,6 +1400,7 @@ from .models import CaseEscalationLog
 
 from django.utils import timezone
 
+
 @messaging2_required
 def agent_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
@@ -1459,6 +1460,10 @@ def agent_dashboard2(request):
         'available_cases': 0,
     }
 
+    # Get all groups for the export dropdown
+    from adminpanel.models import SupportGroup
+    all_groups = SupportGroup.objects.all().order_by('name')
+
     context = {
         'cases': assigned_cases,
         'assigned_cases': assigned_cases,
@@ -1466,6 +1471,8 @@ def agent_dashboard2(request):
         'agent': agent,
         'current_app': request.GET.get('app', 'psf'),
         'app_list': APP_CONFIG.items(),
+        'can_resolve': agent.has_resolve_permission(),
+        'all_groups': all_groups,
     }
 
     return render(
@@ -1473,6 +1480,7 @@ def agent_dashboard2(request):
         'messaging2/agent_dashboard.html',
         context
     )
+
 @messaging2_required
 def agent_case_list_api(request):
     agent = get_agent_from_user(request.user)
@@ -1510,6 +1518,15 @@ def agent_case_list_api(request):
             escalation_logs__escalated_by=username
         ).distinct().order_by('-created_at')
 
+    # ---------- NEW TAB ----------
+    elif tab == 'esc1':
+        cases = CaseModel.objects.filter(
+            current_level='ESC1'
+        ).exclude(
+            status='Closed'
+        ).order_by('-created_at')
+    # ----------------------------
+
     else:
         cases = CaseModel.objects.none()
 
@@ -1527,7 +1544,6 @@ def agent_case_list_api(request):
 
     return JsonResponse({'cases': case_list})
 
-# Executive Dashboard (ESC2)
 
 
 from financehub.models import Lcc

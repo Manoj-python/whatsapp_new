@@ -1596,6 +1596,99 @@ def failed_messages_legacy_psf(request):
     return redirect(f"{request.path}?app=psf")
 
 
+import pandas as pd
+from io import BytesIO
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.models import User
+from django.utils import timezone
+from datetime import datetime
+
+# Import both case models
+from messaging2.models import Case as psfCase
+from messaging.models import Case as smsCase
+
+@login_required
+def download_user_cases_excel(request, user_id):
+    # Admin permission check
+    agent = get_agent_from_user(request.user)
+    if agent.role != 'ADMIN':
+        return HttpResponse("Access denied. Admin only.", status=403)
+
+    user = get_object_or_404(User, id=user_id)
+    username = user.username
+
+    # Fetch cases from both apps (using only necessary fields)
+    psf_cases = psfCase.objects.filter(created_by=username).values(
+        'case_id', 'customer_name', 'mobile', 'loan_number', 'vehicle_number',
+        'group__name', 'subgroup__name', 'category__name', 'current_level',
+        'status', 'priority', 'created_at', 'resolved_at', 'closed_at',
+        'issue_description', 'resolution_notes', 'source','source_app'
+    )
+    
+    sms_cases = smsCase.objects.filter(created_by=username).values(
+        'case_id', 'customer_name', 'mobile', 'loan_number', 'vehicle_number',
+        'group__name', 'subgroup__name', 'category__name', 'current_level',
+        'status', 'priority', 'created_at', 'resolved_at', 'closed_at',
+        'issue_description', 'resolution_notes', 'source','source_app'
+    )
+
+    def format_datetime(dt):
+        """Convert datetime to formatted string with AM/PM, handling None."""
+        if dt is None:
+            return ''
+        # If timezone-aware, make it naive
+        if timezone.is_aware(dt):
+            dt = timezone.localtime(dt)  # convert to local timezone
+            dt = dt.replace(tzinfo=None)  # remove timezone info
+        # Format as dd-mm-yyyy hh:mm AM/PM
+        return dt.strftime('%d-%m-%Y %I:%M %p')
+
+    def process_queryset(qs, app_name):
+        data = list(qs)
+        for row in data:
+            row['App'] = app_name
+            # Rename foreign key fields
+            row['Group'] = row.pop('group__name', '')
+            row['Subgroup'] = row.pop('subgroup__name', '')
+            row['Category'] = row.pop('category__name', '')
+            # Format datetime fields
+            for field in ['created_at', 'resolved_at', 'closed_at']:
+                if field in row:
+                    row[field] = format_datetime(row[field])
+            # Ensure blank values for None
+            for key, val in row.items():
+                if val is None:
+                    row[key] = ''
+        return data
+
+    combined = process_queryset(psf_cases, 'PSF') + process_queryset(sms_cases, 'SMS')
+
+    if not combined:
+        df = pd.DataFrame([{'Message': f'No cases found for {username}'}])
+    else:
+        df = pd.DataFrame(combined)
+        # Reorder columns – put 'App' first
+        cols = ['App'] + [c for c in df.columns if c != 'App']
+        df = df[cols]
+
+    # Generate Excel file
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Cases')
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="cases_{username}_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx"'
+    return response
+
+
+
+
 # ============================================
 # USER MANAGEMENT (Admin only)
 # ============================================

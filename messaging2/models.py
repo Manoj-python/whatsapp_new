@@ -173,7 +173,7 @@ class Agent(models.Model):
         return self.role == 'ADMIN' or self.can_edit
 
     def has_resolve_permission(self):
-        return self.role == 'ADMIN' or self.can_resolve
+        return (self.role == 'ADMIN' or self.can_resolve or self.level=='ESC1')
 
     def has_close_permission(self):
         return self.role == 'ADMIN' or self.can_close

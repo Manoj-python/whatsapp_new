@@ -749,7 +749,7 @@ def whatsapp_webhook(request):
                             if text_body in quick_reply_values:
 
                                 content_type = "interactive"
-                                
+
                                 context_id = None
                                 if msg.get("context"):
                                     context_id = msg.get("context", {}).get("id")
@@ -794,7 +794,7 @@ def whatsapp_webhook(request):
 
                             text_body = f"[Button Click] {button_text}"
                             mark_button_clicked(mobile)
- 
+
                             print(
                                 f"🔘 Template Button Clicked: "
                                 f"text={button_text}, payload={button_payload}"
@@ -1067,13 +1067,50 @@ def whatsapp_webhook(request):
                                 # CREATE SALES CASE
                                 # ----------------------------------
                                 from adminpanel.models import SupportGroup
+                                from financehub.models import Lcc
+                                from django.core.cache import cache
+
+                                cache_key = "sales_team_mapping_psf"
+                                mapping = cache.get(cache_key)
+                                if mapping is None:
+                                    sales_group = SupportGroup.objects.get(name="Sales")
+                                    zone1_subgroup = Subgroup.objects.get(
+                                            name="Zone 1 - AP / KA - Sundeep",
+                                            group=sales_group
+                                        )
+                                    zone2_subgroup = Subgroup.objects.get(
+                                            name="Zone 2 - TS - Venkat",
+                                            group=sales_group
+                                        )
+                                    marketing_category = Category.objects.get(
+                                            name="Marketing Leads",
+                                            group=sales_group
+                                        )
+                                    mapping = {
+                                            'sales_group': sales_group,
+                                            'zone1_subgroup': zone1_subgroup,
+                                            'zone2_subgroup': zone2_subgroup,
+                                            'marketing_category': marketing_category,
+                                        }
+                                    cache.set(cache_key, mapping, 3600)  # 1 hour
+                                sales_group = mapping['sales_group']
+                                zone1_subgroup = mapping['zone1_subgroup']
+                                zone2_subgroup = mapping['zone2_subgroup']
+                                marketing_category = mapping['marketing_category']
+                                lcc_record = Lcc.objects.filter(cust_mobile=mobile).only('loan_number').first()
+                                loan_number = lcc_record.loan_number if lcc_record else ""
+                                # ---- Determine subgroup ----
+                                if "AP" in loan_number.upper():
+                                    subgroup = zone1_subgroup
+                                else:
+                                    subgroup = zone2_subgroup 
 
                                 existing_case = Case.objects.filter(
                                     mobile=mobile,
-                                    group__name__iexact="Sales"
+                                    group=sales_group
                                 ).exclude(
                                     status__in=["Closed"]
-                                ).first()
+                                ).only('id').first()
 
                                 if not existing_case:
 
@@ -1085,6 +1122,8 @@ def whatsapp_webhook(request):
                                         mobile=mobile,
                                         issue_description="Customer clicked Interested on WhatsApp Loan Campaign",
                                         group=sales_group,
+                                        subgroup=subgroup,
+                                        category=marketing_category,
                                         current_level="ESC2",
                                         status="Open",
                                         priority="Medium",
@@ -1092,7 +1131,7 @@ def whatsapp_webhook(request):
                                         created_by="System Auto Lead"
                                     )
                                     case._skip_ticket_open = True
-                                    case.save()
+                                    case.save(update_fields=['_skip_ticket_open'])
                                     print(f"✅ Sales Lead Created: {mobile}")
 
                         except Exception as e:
@@ -1259,6 +1298,7 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
+
 
 
 
