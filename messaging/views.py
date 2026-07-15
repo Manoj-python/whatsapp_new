@@ -16,7 +16,7 @@ from django.conf import settings
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.utils import timezone
-
+from adminpanel.views import APP_CONFIG
 from .models import *
 from .utils import *
 from .tasks import *
@@ -670,6 +670,212 @@ def send_reply_api(request):
 
 
 
+from adminpanel.views import APP_CONFIG
+def get_app_models(app_key):
+    """Return (log_model, contact_model, channel_group, chat_prefix) for the given app."""
+    cfg = APP_CONFIG.get(app_key)
+    if not cfg:
+        raise ValueError(f"Invalid app_key: {app_key}")
+    return (
+        cfg['log_model'],
+        cfg['contact_model'],
+        cfg['channel_group'],
+        cfg['chat_prefix']
+    )
+
+PTP_CONFIRM_KEYWORDS = ["confirm", "నిర్ధారించు"]
+PTP_RESCHEDULE_KEYWORDS = ["reschedule", "రీషెడ్యూల్"]
+from messaging2.views import ws_group2
+def broadcast_ptp_response(app_key, mobile, status, customer_name):
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    cfg = APP_CONFIG.get(app_key)
+    if not cfg:
+        return
+    chat_prefix = cfg['chat_prefix']
+    if app_key == 'sms':
+        gm = ws_group(mobile)
+    else:
+        gm = ws_group2(mobile)
+    if not gm:
+        return
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f"{chat_prefix}_{gm}",
+        {"type": "new_message", "message": {
+            "id": None,
+            "mobile": mobile,
+            "sent_text_message": f"[PTP {status}]",
+            "content_type": "interactive",
+            "media_file": "",
+            "sent_at": timezone.localtime(timezone.now()).isoformat(),
+            "message_type": "Received",
+            "message_id": "ptp_response",
+            "status": "Read",
+            "sender_name": customer_name,
+            "ptp_status": status
+        }}
+    )
+    # optional global broadcast
+    async_to_sync(channel_layer.group_send)(
+        "ptp_updates",
+        {"type": "ptp.response", "mobile": mobile, "status": status, "customer_name": customer_name}
+    )
+
+@csrf_exempt
+def get_ptp_details_view(request):
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'GET required'}, status=405)
+
+    app_key = request.GET.get('app')
+    mobile = request.GET.get('mobile')
+    if not app_key or not mobile:
+        return JsonResponse({'success': False, 'error': 'app and mobile required'}, status=200)
+
+    # 🔥 Clean mobile: remove all non‑digits, and strip leading '91' if present
+    import re
+    mobile_clean = re.sub(r'\D', '', mobile)
+    if mobile_clean.startswith('91') and len(mobile_clean) > 10:
+        mobile_clean = mobile_clean[2:]          # remove country code
+    if len(mobile_clean) != 10:
+        # fallback: try last 10 digits
+        mobile_clean = mobile_clean[-10:]
+
+    try:
+        data = get_details(app_key, mobile_clean)   # now clean
+        data['total_due'] = round(data['due_amount'] + data['lpi_due'] + data['vas_due'] + data['collection_charges'], 2)
+        return JsonResponse({'success': True, **data})
+    except Exception as e:
+        logger.error(f"PTP details error: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=200)
+
+
+@csrf_exempt
+def send_ptp_template_view(request):
+    """
+    POST /messaging2/api/send-ptp-template/?app=sms
+    Body: { mobile, customer_name, amount, due_date, loan_number, lang }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    app_key = request.GET.get('app')
+    if not app_key:
+        return JsonResponse({'success': False, 'error': 'app parameter required'}, status=200)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    mobile = data.get('mobile')
+    customer_name = data.get('customer_name')
+    amount = data.get('amount')
+    due_date = data.get('due_date')
+    loan_number = data.get('loan_number')
+    lang = data.get('lang', 'en')
+
+    # Validation
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile required'}, status=200)
+    if not amount or float(amount) <= 0:
+        return JsonResponse({'success': False, 'error': 'Valid amount required'}, status=200)
+    if not due_date:
+        return JsonResponse({'success': False, 'error': 'Due date required'}, status=200)
+    if not loan_number:
+        return JsonResponse({'success': False, 'error': 'Loan number required'}, status=200)
+
+    # Send the template
+    try:
+        # Ensure mobile is formatted for WhatsApp (with country code, digits only)
+        mobile_digits = ''.join(filter(str.isdigit, mobile))
+        if len(mobile_digits) > 10:
+            mobile_digits = mobile_digits[-10:]
+        # Add '91' if not present (adjust as per your app)
+        if not mobile_digits.startswith('91') and len(mobile_digits) == 10:
+            mobile_digits = '91' + mobile_digits
+
+        result = send_whatsapp_ptp_template(
+            app_key=app_key,
+            to=mobile_digits,
+            customer_name=customer_name or 'Customer',
+            amount=amount,
+            due_date=due_date,
+            loan_number=loan_number,
+            lang=lang
+        )
+
+        # ========== Log the message ==========
+        cfg = APP_CONFIG[app_key]
+        LogModel = cfg['log_model']
+        ContactModel = cfg['contact_model']
+        chat_prefix = cfg['chat_prefix']
+        app_name = cfg.get('app_name', '')
+
+        # Construct a readable log message
+        log_text = f"PTP template sent: {customer_name}, ₹{amount} by {due_date} against {loan_number} [{lang.upper()}]"
+
+        msg_id = result.get('messages', [{}])[0].get('id', '')
+
+        log_entry = LogModel.objects.create(
+            customer_name=app_name,
+            mobile=mobile,   # store original number (with +)
+            sent_text_message=log_text,
+            message_type="Sent",
+            content_type="template",
+            status="Sent",
+            template_name=f"ptp_confirm_{lang}",
+            message_id=msg_id,
+        )
+
+        # Update contact
+        ContactModel.objects.update_or_create(
+            mobile=mobile,
+            defaults={
+                'last_msg': log_text[:50] + "...",
+                'last_time': timezone.now(),
+                'last_type': "Sent",
+                'last_status': "Sent",
+                'unread': 0,
+            }
+        )
+
+        # ========== WebSocket broadcast ==========
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        # Pick the correct group function
+        if app_key == 'psf':
+            gm = ws_group2(mobile)
+        else:
+            gm = ws_group(mobile)
+
+        if gm:
+            async_to_sync(channel_layer.group_send)(
+                f"{chat_prefix}_{gm}",
+                {
+                    "type": "new_message",
+                    "message": {
+                        "id": log_entry.id,
+                        "mobile": mobile,
+                        "sent_text_message": log_text,
+                        "content_type": "template",
+                        "media_file": "",
+                        "sent_at": timezone.localtime(log_entry.sent_at).isoformat(),
+                        "message_type": "Sent",
+                        "message_id": log_entry.message_id,
+                        "status": "Sent",
+                        "sender_name": app_name
+                    }
+                }
+            )
+
+        return JsonResponse({'success': True, 'result': result})
+
+    except Exception as e:
+        logger.error(f"PTP send error for {app_key}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 from messaging2.tasks import send_welcome_message
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
@@ -737,16 +943,38 @@ def whatsapp_webhook(request):
                         if msg_type == "text":
 
                             text_body = msg.get("text", {}).get("body", "").strip()
-
+                            text_lower = text_body.lower().strip()
                             print(f"📝 Raw text from {mobile}: '{text_body}'")
+                            if any(kw in text_lower for kw in PTP_CONFIRM_KEYWORDS):
+                                content_type = "interactive"
+                                button_response = json.dumps({
+                                    "type": "ptp_quick_reply",
+                                    "button_title": text_body,
+                                    "action": "CONFIRM",
+                                    "source": "ptp_template",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+                                text_body = f"[PTP Confirm] {text_body}"
+                                mark_button_clicked(mobile)
+                                broadcast_ptp_response('sms', mobile, "CONFIRMED", customer_name)
+                                print(f"✅ PTP Confirmed by {mobile}")
 
-                            quick_reply_values = [
-                                "Interested",
-                                "Not Interested",
-                                "Call Now"
-                            ]
+                            elif any(kw in text_lower for kw in PTP_RESCHEDULE_KEYWORDS):
+                                content_type = "interactive"
+                                button_response = json.dumps({
+                                    "type": "ptp_quick_reply",
+                                    "button_title": text_body,
+                                    "action": "RESCHEDULE",
+                                    "source": "ptp_template",
+                                    "timestamp": timezone.now().isoformat()
+                                })
+                                text_body = f"[PTP Reschedule] {text_body}"
+                                mark_button_clicked(mobile)
+                                broadcast_ptp_response('sms', mobile, "RESCHEDULED", customer_name)
+                                print(f"🔄 PTP Rescheduled by {mobile}")
 
-                            if text_body in quick_reply_values:
+
+                            elif text_body in ["Interested", "Not Interested", "Call Now"]:
 
                                 content_type = "interactive"
 
@@ -1298,6 +1526,7 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
+
 
 
 

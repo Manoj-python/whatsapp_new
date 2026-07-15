@@ -36,7 +36,8 @@ TEMPLATE_CHOICES = [
     ("34", "apologize english-[34]"),
     ("35", "due_notice_borrower (English)-[35]"),
     ("36", "new_loans_te (Telugu)-[36]"),
-    ("37", "presale_notices_borrower (English)-[37]")
+    ("37", "presale_notices_borrower (English)-[37]"),
+    ("38", "Pay Now Link (English)-[38]")
 
  
 ]

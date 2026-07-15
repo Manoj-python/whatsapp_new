@@ -1,3 +1,4 @@
+
 # messaging2/utils.py
 import re
 import requests
@@ -415,10 +416,10 @@ def check_whatsapp_number(mobile: str) -> Dict[str, Any]:
         err = data.get("error") or {}
         code = err.get("code")
         msg = err.get("message", "")
-        
+
         if code:
             icode = int(code)
-            
+
             # Map each error code to specific status (matching tasks.py ERROR_MAP)
             if icode == 131047:
                 return {"valid": False, "blocked": False, "reason": "24H_WINDOW_EXPIRED - Template window expired"}
@@ -859,7 +860,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 "new_loans_te",
                 "te",
                 [    {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
-            
+
                 ],
                 ),
 
@@ -868,29 +869,42 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 "en",
                 [    {"type": "text", "text": str(row.get("customer_name", ""))},
                      {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                     {"type": "text", "text": str(row.get("loan_number", ""))},             
-   
+                     {"type": "text", "text": str(row.get("loan_number", ""))},
+
 
                 ],
                 ),
+                "38": (
+                    "pay_now_link",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("amount", ""))
+                        },
+                    ],
+                ),
+                
 
     }
 
-
     template_name, lang, parameters = templates.get(choice, templates["8"])
+
     mobile = format_mobile(
-    row.get("cust_mobile") or row.get("CustMobile") or ""
-)
+        row.get("cust_mobile") or row.get("CustMobile") or ""
+    )
 
     if not mobile:
         raise ValueError("Mobile number missing")
 
     # --------------------------------------------------
-    # TEMPLATES WITH DOCUMENT HEADER (19, 20, 21, 25)
-
+    # TEMPLATES WITH DOCUMENT HEADER
     # --------------------------------------------------
-   # --------------------------------------------------
-    if choice in ("19", "20", "21", "25","30","31","32","33","35","37"):
+    if choice in ("19", "20", "21", "25", "30", "31", "32", "33", "35", "37"):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
@@ -904,16 +918,22 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
         elif choice == "25":
             pdf_source = row.get("lpc_pdf")
+
         elif choice == "30":
             pdf_source = row.get("gur_telugu_registration_pdf")
+
         elif choice == "31":
             pdf_source = row.get("cust_telugu_registration_pdf")
+
         elif choice == "32":
             pdf_source = row.get("guarantor_registration_pdf")
+
         elif choice == "33":
             pdf_source = row.get("customer_registration_pdf")
+
         elif choice == "35":
             pdf_source = row.get("due_notice_pdf_file")
+
         elif choice == "37":
             pdf_source = row.get("presale_notices_borrower_pdf")
 
@@ -926,7 +946,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
         if not pdf_source:
             raise ValueError("PDF filename missing in Excel row")
 
-        original_filename = Path(pdf_source).name   #Anu
+        original_filename = Path(pdf_source).name
 
         payload = {
             "messaging_product": "whatsapp",
@@ -935,7 +955,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
             "template": {
                 "name": template_name,
                 "language": {
-                    "policy": "deterministic",   # 🔥 prevents Telugu fallback
+                    "policy": "deterministic",
                     "code": lang
                 },
                 "components": [
@@ -946,17 +966,61 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                                 "type": "document",
                                 "document": {
                                     "id": media_id,
-                                    "filename": original_filename  # prevents 'Untitled' #Anu
+                                    "filename": original_filename
                                 }
                             }
-                        ],
+                        ]
                     },
                     {
                         "type": "body",
-                        "parameters": parameters,
+                        "parameters": parameters
+                    }
+                ]
+            }
+        }
+
+    # --------------------------------------------------
+    # PAY NOW TEMPLATE (38)
+    # --------------------------------------------------
+    elif choice == "38":
+
+        payment_link = str(row.get("payment_link", "")).strip()
+
+        if not payment_link:
+            raise ValueError("payment_link column missing in Excel")
+
+        # Base URL from Meta:
+        # https://alcd.in/{{1}}
+        dynamic_value = payment_link.replace("https://alcd.in/", "")
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": mobile,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {
+                    "policy": "deterministic",
+                    "code": lang
+                },
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": parameters
                     },
-                ],
-            },
+                    {
+                        "type": "button",
+                        "sub_type": "url",
+                        "index": "0",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": dynamic_value
+                            }
+                        ]
+                    }
+                ]
+            }
         }
 
     # --------------------------------------------------
@@ -971,20 +1035,20 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
             "template": {
                 "name": template_name,
                 "language": {
-                    "policy": "deterministic",   # 🔥 prevents language switching
+                    "policy": "deterministic",
                     "code": lang
                 },
                 "components": [
                     {
                         "type": "body",
-                        "parameters": parameters,
+                        "parameters": parameters
                     }
-                ],
-            },
+                ]
+            }
         }
 
     # --------------------------------------------------
-    # PREVIEW TEXT (SANITIZED)
+    # PREVIEW TEXT
     # --------------------------------------------------
     template_body = get_template_text_from_whatsapp(template_name)
 
@@ -994,3 +1058,183 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
     return payload, rendered_text
 
+
+# ================== ptp confirm=======================
+
+
+
+PTP_CONFIG = {
+    'psf': {
+        'app_name': 'Padma Sai Holdings Private Limited',
+        'smsquare': {
+            'auth_token':"amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e",
+            'base_url': "https://prod-apiv2-padmasai.allcloud.app/api",
+            'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
+            'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
+            # 'get_qr': "/paymentgateway/GetQRCode",
+        },
+        'whatsapp': {
+            'phone_number_id': settings.WHATSAPP2_PHONE_NUMBER_ID,
+            'access_token': settings.WHATSAPP2_ACCESS_TOKEN,
+            'api_version': "v22.0",
+        },
+        'templates': {
+            'en': 'ptp_confirm_en',      # English template name
+            'te': 'ptp_confirm_te'       # Telugu template name
+        },
+
+    },
+    'sms': {
+        'app_name': 'SM SQUARE CREDIT SERVICES PRIVATE LIMITED',
+        'smsquare': {
+            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb",
+            'base_url': "https://prod-apiv2-smsquare.allcloud.app/api",
+            'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
+            'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
+            'get_qr': "/paymentgateway/GetQRCode",
+        },
+        'whatsapp': {
+            'phone_number_id': settings.WHATSAPP_PHONE_NUMBER_ID,
+            'access_token': settings.WHATSAPP_ACCESS_TOKEN,
+            'api_version': "v22.0",
+        },
+        'templates': {
+            'en': 'ptp_confirm_en',      # English template name
+            'te': 'ptp_confirm_te'       # Telugu template name
+        },
+    },
+    'spl': {
+        'app_name': 'Padma Sai Holdings Private Limited',
+        'smsquare': {
+            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:6S2KpETjIY/f8EIwql/xMh3s9ks9lWOUvQexCQEcEAs=:rdICQaUzp091Y1DTEFAw5o4Qjo8wxB4u:19301462:38cbfcbd-c82e-48fe-ac81-090295f8bdeb",
+            'base_url': "https://uat-apiv2-smsquare.allcloud.app/api",
+            'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
+            'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
+            'get_qr': "/paymentgateway/GetQRCode",
+        },
+        'whatsapp': {
+            'phone_number_id': "your_spl_phone_id",
+            'access_token': "your_spl_access_token",
+            'api_version': "v18.0",
+        },
+        'template_name': 'payment_gateway',
+    },
+}
+
+import logging
+import requests
+
+logger = logging.getLogger(__name__)
+
+def get_ptp_config(app_key):
+    config = PTP_CONFIG.get(app_key)
+    if not config:
+        raise ValueError(f"Invalid app key: {app_key}")
+    return config
+
+
+def call_smsquare_api(app_key, endpoint, method='GET', params=None, payload=None):
+    config = get_ptp_config(app_key)
+    sms_config = config['smsquare']
+    url = sms_config['base_url'] + endpoint
+    headers = {
+        "Authorization": sms_config['auth_token'],
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    try:
+        if method.upper() == 'GET':
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+        elif method.upper() == 'POST':
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+        else:
+            raise ValueError("Unsupported method")
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"SMSquare API error for {app_key}: {e}")
+        raise
+    
+def get_details(app_key, mobile):
+    config = get_ptp_config(app_key)
+    sms_config = config['smsquare']
+
+    params = {"ContactNumber": mobile}
+    loans_data = call_smsquare_api(app_key, sms_config['get_loan_by_mobile'], method='GET', params=params)
+    if not loans_data:
+        raise ValueError("No loans found for this mobile")
+
+    first_loan = loans_data[0]
+    finance_id = first_loan.get('FinanceId')
+    agreement_no = first_loan.get('AgreementNo')
+    customer_name = first_loan.get('BorrowerName', 'Customer')
+    if not finance_id:
+        raise ValueError("FinanceId not found")
+
+    repayment_params = {"FinanceId": finance_id}
+    repayment_data = call_smsquare_api(app_key, sms_config['get_repayment'], method='GET', params=repayment_params)
+
+    balance_amount = float(repayment_data.get('EMIdues', 0.0) or 0.0)
+    lpi_due = float(repayment_data.get('LPIDue', 0.0) or 0.0)
+    vas_due = float(repayment_data.get('VasDue', 0.0) or 0.0)
+    collection_charges = float(repayment_data.get('CollectionCharges', 0.0) or 0.0)
+
+    return {
+        'customer_name': customer_name,
+        'loan_number': agreement_no,
+        'vehicle_no': first_loan.get('VehicleNo', ''),
+        'due_amount': balance_amount,
+        'finance_id': finance_id,
+        'lpi_due': lpi_due,
+        'vas_due': vas_due,
+        'collection_charges': collection_charges,
+        # No due_date – it comes from UI
+    }
+
+
+def send_whatsapp_ptp_template(app_key, to, customer_name, amount, due_date, loan_number, lang='en'):
+    config = get_ptp_config(app_key)
+    wa_config = config['whatsapp']
+
+    templates = config.get('templates', {})
+    template_name = templates.get(lang)
+    if not template_name:
+        raise ValueError(f"No template defined for language '{lang}' in app '{app_key}'")
+
+    url = f"https://graph.facebook.com/{wa_config['api_version']}/{wa_config['phone_number_id']}/messages"
+    headers = {
+        "Authorization": f"Bearer {wa_config['access_token']}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": lang},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": customer_name},
+                        {"type": "text", "text": str(amount)},      # numeric amount; template adds ₹
+                        {"type": "text", "text": due_date},         # from UI
+                        {"type": "text", "text": loan_number}
+                    ]
+                }
+                # No button components – Confirm & Reschedule are static
+            ]
+        }
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"WhatsApp request failed: {e}")
+        if hasattr(e, 'response') and e.response:
+            logger.error(e.response.text)
+        raise

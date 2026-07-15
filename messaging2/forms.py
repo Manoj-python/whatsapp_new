@@ -49,7 +49,8 @@ TEMPLATE_CHOICES = [
     ("42", "smf_due_notice_borrower (English)"),
     ("43", "new loans template (telugu)-[43]"),
     ("44", "Presale Notices PSF Borrower (English)-[44]"),
-    ("45", "Presale Notices SMF Borrower (English)-[45]")
+    ("45", "Presale Notices SMF Borrower (English)-[45]"),
+    ("46", "Pay Now Link (English)-[46]")
 ]
 
 

@@ -351,6 +351,9 @@
        <button id="micBtn" class="mic-btn" title="Record voice message">
         <i class="fas fa-microphone"></i>
       </button>
+       <button id="ptpBtn" title="Send Payment Confirmation" style="background: #FF6B35; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
+    <i class="fas fa-check-circle"></i>
+</button>
       <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
        <button id="paymentBtn" title="Send Payment Link" style="background: #128C7E; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
     <i class="fas fa-rupee-sign"></i>
@@ -546,6 +549,52 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success" id="paySubmitBtn">
                     <i class="fas fa-paper-plane"></i> Send Payment Link
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PTP Modal -->
+<div class="modal fade" id="ptpModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle"></i> Send Payment Confirmation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ptpForm">
+                    <div class="mb-2">
+                        <label>Customer Name</label>
+                        <input type="text" id="ptpCustName" class="form-control" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label>Loan Number</label>
+                        <input type="text" id="ptpLoanNo" class="form-control" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label>Amount (INR) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" id="ptpAmount" class="form-control" required>
+                        <small class="text-muted">Edit amount if needed</small>
+                    </div>
+                    <div class="mb-2">
+                        <label>Due Date <span class="text-danger">*</span></label>
+                        <input type="date" id="ptpDueDate" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label>Language <span class="text-danger">*</span></label>
+                        <select id="ptpLang" class="form-select">
+                            <option value="en">English</option>
+                            <option value="te">Telugu</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="ptpSubmitBtn">
+                    <i class="fas fa-paper-plane"></i> Send Template
                 </button>
             </div>
         </div>
@@ -2586,6 +2635,98 @@ async function sendPaymentTemplate() {
     }
 }
 
+// ─── PTP Functions ──────────────────────────────────────────────
+async function openPtpModal() {
+    if (!selectedMobile) {
+        showNotification('Select a contact first', 'warning');
+        return;
+    }
+    const modal = new bootstrap.Modal(document.getElementById('ptpModal'));
+    modal.show();
+
+    // Reset fields with loading state
+    document.getElementById('ptpCustName').value = 'Loading...';
+    document.getElementById('ptpLoanNo').value = '...';
+    document.getElementById('ptpAmount').value = '';
+    // Set default date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('ptpDueDate').value = tomorrow.toISOString().split('T')[0];
+    document.getElementById('ptpLang').value = 'en';
+
+    try {
+        const resp = await fetch(`/api/ptp-details/?app=${APP_KEY}&mobile=${encodeURIComponent(selectedMobile)}`);
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('ptpCustName').value = data.customer_name || '';
+            document.getElementById('ptpLoanNo').value = data.loan_number || '';
+            const defaultAmount = data.total_due || data.due_amount || 0;
+            document.getElementById('ptpAmount').value = parseFloat(defaultAmount).toFixed(2);
+        } else {
+            showNotification(data.error || 'Could not fetch details', 'error');
+            modal.hide();
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+        modal.hide();
+    }
+}
+
+async function sendPtpTemplate() {
+    const mobile = selectedMobile;
+    const customer_name = document.getElementById('ptpCustName').value.trim();
+    const amount = document.getElementById('ptpAmount').value;
+    const due_date = document.getElementById('ptpDueDate').value;
+    const lang = document.getElementById('ptpLang').value;
+    const loan_number = document.getElementById('ptpLoanNo').value.trim();
+
+    if (!amount || parseFloat(amount) <= 0) {
+        showNotification('Please enter a valid amount', 'warning');
+        return;
+    }
+    if (!due_date) {
+        showNotification('Please select a due date', 'warning');
+        return;
+    }
+    if (!loan_number) {
+        showNotification('Loan number is required', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('ptpSubmitBtn');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    btn.disabled = true;
+
+    try {
+        const payload = {
+            mobile: mobile,
+            customer_name: customer_name,
+            amount: parseFloat(amount),
+            due_date: due_date,
+            loan_number: loan_number,
+            lang: lang
+        };
+        const resp = await fetch(`/api/send-ptp-template/?app=${APP_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showNotification(`PTP template sent to ${mobile} in ${lang.toUpperCase()}`, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('ptpModal')).hide();
+        } else {
+            showNotification(data.error || 'Failed to send PTP template', 'error');
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
+}
+
  let casePanelBtn = document.getElementById('casePanelBtn');
 if (casePanelBtn) {
   casePanelBtn.onclick = function(e) {
@@ -2607,6 +2748,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('paySubmitBtn');
     if (submitBtn) submitBtn.addEventListener('click', sendPaymentTemplate);
 });
+// PTP button
+const ptpBtn = document.getElementById('ptpBtn');
+if (ptpBtn) {
+    ptpBtn.addEventListener('click', openPtpModal);
+}
+// PTP submit
+const ptpSubmitBtn = document.getElementById('ptpSubmitBtn');
+if (ptpSubmitBtn) {
+    ptpSubmitBtn.addEventListener('click', sendPtpTemplate);
+}
 
 
 document.addEventListener('contextmenu', function(e) {

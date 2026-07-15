@@ -23,7 +23,8 @@ urlpatterns = [
     path("api/mark-read/<str:mobile>/", views.mark_read, name="mark_read"),
     path('api/contact-messages/', views.get_contact_messages, name='get_contact_messages'),
     path('secure-document/<int:log_id>/', views.view_secure_document, name='secure_document'),
-
+    path('api/send-ptp-template/', views.send_ptp_template_view, name='send_ptp_template'),
+    path('api/ptp-details/', views.get_ptp_details_view, name='get_ptp_details'),
     
 
    

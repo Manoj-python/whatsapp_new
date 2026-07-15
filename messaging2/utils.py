@@ -797,7 +797,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                 {"type": "text", "text": str(row.get("customer_name", ""))},
                 {"type": "text", "text": str(row.get("loan_number", ""))},
                 {"type": "text", "text": str(row.get("vehicle_number", ""))},
-            
+
             ],
         ),
          "42": (
@@ -807,26 +807,26 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                 {"type": "text", "text": str(row.get("customer_name", ""))},
                 {"type": "text", "text": str(row.get("loan_number", ""))},
                 {"type": "text", "text": str(row.get("vehicle_number", ""))},
-            
+
             ],
         ),
-    
-          
+
+
          "43": (
                 "new_loans_te",
                 "te",
                 [    {"type": "text", "text": str(row.get("customer_name", ""))},       # {{1}}
-            
+
                 ],
             ),
-          
-         
+
+
         "44": (
                 "presale_notices_borrower_psf",
                 "en",
                 [    {"type": "text", "text": str(row.get("customer_name", ""))},
                      {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                     {"type": "text", "text": str(row.get("loan_number", ""))},             
+                     {"type": "text", "text": str(row.get("loan_number", ""))},
                 ],
                 ),
         "45": (
@@ -834,11 +834,26 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                 "en",
                 [    {"type": "text", "text": str(row.get("customer_name", ""))},
                      {"type": "text", "text": str(row.get("vehicle_number", ""))},
-                     {"type": "text", "text": str(row.get("loan_number", ""))},             
-   
+                     {"type": "text", "text": str(row.get("loan_number", ""))},
+
 
                 ],
                 ),
+        
+        "46": (
+            "pay_now_link",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("amount", ""))
+                },
+            ],
+        ),
 
      
     }
@@ -945,6 +960,53 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                     },
                 ],
             },
+        }
+
+       # --------------------------------------------------
+    # PAY NOW LINK TEMPLATE (46)
+    # --------------------------------------------------
+   
+    elif choice == "46":
+
+        payment_link = str(row.get("payment_link", "")).strip()
+
+        if not payment_link:
+            raise ValueError("payment_link column missing in Excel")
+
+        # Example:
+        # https://alcd.in/ABC123
+        # becomes:
+        # ABC123
+        short_code = payment_link.rstrip("/").split("/")[-1]
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": mobile,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {
+                    "policy": "deterministic",
+                    "code": lang
+                },
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": parameters
+                    },
+                    {
+                        "type": "button",
+                        "sub_type": "url",
+                        "index": "0",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": short_code
+                            }
+                        ]
+                    }
+                ]
+            }
         }
 
     # --------------------------------------------------
@@ -1142,18 +1204,18 @@ def get_agreement_no_from_mobile(mobile):
     mobile_clean = ''.join(filter(str.isdigit, mobile))
     if len(mobile_clean) > 10:
         mobile_clean = mobile_clean[-10:]
-    
+
     # Try exact match
     lccs = Lcc.objects.filter(cust_mobile=mobile_clean)
     if lccs.exists():
         # If multiple, pick the first (maybe order by loan_date descending?)
         return lccs.first().loan_number
-    
+
     # Fallback: endswith (for numbers with country code)
     lccs = Lcc.objects.filter(cust_mobile__endswith=mobile_clean)
     if lccs.exists():
         return lccs.first().loan_number
-    
+
     raise ValueError("No loan found for this mobile number")
 
 def call_smsquare_api(app_key, endpoint, method='GET', params=None, payload=None):
@@ -1370,3 +1432,4 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, payment_u
             # logger.error(e.response.text)
 
         raise
+
