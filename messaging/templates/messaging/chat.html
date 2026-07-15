@@ -2553,6 +2553,7 @@ async function sendPaymentTemplate() {
 }
 
 // ─── PTP Functions ──────────────────────────────────────────────
+
 async function openPtpModal() {
     if (!selectedMobile) {
         showNotification('Select a contact first', 'warning');
@@ -2565,29 +2566,70 @@ async function openPtpModal() {
     document.getElementById('ptpCustName').value = 'Loading...';
     document.getElementById('ptpLoanNo').value = '...';
     document.getElementById('ptpAmount').value = '';
-    // Set default date to tomorrow
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById('ptpDueDate').value = tomorrow.toISOString().split('T')[0];
     document.getElementById('ptpLang').value = 'en';
 
+    const custInput = document.getElementById('ptpCustName');
+    const loanInput = document.getElementById('ptpLoanNo');
+    // Start with readonly (will be toggled)
+    custInput.setAttribute('readonly', 'readonly');
+    loanInput.setAttribute('readonly', 'readonly');
+
     try {
         const resp = await fetch(`/api/ptp-details/?app=${APP_KEY}&mobile=${encodeURIComponent(selectedMobile)}`);
         const data = await resp.json();
+
         if (data.success) {
-            document.getElementById('ptpCustName').value = data.customer_name || '';
-            document.getElementById('ptpLoanNo').value = data.loan_number || '';
-            const defaultAmount = data.total_due || data.due_amount || 0;
-            document.getElementById('ptpAmount').value = parseFloat(defaultAmount).toFixed(2);
-        } else {
-            showNotification(data.error || 'Could not fetch details', 'error');
-            modal.hide();
-        }
+    const custName = data.customer_name || '';
+    const loanNo = data.loan_number || '';
+    const defaultAmount = data.total_due ?? data.due_amount ?? 0;
+
+    custInput.value = custName;
+    loanInput.value = loanNo;
+    document.getElementById('ptpAmount').value = parseFloat(defaultAmount).toFixed(2);
+
+
+    if (loanNo && loanNo.trim() !== '') {
+        // Loan found -> keep both fields readonly
+        custInput.setAttribute('readonly', true);
+        loanInput.setAttribute('readonly', true);
+    } else {
+        // No loan found -> allow editing
+        custInput.removeAttribute('readonly');
+        loanInput.removeAttribute('readonly');
+
+        custInput.placeholder = 'Enter customer name';
+        loanInput.placeholder = 'Enter loan number';
+    }
+} else {
+    // API returned success:false
+    showNotification(data.error || 'Enter details manually.', 'warning');
+
+    custInput.value = '';
+    loanInput.value = '';
+    document.getElementById('ptpAmount').value = '';
+
+    custInput.removeAttribute('readonly');
+    loanInput.removeAttribute('readonly');
+
+    custInput.placeholder = 'Enter customer name';
+    loanInput.placeholder = 'Enter loan number';
+}
     } catch (e) {
-        showNotification('Error: ' + e.message, 'error');
-        modal.hide();
+        // ❌ Network error – keep modal open and make fields editable
+        showNotification('Error: ' + e.message + '. You can enter manually.', 'error');
+        custInput.value = '';
+        loanInput.value = '';
+        document.getElementById('ptpAmount').value = '';
+        custInput.removeAttribute('readonly');
+        custInput.placeholder = 'Enter customer name (required)';
+        loanInput.removeAttribute('readonly');
+        loanInput.placeholder = 'Enter loan number (required)';
     }
 }
+
 
 async function sendPtpTemplate() {
     const mobile = selectedMobile;
