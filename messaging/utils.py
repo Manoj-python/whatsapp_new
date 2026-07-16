@@ -507,10 +507,13 @@ def render_template_text(template_body: str, parameters: list) -> str:
 from io import BytesIO
 
 
-
-def send_second_message_for_mobile(all_rows, mobile):
-
+def send_second_message_for_mobile(all_rows, mobile, agent_name="System"):
+    """
+    Send template 17 (books_pending_second) for a specific mobile.
+    agent_name: name of the agent who initiated the bulk job.
+    """
     lines = []
+    first_customer_name = ""  # to store customer name for sender_name field
 
     for row in all_rows:
         row_mobile = format_mobile(
@@ -529,7 +532,10 @@ def send_second_message_for_mobile(all_rows, mobile):
         if not loan_no and not cust_name:
             continue
 
-        # 🚨 SINGLE LINE FORMAT (NO \n, NO | )
+        # Keep first customer name for sender_name (if needed)
+        if not first_customer_name and cust_name:
+            first_customer_name = cust_name
+
         lines.append(
             f"Loan Number: {loan_no}, "
             f"Customer Name: {cust_name}, "
@@ -539,7 +545,6 @@ def send_second_message_for_mobile(all_rows, mobile):
     if not lines:
         raise ValueError(f"Template 17 empty for {mobile}")
 
-    # 🚨 JOIN INTO ONE SAFE PARAGRAPH
     final_text = " ".join(lines)
     final_text = sanitize_template_text(final_text)
 
@@ -570,8 +575,10 @@ def send_second_message_for_mobile(all_rows, mobile):
     if not resp.ok:
         raise ValueError(resp.text)
 
+    # ✅ LOG with agent_name as customer_name, and store first customer name in sender_name
     SmsWhatsAppLog.objects.create(
-        customer_name="",
+        customer_name=agent_name,          # agent name (sender)
+        sender_name=first_customer_name,   # customer name (for reference, not used in UI)
         mobile=mobile,
         template_name="books_pending_second",
         sent_text_message=final_text,

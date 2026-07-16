@@ -205,6 +205,9 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Kolkata"
 
 CELERY_TASK_ROUTES = {
+    "messaging2.tasks.send_ticket_open_message": {"queue": "ticket_messages"},
+    "messaging2.tasks.send_ticket_close_message": {"queue": "ticket_messages"},
+    "messaging2.tasks.send_welcome_message": {"queue": "ticket_messages"},
     "messaging.tasks.*": {"queue": "messaging"},
     "messaging2.tasks.*": {"queue": "messaging2"},
     "financehub.tasks.*": {"queue": "financehub"},

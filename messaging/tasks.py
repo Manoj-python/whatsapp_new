@@ -60,9 +60,18 @@ def upload_legal_pdf_to_whatsapp(pdf_filename, folder):
 
 
 @shared_task(bind=True, queue="messaging")
-def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_size=50):
+def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id,user_id=None, chunk_size=50):
     template_choice = str(template_choice)
     close_old_connections()
+    from django.contrib.auth.models import User
+    agent_name = "System"
+    if user_id:
+        try:
+            user = User.objects.get(id=user_id)
+            agent_name = user.get_full_name() or user.username
+        except User.DoesNotExist:
+            pass
+
 
     try:
         job = BulkJob.objects.get(job_id=job_id)
@@ -111,7 +120,7 @@ def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_si
     # Create batches
     for i in range(0, total, chunk_size):
         process_bulk_whatsapp_batch.apply_async(
-            args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total)),
+            args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total),agent_name),
             queue="messaging",
         )
 
@@ -120,7 +129,7 @@ def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id, chunk_si
 # BATCH WORKER (FIXED VERSION)
 # ==================================================
 @shared_task(bind=True, queue="messaging")
-def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, start, end):
+def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, start, end,agent_name="System"):
     from django.db import close_old_connections
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
@@ -172,7 +181,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
         for mobile in mobiles:
             try:
                 # This function should process all messages for this mobile
-                send_second_message_for_mobile(all_rows, mobile)
+                send_second_message_for_mobile(all_rows, mobile,agent_name)
                 local_success += 1
                 print(f"✅ Template 17 sent to {mobile}")
 
@@ -215,7 +224,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
                 SmsWhatsAppLog.objects.create(
                     job_id=job_id,
-                    customer_name=name,
+                    customer_name=agent_name,
+                    sender_name=name,
                     mobile=mobile,
                     template_name=template_choice,
                     status=status_value,
@@ -355,7 +365,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
             log = SmsWhatsAppLog.objects.create(
                 job_id=job_id,
-                customer_name=name,
+                customer_name=agent_name,
+                sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
                 sent_text_message=rendered_text,
@@ -449,7 +460,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                             "message_type": "Sent",
                             "message_id": msg_id,
                             "status": "Sent",
-                            "sender_name": name,
+                            "sender_name": agent_name,
                         }
                     }
                 )
@@ -512,7 +523,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
             SmsWhatsAppLog.objects.create(
                 job_id=job_id,
-                customer_name=name,
+                customer_name=agent_name,
+                sender_name=name, 
                 mobile=mobile,
                 template_name=template_choice,
                 status=status_value,

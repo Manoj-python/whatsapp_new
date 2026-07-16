@@ -60,9 +60,17 @@ def upload_legal_pdf_to_whatsapp2(pdf_filename, folder):
 
 
 @shared_task(bind=True, queue="messaging2")
-def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_size=100):
+def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id,user_id=None, chunk_size=100):
     template_choice = str(template_choice)
     close_old_connections()
+    from django.contrib.auth.models import User
+    agent_name = "System"
+    if user_id:
+        try:
+            user = User.objects.get(id=user_id)
+            agent_name = user.get_full_name() or user.username
+        except User.DoesNotExist:
+            pass
 
     try:
         job = BulkJob2.objects.get(job_id=job_id)
@@ -111,7 +119,7 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_s
     # Create batches
     for i in range(0, total, chunk_size):
         process_bulk_whatsapp_batch2.apply_async(
-            args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total)),
+            args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total),agent_name),
             queue="messaging2",
         )
 
@@ -120,7 +128,7 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id, chunk_s
 # BATCH WORKER (FIXED VERSION)
 # ==================================================
 @shared_task(bind=True, queue="messaging2")
-def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, start, end):
+def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, start, end,agent_name="System"):
     from django.db import close_old_connections
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
@@ -174,7 +182,8 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
         except Exception as e:
             SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
-                customer_name=name,
+                customer_name=agent_name,
+                sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
                 status="Failed",
@@ -189,7 +198,8 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             reason = check.get("reason", "Invalid WhatsApp number")
             SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
-                customer_name=name,
+                customer_name=agent_name,
+                sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
                 status="Failed",
@@ -296,7 +306,8 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
             log = SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
-                customer_name=name,
+                customer_name=agent_name,
+                sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
                 sent_text_message=rendered_text,
@@ -396,7 +407,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                             "message_type": "Sent",
                             "message_id": msg_id,
                             "status": "Sent",
-                            "sender_name": name,
+                            "sender_name": agent_name,
                         }
                     }
                 )
@@ -457,7 +468,8 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
             SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
-                customer_name=name,
+                customer_name=agent_name,
+                sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
                 status=status_value,  # ✅ Now uses mapped status
@@ -641,7 +653,7 @@ def clear_button_clicked(mobile):
 # ----------------------------------------------
 
 
-@shared_task(queue="messaging2")
+@shared_task(queue="ticket_messages")
 def send_ticket_open_message(app_key, case_id):
     try:
         cfg = APP_CONFIG[app_key]
@@ -790,7 +802,7 @@ def send_ticket_open_message(app_key, case_id):
 
 
 
-@shared_task(queue="messaging2")
+@shared_task(queue="ticket_messages")
 def send_ticket_close_message(app_key, case_id):
     try:
         cfg = APP_CONFIG[app_key]
@@ -931,7 +943,7 @@ def send_ticket_close_message(app_key, case_id):
 
 
 
-@shared_task(queue="messaging2")
+@shared_task(queue="ticket_messages")
 def send_welcome_message(app_key, mobile, customer_name=""):
     try:
         cfg = APP_CONFIG[app_key]

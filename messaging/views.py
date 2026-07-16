@@ -169,6 +169,7 @@ def messaging_required(view_func):
 # -----------------------------------------------------
 # Bulk Upload Start (S3-safe)
 # -----------------------------------------------------
+
 @messaging_required
 def upload_and_send(request):
     if request.method == "POST":
@@ -199,8 +200,11 @@ def upload_and_send(request):
             )
 
             # 🔥 FORCE TASK INTO WHATSAPP2_main QUEUE
+            user = request.user
+            user_id = user.id if user.is_authenticated else None
+
             process_bulk_whatsapp.apply_async(
-                args=(s3_key, choice, job_id),
+                args=(s3_key, choice, job_id, user_id),
                 queue="messaging"
             )
 
@@ -210,7 +214,6 @@ def upload_and_send(request):
         form = UploadForm()
 
     return render(request, "messaging/index.html", {"form": form})
-
 
 # -----------------------------------------------------
 # Bulk Job Status Page

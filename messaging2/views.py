@@ -195,6 +195,7 @@ def broadcast_delivery2(mobile, message_id, status):
 # -----------------------------------------------------
 # Bulk Upload (PSF only - unchanged)
 # -----------------------------------------------------
+
 @messaging2_required
 def upload_and_send2(request):
     if request.method == "POST":
@@ -216,7 +217,9 @@ def upload_and_send2(request):
                 excel_file=s3_key,
                 status="Pending",
             )
-            process_bulk_whatsapp2.apply_async(args=(s3_key, choice, job_id), queue="messaging2")
+            user = request.user
+            user_id = user.id if user.is_authenticated else None
+            process_bulk_whatsapp2.apply_async(args=(s3_key, choice, job_id,user_id), queue="messaging2")
             return redirect("job_status2", job_id=job_id)
     else:
         form = UploadForm2()
