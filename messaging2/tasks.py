@@ -655,8 +655,11 @@ def send_ticket_open_message(app_key, case_id):
         chat_prefix = cfg.get('chat_prefix', 'chat2')
         whatsapp_creds = cfg.get('whatsapp', {})
         app_name = cfg['app_name']
+
     except KeyError:
         return
+    case = CaseModel.objects.get(id=case_id)
+    final_sender_name = case.created_by
 
     case = CaseModel.objects.filter(id=case_id).first()
     if not case or case.ticket_open_message_sent:
@@ -710,7 +713,7 @@ def send_ticket_open_message(app_key, case_id):
         sent_text = free_text
 
     log = LogModel.objects.create(
-        customer_name=app_name,
+        customer_name=final_sender_name,
         mobile=mobile,
         template_name=open_template if used_template else "",
         sent_text_message=sent_text,
@@ -764,7 +767,7 @@ def send_ticket_open_message(app_key, case_id):
                         "message_type": "Sent",
                         "message_id": log.message_id,
                         "status": log.status,
-                        "sender_name": app_name,
+                        "sender_name": final_sender_name,
                     }
                 }
             )
@@ -785,6 +788,8 @@ def send_ticket_open_message(app_key, case_id):
     except Exception:
         pass
 
+
+
 @shared_task(queue="messaging2")
 def send_ticket_close_message(app_key, case_id):
     try:
@@ -801,6 +806,10 @@ def send_ticket_close_message(app_key, case_id):
         app_name = cfg['app_name']
     except KeyError:
         return
+    
+
+    case = CaseModel.objects.get(id=case_id)
+    final_sender_name = case.created_by
 
     case = CaseModel.objects.filter(id=case_id).first()
     if not case or case.ticket_close_message_sent:
@@ -843,9 +852,9 @@ def send_ticket_close_message(app_key, case_id):
         sent_text = render_template(template_body, template_params)
     else:
         sent_text = free_text
-
+    
     log = LogModel.objects.create(
-        customer_name=app_name,
+        customer_name=final_sender_name,
         mobile=mobile,
         template_name=close_template if used_template else "",
         sent_text_message=sent_text,
@@ -899,7 +908,7 @@ def send_ticket_close_message(app_key, case_id):
                         "message_type": "Sent",
                         "message_id": log.message_id,
                         "status": log.status,
-                        "sender_name": app_name,
+                        "sender_name": final_sender_name,
                     }
                 }
             )

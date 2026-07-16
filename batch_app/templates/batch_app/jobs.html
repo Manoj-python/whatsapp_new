@@ -1,0 +1,149 @@
+<!-- batch_app/templates/batch_app/jobs.html - ENHANCED LIST -->
+{% extends 'batch_app/base.html' %}
+
+{% block page_title %}Batch Jobs{% endblock %}
+{% block page_subtitle %}Manage all your scheduled batch jobs{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Jobs</li>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <span><i class="fas fa-list me-2"></i>All Jobs</span>
+                <span class="badge bg-secondary">{{ jobs.paginator.count }} total</span>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="GET" class="d-flex gap-2">
+                    <select name="status" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+                        <option value="">All Status</option>
+                        {% for status_key, status_label in status_choices %}
+                        <option value="{{ status_key }}" {% if status_filter == status_key %}selected{% endif %}>
+                            {{ status_label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <a href="{% url 'batch_job_create' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus me-1"></i> New Job
+                    </a>
+                </form>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Job Name</th>
+                            <th>App</th>
+                            <th>Template</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Batches</th>
+                            <th>Sent/Failed</th>
+                            <th>Created</th>
+                            <th style="width:80px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in jobs %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'batch_job_detail' job.job_id %}" class="text-decoration-none fw-semibold">
+                                    {{ job.job_name|truncatechars:25 }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge bg-info bg-opacity-10 text-info">{{ job.target_app|title }}</span>
+                            </td>
+                            <td><code>{{ job.template_name|truncatechars:12 }}</code></td>
+                            <td>
+                                <span class="badge-status badge-{{ job.status }}">
+                                    {{ job.status|upper }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2" style="min-width:100px;">
+                                    <div class="progress-custom flex-grow-1" style="width:80px;">
+                                        <div class="progress-bar-custom {% if job.progress_percentage == 100 %}success{% elif job.progress_percentage > 50 %}warning{% else %}danger{% endif %}" 
+                                             style="width: {{ job.progress_percentage }}%"></div>
+                                    </div>
+                                    <span class="fw-semibold small">{{ job.progress_percentage }}%</span>
+                                </div>
+                            </td>
+                            <td>{{ job.completed_batches }}/{{ job.total_batches }}</td>
+                            <td>
+                                <span class="text-success">{{ job.sent_count }}</span>
+                                <span class="text-muted">/</span>
+                                <span class="text-danger">{{ job.failed_count }}</span>
+                            </td>
+                            <td class="text-muted small">{{ job.created_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <a href="{% url 'batch_job_detail' job.job_id %}" class="btn btn-sm btn-outline-primary" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5">
+                                <i class="fas fa-inbox fa-2x text-muted d-block mb-3"></i>
+                                <p class="text-muted">No jobs found</p>
+                                <a href="{% url 'batch_job_create' %}" class="btn btn-primary">
+                                    <i class="fas fa-plus me-2"></i>Create First Job
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        {% if jobs.has_other_pages %}
+        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="text-muted small">
+                Showing page {{ jobs.number }} of {{ jobs.paginator.num_pages }}
+            </span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if jobs.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                            <i class="fas fa-angle-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ jobs.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                            <i class="fas fa-angle-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    <li class="page-item active">
+                        <span class="page-link">{{ jobs.number }}</span>
+                    </li>
+                    
+                    {% if jobs.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ jobs.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                            <i class="fas fa-angle-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ jobs.paginator.num_pages }}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                            <i class="fas fa-angle-double-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

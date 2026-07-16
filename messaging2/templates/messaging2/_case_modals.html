@@ -90,6 +90,10 @@
                     <input type="text" id="editLoanNumber" class="form-control">
                 </div>
                 <div class="mb-3">
+                    <label>Vehicle Number</label>
+                    <input type="text" id="editVehicleNumber" class="form-control">
+                </div>
+                <div class="mb-3">
                     <label>Customer Name</label>
                     <input type="text" id="editCustomerName" class="form-control">
                 </div>
@@ -504,6 +508,7 @@
                 if (data.success) {
                     const c = data.case;
                     document.getElementById('editLoanNumber').value = c.loan_number || '';
+                    document.getElementById('editVehicleNumber').value = c.vehicle_number || '';
                     document.getElementById('editCustomerName').value = c.customer_name || '';
                     document.getElementById('editIssueDescription').value = c.issue_description || '';
 
@@ -545,6 +550,7 @@
     function submitEdit() {
         const caseId = document.getElementById('editCaseId').value;
         const loanNumber = document.getElementById('editLoanNumber').value.trim();
+        const vehicleNumber = document.getElementById('editVehicleNumber').value.trim();
         const customerName = document.getElementById('editCustomerName').value.trim();
         const issueDescription = document.getElementById('editIssueDescription').value.trim();
         const group = document.getElementById('editGroup').value;
@@ -569,6 +575,7 @@
 
         const payload = {
             loan_number: loanNumber,
+            vehicle_number:vehicleNumber,
             customer_name: customerName,
             issue_description: issueDescription
         };

@@ -1,0 +1,85 @@
+{% extends 'batch_app/base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4>{% if template %}✏️ Edit Template{% else %}📝 Register New Template{% endif %}</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label>🔑 Template ID</label>
+                            <input type="text" name="template_id" class="form-control" 
+                                   value="{{ template.template_id|default:'' }}" 
+                                   {% if template %}readonly{% endif %} required>
+                            <small class="text-muted">Unique identifier (e.g., template_36)</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>📋 Template Name (WhatsApp)</label>
+                            <input type="text" name="template_name" class="form-control" 
+                                   value="{{ template.template_name|default:'' }}" required>
+                            <small class="text-muted">Exact name from WhatsApp Manager</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>🌐 Language</label>
+                            <select name="language" class="form-control">
+                                <option value="en" {% if template.language == 'en' %}selected{% endif %}>English</option>
+                                <option value="te" {% if template.language == 'te' %}selected{% endif %}>Telugu</option>
+                                <option value="hi" {% if template.language == 'hi' %}selected{% endif %}>Hindi</option>
+                                <option value="kn" {% if template.language == 'kn' %}selected{% endif %}>Kannada</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>📝 Parameter Names (comma separated)</label>
+                            <input type="text" name="parameter_names" class="form-control" 
+                                   value="{{ template.parameter_names|join:','|default:'' }}">
+                            <small class="text-muted">e.g., customer_name, loan_number</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>📊 Column Mapping (comma separated)</label>
+                            <input type="text" name="column_names" class="form-control" 
+                                   value="{% if template.column_mapping %}{{ template.column_mapping.values|join:',' }}{% endif %}">
+                            <small class="text-muted">Excel column names matching parameters</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>📂 Category</label>
+                            <select name="category" class="form-control">
+                                <option value="UTILITY" {% if template.category == 'UTILITY' %}selected{% endif %}>UTILITY</option>
+                                <option value="MARKETING" {% if template.category == 'MARKETING' %}selected{% endif %}>MARKETING</option>
+                                <option value="AUTHENTICATION" {% if template.category == 'AUTHENTICATION' %}selected{% endif %}>AUTHENTICATION</option>
+                            </select>
+                        </div>
+                        
+                        {% if template %}
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="is_active" {% if template.is_active %}checked{% endif %}>
+                                Active
+                            </label>
+                        </div>
+                        {% endif %}
+                        
+                        <button type="submit" class="btn btn-success btn-block">
+                            {% if template %}💾 Update Template{% else %}🚀 Register Template{% endif %}
+                        </button>
+                    </form>
+                    
+                    <div class="mt-3">
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -2560,24 +2560,10 @@ async function openPaymentModal() {
             document.getElementById('payVasDue').value = vasDue.toFixed(2);
             document.getElementById('payTotalDue').value = totalDue.toFixed(2);
 
-            // ---------- Set up validation ----------
+            // ---------- Set default amount ----------
             const amountInput = document.getElementById('payAmount');
-            const minAmount = totalDue;   // must collect at least the full due
-            amountInput.dataset.min = minAmount.toFixed(2);
-            // No dataset.max
+            amountInput.value = totalDue.toFixed(2);   // default = total due
 
-            // Default = totalDue
-            amountInput.value = totalDue.toFixed(2);
-
-            // Attach validation listener (avoid duplicates)
-            if (window._amountValidationHandler) {
-                amountInput.removeEventListener('input', window._amountValidationHandler);
-            }
-            window._amountValidationHandler = validatePaymentAmount;
-            amountInput.addEventListener('input', window._amountValidationHandler);
-
-            // Initial validation (will pass because amount == min)
-            validatePaymentAmount();
         } else {
             showNotification(data.error || 'Could not fetch details', 'error');
             modal.hide();
@@ -2599,11 +2585,8 @@ async function sendPaymentTemplate() {
         return;
     }
 
-    // Validate amount – ensures amount >= min and > 0
-    if (!validatePaymentAmount()) {
-        amountInput.focus();
-        return;
-    }
+    // Amount validation is removed – any value is accepted (including empty)
+    // (The backend may still enforce its own rules)
 
     const btn = document.getElementById('paySubmitBtn');
     const originalHtml = btn.innerHTML;
@@ -2634,7 +2617,6 @@ async function sendPaymentTemplate() {
         btn.disabled = false;
     }
 }
-
 // ─── PTP Functions ──────────────────────────────────────────────
 
 async function openPtpModal() {

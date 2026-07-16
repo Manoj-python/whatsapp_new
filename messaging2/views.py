@@ -3424,6 +3424,9 @@ def send_payment_template_view(request):
 
     mobile_to_send = data.get('mobile')      # the edited number
     amount = data.get('amount')
+    agent = get_agent_from_user(request.user)
+
+    sender_name = agent.name        
     if not mobile_to_send or not amount:
         return JsonResponse({'success': False, 'error': 'Mobile and amount required'})
 
@@ -3456,6 +3459,7 @@ def send_payment_template_view(request):
         get_template_text = cfg.get('get_template_text')
         render_template_text = cfg.get('render_template_text')
         template_name = cfg['templates'].get('payment', 'payment_gateway')
+        
 
         # ✅ Generate payment link using the original chat number
         payment_url = generate_payment_link(app_key, link_mobile_api, amount)
@@ -3486,11 +3490,11 @@ def send_payment_template_view(request):
         # Send template to the edited number
         result = send_whatsapp_payment_template(app_key, mobile_for_api,customer_name, amount, payment_url)
         logger.info(f"📨 WhatsApp response: {result}")
-
+        final_sender_name = sender_name
         # Save log under the broadcast mobile (the chat we are viewing)
         msg_id = result.get('messages', [{}])[0].get('id', '')
         log_entry = LogModel.objects.create(
-            customer_name=app_name,
+            customer_name=final_sender_name,
             mobile=broadcast_mobile_db,
             sent_text_message=rendered_message,
             message_type="Sent",
@@ -3533,7 +3537,7 @@ def send_payment_template_view(request):
                         "message_type": "Sent",
                         "message_id": log_entry.message_id,
                         "status": "Sent",
-                        "sender_name": app_name
+                        "sender_name": final_sender_name
                     }
                 }
             )

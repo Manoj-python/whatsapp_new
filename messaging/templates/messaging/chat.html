@@ -2470,7 +2470,7 @@ async function openPaymentModal() {
     const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
     modal.show();
 
-    // Pre‑fill the mobile field
+    // Pre‑fill placeholders
     document.getElementById('payMobile').value = selectedMobile;
     document.getElementById('payCustName').value = 'Loading...';
     document.getElementById('payLoanNo').value = '...';
@@ -2485,19 +2485,23 @@ async function openPaymentModal() {
         const resp = await fetch(`/messaging2/api/payment-details/?app=${APP_KEY}&mobile=${encodeURIComponent(selectedMobile)}`);
         const data = await resp.json();
         if (data.success) {
+            const emiDue = parseFloat(data.due_amount || 0);
+            const lpiDue = parseFloat(data.lpi_due || 0);
+            const vasDue = parseFloat(data.vas_due || 0);
+            const totalDue = emiDue + lpiDue + vasDue;   // total due (includes collection charges if any)
+
             document.getElementById('payCustName').value = data.customer_name || '';
             document.getElementById('payLoanNo').value = data.loan_number || '';
             document.getElementById('payVehicleNo').value = data.vehicle_no || '';
-            
-            // ✅ Display with 2 decimal places
-            document.getElementById('payEmiDues').value = parseFloat(data.due_amount || 0).toFixed(2);
-            document.getElementById('payLpi').value = parseFloat(data.lpi_due || 0).toFixed(2);
-            document.getElementById('payVasDue').value = parseFloat(data.vas_due || 0).toFixed(2);
-            document.getElementById('payTotalDue').value = parseFloat(data.total_due || 0).toFixed(2);
-            
-            // Pre‑fill editable amount with total_due (2 decimals)
-            const defaultAmount = data.total_due || data.due_amount || 0;
-            document.getElementById('payAmount').value = parseFloat(defaultAmount).toFixed(2);
+            document.getElementById('payEmiDues').value = emiDue.toFixed(2);
+            document.getElementById('payLpi').value = lpiDue.toFixed(2);
+            document.getElementById('payVasDue').value = vasDue.toFixed(2);
+            document.getElementById('payTotalDue').value = totalDue.toFixed(2);
+
+            // ---------- Set default amount ----------
+            const amountInput = document.getElementById('payAmount');
+            amountInput.value = totalDue.toFixed(2);   // default = total due
+
         } else {
             showNotification(data.error || 'Could not fetch details', 'error');
             modal.hide();
@@ -2508,18 +2512,19 @@ async function openPaymentModal() {
     }
 }
 
+// --------------------- Send Payment Template ---------------------
 async function sendPaymentTemplate() {
-    // 🆕 Read the mobile from the editable field
     const mobileToSend = document.getElementById('payMobile').value.trim();
-    const amount = document.getElementById('payAmount').value;
+    const amountInput = document.getElementById('payAmount');
+    const amount = parseFloat(amountInput.value);
+
     if (!mobileToSend) {
         showNotification('Please enter a valid mobile number', 'warning');
         return;
     }
-    if (!amount || parseFloat(amount) <= 0) {
-        showNotification('Please enter a valid amount', 'warning');
-        return;
-    }
+
+    // Amount validation is removed – any value is accepted (including empty)
+    // (The backend may still enforce its own rules)
 
     const btn = document.getElementById('paySubmitBtn');
     const originalHtml = btn.innerHTML;
@@ -2528,10 +2533,9 @@ async function sendPaymentTemplate() {
 
     try {
         const payload = {
-            mobile: mobileToSend,          // 🆕 Send the edited number
-            amount: parseFloat(amount)
+            mobile: mobileToSend,
+            amount: amount
         };
-        // 🆕 Pass the current chat as a query parameter
         const resp = await fetch(`/messaging2/api/send-payment-template/?app=${APP_KEY}&current_chat=${encodeURIComponent(selectedMobile)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },

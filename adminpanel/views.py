@@ -1445,6 +1445,8 @@ def edit_case_api(request, case_id):
         # ─── Metadata fields ──────────────────────────
         if 'loan_number' in data:
             case.loan_number = data['loan_number']
+        if 'vehicle_number' in data:
+            case.vehicle_number = data['vehicle_number']
         if 'customer_name' in data:
             case.customer_name = data['customer_name']
         if 'issue_description' in data:
@@ -1510,7 +1512,7 @@ def edit_case_api(request, case_id):
                 logger.error(f"auto_assign failed: {e}")
 
         # ─── Save ──────────────────────────────────────
-        case.save(update_fields=['loan_number', 'customer_name', 'issue_description',
+        case.save(update_fields=['loan_number', 'customer_name', 'issue_description','vehicle_number',
                                  'group', 'subgroup', 'category', 'assigned_to_name', 'updated_at'])
         logger.info(f"Case {case_id} saved successfully")
         app_key = get_app_from_request(request)
@@ -1539,6 +1541,7 @@ def edit_case_api(request, case_id):
                 'category_name': case.category.name if case.category else None,
                 'issue_description': case.issue_description,
                 'loan_number': case.loan_number,
+                'vehicle_number':case.vehicle_number,
                 'customer_name': case.customer_name,
                 'assigned_to_name': case.assigned_to_name,
             }
@@ -1547,7 +1550,6 @@ def edit_case_api(request, case_id):
     except Exception as e:
         logger.error(f"Error in edit_case_api: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
-
 
 # ============================================
 # UNIFIED FAILED MESSAGES (supports ?app=...)

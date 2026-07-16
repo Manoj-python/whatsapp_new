@@ -514,6 +514,10 @@
                     <input type="text" id="editLoanNumber" class="form-control">
                 </div>
                 <div class="mb-3">
+                    <label>Vehicle Number</label>
+                    <input type="text" id="editVehicleNumber" class="form-control">
+                </div>
+                <div class="mb-3">
                     <label>Customer Name</label>
                     <textarea id="editName" class="form-control" rows="2"></textarea>
                 </div>
@@ -1086,6 +1090,8 @@ function openEditCaseModal(caseId) {
             if (data.success) {
                 document.getElementById('editCaseId').value = caseId;
                 document.getElementById('editLoanNumber').value = data.case.loan_number || '';
+                document.getElementById('editVehicleNumber').value = data.case.vehicle_number || '';
+
                 document.getElementById('editName').value = data.case.customer_name || '';
                 document.getElementById('editIssueDescription').value = data.case.issue_description || '';
 
@@ -1137,6 +1143,7 @@ function openEditCaseModal(caseId) {
     function submitEditCase() {
         const caseId = document.getElementById('editCaseId').value;
         const loanNumber = document.getElementById('editLoanNumber').value;
+        const vehicleNumber = document.getElementById('editVehicleNumber').value;
         const customerName = document.getElementById('editName').value;
         const issueDesc = document.getElementById('editIssueDescription').value;
         const groupId = document.getElementById('editGroup').value;
@@ -1145,6 +1152,7 @@ function openEditCaseModal(caseId) {
 
         const payload = {
             loan_number: loanNumber,
+            vehicle_number:vehicleNumber,
             customer_name: customerName,
             issue_description: issueDesc,
         };

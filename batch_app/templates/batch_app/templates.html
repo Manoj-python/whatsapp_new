@@ -1,0 +1,55 @@
+{% extends 'batch_app/base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>📝 Template Registry</h5>
+                    <a href="{% url 'batch_template_create' %}" class="btn btn-primary btn-sm">➕ New Template</a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Template Name</th>
+                                    <th>Language</th>
+                                    <th>Parameters</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for template in templates %}
+                                <tr>
+                                    <td><code>{{ template.template_id }}</code></td>
+                                    <td>{{ template.template_name }}</td>
+                                    <td>{{ template.language }}</td>
+                                    <td>{{ template.parameter_names|join:", " }}</td>
+                                    <td>
+                                        <span class="badge badge-{% if template.is_active %}success{% else %}danger{% endif %}">
+                                            {% if template.is_active %}Active{% else %}Inactive{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'batch_template_edit' template.template_id %}" class="btn btn-sm btn-warning">✏️</a>
+                                        <a href="{% url 'batch_template_delete' template.template_id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this template?')">🗑️</a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center">No templates registered yet</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

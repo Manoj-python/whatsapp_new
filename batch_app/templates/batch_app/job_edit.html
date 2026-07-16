@@ -1,0 +1,718 @@
+<!-- batch_app/templates/batch_app/job_edit.html - EDIT BATCH JOB -->
+
+{% extends 'batch_app/base.html' %}
+
+{% block page_title %}Edit Batch Job{% endblock %}
+{% block page_subtitle %}Update your scheduled WhatsApp campaign{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'batch_job_list' %}">Jobs</a></li>
+<li class="breadcrumb-item"><a href="{% url 'batch_job_detail' job.job_id %}">{{ job.job_name }}</a></li>
+<li class="breadcrumb-item active">Edit</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center fade-in">
+    <div class="col-lg-10 col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-edit me-2"></i>Edit Batch Job</span>
+                <span class="badge badge-status badge-{{ job.status }}">
+                    {{ job.status|upper }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Editing this job will reset progress and reschedule it. 
+                    <strong>Job ID:</strong> {{ job.job_id }}
+                </div>
+
+                <form method="POST" id="jobForm" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="row g-4">
+                        <!-- Job Name -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-tag me-1"></i> Job Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="job_name" id="jobName" class="form-control" 
+                                   value="{{ job.job_name }}" required
+                                   minlength="3" maxlength="100">
+                            <div class="invalid-feedback">Please enter a job name (3-100 characters).</div>
+                        </div>
+                        
+                        <!-- Target App -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-mobile-alt me-1"></i> WhatsApp App <span class="text-danger">*</span>
+                            </label>
+                            <select name="target_app" id="targetApp" class="form-select" required>
+                                <option value="">-- Select App --</option>
+                                {% for app_key, app_label in app_choices %}
+                                <option value="{{ app_key }}" {% if job.target_app == app_key %}selected{% endif %}>
+                                    {{ app_label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Select which WhatsApp account to send from</small>
+                        </div>
+                        
+                        <!-- Template -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-file-alt me-1"></i> Template <span class="text-danger">*</span>
+                            </label>
+                            <select name="template_id" id="templateSelect" class="form-select" required>
+                                <option value="">-- Select App First --</option>
+                                {% for template in templates %}
+                                <option value="{{ template.id }}" 
+                                        data-language="{{ template.language|default:'en' }}"
+                                        {% if job.template_id == template.id %}selected{% endif %}>
+                                    {{ template.label|default:template.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div id="templateInfo" class="mt-1">
+                                <span class="badge bg-info">Language: <span id="templateLanguage">{{ job.template_language|upper }}</span></span>
+                                <span class="badge bg-secondary ms-1">ID: {{ job.template_id }}</span>
+                            </div>
+                            <div id="templateLoading" style="display:none;" class="mt-1">
+                                <span class="spinner-border spinner-border-sm me-1"></span> Loading...
+                            </div>
+                            <div id="templateError" style="display:none;" class="text-danger small mt-1"></div>
+                        </div>
+                        
+                        <!-- Excel Path -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-file-excel me-1"></i> Excel File Path <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-folder"></i></span>
+                                <input type="text" name="excel_path" id="excelPath" class="form-control" 
+                                       value="{{ job.excel_path }}" required
+                                       pattern="^[a-zA-Z0-9_\-/]+\.(xlsx|xls)$">
+                                <button type="button" class="btn btn-outline-secondary" onclick="validateExcelPath()">
+                                    <i class="fas fa-check"></i> Validate
+                                </button>
+                            </div>
+                            <small class="text-muted">Path in S3 bucket (must end with .xlsx or .xls)</small>
+                            <div id="pathValidation" style="display:none;" class="mt-1"></div>
+                        </div>
+                        
+                        <!-- ===== BATCH SIZE ===== -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-layer-group me-1"></i> Batch Size
+                            </label>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="radio" name="batch_size_type" id="batchSizeCustom" 
+                                               value="custom" class="form-check-input"
+                                               {% if job.batch_size_type == 'custom' %}checked{% endif %}
+                                               onchange="toggleBatchSize()">
+                                        <label class="form-check-label" for="batchSizeCustom">
+                                            Custom Size
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="radio" name="batch_size_type" id="batchSizeFull" 
+                                               value="full" class="form-check-input"
+                                               {% if job.batch_size_type == 'full' %}checked{% endif %}
+                                               onchange="toggleBatchSize()">
+                                        <label class="form-check-label" for="batchSizeFull">
+                                            <span class="badge bg-success">FULL</span> All Customers (1 Batch)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="customBatchSize" class="mt-2" style="{% if job.batch_size_type == 'full' %}display:none;{% endif %}">
+                                <div class="input-group">
+                                    <input type="number" name="batch_size" id="batchSize" 
+                                           class="form-control" value="{{ job.batch_size|default:default_batch_size }}" min="1">
+                                    <span class="input-group-text">customers per batch</span>
+                                </div>
+                                <div class="mt-2 d-flex flex-wrap gap-1">
+                                    <span class="text-muted small me-2">Quick:</span>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBatchSize(1)">1</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBatchSize(10)">10</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBatchSize(100)">100</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBatchSize(1000)">1K</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBatchSize(10000)">10K</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBatchSize(100000)">1L</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- ===== SCHEDULE TYPE ===== -->
+                        <div class="col-12 mt-3">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-calendar-alt me-1"></i> Schedule Type
+                            </label>
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" name="schedule_type" id="scheduleDaily" 
+                                               value="daily" class="form-check-input"
+                                               {% if job.schedule_type == 'daily' %}checked{% endif %}
+                                               onchange="toggleSchedule()">
+                                        <label class="form-check-label" for="scheduleDaily">
+                                            <i class="fas fa-sun"></i> Daily
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" name="schedule_type" id="scheduleMultiple" 
+                                               value="multiple_daily" class="form-check-input"
+                                               {% if job.schedule_type == 'multiple_daily' %}checked{% endif %}
+                                               onchange="toggleSchedule()">
+                                        <label class="form-check-label" for="scheduleMultiple">
+                                            <i class="fas fa-clock"></i> Multiple Daily
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" name="schedule_type" id="scheduleWeekly" 
+                                               value="weekly" class="form-check-input"
+                                               {% if job.schedule_type == 'weekly' %}checked{% endif %}
+                                               onchange="toggleSchedule()">
+                                        <label class="form-check-label" for="scheduleWeekly">
+                                            <i class="fas fa-calendar-week"></i> Weekly
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" name="schedule_type" id="scheduleCustom" 
+                                               value="custom_interval" class="form-check-input"
+                                               {% if job.schedule_type == 'custom_interval' %}checked{% endif %}
+                                               onchange="toggleSchedule()">
+                                        <label class="form-check-label" for="scheduleCustom">
+                                            <i class="fas fa-sliders-h"></i> Custom
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- ===== SCHEDULE DETAILS ===== -->
+                        <div class="col-12 mt-3" id="scheduleDetails">
+                            
+                            <!-- ===== DAILY SCHEDULE ===== -->
+                            <div id="dailySchedule" class="row g-3" style="{% if job.schedule_type != 'daily' %}display:none;{% endif %}">
+                                <div class="col-md-6">
+                                    <label class="form-label">Date</label>
+                                    <input type="date" name="schedule_date" id="scheduleDate" 
+                                           class="form-control" value="{{ schedule_date|default:today }}" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Time</label>
+                                    <input type="time" name="schedule_time" id="scheduleTime" 
+                                           class="form-control" value="{{ schedule_time|default:current_time }}" required>
+                                </div>
+                            </div>
+                            
+                            <!-- ===== MULTIPLE DAILY SCHEDULE ===== -->
+                            <div id="multipleDailySchedule" style="{% if job.schedule_type != 'multiple_daily' %}display:none;{% endif %}">
+                                <!-- Date Picker -->
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold">
+                                            <i class="fas fa-calendar-day me-1"></i> Select Date
+                                        </label>
+                                        <input type="date" name="multiple_schedule_date" id="multipleScheduleDate" 
+                                               class="form-control" value="{{ multiple_schedule_date|default:today }}" required>
+                                        <small class="text-muted">All times will run on this date</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold">
+                                            <i class="fas fa-clock me-1"></i> Add Times
+                                        </label>
+                                        <div class="d-flex gap-2">
+                                            <input type="time" id="newTimeInput" class="form-control" value="09:00">
+                                            <button type="button" class="btn btn-primary" onclick="addMultipleTime()">
+                                                <i class="fas fa-plus"></i> Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Time List -->
+                                <div class="mt-2">
+                                    <label class="form-label fw-semibold">
+                                        <i class="fas fa-list me-1"></i> Scheduled Times 
+                                        <span class="badge bg-primary" id="timeCount">{{ job.schedule_times|length|default:0 }}</span>
+                                    </label>
+                                    <div id="timeListContainer" class="border rounded p-2" style="min-height: 60px; background: #f8f9fa;">
+                                        <div id="emptyTimesMessage" class="text-center text-muted py-3" style="{% if job.schedule_times %}display:none;{% endif %}">
+                                            <i class="fas fa-clock fa-2x d-block mb-2"></i>
+                                            No times added yet. Add times using the form above.
+                                        </div>
+                                        <div id="timeList" class="d-flex flex-wrap gap-2">
+                                            {% for time in job.schedule_times %}
+                                            <div class="time-chip d-flex align-items-center gap-2 bg-white border rounded p-2" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                                <i class="fas fa-clock text-primary"></i>
+                                                <span class="fw-semibold">{{ time|time:"h:i A" }}</span>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeMultipleTimeFromEdit({{ forloop.counter0 }})" style="padding: 0 6px;">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Each time will trigger a separate run on the selected date</small>
+                                </div>
+                                
+                                <!-- Hidden inputs for form submission -->
+                                <div id="hiddenTimesContainer">
+                                    {% for time in job.schedule_times %}
+                                    <input type="hidden" name="schedule_times[]" value="{{ time }}">
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <!-- ===== WEEKLY SCHEDULE ===== -->
+                            <div id="weeklySchedule" style="{% if job.schedule_type != 'weekly' %}display:none;{% endif %}">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Day of Week</label>
+                                        <select name="weekly_day" class="form-select">
+                                            <option value="0" {% if job.weekly_day == 0 %}selected{% endif %}>Monday</option>
+                                            <option value="1" {% if job.weekly_day == 1 %}selected{% endif %}>Tuesday</option>
+                                            <option value="2" {% if job.weekly_day == 2 %}selected{% endif %}>Wednesday</option>
+                                            <option value="3" {% if job.weekly_day == 3 %}selected{% endif %}>Thursday</option>
+                                            <option value="4" {% if job.weekly_day == 4 %}selected{% endif %}>Friday</option>
+                                            <option value="5" {% if job.weekly_day == 5 %}selected{% endif %}>Saturday</option>
+                                            <option value="6" {% if job.weekly_day == 6 %}selected{% endif %}>Sunday</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Time</label>
+                                        <input type="time" name="schedule_time" class="form-control" value="{{ schedule_time|default:'09:00' }}">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- ===== CUSTOM INTERVAL ===== -->
+                            <div id="customSchedule" style="{% if job.schedule_type != 'custom_interval' %}display:none;{% endif %}">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Interval (Days)</label>
+                                        <input type="number" name="interval_days" class="form-control" 
+                                               value="{{ job.interval_days|default:5 }}" min="1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Date</label>
+                                        <input type="date" name="schedule_date" class="form-control" value="{{ schedule_date|default:today }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Time</label>
+                                        <input type="time" name="schedule_time" class="form-control" value="{{ schedule_time|default:'09:00' }}">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- ===== END DATE ===== -->
+                            <div class="mt-3">
+                                <div class="form-check">
+                                    <input type="checkbox" name="has_end_date" id="hasEndDate" 
+                                           class="form-check-input" {% if has_end_date %}checked{% endif %}
+                                           onchange="toggleEndDate()">
+                                    <label class="form-check-label" for="hasEndDate">
+                                        Set End Date (Optional)
+                                    </label>
+                                </div>
+                                <div id="endDateContainer" style="{% if not has_end_date %}display:none;{% endif %}" class="mt-2">
+                                    <input type="datetime-local" name="end_date" class="form-control" value="{{ end_date|default:'' }}">
+                                    <small class="text-muted">After this date, the job will be marked as completed</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit -->
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-warning btn-lg w-100" id="submitBtn">
+                            <span id="submitText"><i class="fas fa-save me-2"></i>Update Batch Job</span>
+                            <span id="submitSpinner" style="display:none;">
+                                <span class="spinner-border spinner-border-sm me-2"></span> Updating...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="text-center mt-3">
+            <a href="{% url 'batch_job_detail' job.job_id %}" class="text-muted">
+                <i class="fas fa-arrow-left me-1"></i> Back to Job Details
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// MULTIPLE DAILY - ADD/REMOVE TIMES (EDIT MODE)
+// ============================================================
+
+let multipleTimes = [];
+
+// Initialize from existing times
+document.addEventListener('DOMContentLoaded', function() {
+    const existingTimes = document.querySelectorAll('input[name="schedule_times[]"]');
+    existingTimes.forEach(input => {
+        if (input.value) {
+            multipleTimes.push(input.value);
+        }
+    });
+    renderMultipleTimes();
+    updateHiddenTimes();
+});
+
+function addMultipleTime() {
+    const timeInput = document.getElementById('newTimeInput');
+    const time = timeInput.value;
+    
+    if (!time) {
+        showToast('⚠️ Warning', 'Please select a time first', 'warning');
+        return;
+    }
+    
+    if (multipleTimes.includes(time)) {
+        showToast('⚠️ Warning', 'This time is already added', 'warning');
+        return;
+    }
+    
+    if (multipleTimes.length >= 8) {
+        showToast('⚠️ Warning', 'Maximum 8 times per day', 'warning');
+        return;
+    }
+    
+    multipleTimes.push(time);
+    renderMultipleTimes();
+    timeInput.value = '';
+    timeInput.focus();
+    updateHiddenTimes();
+    showToast('✅', `Added ${time}`, 'success');
+}
+
+function removeMultipleTimeFromEdit(index) {
+    multipleTimes.splice(index, 1);
+    renderMultipleTimes();
+    updateHiddenTimes();
+}
+
+function removeMultipleTime(index) {
+    multipleTimes.splice(index, 1);
+    renderMultipleTimes();
+    updateHiddenTimes();
+}
+
+function renderMultipleTimes() {
+    const list = document.getElementById('timeList');
+    const emptyMsg = document.getElementById('emptyTimesMessage');
+    const count = document.getElementById('timeCount');
+    
+    count.textContent = multipleTimes.length;
+    
+    if (multipleTimes.length === 0) {
+        emptyMsg.style.display = 'block';
+        list.innerHTML = '';
+        return;
+    }
+    
+    emptyMsg.style.display = 'none';
+    list.innerHTML = multipleTimes.map((time, index) => `
+        <div class="time-chip d-flex align-items-center gap-2 bg-white border rounded p-2" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <i class="fas fa-clock text-primary"></i>
+            <span class="fw-semibold">${formatTimeDisplay(time)}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeMultipleTime(${index})" style="padding: 0 6px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function formatTimeDisplay(time) {
+    const [hours, minutes] = time.split(':');
+    const h = parseInt(hours);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${minutes} ${ampm}`;
+}
+
+function updateHiddenTimes() {
+    const container = document.getElementById('hiddenTimesContainer');
+    container.innerHTML = multipleTimes.map(time => 
+        `<input type="hidden" name="schedule_times[]" value="${time}">`
+    ).join('');
+}
+
+// Also add time on Enter key
+document.getElementById('newTimeInput')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addMultipleTime();
+    }
+});
+
+// ============================================================
+// TOGGLE FUNCTIONS
+// ============================================================
+
+function toggleBatchSize() {
+    const isFull = document.getElementById('batchSizeFull').checked;
+    document.getElementById('customBatchSize').style.display = isFull ? 'none' : 'block';
+}
+
+function toggleSchedule() {
+    const type = document.querySelector('input[name="schedule_type"]:checked').value;
+
+    const sections = {
+        daily: document.getElementById('dailySchedule'),
+        multiple_daily: document.getElementById('multipleDailySchedule'),
+        weekly: document.getElementById('weeklySchedule'),
+        custom_interval: document.getElementById('customSchedule')
+    };
+
+    Object.entries(sections).forEach(([sectionType, section]) => {
+        const active = sectionType === type;
+        section.style.display = active ? 'block' : 'none';
+        section.querySelectorAll('input, select, textarea').forEach((field) => {
+            if (field.id !== 'newTimeInput') {
+                field.disabled = !active;
+            }
+        });
+    });
+
+    if (type === 'weekly') {
+        document.getElementById('scheduleDate').disabled = false;
+    }
+    
+    if (type !== 'multiple_daily') {
+        multipleTimes = [];
+        renderMultipleTimes();
+        updateHiddenTimes();
+    }
+}
+
+function toggleEndDate() {
+    const checked = document.getElementById('hasEndDate').checked;
+    document.getElementById('endDateContainer').style.display = checked ? 'block' : 'none';
+}
+
+function setBatchSize(size) {
+    document.getElementById('batchSize').value = size;
+    document.getElementById('batchSizeCustom').checked = true;
+    toggleBatchSize();
+}
+
+function validateExcelPath() {
+    const input = document.getElementById('excelPath');
+    const validation = document.getElementById('pathValidation');
+    const pattern = /^[a-zA-Z0-9_\-/]+\.(xlsx|xls)$/;
+    
+    if (pattern.test(input.value)) {
+        validation.style.display = 'block';
+        validation.innerHTML = '<div class="alert alert-success py-1 mb-0">✓ Valid Excel file path</div>';
+        input.classList.remove('is-invalid');
+    } else {
+        validation.style.display = 'block';
+        validation.innerHTML = '<div class="alert alert-danger py-1 mb-0">✗ Invalid path. Must end with .xlsx or .xls</div>';
+        input.classList.add('is-invalid');
+    }
+}
+
+// ============================================================
+// INITIALIZATION
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default date if not provided
+    const today = new Date().toISOString().split('T')[0];
+    document.querySelectorAll('input[type="date"]').forEach(el => {
+        if (!el.value) el.value = today;
+    });
+    
+    // Set default time if not provided
+    const now = new Date();
+    now.setMinutes(Math.ceil(now.getMinutes() / 5) * 5);
+    const defaultTime = now.toTimeString().slice(0, 5);
+    document.querySelectorAll('input[type="time"]').forEach(el => {
+        if (!el.value || el.value === '09:00') {
+            el.value = defaultTime;
+        }
+    });
+    
+    // Load templates when app changes
+    const appSelect = document.getElementById('targetApp');
+    const templateSelect = document.getElementById('templateSelect');
+    const templateLoading = document.getElementById('templateLoading');
+    const templateInfo = document.getElementById('templateInfo');
+    const templateLanguage = document.getElementById('templateLanguage');
+    const templateError = document.getElementById('templateError');
+    const form = document.getElementById('jobForm');
+    
+    appSelect.addEventListener('change', function() {
+        const app = this.value;
+        templateError.style.display = 'none';
+        templateInfo.style.display = 'none';
+        templateSelect.innerHTML = '<option value="">Loading...</option>';
+        templateSelect.disabled = true;
+        
+        if (!app) {
+            templateSelect.innerHTML = '<option value="">-- Select App First --</option>';
+            templateSelect.disabled = false;
+            return;
+        }
+        
+        templateLoading.style.display = 'inline-block';
+        
+        fetch(`/batch/api/templates/?app=${app}`)
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load templates');
+                return response.json();
+            })
+            .then(data => {
+                templateLoading.style.display = 'none';
+                templateSelect.disabled = false;
+                templateSelect.innerHTML = '<option value="">-- Select Template --</option>';
+                
+                if (data.templates && data.templates.length > 0) {
+                    data.templates.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = template.id;
+                        option.textContent = template.label || template.name;
+                        option.dataset.language = template.language || 'en';
+                        option.dataset.name = template.name;
+                        templateSelect.appendChild(option);
+                    });
+                } else {
+                    templateSelect.innerHTML = '<option value="">No templates found</option>';
+                }
+            })
+            .catch(error => {
+                templateLoading.style.display = 'none';
+                templateSelect.disabled = false;
+                templateSelect.innerHTML = '<option value="">Error loading templates</option>';
+                templateError.style.display = 'block';
+                templateError.textContent = error.message || 'Failed to load templates';
+                showToast('❌ Error', 'Failed to load templates: ' + error.message, 'error');
+            });
+    });
+    
+    // Show template info when selected
+    templateSelect.addEventListener('change', function() {
+        const selected = this.options[this.selectedIndex];
+        if (selected && selected.value) {
+            templateInfo.style.display = 'block';
+            templateLanguage.textContent = selected.dataset.language || 'en';
+        } else {
+            templateInfo.style.display = 'none';
+        }
+    });
+    
+    // Form validation
+    form.addEventListener('submit', function(e) {
+        const jobName = document.getElementById('jobName');
+        if (!jobName.value.trim() || jobName.value.trim().length < 3) {
+            e.preventDefault();
+            jobName.classList.add('is-invalid');
+            jobName.focus();
+            showToast('❌ Validation Error', 'Please enter a job name (3-100 characters)', 'error');
+            return false;
+        }
+        jobName.classList.remove('is-invalid');
+        
+        if (!appSelect.value) {
+            e.preventDefault();
+            appSelect.classList.add('is-invalid');
+            showToast('❌ Validation Error', 'Please select a WhatsApp app', 'error');
+            return false;
+        }
+        appSelect.classList.remove('is-invalid');
+        
+        if (!templateSelect.value) {
+            e.preventDefault();
+            templateSelect.classList.add('is-invalid');
+            showToast('❌ Validation Error', 'Please select a template', 'error');
+            return false;
+        }
+        templateSelect.classList.remove('is-invalid');
+        
+        const excelPath = document.getElementById('excelPath');
+        const pathPattern = /^[a-zA-Z0-9_\-/]+\.(xlsx|xls)$/;
+        if (!pathPattern.test(excelPath.value.trim())) {
+            e.preventDefault();
+            excelPath.classList.add('is-invalid');
+            showToast('❌ Validation Error', 'Please enter a valid Excel file path', 'error');
+            excelPath.focus();
+            return false;
+        }
+        excelPath.classList.remove('is-invalid');
+        
+        // Validate Multiple Daily
+        const scheduleType = document.querySelector('input[name="schedule_type"]:checked').value;
+        
+        if (scheduleType === 'multiple_daily') {
+            const selectedDate = document.getElementById('multipleScheduleDate').value;
+            if (!selectedDate) {
+                e.preventDefault();
+                showToast('❌ Validation Error', 'Please select a date', 'error');
+                return false;
+            }
+            
+            if (multipleTimes.length === 0) {
+                e.preventDefault();
+                showToast('❌ Validation Error', 'Please add at least one time', 'error');
+                return false;
+            }
+            
+            // Set the schedule_date and schedule_time from multiple daily
+            const firstTime = multipleTimes[0];
+            document.getElementById('scheduleDate').value = selectedDate;
+            document.getElementById('scheduleTime').value = firstTime;
+        }
+        
+        // Show loading state
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitSpinner = document.getElementById('submitSpinner');
+        submitBtn.disabled = true;
+        submitText.style.display = 'none';
+        submitSpinner.style.display = 'inline';
+    });
+    
+    // Initialize UI
+    toggleBatchSize();
+    toggleSchedule();
+    toggleEndDate();
+    
+    console.log('🚀 Edit Job Form Loaded');
+});
+</script>
+
+<style>
+.time-chip {
+    transition: all 0.2s ease;
+}
+.time-chip:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+#timeListContainer {
+    transition: all 0.3s ease;
+}
+#timeList {
+    min-height: 40px;
+}
+</style>
+{% endblock %}

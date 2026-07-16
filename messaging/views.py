@@ -749,7 +749,6 @@ def get_ptp_details_view(request):
         logger.error(f"PTP details error: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=200)
 
-
 @csrf_exempt
 def send_ptp_template_view(request):
     """
@@ -774,6 +773,8 @@ def send_ptp_template_view(request):
     due_date = data.get('due_date')
     loan_number = data.get('loan_number')
     lang = data.get('lang', 'en')
+    agent = get_agent_from_user(request.user)
+    sender_name = agent.name
 
     # Validation
     if not mobile:
@@ -811,6 +812,8 @@ def send_ptp_template_view(request):
         ContactModel = cfg['contact_model']
         chat_prefix = cfg['chat_prefix']
         app_name = cfg.get('app_name', '')
+        final_sender_name = sender_name if sender_name else app_name
+
 
         # Construct a readable log message
         log_text = f"PTP template sent: {customer_name}, ₹{amount} by {due_date} against {loan_number} [{lang.upper()}]"
@@ -818,7 +821,7 @@ def send_ptp_template_view(request):
         msg_id = result.get('messages', [{}])[0].get('id', '')
 
         log_entry = LogModel.objects.create(
-            customer_name=app_name,
+            customer_name=final_sender_name,
             mobile=mobile,   # store original number (with +)
             sent_text_message=log_text,
             message_type="Sent",
@@ -826,6 +829,7 @@ def send_ptp_template_view(request):
             status="Sent",
             template_name=f"ptp_confirm_{lang}",
             message_id=msg_id,
+             
         )
 
         # Update contact
@@ -865,7 +869,7 @@ def send_ptp_template_view(request):
                         "message_type": "Sent",
                         "message_id": log_entry.message_id,
                         "status": "Sent",
-                        "sender_name": app_name
+                        "sender_name": final_sender_name
                     }
                 }
             )
@@ -875,6 +879,7 @@ def send_ptp_template_view(request):
     except Exception as e:
         logger.error(f"PTP send error for {app_key}: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 from messaging2.tasks import send_welcome_message
 # =============================================

@@ -48,8 +48,8 @@ INSTALLED_APPS = [
     "financehub",
     "notices",
     "special_cases",
-     "meghaai_app"
-      
+     "meghaai_app",
+     "batch_app"    
 ]
 
 
@@ -210,6 +210,8 @@ CELERY_TASK_ROUTES = {
     "financehub.tasks.*": {"queue": "financehub"},
     "special_cases.tasks.*": {"queue": "special_cases"},
     "notices.tasks.*": {"queue": "notices"},
+    "batch_app.tasks.*": {"queue": "batch_app"},
+    "batch_app.scheduler.*": {"queue": "batch_scheduler"},
 }
 
 CELERY_BEAT_SCHEDULE = {
