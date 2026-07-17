@@ -359,7 +359,13 @@ def process_batch_job(self, job_id):
                 f"CompletedRuns={job.completed_runs}/{total_times}, "
                 f"CompletedBatches={job.completed_batches}/{job.total_batches}, "
                 f"NextRun={job.next_run_time}"
-            )        # -------------------------
+            ) 
+
+            if job.next_run_time and job.status != 'completed':
+                from batch_app.tasks import schedule_batch_job
+                schedule_batch_job.delay(job.job_id)
+                logger.info(f"📅 Scheduled next run at: {job.next_run_time}")
+        # -------------------------
         # 2. FULL BATCH
         # -------------------------
         elif job.batch_size_type == 'full':
@@ -490,9 +496,9 @@ def process_batch_job(self, job_id):
                 # CUSTOM INTERVAL - Next Run = After N Days
                 # ============================================================
                 elif job.schedule_type == 'custom_interval':
-                    # ✅ Calculate next run: schedule_datetime + (completed_batches * interval_days)
+                    # ✅ FIX: Use total_runs instead of completed_batches
                     interval = job.interval_days or 1
-                    next_run = job.schedule_datetime + timedelta(days=interval * job.completed_batches)
+                    next_run = job.schedule_datetime + timedelta(days=interval * job.total_runs)
                     
                     # ✅ Ensure it's in the future
                     now = timezone.now()
@@ -518,7 +524,6 @@ def process_batch_job(self, job_id):
                         f"{next_run.strftime('%Y-%m-%d %I:%M %p')} "
                         f"(Every {interval} day(s))"
                     )
-
                 else:
                     job.save(update_fields=[
                         'current_batch',
@@ -578,69 +583,61 @@ def schedule_batch_job(job_id):
             return
         
         # ===== MULTIPLE DAILY SCHEDULE =====
+        # ===== MULTIPLE DAILY SCHEDULE =====
         if job.schedule_type == 'multiple_daily':
             now = timezone.now()
-            scheduled_count = 0
-            next_run_time = None
             
-            # Get today's date
-            today_date = now.date()
-            
-            for time_str in job.schedule_times:
-                try:
-                    t = datetime.strptime(time_str, '%H:%M').time()
-                    
-                    # Combine today's date with the time
-                    run_time = timezone.make_aware(
-                        datetime.combine(today_date, t),
-                        timezone.get_current_timezone()
+            # ✅ FIX: Use the saved next_run_time from the job
+            # This ensures we respect the time calculated in process_batch_job
+            if job.next_run_time and job.next_run_time > now:
+                # Use existing next_run_time
+                next_run = job.next_run_time
+                seconds_until = int((next_run - now).total_seconds())
+                
+                if seconds_until <= 60:
+                    process_batch_job.delay(job_id)
+                    logger.info(f"🚀 Multiple daily: Running immediately")
+                else:
+                    process_batch_job.apply_async(
+                        args=(job_id,),
+                        countdown=seconds_until,
+                        queue="batch_app"
                     )
-                    
-                    # If time has passed today, schedule for tomorrow
-                    if run_time <= now:
-                        run_time += timedelta(days=1)
-                    
-                    # Calculate seconds until run
-                    seconds_until = int((run_time - now).total_seconds())
-                    
-                    if seconds_until <= 60:
-                        # Run immediately
-                        process_batch_job.delay(job_id)
-                        logger.info(f"🚀 Multiple daily: Running immediately for {time_str}")
-                    else:
-                        # Schedule with countdown
-                        process_batch_job.apply_async(
-                            args=(job_id,),
-                            countdown=seconds_until,
-                            queue="batch_app"
-                        )
-                        logger.info(f"📅 Multiple daily: Scheduled at {time_str} (in {seconds_until}s)")
-                    
-                    scheduled_count += 1
-                    
-                    # Track the earliest next run
-                    if next_run_time is None or run_time < next_run_time:
-                        next_run_time = run_time
-                        
-                except Exception as e:
-                    logger.error(f"❌ Failed to schedule at {time_str}: {e}")
-                    continue
+                    logger.info(f"📅 Multiple daily: Scheduled at {next_run.strftime('%Y-%m-%d %I:%M %p')} (in {seconds_until}s)")
+                
+                # Schedule next day's scheduler (24 hours)
+                schedule_batch_job.apply_async(
+                    args=(job_id,),
+                    countdown=86400,
+                    queue="batch_scheduler"
+                )
+                return
             
-            # Set job status and next_run_time
-            if scheduled_count > 0 and next_run_time:
+            # ✅ If no next_run_time exists (first time), calculate the next one
+            next_run = job._get_next_multiple_time(now)
+            if next_run:
+                job.next_run_time = next_run
                 job.status = 'scheduled'
-                job.next_run_time = next_run_time
-                job.save(update_fields=['status', 'next_run_time'])
-                logger.info(f"📅 Multiple daily scheduler for {job_id} scheduled {scheduled_count} runs, next at {next_run_time.strftime('%Y-%m-%d %I:%M %p')}")
-            elif scheduled_count > 0:
-                job.status = 'scheduled'
-                job.save(update_fields=['status'])
-                logger.info(f"📅 Multiple daily scheduler for {job_id} scheduled {scheduled_count} runs")
+                job.save(update_fields=['next_run_time', 'status'])
+                
+                seconds_until = int((next_run - now).total_seconds())
+                
+                if seconds_until <= 60:
+                    process_batch_job.delay(job_id)
+                    logger.info(f"🚀 Multiple daily: Running immediately")
+                else:
+                    process_batch_job.apply_async(
+                        args=(job_id,),
+                        countdown=seconds_until,
+                        queue="batch_app"
+                    )
+                    logger.info(f"📅 Multiple daily: Scheduled at {next_run.strftime('%Y-%m-%d %I:%M %p')} (in {seconds_until}s)")
             else:
                 job.status = 'failed'
                 job.error_message = "No times could be scheduled"
                 job.save(update_fields=['status', 'error_message'])
                 logger.error(f"❌ No times scheduled for {job_id}")
+                return
             
             # Schedule next day's scheduler (24 hours)
             schedule_batch_job.apply_async(
@@ -649,7 +646,6 @@ def schedule_batch_job(job_id):
                 queue="batch_scheduler"
             )
             return
-        
         # ===== WEEKLY SCHEDULE - FIXED =====
         if job.schedule_type == 'weekly':
             now = timezone.now()
@@ -746,18 +742,21 @@ def schedule_batch_job(job_id):
                 return
             
             now = timezone.now()
+            interval = job.interval_days
             
-            # ✅ FIXED: Use schedule_datetime as the anchor
-            if job.schedule_datetime > now:
-                next_run = job.schedule_datetime
+            # ✅ FIX: Use the stored next_run_time if it exists
+            if job.next_run_time and job.next_run_time > now:
+                next_run = job.next_run_time
             else:
-                next_run = job.schedule_datetime
+                # Calculate next run from schedule_datetime + (total_runs * interval)
+                next_run = job.schedule_datetime + timedelta(days=interval * job.total_runs)
                 while next_run <= now:
-                    next_run += timedelta(days=job.interval_days)
+                    next_run += timedelta(days=interval)
             
             seconds_until = int((next_run - now).total_seconds())
             
             logger.info(f"📅 Custom job {job_id} - schedule_datetime: {job.schedule_datetime.strftime('%Y-%m-%d %I:%M:%S %p')}")
+            logger.info(f"📅 Custom job {job_id} - total_runs: {job.total_runs}")
             logger.info(f"📅 Custom job {job_id} - next_run: {next_run.strftime('%Y-%m-%d %I:%M:%S %p')}")
             
             if seconds_until <= 60:
@@ -776,14 +775,13 @@ def schedule_batch_job(job_id):
                 logger.info(f"📅 Custom job {job_id} scheduled for {next_run.strftime('%Y-%m-%d %I:%M %p')}")
             
             # Schedule next scheduler
-            next_scheduler = next_run + timedelta(days=job.interval_days)
+            next_scheduler = next_run + timedelta(days=interval)
             schedule_batch_job.apply_async(
                 args=(job_id,),
                 eta=next_scheduler,
                 queue="batch_scheduler"
             )
-            return
-        
+            return        
         # Unknown schedule type
         logger.warning(f"⚠️ Unknown schedule type for {job_id}: {job.schedule_type}")
         job.status = 'failed'

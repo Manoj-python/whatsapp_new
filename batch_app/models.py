@@ -1,6 +1,3 @@
-from django.db import models
-
-# Create your models here.
 # batch_app/models.py - COMPLETE PRODUCTION READY VERSION
 # ✅ PERFECT DATE/TIME HANDLING FOR ALL SCHEDULE TYPES
 # ✅ FIXED: 5-MINUTE TOLERANCE FOR SAVE METHOD
@@ -248,18 +245,19 @@ class BatchJob(models.Model):
     # ============================================================
     # ✅ PERFECT MULTIPLE DAILY NEXT TIME CALCULATION
     # ============================================================
-
     def _get_next_multiple_time(self, now):
         """
         Get the next time from multiple daily schedules.
         
         Example:
-            times = ['15:02', '15:05', '15:07']
-            now = 15:02:17 IST
-            returns: 15:05 IST (same day)
+            times = ['15:22', '15:24', '15:26']
+            completed_runs = 1  # 15:22 already done
+            now = 15:23 IST
+            returns: 15:24 IST (same day)
             
-            now = 15:07:30 IST
-            returns: 15:02 IST (tomorrow)
+            completed_runs = 3  # All times done
+            now = 15:27 IST
+            returns: 15:22 IST (tomorrow)
         """
         if not self.schedule_times:
             return None
@@ -279,27 +277,52 @@ class BatchJob(models.Model):
         # Sort times
         times.sort()
         
-        # Get current time
-        current_time = now.time()
+        # ✅ FIX: Use completed_runs to determine which time slot is next
+        completed_slots = self.completed_runs
         
-        # Find the next time today
-        for t in times:
-            # ✅ Compare time parts only (avoid timezone issues)
-            if t > current_time:
-                # ✅ Create timezone-aware datetime
-                return timezone.make_aware(
-                    datetime.datetime.combine(now.date(), t),
+        # If all slots are completed, return first time tomorrow
+        if completed_slots >= len(times):
+            t = times[0]
+            tomorrow = now.date() + timedelta(days=1)
+            return timezone.make_aware(
+                datetime.datetime.combine(tomorrow, t),
+                timezone.get_current_timezone()
+            )
+        
+        # Get the next time slot based on completed runs
+        slot_index = completed_slots
+        t = times[slot_index]
+        
+        # Create datetime for today at this time
+        run_time = timezone.make_aware(
+            datetime.datetime.combine(now.date(), t),
+            timezone.get_current_timezone()
+        )
+        
+        # If this time has already passed (should not happen normally),
+        # move to the next slot or tomorrow
+        if run_time <= now:
+            # Check if there's a later time today
+            next_slot_index = slot_index + 1
+            while next_slot_index < len(times):
+                t_next = times[next_slot_index]
+                run_time_next = timezone.make_aware(
+                    datetime.datetime.combine(now.date(), t_next),
                     timezone.get_current_timezone()
                 )
+                if run_time_next > now:
+                    return run_time_next
+                next_slot_index += 1
+            
+            # All remaining times have passed, return first time tomorrow
+            t = times[0]
+            tomorrow = now.date() + timedelta(days=1)
+            return timezone.make_aware(
+                datetime.datetime.combine(tomorrow, t),
+                timezone.get_current_timezone()
+            )
         
-        # All times have passed today, get the first time tomorrow
-        t = times[0]
-        tomorrow = now.date() + timedelta(days=1)
-        return timezone.make_aware(
-            datetime.datetime.combine(tomorrow, t),
-            timezone.get_current_timezone()
-        ) 
-   
+        return run_time 
     def get_all_run_times(self):
         """Get all scheduled times for the day (for multiple daily)"""
         if self.schedule_type != 'multiple_daily':

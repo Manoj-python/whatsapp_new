@@ -1310,18 +1310,36 @@ def whatsapp_webhook(request):
                                 mapping = cache.get(cache_key)
                                 if mapping is None:
                                     sales_group = SupportGroup.objects.get(name="Sales")
-                                    zone1_subgroup = Subgroup.objects.get(
-                                            name="Zone 1 - AP / KA - Sundeep",
-                                            group=sales_group
-                                        )
-                                    zone2_subgroup = Subgroup.objects.get(
-                                            name="Zone 2 - TS - Venkat",
-                                            group=sales_group
-                                        )
-                                    marketing_category = Category.objects.get(
-                                            name="Marketing Leads",
-                                            group=sales_group
-                                        )
+
+                                    zone1_subgroup = Subgroup.objects.filter(
+                                        group=sales_group,
+                                        name__icontains="Zone 1"
+                                    ).first()
+                                    if not zone1_subgroup:
+                                        zone1_subgroup = Subgroup.objects.create(
+                                                group=sales_group,
+                                                name="Zone 1 - Narender"  # Fallback name from your DB
+                                            )
+                                    zone2_subgroup = Subgroup.objects.filter(
+                                        group=sales_group,
+                                        name__icontains="Zone 2"
+                                    ).first()
+                                    if not zone2_subgroup:
+                                        zone2_subgroup = Subgroup.objects.create(
+                                                group=sales_group,
+                                                name="Zone 2 - Venkanna"  # Fallback name from your DB
+                                                )
+
+                                    marketing_category = Category.objects.filter(
+                                            group=sales_group,
+                                            name__icontains="Marketing"
+                                        ).first()
+                                    if not marketing_category:
+                                    
+                                        marketing_category = Category.objects.get_or_create(
+                                                name="Marketing leads",
+                                                group=sales_group
+                                            )
                                     mapping = {
                                             'sales_group': sales_group,
                                             'zone1_subgroup': zone1_subgroup,
@@ -1333,8 +1351,13 @@ def whatsapp_webhook(request):
                                 zone1_subgroup = mapping['zone1_subgroup']
                                 zone2_subgroup = mapping['zone2_subgroup']
                                 marketing_category = mapping['marketing_category']
-                                lcc_record = Lcc.objects.filter(cust_mobile=mobile).only('loan_number').first()
+                                # Normalise mobile to 10 digits for Lcc lookup
+                                mobile_10 = re.sub(r'\D', '', mobile)[-10:]
+                                lcc_record = Lcc.objects.filter(cust_mobile=mobile_10).only('loan_number').first()
                                 loan_number = lcc_record.loan_number if lcc_record else ""
+
+                                # Debug (optional)
+                                print(f"🔍 Lcc loan_number for {mobile_10}: '{loan_number}'")
                                 # ---- Determine subgroup ----
                                 if "AP" in loan_number.upper():
                                     subgroup = zone1_subgroup
@@ -1350,7 +1373,7 @@ def whatsapp_webhook(request):
 
                                 if not existing_case:
 
-                                    sales_group = SupportGroup.objects.get(name="Sales")
+                                    # sales_group = SupportGroup.objects.get(name="Sales")
 
                                     case=Case.objects.create(
                                         case_id=f"LEAD-{uuid.uuid4().hex[:8].upper()}",
@@ -1367,7 +1390,7 @@ def whatsapp_webhook(request):
                                         created_by="System Auto Lead"
                                     )
                                     case._skip_ticket_open = True
-                                    case.save(update_fields=['_skip_ticket_open'])
+                                    case.save()
                                     print(f"✅ Sales Lead Created: {mobile}")
 
                         except Exception as e:
