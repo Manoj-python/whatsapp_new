@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<a class="btn-link" href="/dashboard">← {{ t('back_dashboard') }}</a>
+
+{% if loan %}
+<div class="card">
+  <h2>{{ t('loan_details') }}</h2>
+  <p class="muted">{{ loan.agreement_no }}</p>
+  <div class="kv">
+    <div><span class="k">{{ t('customer_name') }}</span><span class="v">{{ loan.primary_customer_name.title() }}</span></div>
+    <div><span class="k">{{ t('loan_type') }}</span><span class="v">{{ loan.product_type }}</span></div>
+    <div><span class="k">{{ t('loan_amount') }}</span><span class="v">₹{{ '%.2f'|format(loan.loan_amount) }}</span></div>
+    <div><span class="k">{{ t('total_emi') }}</span><span class="v">{{ loan.duration }}</span></div>
+    <div><span class="k">{{ t('next_due') }}</span><span class="v">{{ loan.next_due_date|dmy }}</span></div>
+    <div><span class="k">{{ t('no_of_emi_received') }}</span><span class="v">{{ '%.2f'|format(loan.no_of_paid_emi) }}</span></div>
+    <div><span class="k">{{ t('emi_due_count') }}</span><span class="v">{{ '%.2f'|format(loan.emi_due_count) }}</span></div>
+    <div><span class="k">{{ t('emi') }}</span><span class="v">₹{{ '%.2f'|format(loan.regular_emi_amount) }}</span></div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h1>{{ t('dues_title') }}</h1>
+  {% if loan %}<p class="muted">{{ loan.product_type }} · {{ loan.agreement_no }}</p>{% endif %}
+
+  {# RBI penal-charges disclosure: full break-up BEFORE payment. Sourced from
+     GetLoanAgreementNoAsync (loan) — confirmed live to be accurate, unlike
+     GetRepaymentForLoanByLoanId's totals for this account which turned out
+     to be full-payoff figures, not current dues. #}
+  <table class="dues-table">
+    <tr><td>{{ t('emi_overdue') }}</td><td>₹{{ '%.2f'|format(loan.overdue_amount) }}</td></tr>
+    <tr><td>{{ t('late_charges') }}</td><td>₹{{ '%.2f'|format(loan.lpi_dues) }}</td></tr>
+    <tr><td>{{ t('vas_charges') }}</td><td>₹{{ '%.2f'|format(loan.total_vas_dues) }}</td></tr>
+    <tr class="total"><td>{{ t('total_due') }}</td><td>₹{{ '%.2f'|format(loan.total_emi_overdue_amount) }}</td></tr>
+  </table>
+  <p class="muted">{{ t('penal_disclosure') }}</p>
+</div>
+
+<div class="card" id="pay-box">
+  <h2>{{ t('pay_option') }}</h2>
+  <form hx-post="/loan/{{ finance_id }}/pay/qr" hx-target="#pay-box" hx-swap="innerHTML">
+    <label class="pay-option">
+      <input type="radio" name="option" value="total" checked>
+      <span>{{ t('pay_total') }} — <strong>₹{{ '%.2f'|format(loan.total_emi_overdue_amount) }}</strong></span>
+    </label>
+    <label class="pay-option">
+      <input type="radio" name="option" value="emi">
+      <span>{{ t('pay_emi') }} — <strong>₹{{ '%.2f'|format(loan.regular_emi_amount) }}</strong></span>
+    </label>
+    <label class="pay-option">
+      <input type="radio" name="option" value="part">
+      <span>{{ t('pay_part') }} (min ₹{{ '%.2f'|format(min_part_amount) }})</span>
+    </label>
+    <input type="number" name="part_amount" min="{{ min_part_amount|int }}" max="{{ max_part_amount|int }}" step="1" placeholder="₹"
+           style="margin-top:4px" aria-label="{{ t('pay_part') }}">
+
+    {# GetQRCode gives no real QR/UPI intent to scan — both ShowQR values
+       return the identical checkout URL — so there's one action, not two. #}
+    <button class="btn btn-primary" type="submit" name="method" value="paynow">{{ t('pay_now') }}</button>
+  </form>
+</div>
+{% endblock %}

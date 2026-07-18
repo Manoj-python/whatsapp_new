@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t('brand') }}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body hx-indicator="#global-loading">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/dashboard">
+      <span class="brand-mark">SM²</span>
+      <span class="brand-text">{{ t('brand') }}<small>{{ t('tagline') }}</small></span>
+    </a>
+    <nav class="topnav">
+      <span class="lang-toggle">
+        <a href="/lang/en" class="{{ 'active' if lang == 'en' }}">EN</a>
+        <a href="/lang/te" class="{{ 'active' if lang == 'te' }}">తె</a>
+      </span>
+      {% if sess is defined and sess %}
+        <span class="user-chip" title="{{ t('welcome') }}">{{ sess.mobile_mask }}</span>
+        <a class="btn btn-ghost" href="/logout">{{ t('logout') }}</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+
+{# Slow-network feedback: hx-indicator on <body> makes htmx show this for
+   EVERY request on the page (no per-form wiring) — matters on 2G/3G where a
+   tap can take a few seconds with nothing else visibly happening. #}
+<div id="global-loading" class="htmx-indicator global-loading">{{ t('loading') }}</div>
+
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <p class="legal-name">{{ settings.legal_name }}</p>
+    <p class="company-address">{{ settings.company_address }}</p>
+    <p><strong>{{ t('helpline') }}:</strong>
+       <a href="tel:{{ settings.helpline_number }}">{{ settings.helpline_number }}</a>
+       · <a href="https://wa.me/91{{ settings.helpline_number }}" target="_blank" rel="noopener">WhatsApp</a></p>
+    <p><strong>{{ t('grievance') }}:</strong> {{ settings.grievance_officer }}
+       · <a href="mailto:{{ settings.grievance_email }}">{{ settings.grievance_email }}</a></p>
+    <p><a href="{{ settings.ombudsman_url }}" target="_blank" rel="noopener">{{ t('ombudsman') }}</a></p>
+    <p class="fpc">{{ t('fpc') }}</p>
+  </div>
+</footer>
+</body>
+</html>
