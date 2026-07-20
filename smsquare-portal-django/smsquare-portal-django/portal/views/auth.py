@@ -17,6 +17,7 @@ import re
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 
+from portal.i18n import LANGS
 from portal.lms import get_lms
 from portal.ratelimit import rate_limit
 from portal.services import otp_service, session_service
@@ -53,10 +54,6 @@ def _clean_mobile(raw: str) -> str | None:
     return digits if MOBILE_RE.match(digits) else None
 
 
-def _ip(request) -> str:
-    return request.META.get("REMOTE_ADDR", "")
-
-
 def login_page(request):
     expired = request.GET.get("expired")
     return render(request, "login.html", {"expired": expired})
@@ -75,13 +72,13 @@ async def send_otp(request):
     except LMSError:
         return render(request, "partials/login_error.html", {"error_key": "err_lms_down"})
     if not customers:
-        await audit("login_unknown_mobile", mobile_mask=mask_mobile(cleaned), ip=_ip(request))
+        await audit(request, "login_unknown_mobile", mobile_mask=mask_mobile(cleaned), mobile=cleaned)
         return render(request, "partials/login_error.html", {"error_key": "err_mobile_not_found"})
     try:
         await otp_service.send_otp(cleaned)
     except OtpError as exc:
         return render(request, "partials/login_error.html", {"error_key": exc.code})
-    await audit("otp_sent", mobile_mask=mask_mobile(cleaned), ip=_ip(request))
+    await audit(request, "otp_sent", mobile_mask=mask_mobile(cleaned), mobile=cleaned)
     return render(
         request,
         "partials/otp_form.html",
@@ -99,7 +96,7 @@ async def resend_otp(request):
     error_key = None
     try:
         await otp_service.send_otp(cleaned)
-        await audit("otp_resent", mobile_mask=mask_mobile(cleaned), ip=_ip(request))
+        await audit(request, "otp_resent", mobile_mask=mask_mobile(cleaned), mobile=cleaned)
     except OtpError as exc:
         error_key = exc.code
     return render(
@@ -157,7 +154,9 @@ async def verify_otp(request):
         cleaned, finance_ids, customer_name=name,
         login_method="mobile_otp" if flow == "mobile" else "agreement_otp",
     )
-    await audit("login_success", session_id=sess.id, mobile_mask=sess.mobile_mask, ip=_ip(request))
+    agreement_nos = ",".join(l.agreement_no for l in loans if l.agreement_no)
+    await audit(request, "login_success", session_id=sess.id, mobile_mask=sess.mobile_mask, mobile=sess.mobile,
+                detail=f"loans={agreement_nos}")
 
     # HTMX client-side redirect to the dashboard.
     response = render(request, "partials/login_success.html", {})
@@ -198,8 +197,8 @@ async def agreement_lookup(request):
         and entered_dob and _parse_loose_date(customer.dob) == entered_dob
     )
     if not matched:
-        await audit("agreement_login_failed", detail=f"agr={agreement_no}",
-                     mobile_mask=mask_mobile(cleaned_mobile), ip=_ip(request))
+        await audit(request, "agreement_login_failed", detail=f"agr={agreement_no}",
+                     mobile_mask=mask_mobile(cleaned_mobile), mobile=cleaned_mobile)
         return render(request, "partials/login_error.html", {"error_key": "err_agreement_not_found"})
 
     # Matched on all three factors -> session created directly, no OTP.
@@ -214,8 +213,9 @@ async def agreement_lookup(request):
     sess = await session_service.create_session(
         cleaned_mobile, finance_ids, customer_name=name, login_method="agreement_dob"
     )
-    await audit("login_success_agreement", session_id=sess.id,
-                mobile_mask=sess.mobile_mask, detail=f"agr={agreement_no}", ip=_ip(request))
+    agreement_nos = ",".join(l.agreement_no for l in loans if l.agreement_no) or agreement_no
+    await audit(request, "login_success_agreement", session_id=sess.id, mobile=sess.mobile,
+                mobile_mask=sess.mobile_mask, detail=f"loans={agreement_nos}")
 
     response = render(request, "partials/login_success.html", {})
     response.headers["HX-Redirect"] = "/dashboard"
@@ -233,7 +233,7 @@ async def logout(request):
     sess = await session_service.load_session(request)
     if sess:
         await session_service.revoke(sess)
-        await audit("logout", session_id=sess.id, mobile_mask=sess.mobile_mask, ip=_ip(request))
+        await audit(request, "logout", session_id=sess.id, mobile_mask=sess.mobile_mask, mobile=sess.mobile)
     response = HttpResponseRedirect("/login")
     session_service.clear_session_cookie(response)
     return response
@@ -241,6 +241,6 @@ async def logout(request):
 
 def set_lang(request, code: str):
     response = HttpResponseRedirect(request.META.get("HTTP_REFERER") or "/login")
-    if code in ("en", "te"):
+    if code in LANGS:
         response.set_cookie("lang", code, max_age=365 * 24 * 3600, samesite="Lax")
     return response

@@ -11,11 +11,20 @@
     <div><span class="k">{{ t('loan_type') }}</span><span class="v">{{ loan.product_type }}</span></div>
     <div><span class="k">{{ t('loan_amount') }}</span><span class="v">₹{{ '%.2f'|format(loan.loan_amount) }}</span></div>
     <div><span class="k">{{ t('total_emi') }}</span><span class="v">{{ loan.duration }}</span></div>
-    <div><span class="k">{{ t('next_due') }}</span><span class="v">{{ loan.next_due_date|dmy }}</span></div>
+    <div><span class="k">{{ t('next_due') }}</span><span class="v">{{ t('expired') if (lcc and not lcc.installment_due_date) else loan.next_due_date|dmy }}</span></div>
     <div><span class="k">{{ t('no_of_emi_received') }}</span><span class="v">{{ '%.2f'|format(loan.no_of_paid_emi) }}</span></div>
     <div><span class="k">{{ t('emi_due_count') }}</span><span class="v">{{ '%.2f'|format(loan.emi_due_count) }}</span></div>
     <div><span class="k">{{ t('emi') }}</span><span class="v">₹{{ '%.2f'|format(loan.regular_emi_amount) }}</span></div>
+    {% if lcc %}
+    <div><span class="k">{{ t('branch') }}</span><span class="v">{{ lcc.branch or '—' }}</span></div>
+    <div><span class="k">{{ t('region') }}</span><span class="v">{{ lcc.region or '—' }}</span></div>
+    <div><span class="k">{{ t('vehicle_no') }}</span><span class="v">{{ lcc.registration_no or '—' }}</span></div>
+    <div><span class="k">{{ t('vehicle_class') }}</span><span class="v">{{ lcc.vehicle_class or '—' }}</span></div>
+    {% endif %}
   </div>
+  <a class="btn-link" href="/loan/{{ finance_id }}/statement.pdf">{{ t('download_statement') }}</a>
+  <a class="btn-link" href="/loan/{{ finance_id }}/foreclosure.pdf">{{ t('download_foreclosure_statement') }}</a>
+  <a class="btn-link" href="/loan/{{ finance_id }}/downloads">{{ t('payment_history') }}</a>
 </div>
 {% endif %}
 
@@ -26,12 +35,21 @@
   {# RBI penal-charges disclosure: full break-up BEFORE payment. Sourced from
      GetLoanAgreementNoAsync (loan) — confirmed live to be accurate, unlike
      GetRepaymentForLoanByLoanId's totals for this account which turned out
-     to be full-payoff figures, not current dues. #}
+     to be full-payoff figures, not current dues.
+
+     Late charges (and therefore Total Due) are capped at Rs. 50,000
+     (product decision, 2026-07-20) — total_due_display is recomputed from
+     the capped late charges, so it visibly sums with the row above, AND is
+     the actual amount charged when "Total due" is selected as the payment
+     option (see payment_service.capped_total_due). On an account where
+     real late charges exceed the cap, paying "Total due" will not
+     necessarily clear the loan's real outstanding balance in AllCloud —
+     an accepted tradeoff of this product decision. #}
   <table class="dues-table">
     <tr><td>{{ t('emi_overdue') }}</td><td>₹{{ '%.2f'|format(loan.overdue_amount) }}</td></tr>
-    <tr><td>{{ t('late_charges') }}</td><td>₹{{ '%.2f'|format(loan.lpi_dues) }}</td></tr>
+    <tr><td>{{ t('late_charges') }}</td><td>₹{{ '%.2f'|format(late_charges_display) }}</td></tr>
     <tr><td>{{ t('vas_charges') }}</td><td>₹{{ '%.2f'|format(loan.total_vas_dues) }}</td></tr>
-    <tr class="total"><td>{{ t('total_due') }}</td><td>₹{{ '%.2f'|format(loan.total_emi_overdue_amount) }}</td></tr>
+    <tr class="total"><td>{{ t('total_due') }}</td><td>₹{{ '%.2f'|format(total_due_display) }}</td></tr>
   </table>
   <p class="muted">{{ t('penal_disclosure') }}</p>
 </div>
@@ -41,17 +59,17 @@
   <form hx-post="/loan/{{ finance_id }}/pay/qr" hx-target="#pay-box" hx-swap="innerHTML">
     <label class="pay-option">
       <input type="radio" name="option" value="total" checked>
-      <span>{{ t('pay_total') }} — <strong>₹{{ '%.2f'|format(loan.total_emi_overdue_amount) }}</strong></span>
+      <span>{{ t('pay_total') }} — <strong>₹{{ '%.2f'|format(total_due_display) }}</strong></span>
     </label>
     <label class="pay-option">
       <input type="radio" name="option" value="emi">
-      <span>{{ t('pay_emi') }} — <strong>₹{{ '%.2f'|format(loan.regular_emi_amount) }}</strong></span>
+      <span>{{ t('pay_emi') }} — <strong>₹{{ '%.2f'|format(min_emi_amount) }}</strong></span>
     </label>
     <label class="pay-option">
       <input type="radio" name="option" value="part">
-      <span>{{ t('pay_part') }} (min ₹{{ '%.2f'|format(min_part_amount) }})</span>
+      <span>{{ t('pay_part') }} ({{ t('minimum_emi_amount') }} ₹{{ '%.2f'|format(min_emi_amount) }})</span>
     </label>
-    <input type="number" name="part_amount" min="{{ min_part_amount|int }}" max="{{ max_part_amount|int }}" step="1" placeholder="₹"
+    <input type="number" name="part_amount" min="{{ min_emi_amount|int }}" max="{{ max_part_amount|int }}" step="1" placeholder="₹"
            style="margin-top:4px" aria-label="{{ t('pay_part') }}">
 
     {# GetQRCode gives no real QR/UPI intent to scan — both ShowQR values

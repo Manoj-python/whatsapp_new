@@ -27,6 +27,16 @@ def dmy(value: str) -> str:
 
 
 def environment(**options):
+    # Django's Jinja2 backend defaults auto_reload to settings.DEBUG, which
+    # is False whenever APP_ENV=prod (real AllCloud credentials) — even
+    # though this app has no actual separate production deployment yet, it
+    # only ever runs locally. Without this override, template edits stop
+    # taking effect at all once switched to prod mode until the server is
+    # restarted (confirmed live 2026-07-18 — a WhatsApp icon edit silently
+    # never rendered). Force it on unconditionally for now; revisit if this
+    # app gets a real production deployment where DEBUG=False actually means
+    # "don't touch template files without a redeploy."
+    options["auto_reload"] = True
     env = Environment(**options)
     env.filters["dmy"] = dmy
     return env

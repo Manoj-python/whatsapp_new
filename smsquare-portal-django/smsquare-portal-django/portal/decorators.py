@@ -7,9 +7,23 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect
 
 from portal.models import PortalSession
-from portal.services import session_service
+from portal.services import session_service, staff_session_service
 from portal.services.allcloud_client import AllCloudClient
 from portal.services.audit import audit
+
+
+def require_staff_session(view_func):
+    """Same shape as require_session, but for the internal audit report —
+    a completely separate cookie/session store, never a customer session."""
+
+    @functools.wraps(view_func)
+    async def wrapper(request, *args, **kwargs):
+        staff = await staff_session_service.load_session(request)
+        if staff is None:
+            return HttpResponseRedirect("/staff/login?expired=1")
+        return await view_func(request, staff, *args, **kwargs)
+
+    return wrapper
 
 
 def require_session(view_func):

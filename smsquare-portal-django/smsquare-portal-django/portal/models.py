@@ -101,10 +101,48 @@ class LmsApiLog(models.Model):
 class AuditLog(models.Model):
     session_id = models.CharField(max_length=32, default="", blank=True, db_index=True)
     mobile_mask = models.CharField(max_length=20, default="", blank=True)
+    # Full mobile number, encrypted at rest — shown unmasked on the internal
+    # staff audit report per an explicit product decision (staff need to
+    # identify/contact customers from this report). mobile_mask is kept
+    # alongside for rows written before this field existed.
+    mobile = EncryptedCharField(default="", blank=True)
     action = models.CharField(max_length=60, db_index=True)
     detail = models.TextField(default="", blank=True)
     ip = models.CharField(max_length=45, default="", blank=True)
+    # City/region/country + coordinates resolved from `ip` — filled in
+    # asynchronously after the row is created (see services/geoip.py) so a
+    # third-party lookup never adds latency to the customer-facing request
+    # that triggered the audit event. Blank until that background task
+    # finishes, or permanently blank for private/local IPs.
+    location = models.CharField(max_length=120, default="", blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         db_table = "audit_log"
+
+
+class StaffUser(models.Model):
+    """Internal staff account for the audit report — deliberately separate
+    from customer PortalSessions/auth (different cookie, different login
+    page, no OTP). No self-service signup: provisioned via the
+    create_staff_user management command."""
+    username = models.CharField(max_length=60, unique=True)
+    password_hash = models.CharField(max_length=200)  # django.contrib.auth.hashers, no auth app needed
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_users"
+
+
+class StaffSession(models.Model):
+    id = models.CharField(max_length=32, primary_key=True, default=new_uuid)
+    username = models.CharField(max_length=60)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    revoked = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "staff_sessions"

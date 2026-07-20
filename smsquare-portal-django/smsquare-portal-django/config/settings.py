@@ -15,7 +15,10 @@ _settings = get_settings()
 
 SECRET_KEY = _settings.secret_key
 DEBUG = not _settings.is_prod
-ALLOWED_HOSTS = ["*"] if DEBUG else []
+# Local demo/testing regardless of APP_ENV (this app is only ever run
+# locally right now, no real deployment host yet) — always allow localhost;
+# widen with a real domain via ALLOWED_HOSTS once actually deployed.
+ALLOWED_HOSTS = ["*"] if DEBUG else ["localhost", "127.0.0.1"]
 
 # No django.contrib.auth/sessions/admin — the portal rolls its own signed-
 # cookie + DB-backed session (portal.services.session_service), matching the
@@ -81,3 +84,10 @@ LOGGING = {
         "django.server": {"level": "INFO", "handlers": ["console"], "propagate": False},
     },
 }
+
+
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [
+    BASE_DIR / "portal" / "static",
+]
+STATIC_ROOT = BASE_DIR / "staticfiles"

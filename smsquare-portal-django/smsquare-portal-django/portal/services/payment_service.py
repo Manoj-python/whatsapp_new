@@ -56,13 +56,43 @@ async def confirm_gateway_payment(txn: PgTransaction, utr: str) -> PgTransaction
     return txn
 
 
-def min_part_payment(emi: float, dues_total: float) -> float:
-    """Part payments must be at least the lower of the EMI amount or the
-    total due — literally, so a loan that's fully current (dues_total=0)
-    drops straight to the platform floor rather than forcing a full EMI on
-    a voluntary prepayment."""
+def minimum_emi_amount(emi: float, dues_total: float, emi_due_count: float) -> float:
+    """"Minimum EMI Amount" — both the amount charged by the "EMI amount"
+    pay option and the floor for a customer-typed "any other payment".
+    Tiered by how overdue the loan is (explicit product decision,
+    2026-07-20): under 3 EMIs due, 1.5x the EMI amount, capped at the total
+    due (so a loan that's nearly fully current, e.g. dues_total=0, doesn't
+    demand more than is actually owed); 3+ EMIs due, a flat 2 EMIs
+    regardless of the 1.5x/total-due cap — collections wants a bigger
+    minimum once an account is meaningfully behind."""
     s = get_settings()
-    return max(min(emi, dues_total), s.min_part_payment)
+    if emi_due_count < 3:
+        floor = min(1.5 * emi, dues_total)
+    else:
+        floor = 2 * emi
+    return max(floor, s.min_part_payment)
+
+
+LATE_CHARGES_DISPLAY_CAP = 50000.0
+
+
+def late_charges_display(lpi_dues: float) -> float:
+    """Late charges are capped at Rs. 50,000 (product decision,
+    2026-07-20) — both the "Late charges" line shown on the dues break-up
+    AND Total Due (see capped_total_due below) use this capped figure, so
+    a customer who pays "Total due" genuinely pays less when real late
+    charges exceed the cap. The loan's real outstanding balance in
+    AllCloud is NOT necessarily cleared by that payment in that case —
+    accepted tradeoff of this product decision, not a bug."""
+    return min(lpi_dues, LATE_CHARGES_DISPLAY_CAP)
+
+
+def capped_total_due(overdue_amount: float, lpi_dues: float, vas_dues: float) -> float:
+    """Total Due recomputed from the capped late charges, so it visibly
+    sums with the (also capped) Late charges line — and, per product
+    decision, is also the amount actually charged when "Total due" is
+    selected as the payment option."""
+    return overdue_amount + late_charges_display(lpi_dues) + vas_dues
 
 
 def max_part_payment(loan_amount: float) -> float:
@@ -73,17 +103,19 @@ def max_part_payment(loan_amount: float) -> float:
 
 
 def validate_amount(
-    option: str, part_amount: float | None, dues_total: float, emi: float, loan_amount: float
+    option: str, part_amount: float | None, dues_total: float, emi: float, loan_amount: float,
+    emi_due_count: float,
 ) -> tuple[str, float]:
     """Maps the customer's choice to the amount charged. Raises ValueError
     with an i18n key on bad input."""
     if option == "total":
         return "total", round(dues_total, 2)
     if option == "emi":
-        return "emi", round(emi if emi > 0 else dues_total, 2)
+        floor = minimum_emi_amount(emi, dues_total, emi_due_count)
+        return "emi", round(floor if emi > 0 else dues_total, 2)
     if option == "part":
         amt = round(part_amount or 0, 2)
-        if amt < min_part_payment(emi, dues_total):
+        if amt < minimum_emi_amount(emi, dues_total, emi_due_count):
             raise ValueError("pay_min_part")
         if amt > max_part_payment(loan_amount):
             raise ValueError("pay_exceeds_max")

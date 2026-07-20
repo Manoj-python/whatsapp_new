@@ -11,7 +11,9 @@
       <input type="tel" id="mobile" name="mobile" inputmode="numeric" autocomplete="tel"
              maxlength="10" pattern="[6-9][0-9]{9}" placeholder="9XXXXXXXXX" required>
       <label for="dob">{{ t('dob') }}</label>
-      <input type="date" id="dob" name="dob" required>
+      <input type="text" id="dob" name="dob" inputmode="numeric" autocomplete="bday"
+             placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}"
+             title="{{ t('dob') }}: DD/MM/YYYY" maxlength="10" required>
       <button class="btn btn-primary" type="submit">{{ t('continue') }}</button>
     </form>
   </div>

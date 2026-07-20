@@ -95,6 +95,17 @@ class AllCloudAuth:
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(self.settings.lms_timeout_seconds)
         )
+    async def warmup(self) -> None:
+        """Pre-open HTTPS connection to AllCloud to avoid TLS handshake delay on first request."""
+        try:
+            # Use a lightweight HEAD request to the lookup base URL.
+            # This opens the TCP/TLS connection without fetching heavy data.
+            await self._client.head(self.settings.lookup_base_url)
+            logger.info("LMS connection pool warmed successfully")
+        except Exception as e:
+            # Non-fatal: if warmup fails, the first user request will just be slightly slower.
+            logger.warning("LMS warmup failed (harmless): %s", e)
+
 
     async def aclose(self) -> None:
         await self._client.aclose()

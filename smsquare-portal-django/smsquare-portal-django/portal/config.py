@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     allcloud_usertoken_uat: str = ""
     allcloud_apikey_uat: str = ""
 
-    lms_timeout_seconds: float = 10.0
+    lms_timeout_seconds: float = 70.0
     lms_max_retries: int = 2
 
     # --- AllCloud LMS (prod: static pre-issued `amx` tokens, no per-call
@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     lms_collection_type_default: int = 5
 
     # --- Portal behaviour ---
-    session_idle_minutes: int = 15
+    session_idle_minutes: int = 240  # 4 hours
     otp_expiry_minutes: int = 5  # must match the DLT-registered SMS template's "valid only for 5 mins"
     otp_max_attempts: int = 3
     otp_resend_seconds: int = 30
@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     ombudsman_url: str = "https://cms.rbi.org.in"
     # Same number for calls and WhatsApp.
     helpline_number: str = "8333000111"
+    # Public base URL this portal is reachable at — used only to build the
+    # verification QR code URL embedded in downloaded PDFs (see doc_verify.py).
+    # Defaults to localhost for local dev; must be set to the real deployed
+    # domain in prod or the QR codes won't resolve for anyone else.
+    portal_base_url: str = "http://localhost:8001"
 
     @property
     def is_prod(self) -> bool:

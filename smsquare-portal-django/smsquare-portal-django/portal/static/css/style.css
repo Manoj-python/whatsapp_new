@@ -32,9 +32,9 @@ body {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
-.brand-mark {
-  background: var(--teal); border-radius: 8px; padding: 4px 8px;
-  font-weight: 800; font-size: 15px;
+.brand-logo {
+  width: 34px; height: 34px; border-radius: 8px; object-fit: cover;
+  background: #fff; flex-shrink: 0;
 }
 .brand-text { font-weight: 700; font-size: 15px; line-height: 1.15; display: flex; flex-direction: column; }
 .brand-text small { font-weight: 400; font-size: 11px; opacity: .8; }
@@ -47,6 +47,15 @@ body {
   background: rgba(255,255,255,.12); border-radius: 20px; padding: 3px 10px; font-size: 12px;
 }
 
+/* On narrow phones the tagline + mobile-number badge + Logout button
+   competing for one row wrapped the brand text across 3-4 lines, making the
+   header tall and cramped. The tagline is decorative — drop it below the
+   width where that starts happening. */
+@media (max-width: 480px) {
+  .brand-text small { display: none; }
+  .user-chip { display: none; }
+}
+
 /* cards & layout */
 .card {
   background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
@@ -55,6 +64,15 @@ body {
 h1, h2 { color: var(--navy); margin: 0 0 12px; }
 h1 { font-size: 22px; } h2 { font-size: 18px; }
 .muted { color: var(--muted); font-size: 14px; }
+
+/* profile */
+.profile-header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.profile-header h1 { margin: 0; }
+.profile-pic {
+  width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+  border: 2px solid var(--teal-light);
+}
+.profile-pic-lg { width: 84px; height: 84px; }
 
 /* forms */
 label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 4px; }
@@ -109,9 +127,14 @@ input:focus { outline: 2px solid var(--teal); border-color: var(--teal); }
 .qr-box { text-align: center; padding: 18px; }
 .amount-big { font-size: 26px; font-weight: 800; color: var(--navy); }
 
-/* slow-network loading feedback (htmx hx-indicator) */
-.htmx-indicator { opacity: 0; transition: opacity 150ms ease-in; }
-.htmx-indicator.htmx-request { opacity: 1; }
+/* slow-network loading feedback (htmx hx-indicator). opacity alone isn't
+   enough to hide it — an opacity:0 element still captures clicks, and this
+   bar sits fixed across the full page width right over the header, so
+   every click there (including Logout) was silently swallowed even while
+   invisible. pointer-events keeps it click-through except while an htmx
+   request is actually in flight. */
+.htmx-indicator { opacity: 0; pointer-events: none; transition: opacity 150ms ease-in; }
+.htmx-indicator.htmx-request { opacity: 1; pointer-events: auto; }
 .global-loading {
   position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
   background: var(--teal); color: #fff; text-align: center;
@@ -125,6 +148,8 @@ input:focus { outline: 2px solid var(--teal); border-color: var(--teal); }
 .footer .fpc { opacity: .8; }
 .footer .legal-name { font-weight: 700; color: #fff; margin-bottom: 2px; }
 .footer .company-address { opacity: .8; margin-bottom: 10px; }
+.whatsapp-link { display: inline-flex; align-items: center; gap: 4px; }
+.wa-icon { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* desktop */
 @media (min-width: 700px) {

@@ -10,13 +10,28 @@ numbers, not strings, on GetCustomerSearch — coerce_numbers_to_str handles
 that (and any other str-typed field AllCloud sends numerically) app-wide.
 """
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 
 class TolerantModel(BaseModel):
     model_config = ConfigDict(
         extra="ignore", populate_by_name=True, coerce_numbers_to_str=True
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_nulls(cls, data):
+        # Confirmed live (2026-07-17): AllCloud sends explicit JSON null for
+        # string fields once a loan is past scheduled events — e.g.
+        # GetLccDetailsByAgreementNo's InstallmentDueDate is null for a loan
+        # past its full EMI tenure but still carrying dues. Pydantic rejects
+        # None for a non-Optional str field, which without this silently
+        # crashed the whole model and made callers fall back to a much less
+        # reliable data source. Dropping null keys lets the field's own
+        # default apply instead.
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if v is not None}
+        return data
 
 
 class CustomerSearchResult(TolerantModel):
@@ -39,10 +54,33 @@ class CustomerSearchResult(TolerantModel):
     # agreement-lookup endpoint does NOT, so this is the only source of DOB
     # for the alternate login flow.
     dob: str = Field(default="", validation_alias=AliasChoices("DOB", "DateOfBirth"))
+    # Confirmed live (2026-07-18): customer profile fields for the portal's
+    # "View profile" page — PhotoURL is a presigned S3 URL (~10 min expiry),
+    # never persisted anywhere, only ever rendered fresh from a live call.
+    father_name: str = Field(default="", validation_alias=AliasChoices("FatherName",))
+    email: str = Field(default="", validation_alias=AliasChoices("Email",))
+    photo_url: str = Field(default="", validation_alias=AliasChoices("PhotoURL",))
+    masked_aadhaar: str = Field(default="", validation_alias=AliasChoices("MaskedAadarCard",))
+    address_line1: str = Field(default="", validation_alias=AliasChoices("PrimaryAddressLine1",))
+    address_line2: str = Field(default="", validation_alias=AliasChoices("PrimaryAddressLine2",))
+    address_area: str = Field(default="", validation_alias=AliasChoices("PrimaryArea",))
+    address_town: str = Field(default="", validation_alias=AliasChoices("PrimaryTown",))
+    address_taluka: str = Field(default="", validation_alias=AliasChoices("PrimaryTaluka",))
+    address_postcode: str = Field(default="", validation_alias=AliasChoices("PrimaryPostcode",))
+    address_landmark: str = Field(default="", validation_alias=AliasChoices("PrimaryLandmark",))
 
     @property
     def customer_name(self) -> str:
         return self.customer_name_raw or f"{self.first_name} {self.last_name}".strip()
+
+    @property
+    def full_address(self) -> str:
+        parts = [
+            self.address_line1, self.address_line2, self.address_area,
+            self.address_town, self.address_taluka, self.address_postcode,
+            self.address_landmark,
+        ]
+        return ", ".join(p.strip() for p in parts if p and p.strip())
 
 
 class CoBorrower(TolerantModel):
@@ -57,8 +95,50 @@ class CoBorrower(TolerantModel):
 
 
 class RepaymentScheduleEntry(TolerantModel):
+    """Confirmed live (2026-07-18): GetLoanAgreementNoAsync's RepaymentSchedules
+    is a full per-installment ledger — due date/amount, principal/interest
+    split, running principal outstanding, and what was actually paid (amount/
+    date/mode) plus penal charges (LPC) charged and received. This is the
+    statement-of-account "transaction history" data; there's no separate
+    flat debit/credit journal endpoint confirmed."""
+
     installment_no: int = Field(default=0, validation_alias=AliasChoices("InstallmentNo",))
+    due_date: str = Field(default="", validation_alias=AliasChoices("DueDate",))
     due_amount: float = Field(default=0.0, validation_alias=AliasChoices("DueAmount",))
+    principal: float = Field(default=0.0, validation_alias=AliasChoices("Principal",))
+    interest: float = Field(default=0.0, validation_alias=AliasChoices("Interest",))
+    principal_os: float = Field(default=0.0, validation_alias=AliasChoices("PrincipalOS",))
+    # Confirmed live: PaidAmount/PaymentDate/PaymentMode arrive as "" (empty
+    # string, not absent/null) for not-yet-due installments.
+    paid_amount: str = Field(default="", validation_alias=AliasChoices("PaidAmount",))
+    payment_date: str = Field(default="", validation_alias=AliasChoices("PaymentDate",))
+    payment_mode: str = Field(default="", validation_alias=AliasChoices("PaymentMode",))
+    pending_amount: float = Field(default=0.0, validation_alias=AliasChoices("PendingAmount",))
+    payment_status: str = Field(default="", validation_alias=AliasChoices("PaymentStatus",))
+    lpc: float = Field(default=0.0, validation_alias=AliasChoices("LPC",))
+    lpc_received: float = Field(default=0.0, validation_alias=AliasChoices("LPCReceived",))
+    collection_charges: float = Field(default=0.0, validation_alias=AliasChoices("CollectionCharges",))
+
+
+class VasEntry(TolerantModel):
+    """One row of GetLoanAgreementNoAsync's VASs — non-EMI charges/credits
+    (security deposit, processing fees, insurance, ...) confirmed live
+    2026-07-18. Used on the statement to show the disbursement-time
+    deductions (e.g. security deposit) that explain Loan Amount vs
+    Disbursed Amount."""
+
+    name: str = Field(default="", validation_alias=AliasChoices("Name",))
+    amount: float = Field(default=0.0, validation_alias=AliasChoices("Amount",))
+    vas_type_id: str = Field(default="", validation_alias=AliasChoices("VASTypeId",))
+    received_amount: float = Field(default=0.0, validation_alias=AliasChoices("ReceivedAmount",))
+    received_date: str = Field(default="", validation_alias=AliasChoices("ReceivedDate",))
+    # Confirmed live 2026-07-18: for recurring charges (e.g. UPI NACH Bounce
+    # Charges) that get settled in a later lump-sum batch, AllCloud's own
+    # receipt listing dates each occurrence by DueDate — ReceivedDate only
+    # reflects when the batch was actually cleared, which can be months
+    # later and collapses several distinct charges onto one date.
+    due_date: str = Field(default="", validation_alias=AliasChoices("DueDate",))
+    vas_due: float = Field(default=0.0, validation_alias=AliasChoices("VASDue",))
 
 
 class LoanSummary(TolerantModel):
@@ -142,6 +222,27 @@ class LoanSummary(TolerantModel):
     co_borrowers: list[CoBorrower] = Field(
         default_factory=list, validation_alias=AliasChoices("lstCoBorrowers", "CoBorrowers")
     )
+    # --- Statement-of-account fields — confirmed live 2026-07-18 -----------
+    vas_list: list[VasEntry] = Field(default_factory=list, validation_alias=AliasChoices("VASs",))
+    start_date: str = Field(default="", validation_alias=AliasChoices("StartDate",))
+    emi_start_date: str = Field(default="", validation_alias=AliasChoices("EMIStartDate",))
+    emi_end_date: str = Field(default="", validation_alias=AliasChoices("EMIEndDate",))
+    installment_type_id: str = Field(default="", validation_alias=AliasChoices("InstallmentTypeId",))
+    mode_of_repayment_id: str = Field(default="", validation_alias=AliasChoices("ModeOfRePaymentId",))
+    utr_no: str = Field(default="", validation_alias=AliasChoices("UTRNo",))
+    # DisbursementStatus ("Disbursed") and StatusId ("Open") are distinct —
+    # kept apart from the ambiguous `status` field above (which already
+    # falls back to StatusId/DisbursementStatus when nothing more specific
+    # is present, so is unreliable for telling the two apart).
+    disbursement_status: str = Field(default="", validation_alias=AliasChoices("DisbursementStatus",))
+    status_id: str = Field(default="", validation_alias=AliasChoices("StatusId",))
+    # ROI(%) | APR(%) on the statement = YearlyIndicativeROI | EffectiveAPRPercente
+    # (confirmed live against a real statement PDF, 2026-07-18).
+    yearly_indicative_roi: float = Field(default=0.0, validation_alias=AliasChoices("YearlyIndicativeROI",))
+    effective_apr: float = Field(default=0.0, validation_alias=AliasChoices("EffectiveAPRPercente",))
+    lpc_interest: float = Field(default=0.0, validation_alias=AliasChoices("LPCInterest",))
+    total_principal_due: float = Field(default=0.0, validation_alias=AliasChoices("TotalPrincipalDue",))
+    total_interest_due: float = Field(default=0.0, validation_alias=AliasChoices("TotalInterestDue",))
 
     @property
     def primary_customer_id(self) -> str | None:
@@ -156,6 +257,33 @@ class LoanSummary(TolerantModel):
             if cb.order_type_id.lower() == "primary" and "customer" in cb.entity_type_id.lower():
                 return cb.borrower_name
         return self.customer_name
+
+    @property
+    def guarantors(self) -> list["CoBorrower"]:
+        return [cb for cb in self.co_borrowers if "guarantor" in cb.entity_type_id.lower()]
+
+    @property
+    def disbursed_amount(self) -> float:
+        """Loan Amount minus security-deposit-style VAS deductions taken at
+        disbursement — confirmed live 2026-07-18 against a real statement
+        (Loan Amount 63,000 - Security Deposit 5,000 = Disbursed 58,000)."""
+        deductions = sum(
+            v.amount for v in self.vas_list
+            if "securitydeposit" in v.vas_type_id.lower().replace(" ", "")
+        )
+        return round(self.loan_amount - deductions, 2)
+
+    @property
+    def last_paid_date(self) -> str:
+        for entry in reversed(self.repayment_schedules):
+            if entry.payment_date:
+                # Confirmed live (2026-07-18): PaymentDate can itself be a
+                # comma-separated list when an installment received
+                # multiple partial payments (e.g. "17-12-2025, 12-01-2026")
+                # — the most recent one is the actual last-paid date.
+                parts = [p.strip() for p in entry.payment_date.split(",") if p.strip()]
+                return parts[-1] if parts else ""
+        return ""
 
     @property
     def regular_emi_amount(self) -> float:
@@ -259,6 +387,8 @@ class LccDetails(TolerantModel):
 
     finance_id: str = Field(default="", validation_alias=AliasChoices("FinanceId",))
     agreement_no: str = Field(default="", validation_alias=AliasChoices("AgreementNo",))
+    region: str = Field(default="", validation_alias=AliasChoices("Region",))
+    branch: str = Field(default="", validation_alias=AliasChoices("Branch",))
     customer_name: str = Field(default="", validation_alias=AliasChoices("CustomerName",))
     customer_contact: str = Field(default="", validation_alias=AliasChoices("CustomerContact",))
     vehicle_class: str = Field(default="", validation_alias=AliasChoices("VehicleClass",))
@@ -278,6 +408,12 @@ class LccDetails(TolerantModel):
     emi_due_count: float = Field(default=0.0, validation_alias=AliasChoices("EMIDueCount",))
     running_emi_count: int = Field(default=0, validation_alias=AliasChoices("RunningEmiCount",))
     status: str = Field(default="", validation_alias=AliasChoices("Status",))
+    # Non-empty once the vehicle has been repossessed as part of recovery.
+    seize_date: str = Field(default="", validation_alias=AliasChoices("SeizeDate",))
+
+    @property
+    def is_seized(self) -> bool:
+        return bool(self.seize_date)
 
     @property
     def is_overdue(self) -> bool:
