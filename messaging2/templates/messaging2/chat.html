@@ -2388,7 +2388,8 @@ function renderMessage(msg){
                 </div>
             </div>`;
             if (msg.sent_text_message) {
-                contentHtml += `<div class="doc-text" style="margin-top:6px;padding:6px;background:#ffe5e5;border-left:3px solid #dc3545;font-size:12px;">⚠️ ${linkify(escapeHtml(msg.sent_text_message))}</div>`;
+                contentHtml += `<div class="doc-text" style="margin-top:6px;padding:6px;background:#ffe5e5;border-left:3px solid #dc3545;font-size:12px;">
+⚠️ ${linkify(escapeHtml(msg.sent_text_message))}</div>`;
             }
         } else {
             contentHtml = `<div class="document-bubble" onclick="downloadDocument('${msg.media_file}','${escapeHtml(fileName)}',event)" style="cursor:pointer;background:white;border-radius:12px;">
@@ -2857,11 +2858,37 @@ async function openNocModal() {
 }
 
 // Send NOC from modal
+// Send NOC from modal - NOW WITH INSTANT UI UPDATE
 document.getElementById('nocSendBtn').addEventListener('click', async function() {
     const btn = this;
     const originalHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     btn.disabled = true;
+
+    // --- Create a temporary message (appears instantly) ---
+    const tempId = 'temp_noc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const custName = document.getElementById('nocCustName').textContent;
+    const vehicleNo = document.getElementById('nocVehicleNo').textContent;
+    const renderedText = `📄 NOC document sent for vehicle ${vehicleNo}`;
+
+    const tempMsg = {
+        id: tempId,
+        mobile: selectedMobile,
+        sent_text_message: renderedText,
+        content_type: 'document',       // will show document icon once media_file is set
+        media_file: '',                // placeholder
+        sent_at: new Date().toISOString(),
+        message_type: 'Sent',
+        message_id: tempId,
+        status: 'Sending...',
+        sender_name: 'You',
+        is_temp: true
+    };
+
+    // Append to chat and update contact list
+    appendMessage(tempMsg);
+    updateContactInList(tempMsg);
+    scrollToBottom();
 
     try {
         const resp = await fetch(`/api/send-noc/?mobile=${encodeURIComponent(selectedMobile)}&app=${APP_KEY}`, {
@@ -2871,20 +2898,45 @@ document.getElementById('nocSendBtn').addEventListener('click', async function()
         const data = await resp.json();
 
         if (data.success) {
+            // --- Update the temporary message with real data ---
+            const tempIndex = messages.findIndex(m => m.id === tempId);
+            if (tempIndex !== -1) {
+                messages[tempIndex] = {
+                    ...messages[tempIndex],
+                    id: data.message_id || messages[tempIndex].id,
+                    message_id: data.message_id || messages[tempIndex].message_id,
+                    media_file: data.media_file || '',
+                    status: 'Sent',
+                    is_temp: false,
+                    sent_text_message: data.rendered_text || renderedText,  // optional: show actual template text
+                };
+                // Re-render messages to show the document icon
+                renderMessages(messages, hasMoreMessages, null, false);
+            }
             showNotification('NOC sent successfully!', 'success');
-            // Optionally add a temporary message to the chat
             bootstrap.Modal.getInstance(document.getElementById('nocModal')).hide();
         } else {
+            // --- Remove temporary message on failure ---
+            const tempIndex = messages.findIndex(m => m.id === tempId);
+            if (tempIndex !== -1) {
+                messages.splice(tempIndex, 1);
+                renderMessages(messages, hasMoreMessages, null, false);
+            }
             showNotification(data.error || 'Failed to send NOC', 'error');
         }
     } catch (e) {
+        // --- Remove temporary message on error ---
+        const tempIndex = messages.findIndex(m => m.id === tempId);
+        if (tempIndex !== -1) {
+            messages.splice(tempIndex, 1);
+            renderMessages(messages, hasMoreMessages, null, false);
+        }
         showNotification('Error: ' + e.message, 'error');
     } finally {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     }
 });
-
 
 
 // --- NEW: Mark as Unread button ---

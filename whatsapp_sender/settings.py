@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    
+    "django_celery_beat",
     "channels",
     "storages",
     
@@ -217,12 +217,6 @@ CELERY_TASK_ROUTES = {
     "batch_app.scheduler.*": {"queue": "batch_scheduler"},
 }
 
-CELERY_BEAT_SCHEDULE = {
-    'revert-unread-every-30-min': {
-        'task': 'messaging2.tasks.revert_unread_after_timeout',
-        'schedule': 1800.0,  # 30 minutes
-    },
-}
 # -------------------------------------------------------
 # CSRF
 # -------------------------------------------------------
