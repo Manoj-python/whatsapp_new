@@ -25,6 +25,7 @@ from .models import (
     Feedback,
     ExecutiveVisitScheduling,
     Clu,
+    NocModel,
     Freshdesk,
     DueNotice,
     Visiter,
@@ -131,7 +132,7 @@ FILE_TYPES = [
     ("smsquare", "SMSquare"),
     ("upi", "UPI"),
     ("executive_visit_scheduling", "Executive Visit Scheduling"),
-
+    ("NocModel","NocModel")
 
 
 ]

@@ -21,6 +21,7 @@ class SmsWhatsAppLog(models.Model):
     error_code = models.IntegerField(null=True, blank=True, help_text="WhatsApp API error code")
     error_reason = models.TextField(blank=True, help_text="Detailed error reason")
     button_response = models.TextField(blank=True, default='', help_text="Store button click data as JSON")
+    vehicle_number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
     
     class Meta:
         ordering = ['-sent_at']

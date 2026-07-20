@@ -884,3 +884,13 @@ class StatusCountCache(models.Model):
     class Meta:
         db_table = 'status_count_cache'
 
+
+
+class NocModel(models.Model):
+    customer_name = models.CharField(max_length=225)
+    loan_number = models.CharField(max_length=225)
+    vehicle_number = models.CharField(max_length=225, db_index=True)   # for future lookups
+    mobile_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)   # for fast lookup
+
+    def __str__(self):
+        return self.customer_name

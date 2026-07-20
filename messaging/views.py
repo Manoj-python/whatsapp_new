@@ -1636,3 +1636,199 @@ def fetch_padmasai_details(request):
         return JsonResponse({'success': True, **result})
     else:
         return JsonResponse({'success': False, 'error': 'No details found'})
+
+
+# ==================================== Noc==========================================
+
+
+
+import logging
+import requests
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from io import BytesIO
+from financehub.models import NocModel
+
+
+@require_http_methods(["GET"])
+def noc_details(request):
+    mobile = request.GET.get('mobile')
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile number required'}, status=400)
+
+    # Extract last 10 digits to match storage
+    import re
+    mobile_digits = re.sub(r'\D', '', mobile)
+    mobile_lookup = mobile_digits[-10:] if len(mobile_digits) >= 10 else mobile_digits
+
+    try:
+        noc = NocModel.objects.get(mobile_number=mobile_lookup)
+        return JsonResponse({
+            'success': True,
+            'customer_name': noc.customer_name,
+            'loan_number': noc.loan_number,
+            'vehicle_number': noc.vehicle_number,
+        })
+    except NocModel.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'No NOC record found'}, status=404)
+logger = logging.getLogger(__name__)
+
+@require_http_methods(["POST"])
+def send_noc(request):
+    """
+    Send NOC document via WhatsApp template (choice 31 = doc_noc_psf).
+    Supports PSF, SMS, and SPL apps.
+    """
+    mobile = request.GET.get('mobile') or request.POST.get('mobile')
+    app = request.GET.get('app') or request.POST.get('app', 'psf')
+
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile number required'}, status=400)
+
+    if app not in APP_CONFIG:
+        return JsonResponse({'success': False, 'error': f'Invalid app: {app}'}, status=400)
+
+    config = APP_CONFIG[app]
+
+    # 1. Format mobile using app-specific function
+    format_mobile_func = config['format_mobile_func']
+    mobile_formatted = format_mobile_func(mobile)
+    if not mobile_formatted:
+        return JsonResponse({'success': False, 'error': 'Invalid mobile number'}, status=400)
+
+    # 2. Extract last 10 digits to match NocModel storage (stored as 10 digits without country code)
+    mobile_digits = re.sub(r'\D', '', mobile_formatted)
+    mobile_lookup = mobile_digits[-10:] if len(mobile_digits) >= 10 else mobile_digits
+    if not mobile_lookup:
+        return JsonResponse({'success': False, 'error': 'Invalid mobile number format'}, status=400)
+
+    # 3. Look up NocModel (shared across all apps)
+    try:
+        noc_record = NocModel.objects.get(mobile_number=mobile_lookup)
+    except NocModel.DoesNotExist:
+        logger.warning(f"No NOC record found for {mobile_lookup}")
+        return JsonResponse({'success': False, 'error': 'No NOC record found for this mobile number'}, status=404)
+
+    customer_name = noc_record.customer_name
+    loan_number = noc_record.loan_number
+    vehicle_no = noc_record.vehicle_number
+
+    if not vehicle_no:
+        return JsonResponse({'success': False, 'error': 'Vehicle number missing in NOC record'}, status=404)
+
+    # 4. Build PDF filename and fetch from S3 (using app-specific function)
+    pdf_filename = f"{vehicle_no}_noc.pdf"
+    folder = "noc_pdfs"
+
+    open_pdf_func = config['open_legal_pdf_func']
+    try:
+        pdf_bytes = open_pdf_func(pdf_filename, folder)
+        if not pdf_bytes:
+            raise ValueError("Empty PDF")
+    except FileNotFoundError:
+        return JsonResponse({'success': False, 'error': f'PDF "{pdf_filename}" not found in S3'}, status=404)
+    except Exception as e:
+        logger.exception("PDF read error")
+        return JsonResponse({'success': False, 'error': f'Error reading PDF: {str(e)}'}, status=500)
+
+    # 5. Global send limit – count across all apps' log tables
+    total_sent = 0
+    for app_key, cfg in APP_CONFIG.items():
+        total_sent += cfg['log_model'].objects.filter(
+            vehicle_number=vehicle_no,
+            template_name='31'          # choice 31 = doc_noc_psf
+        ).count()
+
+    if total_sent >= 2:
+        return JsonResponse({
+            'success': False,
+            'error': f'NOC for vehicle {vehicle_no} already sent {total_sent} times. Maximum 2 allowed.'
+        }, status=400)
+
+    # 6. Upload PDF to WhatsApp using app-specific upload function
+    upload_media_func = config['upload_media_func']
+    try:
+        file_obj = BytesIO(pdf_bytes)
+        file_obj.name = pdf_filename
+        file_obj.content_type = "application/pdf"
+
+        # If your upload function requires an app parameter, pass it:
+        # upload_result = upload_media_func(file_obj, app=app)
+        upload_result = upload_media_func(file_obj)   # adjust signature as needed
+        media_id = upload_result.get("id")
+        if not media_id:
+            raise ValueError("Upload failed – no media ID")
+    except Exception as e:
+        logger.exception("Media upload error")
+        return JsonResponse({'success': False, 'error': f'Media upload failed: {str(e)}'}, status=500)
+
+    # 7. Build payload using app-specific build function
+    build_payload_func = config['build_payload_func']
+    # IMPORTANT: build_payload2 expects 'cust_mobile' (or 'CustMobile') in the row
+    row = {
+        'customer_name': customer_name,
+        'loan_number': loan_number,
+        'vehicle_number': vehicle_no,
+        'doc_noc_pdf_file': pdf_filename,
+        'cust_mobile': mobile_formatted,        # required for build_payload
+        # Some variants use 'CustMobile' – we add both to be safe
+        'CustMobile': mobile_formatted,
+    }
+    try:
+        payload, rendered_text = build_payload_func('31', row, media_id)
+    except Exception as e:
+        logger.exception("Payload build error")
+        return JsonResponse({'success': False, 'error': f'Payload error: {str(e)}'}, status=500)
+
+    # 8. Send message using app-specific WhatsApp credentials
+    session = requests.Session()
+    whatsapp = config['whatsapp']
+    session.headers.update({
+        "Authorization": f"Bearer {whatsapp['access_token']}"
+    })
+    post_url = f"https://graph.facebook.com/v22.0/{whatsapp['phone_number_id']}/messages"
+
+    try:
+        resp = session.post(post_url, json=payload, timeout=30)
+        if not resp.ok:
+            logger.error(f"WhatsApp API error: {resp.text}")
+            return JsonResponse({'success': False, 'error': f'WhatsApp error: {resp.text}'}, status=500)
+        msg_id = resp.json()['messages'][0]['id']
+    except Exception as e:
+        logger.exception("Send error")
+        return JsonResponse({'success': False, 'error': f'Send error: {str(e)}'}, status=500)
+
+    # 9. Save PDF locally for dashboard display
+    media_file_path = ''
+    try:
+        saved_path = default_storage.save(
+            f"chat_media2/{pdf_filename}",
+            ContentFile(pdf_bytes)
+        )
+        media_file_path = saved_path
+    except Exception as e:
+        logger.warning(f"Local PDF save failed: {e}")
+
+    # 10. Log to the correct table for this app
+    LogModel = config['log_model']
+    LogModel.objects.create(
+        job_id=None,
+        customer_name=customer_name,
+        sender_name='System (NOC)',
+        mobile=mobile_formatted,
+        vehicle_number=vehicle_no,
+        template_name='31',
+        sent_text_message=rendered_text,
+        status='Sent',
+        message_id=msg_id,
+        message_type='Sent',
+        content_type='document',
+        media_file=media_file_path,   # stored path for frontend download
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message_id': msg_id,
+        'rendered_text': rendered_text,
+        'media_file': media_file_path,   # optional, for frontend to show immediately
+    })

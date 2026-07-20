@@ -300,7 +300,16 @@
 .composer button.mic-btn { background: var(--whatsapp-green); }
 .composer button.mic-btn.recording-active { background: #dc3545; }
 .composer button.mic-btn i { font-size: 18px; }
-
+#nocModal .modal-header.bg-danger {
+    background: #dc3545 !important;
+}
+#nocModal .btn-danger {
+    background: #dc3545;
+    border-color: #dc3545;
+}
+#nocModal .btn-danger:hover {
+    background: #c82333;
+}
   
   </style>
 </head>
@@ -348,16 +357,21 @@
         <button id="attachBtn"><i class="fas fa-paperclip"></i></button>
         <input type="text" id="messageInput" placeholder="Type a message...">
       </div>
+        <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+      
        <button id="micBtn" class="mic-btn" title="Record voice message">
         <i class="fas fa-microphone"></i>
       </button>
+      <button id="nocBtn" class="noc-btn" title="Send NOC Document" style="background: #dc3545; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
+    <i class="fas fa-file-contract"></i>
+</button>
+ <button id="paymentBtn" title="Send Payment Link" style="background: #128C7E; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
+    <i class="fas fa-rupee-sign"></i>
+</button>
        <button id="ptpBtn" title="Send Payment Confirmation" style="background: #FF6B35; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
     <i class="fas fa-check-circle"></i>
 </button>
-      <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
-       <button id="paymentBtn" title="Send Payment Link" style="background: #128C7E; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
-    <i class="fas fa-rupee-sign"></i>
-</button>
+    
       <input type="file" id="mediaInput" style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
     </div>
 <!-- VOICE RECORDER -->
@@ -601,6 +615,48 @@
     </div>
 </div>
 
+
+<!-- NOC Modal -->
+<div class="modal fade" id="nocModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-file-contract"></i> Send NOC Document</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="nocLoading" class="text-center py-3">
+                    <i class="fas fa-spinner fa-spin"></i> Loading details...
+                </div>
+                <div id="nocDetails" style="display:none;">
+                    <div class="mb-2">
+                        <label class="fw-bold">Customer Name</label>
+                        <div id="nocCustName" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Loan Number</label>
+                        <div id="nocLoanNo" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Vehicle Number</label>
+                        <div id="nocVehicleNo" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Mobile</label>
+                        <div id="nocMobile" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div id="nocError" class="alert alert-danger" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="nocSendBtn" disabled>
+                    <i class="fas fa-paper-plane"></i> Send NOC
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
   // ========== CONFIG ==========
   const CSRF = document.querySelector('meta[name="csrf-token"]').content;
@@ -2759,6 +2815,78 @@ if (casePanelBtn) {
   };
 }
 
+// ==================== NOC SEND ====================
+// ==================== NOC MODAL ====================
+async function openNocModal() {
+    if (!selectedMobile) {
+        showNotification('Select a contact first', 'warning');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('nocModal'));
+    modal.show();
+
+    // Reset UI
+    document.getElementById('nocLoading').style.display = 'block';
+    document.getElementById('nocDetails').style.display = 'none';
+    document.getElementById('nocError').style.display = 'none';
+    document.getElementById('nocSendBtn').disabled = true;
+
+    try {
+        const resp = await fetch(`/api/noc-details/?mobile=${encodeURIComponent(selectedMobile)}`);
+        const data = await resp.json();
+
+        if (data.success) {
+            document.getElementById('nocCustName').textContent = data.customer_name || '-';
+            document.getElementById('nocLoanNo').textContent = data.loan_number || '-';
+            document.getElementById('nocVehicleNo').textContent = data.vehicle_number || '-';
+            document.getElementById('nocMobile').textContent = selectedMobile;
+            document.getElementById('nocLoading').style.display = 'none';
+            document.getElementById('nocDetails').style.display = 'block';
+            document.getElementById('nocSendBtn').disabled = false;
+        } else {
+            document.getElementById('nocLoading').style.display = 'none';
+            document.getElementById('nocError').textContent = data.error || 'Failed to fetch details';
+            document.getElementById('nocError').style.display = 'block';
+        }
+    } catch (e) {
+        document.getElementById('nocLoading').style.display = 'none';
+        document.getElementById('nocError').textContent = 'Error: ' + e.message;
+        document.getElementById('nocError').style.display = 'block';
+    }
+}
+
+// Send NOC from modal
+document.getElementById('nocSendBtn').addEventListener('click', async function() {
+    const btn = this;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch(`/api/send-noc/?mobile=${encodeURIComponent(selectedMobile)}&app=${APP_KEY}`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF }
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            showNotification('NOC sent successfully!', 'success');
+            // Optionally add a temporary message to the chat
+            bootstrap.Modal.getInstance(document.getElementById('nocModal')).hide();
+        } else {
+            showNotification(data.error || 'Failed to send NOC', 'error');
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
+});
+
+
+
 // --- NEW: Mark as Unread button ---
 let markUnreadBtn = document.getElementById('markUnreadBtn');
 if (markUnreadBtn) {
@@ -2782,6 +2910,11 @@ const ptpSubmitBtn = document.getElementById('ptpSubmitBtn');
 if (ptpSubmitBtn) {
     ptpSubmitBtn.addEventListener('click', sendPtpTemplate);
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const nocBtn = document.getElementById('nocBtn');
+    if (nocBtn) nocBtn.addEventListener('click', openNocModal);  // ✅ fixed
+});
 
 
 document.addEventListener('contextmenu', function(e) {

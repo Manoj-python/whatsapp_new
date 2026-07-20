@@ -581,6 +581,26 @@ def clean_header(header: str, model_name: str = None):
             "rating": "rating",
         }
         return special_mapping.get(h, h)
+    
+    elif model_name == "NocModel":
+        special_mapping = {
+            "customername": "customer_name",
+            "customer_name": "customer_name",
+            "loannumber": "loan_number",
+            "loan_no": "loan_number",
+            "loan_number": "loan_number",
+            "vehiclenumber": "vehicle_number",
+            "vehicle_no": "vehicle_number",
+            "vehicle_number": "vehicle_number",
+            "mobilenumber": "mobile_number",
+            "mobile_no": "mobile_number",
+            "mobile": "mobile_number",
+            "phone": "mobile_number",
+            "phonenumber": "mobile_number",
+            "customer_mobile": "mobile_number",
+        }
+        return special_mapping.get(h, h)
+
 
     # ============================================================
     # FALLBACK: Return the cleaned header as-is
@@ -655,11 +675,14 @@ def get_model_by_type(file_type: str):
         "smsquare_payments": "Smsquare",
         "upi": "Upi",
         "executive_visit_scheduling": "ExecutiveVisitScheduling",
+        "nocmodel": "NocModel",
     }
 
     model_name = mapping.get(file_type.lower())
     if not model_name:
         return None
+   
+    
 
     return apps.get_model("financehub", model_name)
 
@@ -676,6 +699,8 @@ def get_unique_field(model):
 
     if model.__name__.lower() in no_unique_models:
         return None
+    if model.__name__ == "NocModel":
+        return "vehicle_number"
 
     priority = [
         "loan_number",
