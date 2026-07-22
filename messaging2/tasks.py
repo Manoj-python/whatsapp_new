@@ -219,7 +219,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             # 📁 SELECT PDF + FOLDER (FIXED)
             # ==================================================
-            if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42","44","45"):
+            if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42","44","45","49"):
                 is_document = True
 
                 if template_choice == "14":
@@ -258,6 +258,9 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                 elif template_choice in ("44", "45"):
                     pdf_filename = row.get("presale_notices_borrower_pdf")
                     folder = "legal_pdfs"
+                elif template_choice == "49":
+                    pdf_filename = row.get("hpt_pending_pdf")
+                    folder = "noc_pdfs"
                 else:
                     pdf_filename = row.get("customer_pdf_file")
                     folder = "legal_pdfs"
@@ -440,7 +443,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
             # Map error codes to specific statuses
             status_value = "Failed"
-            
+
             ERROR_MAP = {
                 "100": "INVALID_PARAMETER_100",
                 "131026": "NOT_ON_WHATSAPP",
@@ -460,7 +463,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                 "130429": "RATE_LIMIT",
                 "131056": "TOO_MANY_MESSAGES",
             }
-            
+
             for code, label in ERROR_MAP.items():
                 if code in err_msg:
                     status_value = label
@@ -621,7 +624,7 @@ def process_pending_webhook_updates():
                     cache.delete(key)
 
 
-	
+
 from celery import shared_task
 from django.utils import timezone
 from adminpanel.views import APP_CONFIG
@@ -818,7 +821,7 @@ def send_ticket_close_message(app_key, case_id):
         app_name = cfg['app_name']
     except KeyError:
         return
-    
+
 
     case = CaseModel.objects.get(id=case_id)
     final_sender_name = case.created_by
@@ -864,7 +867,7 @@ def send_ticket_close_message(app_key, case_id):
         sent_text = render_template(template_body, template_params)
     else:
         sent_text = free_text
-    
+
     log = LogModel.objects.create(
         customer_name=final_sender_name,
         mobile=mobile,
@@ -1082,7 +1085,7 @@ def revert_unread_after_timeout():
     for app_key, cfg in APP_CONFIG.items():
         ContactModel = cfg.get('contact_model')
         channel_group = cfg.get('channel_group')
-        
+
         if not ContactModel or not channel_group:
             continue  # skip if misconfigured
 
@@ -1125,3 +1128,4 @@ def revert_unread_after_timeout():
             )
 
     return f"Reverted {total_updated} contacts to unread across all apps"
+

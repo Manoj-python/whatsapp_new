@@ -57,12 +57,12 @@ def format_datetime_12hr(dt, show_date=True, show_seconds=False):
     """Format datetime in 12-hour format with AM/PM in IST"""
     if not dt:
         return '-'
-    
+
     try:
         ist_dt = format_ist_datetime(dt)
         if not ist_dt:
             return '-'
-        
+
         if show_date:
             if show_seconds:
                 return ist_dt.strftime('%Y-%m-%d %I:%M:%S %p')
@@ -100,15 +100,15 @@ def validate_and_fix_schedule_datetime(dt_str):
     try:
         dt_obj = datetime.strptime(dt_str, '%Y-%m-%dT%H:%M')
         dt_obj = timezone.make_aware(dt_obj, timezone.get_current_timezone())
-        
+
         now = timezone.now()
-        
+
         current_year = now.year
         if dt_obj.year > current_year + 1:
             dt_obj = dt_obj.replace(year=current_year)
-        
+
         time_diff = (now - dt_obj).total_seconds()
-        
+
         # ✅ Only move to tomorrow if more than 1 hour in the past
         if time_diff > 3600:
             dt_obj = dt_obj + timedelta(days=1)
@@ -117,9 +117,9 @@ def validate_and_fix_schedule_datetime(dt_str):
             print(f"⚠️ Time is {int(time_diff)} seconds in the past, keeping as is")
         else:
             print(f"✅ Time is in the future: {dt_obj.strftime('%Y-%m-%d %I:%M %p')}")
-        
+
         return dt_obj
-        
+
     except Exception as e:
         raise ValueError(f"Invalid date/time: {e}")
 
@@ -143,10 +143,10 @@ def get_job_data(job):
         schedule_ist = format_ist_datetime(job.schedule_datetime)
         next_run_ist = format_ist_datetime(job.next_run_time)
         end_date_ist = format_ist_datetime(job.end_date)
-        
+
         # ✅ Format schedule time in 12-hour format
         schedule_time_str = schedule_ist.strftime('%I:%M %p') if schedule_ist else 'Not set'
-        
+
         return {
             # Basic Info
             'job_id': job.job_id,
@@ -156,37 +156,37 @@ def get_job_data(job):
             'template_name': job.template_name,
             'template_language': job.template_language,
             'excel_path': job.excel_path,
-            
+
             # Batch Settings
             'batch_size': job.batch_size,
             'batch_size_type': job.batch_size_type,
-            
+
             # Schedule Settings
             'schedule_type': job.schedule_type,
             'schedule_times': job.schedule_times,
             'weekly_day': job.weekly_day,
             'interval_days': job.interval_days,
             'schedule_info': job.get_schedule_info(),
-            
+
             # Status & Progress
             'status': job.status,
             'total_customers': job.total_customers,
             'total_batches': job.total_batches,
             'completed_batches': job.completed_batches,
             'current_batch': job.current_batch,
-            
+
             # Stats
             'sent_count': job.sent_count,
             'failed_count': job.failed_count,
             'skipped_count': job.skipped_count,
             'total_runs': job.total_runs,
             'completed_runs': job.completed_runs,
-            
+
             # Metadata
             'created_by': job.created_by,
             'error_message': job.error_message,
             'report_file': job.report_file,
-            
+
             # ✅ 12-hour format with AM/PM (IST)
             'created_at': created_ist.strftime('%Y-%m-%d %I:%M:%S %p') if created_ist else '-',
             'started_at': started_ist.strftime('%Y-%m-%d %I:%M:%S %p') if started_ist else '-',
@@ -194,13 +194,13 @@ def get_job_data(job):
             'schedule_datetime': schedule_ist.strftime('%Y-%m-%d %I:%M:%S %p') if schedule_ist else '-',
             'next_run_time': next_run_ist.strftime('%Y-%m-%d %I:%M:%S %p') if next_run_ist else 'Not scheduled',
             'end_date': end_date_ist.strftime('%Y-%m-%d %I:%M:%S %p') if end_date_ist else 'No end date',
-            
+
             # ✅ Only time in 12-hour format
             'schedule_time': schedule_time_str,
-            
+
             # ✅ Only date
             'created_date': created_ist.strftime('%Y-%m-%d') if created_ist else '-',
-            
+
             # ✅ Raw objects for calculations
             'schedule_datetime_obj': job.schedule_datetime,
             'next_run_time_obj': job.next_run_time,
@@ -274,13 +274,13 @@ def batch_job_list(request):
         status_filter = request.GET.get('status', '')
         if status_filter:
             jobs = jobs.filter(status=status_filter)
-        
+
         paginator = Paginator(jobs, 20)
         page = request.GET.get('page', 1)
         jobs_page = paginator.get_page(page)
-        
+
         apps = get_all_messaging_apps()
-        
+
         return render(request, 'batch_app/jobs.html', {
             'jobs': jobs_page,
             'status_filter': status_filter,
@@ -307,21 +307,21 @@ def batch_job_create(request):
             if not job_name:
                 messages.error(request, '❌ Job name is required')
                 return redirect('batch_job_create')
-            
+
             target_app = request.POST.get('target_app', 'messaging')
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
-            
+
             if not excel_path:
                 messages.error(request, '❌ Excel file path is required')
                 return redirect('batch_job_create')
-            
+
             # Validate app exists
             app = get_app_by_name(target_app)
             if not app:
                 messages.error(request, f'❌ App "{target_app}" not found')
                 return redirect('batch_job_create')
-            
+
             # Get template details
             templates = get_templates_from_app(target_app)
             template_info = None
@@ -329,32 +329,32 @@ def batch_job_create(request):
                 if t['id'] == template_id:
                     template_info = t
                     break
-            
+
             if not template_info:
                 messages.error(request, f'❌ Template "{template_id}" not found in {target_app}')
                 return redirect('batch_job_create')
-            
+
             # Get schedule data
             schedule_type = request.POST.get('schedule_type', 'daily')
             schedule_date = request.POST.get('schedule_date', '')
             schedule_time = request.POST.get('schedule_time', '09:00')
-            
+
             # Multiple daily times
             schedule_times = request.POST.getlist('schedule_times[]', [])
             multiple_schedule_date = request.POST.get('multiple_schedule_date', '')
-            
+
             # Other schedule fields
             weekly_day = request.POST.get('weekly_day')
             interval_days = request.POST.get('interval_days')
-            
+
             # End date
             has_end_date = request.POST.get('has_end_date') == 'on'
             end_date_str = request.POST.get('end_date', '')
-            
+
             # Batch size
             batch_size_type = request.POST.get('batch_size_type', 'custom')
             batch_size_str = request.POST.get('batch_size', '1000')
-            
+
             # Validate batch size
             try:
                 batch_size = int(batch_size_str) if batch_size_type == 'custom' else 0
@@ -364,12 +364,12 @@ def batch_job_create(request):
             except ValueError:
                 messages.error(request, '❌ Please enter a valid number for batch size')
                 return redirect('batch_job_create')
-            
+
             # ============================================================
             # ✅ FIXED: VALIDATE SCHEDULE WITH 1-HOUR TOLERANCE
             # ============================================================
             schedule_datetime_obj = None
-            
+
             # ============================================================
             # ✅ FIXED 1: MULTIPLE DAILY - NEVER MODIFY, PRESERVE EXACT TIMES
             # ============================================================
@@ -377,35 +377,35 @@ def batch_job_create(request):
                 if not schedule_times:
                     messages.error(request, '❌ Please add at least one time for multiple daily schedule')
                     return redirect('batch_job_create')
-                
+
                 if not multiple_schedule_date:
                     messages.error(request, '❌ Please select a date for multiple daily schedule')
                     return redirect('batch_job_create')
-                
+
                 try:
                     date_obj = datetime.strptime(multiple_schedule_date, '%Y-%m-%d').date()
                     first_time = schedule_times[0]
                     t = datetime.strptime(first_time, '%H:%M').time()
-                    
+
                     # Combine date and time - EXACT time
                     schedule_datetime_obj = timezone.make_aware(
                         datetime.combine(date_obj, t),
                         timezone.get_current_timezone()
                     )
-                    
+
                     now = timezone.now()
                     time_diff = (schedule_datetime_obj - now).total_seconds()
-                    
+
                     # ✅ FIXED: Multiple Daily - NEVER modify, ONLY log
                     # Even if time is past, we keep it because the scheduler will find the next time
                     print(f"📅 Multiple daily - Keeping exact time: {schedule_datetime_obj.strftime('%Y-%m-%d %I:%M %p')} (diff: {time_diff:.0f}s)")
                     print(f"📅 Multiple daily date: {multiple_schedule_date}")
                     print(f"📅 Multiple daily times: {schedule_times}")
-                    
+
                 except Exception as e:
                     messages.error(request, f'❌ Invalid date/time format: {e}')
                     return redirect('batch_job_create')
-            
+
             # ============================================================
             # ✅ FIXED 2: WEEKLY SCHEDULE - PRESERVE USER'S EXACT DATE AND TIME
             # ============================================================
@@ -413,22 +413,22 @@ def batch_job_create(request):
                 if not schedule_date or not schedule_time:
                     messages.error(request, '❌ Please select a date and time')
                     return redirect('batch_job_create')
-                
+
                 # Use the exact time from the weekly time input
                 weekly_time = request.POST.get('schedule_time', schedule_time)
-                
+
                 schedule_datetime_str = f"{schedule_date}T{weekly_time}"
-                
+
                 try:
                     dt_obj = datetime.strptime(schedule_datetime_str, '%Y-%m-%dT%H:%M')
                     schedule_datetime_obj = timezone.make_aware(dt_obj, timezone.get_current_timezone())
-                    
+
                     # Get the selected day from dropdown (0=Monday, 6=Sunday)
                     selected_weekly_day = int(weekly_day) if weekly_day else 0
-                    
+
                     # Get the day of week from the selected date
                     selected_weekday = schedule_datetime_obj.weekday()  # 0=Monday, 6=Sunday
-                    
+
                     # If the selected date doesn't match the selected day, adjust
                     if selected_weekday != selected_weekly_day:
                         days_ahead = (selected_weekly_day - selected_weekday + 7) % 7
@@ -437,24 +437,24 @@ def batch_job_create(request):
                         schedule_datetime_obj += timedelta(days=days_ahead)
                         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
                         messages.warning(
-                            request, 
+                            request,
                             f'⚠️ Selected date was not a {days[selected_weekly_day]}. '
                             f'Adjusted to {schedule_datetime_obj.strftime("%A, %B %d, %Y at %I:%M %p")}'
                         )
-                    
+
                     now = timezone.now()
                     time_diff = (schedule_datetime_obj - now).total_seconds()
-                    
+
                     # Keep the user's selected first run exactly. The scheduler
                     # decides the next future run without changing this anchor.
                     print(f"✅ Weekly - Keeping user's selected time: {schedule_datetime_obj.strftime('%Y-%m-%d %I:%M %p')} (diff: {time_diff:.0f}s)")
-                    
+
                     print(f"✅ Weekly schedule created: {schedule_datetime_obj.strftime('%Y-%m-%d %I:%M %p')}")
-                    
+
                 except ValueError as e:
                     messages.error(request, f'❌ Invalid date/time: {e}')
                     return redirect('batch_job_create')
-            
+
             # ============================================================
             # ✅ FIXED 3: DAILY / CUSTOM - PRESERVE USER'S EXACT TIME
             # ============================================================
@@ -462,24 +462,24 @@ def batch_job_create(request):
                 if not schedule_date or not schedule_time:
                     messages.error(request, '❌ Please select a date and time')
                     return redirect('batch_job_create')
-                
+
                 schedule_datetime_str = f"{schedule_date}T{schedule_time}"
-                
+
                 try:
                     dt_obj = datetime.strptime(schedule_datetime_str, '%Y-%m-%dT%H:%M')
                     schedule_datetime_obj = timezone.make_aware(dt_obj, timezone.get_current_timezone())
-                    
+
                     now = timezone.now()
                     time_diff = (schedule_datetime_obj - now).total_seconds()
-                    
+
                     # Keep the user's selected first run exactly. The scheduler
                     # calculates the next future execution from this anchor.
                     print(f"✅ Keeping user's selected time: {schedule_datetime_obj.strftime('%Y-%m-%d %I:%M %p')} (diff: {time_diff:.0f}s)")
-                        
+
                 except ValueError as e:
                     messages.error(request, f'❌ Invalid date/time: {e}')
                     return redirect('batch_job_create')
-            
+
             # Validate end date
             end_date_obj = None
             if has_end_date and end_date_str:
@@ -491,7 +491,7 @@ def batch_job_create(request):
                 except ValueError as e:
                     messages.error(request, f'❌ Invalid end date: {e}')
                     return redirect('batch_job_create')
-            
+
             # Read Excel
             try:
                 df = read_excel_from_s3(excel_path)
@@ -501,22 +501,22 @@ def batch_job_create(request):
             except Exception as e:
                 messages.error(request, f'❌ Error reading Excel file: {str(e)}')
                 return redirect('batch_job_create')
-            
+
             total = len(df)
             if total == 0:
                 messages.error(request, '❌ No customers found in Excel file')
                 return redirect('batch_job_create')
-            
+
             # Calculate batches
             if batch_size_type == 'full':
                 total_batches = 1
                 batch_size = total
             else:
                 total_batches = (total + batch_size - 1) // batch_size
-            
+
             # Generate job_id
             job_id = f"batch_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
-            
+
             # Create the job
             job = BatchJob.objects.create(
                 job_id=job_id,
@@ -536,45 +536,46 @@ def batch_job_create(request):
                 end_date=end_date_obj,
                 total_customers=total,
                 total_batches=total_batches,
-                status='pending',
+                status='scheduled',
                 created_by=request.user.username if request.user.is_authenticated else 'System',
             )
-            
+
             # ✅ Schedule the job
             try:
                 from batch_app import tasks
-                tasks.schedule_batch_job.delay(job.job_id)
+                job.next_run_time = job.schedule_datetime
+                job.save(update_fields=["next_run_time"])
             except Exception as e:
                 messages.warning(request, f'⚠️ Job created but scheduling failed: {str(e)}')
-            
+
             # Build success message
             schedule_desc = job.get_schedule_info()
             batch_desc = "FULL (all customers)" if batch_size_type == 'full' else f"{batch_size:,} per batch"
-            
+
             if schedule_type == 'multiple_daily':
                 times_display = ', '.join([format_time_display(t) for t in schedule_times])
                 schedule_desc = f"Multiple times on {multiple_schedule_date}: {times_display}"
-            
+
             messages.success(
-                request, 
+                request,
                 f'✅ Job created! {total:,} customers, {total_batches} batches '
                 f'(batch size: {batch_desc}) using "{template_info["label"]}" - '
                 f'Schedule: {schedule_desc} on {app["label"]}'
             )
             return redirect('batch_job_detail', job_id=job.job_id)
-            
+
         except Exception as e:
             import traceback
             traceback.print_exc()
             messages.error(request, f'❌ Error creating job: {str(e)}')
             return redirect('batch_job_create')
-    
+
     # GET request - show form
     try:
         app_choices = get_all_messaging_apps()
         today = timezone.now().strftime('%Y-%m-%d')
         current_time = timezone.now().strftime('%H:%M')
-        
+
         return render(request, 'batch_app/job_form.html', {
             'app_choices': app_choices,
             'default_batch_size': 1000,
@@ -595,12 +596,12 @@ def batch_job_detail(request, job_id):
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
         logs = BatchLog.objects.filter(job=job).order_by('-sent_at')[:50]
-        
+
         templates = get_templates_from_app(job.target_app)
         template_label = next((t['label'] for t in templates if t['id'] == job.template_name), job.template_name)
-        
+
         job_data = get_job_data(job)
-        
+
         formatted_logs = []
         for log in logs:
             formatted_logs.append({
@@ -612,7 +613,7 @@ def batch_job_detail(request, job_id):
                 'sent_at': format_datetime_12hr(log.sent_at, show_seconds=True),
                 'sent_at_raw': log.sent_at,
             })
-        
+
         return render(request, 'batch_app/job_detail.html', {
             'job': job,
             'job_data': job_data,
@@ -635,12 +636,12 @@ def batch_job_detail(request, job_id):
 def batch_job_edit(request, job_id):
     """Edit an existing batch job"""
     job = get_object_or_404(BatchJob, job_id=job_id)
-    
+
     # Only allow editing if job is not running or completed
     if job.status in ['running', 'completed']:
         messages.error(request, f'❌ Cannot edit a {job.status} job')
         return redirect('batch_job_detail', job_id=job.job_id)
-    
+
     if request.method == 'POST':
         try:
             # Get form data
@@ -648,36 +649,36 @@ def batch_job_edit(request, job_id):
             if not job_name:
                 messages.error(request, '❌ Job name is required')
                 return redirect('batch_job_edit', job_id=job.job_id)
-            
+
             target_app = request.POST.get('target_app', 'messaging')
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
-            
+
             if not excel_path:
                 messages.error(request, '❌ Excel file path is required')
                 return redirect('batch_job_edit', job_id=job.job_id)
-            
+
             # Get schedule data
             schedule_type = request.POST.get('schedule_type', 'daily')
             schedule_date = request.POST.get('schedule_date', '')
             schedule_time = request.POST.get('schedule_time', '09:00')
-            
+
             # Multiple daily times
             schedule_times = request.POST.getlist('schedule_times[]', [])
             multiple_schedule_date = request.POST.get('multiple_schedule_date', '')
-            
+
             # Other schedule fields
             weekly_day = request.POST.get('weekly_day')
             interval_days = request.POST.get('interval_days')
-            
+
             # End date
             has_end_date = request.POST.get('has_end_date') == 'on'
             end_date_str = request.POST.get('end_date', '')
-            
+
             # Batch size
             batch_size_type = request.POST.get('batch_size_type', 'custom')
             batch_size_str = request.POST.get('batch_size', '1000')
-            
+
             # Validate batch size
             try:
                 batch_size = int(batch_size_str) if batch_size_type == 'custom' else 0
@@ -687,56 +688,56 @@ def batch_job_edit(request, job_id):
             except ValueError:
                 messages.error(request, '❌ Please enter a valid number for batch size')
                 return redirect('batch_job_edit', job_id=job.job_id)
-            
+
             # Validate schedule
             schedule_datetime_obj = None
-            
+
             if schedule_type == 'multiple_daily':
                 if not schedule_times:
                     messages.error(request, '❌ Please add at least one time for multiple daily schedule')
                     return redirect('batch_job_edit', job_id=job.job_id)
-                
+
                 if not multiple_schedule_date:
                     messages.error(request, '❌ Please select a date for multiple daily schedule')
                     return redirect('batch_job_edit', job_id=job.job_id)
-                
+
                 try:
                     date_obj = datetime.strptime(multiple_schedule_date, '%Y-%m-%d').date()
                     first_time = schedule_times[0]
                     t = datetime.strptime(first_time, '%H:%M').time()
-                    
+
                     schedule_datetime_obj = timezone.make_aware(
                         datetime.combine(date_obj, t),
                         timezone.get_current_timezone()
                     )
-                    
+
                     now = timezone.now()
                     time_diff = (schedule_datetime_obj - now).total_seconds()
                     print(f"✅ Multiple daily edit - Keeping exact time: {schedule_datetime_obj.strftime('%Y-%m-%d %I:%M %p')} (diff: {time_diff:.0f}s)")
-                    
+
                 except Exception as e:
                     messages.error(request, f'❌ Invalid date/time format: {e}')
                     return redirect('batch_job_edit', job_id=job.job_id)
-                    
+
             else:
                 if not schedule_date or not schedule_time:
                     messages.error(request, '❌ Please select a date and time')
                     return redirect('batch_job_edit', job_id=job.job_id)
-                
+
                 schedule_datetime_str = f"{schedule_date}T{schedule_time}"
-                
+
                 try:
                     dt_obj = datetime.strptime(schedule_datetime_str, '%Y-%m-%dT%H:%M')
                     schedule_datetime_obj = timezone.make_aware(dt_obj, timezone.get_current_timezone())
-                    
+
                     now = timezone.now()
                     time_diff = (schedule_datetime_obj - now).total_seconds()
                     print(f"✅ Edit - Keeping user's selected time: {schedule_datetime_obj.strftime('%Y-%m-%d %I:%M %p')} (diff: {time_diff:.0f}s)")
-                    
+
                 except ValueError as e:
                     messages.error(request, f'❌ Invalid date/time: {e}')
                     return redirect('batch_job_edit', job_id=job.job_id)
-            
+
             # Validate end date
             end_date_obj = None
             if has_end_date and end_date_str:
@@ -748,25 +749,25 @@ def batch_job_edit(request, job_id):
                 except ValueError as e:
                     messages.error(request, f'❌ Invalid end date: {e}')
                     return redirect('batch_job_edit', job_id=job.job_id)
-            
+
             # Read Excel
             df = read_excel_from_s3(excel_path)
             if df is None:
                 messages.error(request, '❌ Could not read Excel file from S3')
                 return redirect('batch_job_edit', job_id=job.job_id)
-            
+
             total = len(df)
             if total == 0:
                 messages.error(request, '❌ No customers found in Excel file')
                 return redirect('batch_job_edit', job_id=job.job_id)
-            
+
             # Calculate batches
             if batch_size_type == 'full':
                 total_batches = 1
                 batch_size = total
             else:
                 total_batches = (total + batch_size - 1) // batch_size
-            
+
             # ✅ Update the job
             job.job_name = job_name
             job.target_app = target_app
@@ -782,8 +783,8 @@ def batch_job_edit(request, job_id):
             job.end_date = end_date_obj
             job.total_customers = total
             job.total_batches = total_batches
-            job.status = 'pending'
-            
+            job.status = 'scheduled'
+
             # ✅ Reset progress
             job.current_batch = 0
             job.completed_batches = 0
@@ -792,37 +793,39 @@ def batch_job_edit(request, job_id):
             job.total_runs = 0
             job.completed_runs = 0
             job.completed_at = None
-            job.next_run_time = None
-            
+
+            job.next_run_time = job.schedule_datetime
+
             job.save()
-            
+
             # ✅ Reschedule the job
             try:
-                tasks.schedule_batch_job.delay(job.job_id)
+                job.next_run_time = job.schedule_datetime
+                job.save(update_fields=["next_run_time"])
                 messages.success(request, f'✅ Job "{job.job_name}" updated and rescheduled!')
             except Exception as e:
                 messages.warning(request, f'⚠️ Job updated but scheduling failed: {str(e)}')
-            
+
             return redirect('batch_job_detail', job_id=job.job_id)
-            
+
         except Exception as e:
             traceback.print_exc()
             messages.error(request, f'❌ Error updating job: {str(e)}')
             return redirect('batch_job_edit', job_id=job.job_id)
-    
+
     # GET request - show edit form
     try:
         app_choices = get_all_messaging_apps()
         templates = get_templates_from_app(job.target_app)
-        
+
         # Format times for display
         schedule_date = job.schedule_datetime.strftime('%Y-%m-%d') if job.schedule_datetime else ''
         schedule_time = job.schedule_datetime.strftime('%H:%M') if job.schedule_datetime else '09:00'
         multiple_schedule_date = schedule_date
-        
+
         # End date
         end_date = job.end_date.strftime('%Y-%m-%dT%H:%M') if job.end_date else ''
-        
+
         return render(request, 'batch_app/job_edit.html', {
             'job': job,
             'app_choices': app_choices,
@@ -850,25 +853,26 @@ def batch_job_action(request, job_id, action):
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-        
+
         if action == 'pause':
             job.status = 'paused'
             job.save()
             message = f'⏸️ Job "{job.job_name}" paused!'
-            
+
         elif action == 'resume':
             job.status = 'pending'
             job.save()
-            tasks.schedule_batch_job.delay(job.job_id)
+            job.next_run_time = job.schedule_datetime
+            job.save(update_fields=["next_run_time"])
             message = f'▶️ Job "{job.job_name}" resumed!'
-            
+
         elif action == 'cancel':
             job.status = 'cancelled'
-            job.next_run_time = None
+          
             job.save()
             tasks.cancel_daily_schedule.delay(job.job_id)
             message = f'⛔ Job "{job.job_name}" cancelled!'
-            
+
         elif action == 'restart':
             job.current_batch = 0
             job.completed_batches = 0
@@ -878,21 +882,20 @@ def batch_job_action(request, job_id, action):
             job.completed_runs = 0
             job.status = 'pending'
             job.completed_at = None
-            job.next_run_time = None
+
             job.save()
-            tasks.schedule_batch_job.delay(job.job_id)
             message = f'🔄 Job "{job.job_name}" restarted!'
-            
+
         elif action == 'force_run':
             tasks.process_batch_job.delay(job.job_id)
             message = f'🚀 Job "{job.job_name}" started!'
-            
+
         else:
             if is_ajax:
                 return JsonResponse({'error': f'Unknown action: {action}'}, status=400)
             messages.error(request, f'❌ Unknown action: {action}')
             return redirect('batch_job_detail', job_id=job.job_id)
-        
+
         if is_ajax:
             return JsonResponse({
                 'success': True,
@@ -902,7 +905,7 @@ def batch_job_action(request, job_id, action):
         else:
             messages.success(request, message)
             return redirect('batch_job_detail', job_id=job.job_id)
-            
+
     except Exception as e:
         if is_ajax:
             return JsonResponse({
@@ -920,12 +923,12 @@ def batch_job_delete(request, job_id):
         job = get_object_or_404(BatchJob, job_id=job_id)
         job_name = job.job_name
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-        
+
         # ✅ Cancel any scheduled tasks
         tasks.cancel_daily_schedule.delay(job.job_id)
         # Delete the job
         job.delete()
-        
+
         if is_ajax:
             return JsonResponse({
                 'success': True,
@@ -934,7 +937,7 @@ def batch_job_delete(request, job_id):
         else:
             messages.success(request, f'✅ Job {job_name} deleted!')
             return redirect('batch_job_list')
-            
+
     except Exception as e:
         if is_ajax:
             return JsonResponse({
@@ -954,15 +957,15 @@ def batch_job_logs(request, job_id):
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
         logs = BatchLog.objects.filter(job=job).order_by('-sent_at')
-        
+
         status_filter = request.GET.get('status', '')
         if status_filter:
             logs = logs.filter(status=status_filter)
-        
+
         paginator = Paginator(logs, 100)
         page = request.GET.get('page', 1)
         logs_page = paginator.get_page(page)
-        
+
         formatted_logs = []
         for log in logs_page:
             formatted_logs.append({
@@ -974,7 +977,7 @@ def batch_job_logs(request, job_id):
                 'error_message': log.error_message,
                 'sent_at': format_datetime_12hr(log.sent_at, show_seconds=True),
             })
-        
+
         return render(request, 'batch_app/job_logs.html', {
             'job': job,
             'logs': formatted_logs,
@@ -996,10 +999,10 @@ def batch_job_report(request, job_id):
     try:
         import io
         import pandas as pd
-        
+
         job = get_object_or_404(BatchJob, job_id=job_id)
         logs = BatchLog.objects.filter(job=job)
-        
+
         data = [{
             'Mobile': log.mobile,
             'Customer Name': log.customer_name,
@@ -1008,16 +1011,16 @@ def batch_job_report(request, job_id):
             'Error': log.error_message,
             'Sent At': format_datetime_12hr(log.sent_at, show_seconds=True),
         } for log in logs]
-        
+
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
         df.to_excel(buffer, index=False)
         buffer.seek(0)
-        
+
         response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = f'attachment; filename="batch_{job.job_id}_report.xlsx"'
         return response
-        
+
     except Exception as e:
         messages.error(request, f'❌ Error generating report: {str(e)}')
         return redirect('batch_job_detail', job_id=job_id)
@@ -1034,7 +1037,7 @@ def batch_job_status_api(request, job_id):
         job = BatchJob.objects.get(job_id=job_id)
     except BatchJob.DoesNotExist:
         return JsonResponse({"error": "Job not found"}, status=404)
-    
+
     try:
         return JsonResponse({
             "job_id": job.job_id,
@@ -1069,3 +1072,4 @@ def batch_job_status_api(request, job_id):
         })
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+

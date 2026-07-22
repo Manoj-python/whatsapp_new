@@ -1,4 +1,3 @@
-
 # messaging2/utils.py
 import re
 import requests
@@ -895,7 +894,78 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                         },
                     ],
                 ),
-                
+
+                "39": (
+                        "rc__noc_dispatched",
+                        "en",
+                        [
+                            {
+                                "type": "text",
+                                "text": str(row.get("loan_number", ""))
+                            },
+                            {
+                                "type": "text",
+                                "text": str(row.get("vehicle_number", ""))
+                            },
+                            {
+                                "type": "text",
+                                "text": str(row.get("courier_service", ""))
+                            },
+                            {
+                            "type": "text",
+                            "text": str(row.get("tracking_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": format_whatsapp_date(row.get("dispatch_date", ""))
+                        },
+                    ],
+                ),                      
+                "40": (
+                    "hpt_completed",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        },
+                     
+                    ],
+                ),
+                "41": (
+                    "hpt_pending",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        },
+                     
+                    ],
+                ),
+                "42": (
+                    "rcnoc_returned",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        },
+                     
+                    ],
+                ),
 
     }
 
@@ -911,7 +981,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
     # --------------------------------------------------
     # TEMPLATES WITH DOCUMENT HEADER
     # --------------------------------------------------
-    if choice in ("19", "20", "21", "25", "30", "31", "32", "33", "35", "37"):
+    if choice in ("19", "20", "21", "25", "30", "31", "32", "33", "35", "37","41"):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
@@ -943,6 +1013,9 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
         elif choice == "37":
             pdf_source = row.get("presale_notices_borrower_pdf")
+        elif choice == "41":
+            pdf_source = row.get("hpt_pending_pdf")
+
 
         else:  # choice == "19"
             pdf_source = (
@@ -1161,7 +1234,7 @@ def call_smsquare_api(app_key, endpoint, method='GET', params=None, payload=None
     except requests.exceptions.RequestException as e:
         logger.error(f"SMSquare API error for {app_key}: {e}")
         raise
-    
+
 def get_details(app_key, mobile):
     config = get_ptp_config(app_key)
     sms_config = config['smsquare']
@@ -1245,3 +1318,4 @@ def send_whatsapp_ptp_template(app_key, to, customer_name, amount, due_date, loa
         if hasattr(e, 'response') and e.response:
             logger.error(e.response.text)
         raise
+

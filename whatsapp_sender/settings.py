@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "channels",
     "storages",
-    
+
     "adminpanel",
     "messaging",
     "messaging2",
@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     "notices",
     "special_cases",
      "meghaai_app",
-     "batch_app"    
+     "batch_app"
 ]
 
 
@@ -57,6 +57,7 @@ INSTALLED_APPS = [
 #ELASTICSEARCH_DSL_AUTO_REFRESH = True
 
 
+MIN_PART_PAYMENT = 100.0
 
 # -------------------------------------------------------
 # MIDDLEWARE
@@ -213,8 +214,13 @@ CELERY_TASK_ROUTES = {
     "financehub.tasks.*": {"queue": "financehub"},
     "special_cases.tasks.*": {"queue": "special_cases"},
     "notices.tasks.*": {"queue": "notices"},
-    "batch_app.tasks.*": {"queue": "batch_app"},
-    "batch_app.scheduler.*": {"queue": "batch_scheduler"},
+
+    # Batch Processing
+    "batch_app.tasks.process_batch_job": {"queue": "batch_app"},
+
+    # Batch Scheduler
+    "batch_app.tasks.check_pending_batch_jobs": {"queue": "batch_scheduler"},
+    "batch_app.tasks.cancel_daily_schedule": {"queue": "batch_scheduler"},
 }
 
 # -------------------------------------------------------
@@ -287,14 +293,14 @@ MEGHAAI_CONFIG = {
     'MODEL': os.environ.get('MODEL', 'claude-sonnet-4-6'),
     'MAX_ROWS': int(os.environ.get('SQL_MAX_ROWS', 500)),
     'QUERY_TIMEOUT_MS': int(os.environ.get('SQL_TIMEOUT_MS', 30000)),
-    
+
     # Database Settings
     'MYSQL_HOST': os.environ.get('MYSQL_HOST', '127.0.0.1'),
     'MYSQL_PORT': int(os.environ.get('MYSQL_PORT', 3306)),
     'MYSQL_USER': os.environ.get('MYSQL_USER'),
     'MYSQL_PASSWORD': os.environ.get('MYSQL_PASSWORD'),
     'MYSQL_DATABASE': os.environ.get('MYSQL_DATABASE'),
-    
+
     # SSH Tunnel Settings
     'SSH_HOST': os.environ.get('SSH_HOST'),
     'SSH_PORT': int(os.environ.get('SSH_PORT', 22)),
@@ -302,16 +308,24 @@ MEGHAAI_CONFIG = {
     'SSH_KEY_FILE': os.environ.get('SSH_KEY_FILE'),
     'SSH_KEY_PASSPHRASE': os.environ.get('SSH_KEY_PASSPHRASE'),
     'SSH_PASSWORD': os.environ.get('SSH_PASSWORD'),
-    
+
     # ========== NEW: Connection Pool Settings ==========
     'DB_POOL_SIZE': 15,           # Minimum connections always open
     'DB_MAX_POOL_SIZE': 30,       # Maximum connections in pool
     'DB_MAX_OVERFLOW': 20,        # Extra connections when needed
-     
+
     # Your Whisper API endpoint
     'WHISPER_API_URL': os.environ.get('WHISPER_API_URL', ''),
-    
+
     # Your Whisper API key (OpenAI API key for Whisper)
-    'WHISPER_API_KEY': os.environ.get('WHISPER_API_KEY', ''),    
-  
+    'WHISPER_API_KEY': os.environ.get('WHISPER_API_KEY', ''),
+
+}
+
+
+CELERY_BEAT_SCHEDULE = {
+    "batch-job-checker": {
+        "task": "batch_app.tasks.check_pending_batch_jobs",
+        "schedule": 60.0,
+    }
 }

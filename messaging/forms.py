@@ -37,7 +37,11 @@ TEMPLATE_CHOICES = [
     ("35", "due_notice_borrower (English)-[35]"),
     ("36", "new_loans_te (Telugu)-[36]"),
     ("37", "presale_notices_borrower (English)-[37]"),
-    ("38", "Pay Now Link (English)-[38]")
+    ("38", "Pay Now Link (English)-[38]"),
+    ("39", "RC/NOC Dispatched (English)-[39]"),
+    ("40", "HPT Completed (English)-[40]"),
+    ("41", "HPT Pending (English)-[41]"),
+    ("42", "RC/NOC Returned (English)-[42]"),
 
  
 ]

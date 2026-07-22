@@ -27,7 +27,7 @@ def get_build_payload_function(app_name):
     """Dynamically import the build_payload function from the target app's utils"""
     try:
         utils = get_app_utils(app_name)
-        
+
         if 'build_payload' in utils:
             return utils['build_payload']
         elif 'build_payload2' in utils:
@@ -54,22 +54,22 @@ def get_build_payload_function(app_name):
 def process_batch_job(self, job_id):
     """Process a batch job - Supports FULL batch size with error handling"""
     close_old_connections()
-    
+
     try:
         job = BatchJob.objects.get(job_id=job_id)
     except BatchJob.DoesNotExist:
         logger.error(f"❌ Job {job_id} not found")
         return
-    
+
     # Skip if cancelled
     if job.status == 'cancelled':
         logger.info(f"ℹ️ Job {job_id} is cancelled, skipping")
         return
-    
+
     if job.status == 'paused':
         logger.info(f"⏸️ Batch job {job_id} is paused")
         return
-    
+
     # For multiple daily: check if already completed ALL times today
     if (
         job.schedule_type == 'multiple_daily'
@@ -85,9 +85,9 @@ def process_batch_job(self, job_id):
             job.status = 'running'
             job.started_at = timezone.now()
             job.save(update_fields=['status', 'started_at'])
-        
+
         actual_batch_size = job.get_actual_batch_size()
-        
+
         # Handle 'full' batch size
         if job.batch_size_type == 'full':
             batch_customers, batch_count = job.get_all_customers_from_s3()
@@ -95,77 +95,77 @@ def process_batch_job(self, job_id):
             batch_customers, batch_count = job.get_batch_from_s3(
                 job.current_batch * job.batch_size
             )
-        
+
         if not batch_customers:
             job.status = 'completed'
             job.completed_at = timezone.now()
             job.next_run_time = None
             job.save(update_fields=['status', 'completed_at', 'next_run_time'])
             return
-        
+
         # Get app info
         app = get_app_by_name(job.target_app)
         if not app:
             raise Exception(f"App {job.target_app} not found")
-        
+
         LogModel = get_app_log_model(job.target_app)
         ContactModel = get_app_contact_model(job.target_app)
-        
+
         if not LogModel:
             raise Exception(f"No log model found for app {job.target_app}")
-        
+
         creds = app.get('credentials', {})
         if not creds or 'access_token' not in creds or 'phone_number_id' not in creds:
             raise Exception(f"No credentials found for app {job.target_app}")
-        
+
         build_payload = get_build_payload_function(job.target_app)
         if not build_payload:
             raise Exception(f"No build_payload function found for app {job.target_app}")
-        
+
         # Log info
         if job.batch_size_type == 'full':
             logger.info(f"📦 FULL BATCH - {batch_count} customers (all at once)")
         else:
             logger.info(f"📦 Batch {job.current_batch + 1}/{job.total_batches} - {batch_count} customers")
-        
+
         logger.info(f"📱 Target App: {app.get('label', job.target_app)} ({job.target_app})")
         logger.info(f"📋 Template: {job.template_name} (ID: {job.template_id})")
         logger.info(f"🌐 Language: {job.template_language}")
         logger.info(f"📊 Batch Size: {actual_batch_size}")
-        
+
         # Send messages via WhatsApp API
         url = f"https://graph.facebook.com/v22.0/{creds['phone_number_id']}/messages"
         headers = {
             "Authorization": f"Bearer {creds['access_token']}",
             "Content-Type": "application/json",
         }
-        
+
         sent = 0
         failed = 0
-        
+
         for idx, row in enumerate(batch_customers):
             try:
                 mobile = format_mobile(row.get('CustMobile') or row.get('cust_mobile') or '')
                 customer_name = row.get('CustomerName') or row.get('customer_name') or ''
-                
+
                 if not mobile:
                     failed += 1
                     continue
-                
+
                 payload, rendered_text = build_payload(
                     job.template_id,
                     row,
                     None
                 )
-                
+
                 payload['to'] = mobile
-                
+
                 resp = requests.post(url, headers=headers, json=payload, timeout=30)
-                
+
                 if resp.ok:
                     msg_id = resp.json()['messages'][0]['id']
                     sent += 1
-                    
+
                     LogModel.objects.create(
                         job_id=job.job_id,
                         customer_name=customer_name,
@@ -177,7 +177,7 @@ def process_batch_job(self, job_id):
                         message_type="Sent",
                         content_type="text",
                     )
-                    
+
                     if ContactModel:
                         ContactModel.objects.update_or_create(
                             mobile=mobile,
@@ -189,7 +189,7 @@ def process_batch_job(self, job_id):
                                 "unread": 0
                             }
                         )
-                    
+
                     BatchLog.objects.create(
                         job=job,
                         mobile=mobile,
@@ -197,12 +197,12 @@ def process_batch_job(self, job_id):
                         status='Sent',
                         message_id=msg_id,
                     )
-                    
+
                     logger.info(f"✅ [{job.target_app}] Sent to {mobile}")
                 else:
                     failed += 1
                     error_msg = resp.text[:500]
-                    
+
                     LogModel.objects.create(
                         job_id=job.job_id,
                         customer_name=customer_name,
@@ -213,7 +213,7 @@ def process_batch_job(self, job_id):
                         message_type="Sent",
                         error_message=error_msg,
                     )
-                    
+
                     BatchLog.objects.create(
                         job=job,
                         mobile=mobile,
@@ -222,15 +222,15 @@ def process_batch_job(self, job_id):
                         error_message=error_msg,
                     )
                     logger.error(f"❌ [{job.target_app}] Failed to send to {mobile}")
-                
+
                 if (idx + 1) % 100 == 0:
                     time.sleep(5)
-                
+
             except Exception as e:
                 failed += 1
                 error_msg = str(e)
                 logger.error(f"❌ Error for {mobile if 'mobile' in locals() else 'Unknown'}: {error_msg}")
-                
+
                 try:
                     LogModel.objects.create(
                         job_id=job.job_id,
@@ -242,7 +242,7 @@ def process_batch_job(self, job_id):
                         message_type="Sent",
                         error_message=error_msg[:500],
                     )
-                    
+
                     BatchLog.objects.create(
                         job=job,
                         mobile=mobile if 'mobile' in locals() else '',
@@ -257,73 +257,73 @@ def process_batch_job(self, job_id):
         # ✅ FIXED: MULTIPLE DAILY SCHEDULE - COMPLETE ONLY AFTER ALL TIMES
         # ============================================================
         if job.schedule_type == 'multiple_daily':
-            
+
             # ============================================================
             # 1. UPDATE STATISTICS
             # ============================================================
-            
+
             # ✅ Custom Batch: Move to next batch
             # ✅ Full Batch: Same customers every time, don't increment
             if job.batch_size_type != 'full':
                 job.current_batch += 1
                 job.completed_batches += 1
-            
+
             # ✅ Always update these
             job.sent_count += sent
             job.failed_count += failed
             job.total_runs += 1
             job.completed_runs += 1
             job.completed_at = timezone.now()
-            
+
             total_times = len(job.schedule_times)
-            
+
             logger.info(f"📊 Multiple Daily Progress:")
             logger.info(f"   Runs: {job.completed_runs}/{total_times}")
             logger.info(f"   Batches: {job.completed_batches}/{job.total_batches}")
             logger.info(f"   Batch Size Type: {job.batch_size_type}")
-            
+
             # ============================================================
             # 2. CHECK COMPLETION - CLEAN LOGIC
             # ============================================================
-            
+
             # ✅ All times today completed?
             all_times_completed = job.completed_runs >= total_times
-            
+
             # ✅ All batches completed?
             all_batches_completed = job.completed_batches >= job.total_batches
-            
+
             if all_times_completed and all_batches_completed:
                 # ✅ COMPLETED - Everything finished
                 job.status = 'completed'
                 job.completed_batches = job.total_batches
                 job.completed_at = timezone.now()
                 job.next_run_time = None
-                
+
                 logger.info(f"✅ Job {job_id} COMPLETED successfully!")
-                
+
             elif all_times_completed:
                 # ✅ All times done today, but batches remain → Tomorrow
                 job.status = 'scheduled'
-                
+
                 # ✅ Get tomorrow's first time
                 next_run = job._get_next_multiple_time(timezone.now())
                 if next_run:
                     job.next_run_time = next_run
-                
+
                 logger.info(
                     f"📅 All today's runs finished. Next batch scheduled at "
                     f"{next_run.strftime('%Y-%m-%d %I:%M %p') if next_run else 'N/A'}"
                 )
-                
+
             else:
                 # ✅ More times today
                 job.status = 'scheduled'
-                
+
                 # ✅ Get next time today
                 next_run = job._get_next_multiple_time(timezone.now())
                 if next_run:
                     job.next_run_time = next_run
-                
+
                 logger.info(
                     f"📅 Multiple Daily Progress: "
                     f"{job.completed_runs}/{total_times} runs completed today."
@@ -336,11 +336,11 @@ def process_batch_job(self, job_id):
                     f"📅 Next run at: "
                     f"{next_run.strftime('%Y-%m-%d %I:%M %p') if next_run else 'N/A'}"
                 )
-            
+
             # ============================================================
             # 3. SAVE
             # ============================================================
-            
+
             job.save(update_fields=[
                 'current_batch',
                 'completed_batches',
@@ -352,19 +352,16 @@ def process_batch_job(self, job_id):
                 'status',
                 'next_run_time'
             ])
-            
+
             logger.info(
                 f"📊 Saved Multiple Daily Job: "
                 f"Status={job.status}, "
                 f"CompletedRuns={job.completed_runs}/{total_times}, "
                 f"CompletedBatches={job.completed_batches}/{job.total_batches}, "
                 f"NextRun={job.next_run_time}"
-            ) 
+            )
 
-            if job.next_run_time and job.status != 'completed':
-                from batch_app.tasks import schedule_batch_job
-                schedule_batch_job.delay(job.job_id)
-                logger.info(f"📅 Scheduled next run at: {job.next_run_time}")
+    
         # -------------------------
         # 2. FULL BATCH
         # -------------------------
@@ -375,13 +372,13 @@ def process_batch_job(self, job_id):
             job.failed_count += failed
             job.total_runs += 1
             job.completed_runs += 1
-            
+
             # ✅ FIXED: Use update_fields to prevent modifying schedule_datetime
             job.save(update_fields=[
-                'current_batch', 'completed_batches', 'sent_count', 
+                'current_batch', 'completed_batches', 'sent_count',
                 'failed_count', 'total_runs', 'completed_runs'
             ])
-            
+
             job.status = 'completed'
             job.completed_at = timezone.now()
             job.next_run_time = None
@@ -436,12 +433,12 @@ def process_batch_job(self, job_id):
                 if job.schedule_type == 'daily':
                     # ✅ Calculate next run: schedule_datetime + (completed_batches * 1 day)
                     next_run = job.schedule_datetime + timedelta(days=job.completed_batches)
-                    
+
                     # ✅ Ensure it's in the future
                     now = timezone.now()
                     while next_run <= now:
                         next_run += timedelta(days=1)
-                    
+
                     job.status = 'scheduled'
                     job.next_run_time = next_run
 
@@ -467,12 +464,12 @@ def process_batch_job(self, job_id):
                 elif job.schedule_type == 'weekly':
                     # ✅ Calculate next run: schedule_datetime + (completed_batches * 7 days)
                     next_run = job.schedule_datetime + timedelta(days=7 * job.completed_batches)
-                    
+
                     # ✅ Ensure it's in the future
                     now = timezone.now()
                     while next_run <= now:
                         next_run += timedelta(days=7)
-                    
+
                     job.status = 'scheduled'
                     job.next_run_time = next_run
 
@@ -499,12 +496,12 @@ def process_batch_job(self, job_id):
                     # ✅ FIX: Use total_runs instead of completed_batches
                     interval = job.interval_days or 1
                     next_run = job.schedule_datetime + timedelta(days=interval * job.total_runs)
-                    
+
                     # ✅ Ensure it's in the future
                     now = timezone.now()
                     while next_run <= now:
                         next_run += timedelta(days=interval)
-                    
+
                     job.status = 'scheduled'
                     job.next_run_time = next_run
 
@@ -533,271 +530,289 @@ def process_batch_job(self, job_id):
                         'total_runs',
                         'completed_runs'
                     ])
-        
+
     except Exception as e:
         error_msg = str(e)
         logger.error(f"❌ Batch job {job_id} failed: {error_msg}")
         logger.error(traceback.format_exc())
-        
+
         try:
             job.status = 'failed'
             job.error_message = error_msg[:500]
             job.save(update_fields=['status', 'error_message'])
         except Exception as save_error:
             logger.error(f"❌ Failed to update job status: {save_error}")
-        
+
         try:
             self.retry(exc=e, countdown=60, max_retries=3)
         except Exception as retry_error:
             logger.error(f"❌ Failed to retry task: {retry_error}")
-            
-# ============================================================
-# SCHEDULER - PERFECT TIME HANDLING FOR ALL SCHEDULE TYPES
-# ============================================================
 
-@shared_task(queue="batch_scheduler", max_retries=3)
-def schedule_batch_job(job_id):
-    """
-    Schedule the job based on its schedule type
-    
-    ✅ FIXED: NEVER modify schedule_datetime
-    ✅ FIXED: Weekly schedules preserve first run date
-    ✅ FIXED: Timezone-aware comparisons
-    """
-    try:
-        job = BatchJob.objects.get(job_id=job_id)
-    except BatchJob.DoesNotExist:
-        logger.error(f"❌ Job {job_id} not found")
-        return
-    
-    if job.status in ['completed', 'cancelled']:
-        logger.info(f"ℹ️ Job {job_id} is {job.status}, skipping scheduling")
-        return
-    
-    try:
-        # Check if end_date is reached
-        if job.end_date and timezone.now() >= job.end_date:
-            job.status = 'completed'
-            job.save(update_fields=['status'])
-            logger.info(f"📅 Job {job_id} ended (end_date reached)")
-            return
-        
-        # ===== MULTIPLE DAILY SCHEDULE =====
-        # ===== MULTIPLE DAILY SCHEDULE =====
-        if job.schedule_type == 'multiple_daily':
-            now = timezone.now()
-            
-            # ✅ FIX: Use the saved next_run_time from the job
-            # This ensures we respect the time calculated in process_batch_job
-            if job.next_run_time and job.next_run_time > now:
-                # Use existing next_run_time
-                next_run = job.next_run_time
-                seconds_until = int((next_run - now).total_seconds())
-                
-                if seconds_until <= 60:
-                    process_batch_job.delay(job_id)
-                    logger.info(f"🚀 Multiple daily: Running immediately")
-                else:
-                    process_batch_job.apply_async(
-                        args=(job_id,),
-                        countdown=seconds_until,
-                        queue="batch_app"
-                    )
-                    logger.info(f"📅 Multiple daily: Scheduled at {next_run.strftime('%Y-%m-%d %I:%M %p')} (in {seconds_until}s)")
-                
-                # Schedule next day's scheduler (24 hours)
-                schedule_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=86400,
-                    queue="batch_scheduler"
-                )
-                return
-            
-            # ✅ If no next_run_time exists (first time), calculate the next one
-            next_run = job._get_next_multiple_time(now)
-            if next_run:
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-                
-                seconds_until = int((next_run - now).total_seconds())
-                
-                if seconds_until <= 60:
-                    process_batch_job.delay(job_id)
-                    logger.info(f"🚀 Multiple daily: Running immediately")
-                else:
-                    process_batch_job.apply_async(
-                        args=(job_id,),
-                        countdown=seconds_until,
-                        queue="batch_app"
-                    )
-                    logger.info(f"📅 Multiple daily: Scheduled at {next_run.strftime('%Y-%m-%d %I:%M %p')} (in {seconds_until}s)")
-            else:
-                job.status = 'failed'
-                job.error_message = "No times could be scheduled"
-                job.save(update_fields=['status', 'error_message'])
-                logger.error(f"❌ No times scheduled for {job_id}")
-                return
-            
-            # Schedule next day's scheduler (24 hours)
-            schedule_batch_job.apply_async(
-                args=(job_id,),
-                countdown=86400,
-                queue="batch_scheduler"
-            )
-            return
-        # ===== WEEKLY SCHEDULE - FIXED =====
-        if job.schedule_type == 'weekly':
-            now = timezone.now()
-            
-            # ✅ FIXED: Use schedule_datetime as the anchor for all calculations
-            # First run: use the exact schedule_datetime the user selected
-            if job.schedule_datetime > now:
-                next_run = job.schedule_datetime
-            else:
-                # After first run: add 7 days from the original schedule_datetime
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=7)
-            
-            seconds_until = int((next_run - now).total_seconds())
-            
-            # Debug logging
-            logger.info(f"📅 Weekly job {job_id} - schedule_datetime: {job.schedule_datetime.strftime('%Y-%m-%d %I:%M:%S %p')}")
-            logger.info(f"📅 Weekly job {job_id} - next_run: {next_run.strftime('%Y-%m-%d %I:%M:%S %p')}")
-            logger.info(f"📅 Weekly job {job_id} - seconds_until: {seconds_until}")
-            
-            if seconds_until <= 60:
-                process_batch_job.delay(job_id)
-                logger.info(f"🚀 Weekly job {job_id} running immediately")
-            else:
-                # ✅ FIXED: Never modify schedule_datetime, only update next_run_time
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-                
-                process_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=seconds_until,
-                    queue="batch_app"
-                )
-                logger.info(f"📅 Weekly job {job_id} scheduled for {next_run.strftime('%Y-%m-%d %I:%M %p')}")
-            
-            # Schedule next scheduler (7 days later)
-            next_scheduler = next_run + timedelta(days=7)
-            schedule_batch_job.apply_async(
-                args=(job_id,),
-                eta=next_scheduler,
-                queue="batch_scheduler"
-            )
-            return
-        
-        # ===== DAILY SCHEDULE - FIXED =====
-        if job.schedule_type == 'daily':
-            now = timezone.now()
-            
-            # ✅ FIXED: Use schedule_datetime as the anchor
-            if job.schedule_datetime > now:
-                next_run = job.schedule_datetime
-            else:
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=1)
-            
-            seconds_until = int((next_run - now).total_seconds())
-            
-            logger.info(f"📅 Daily job {job_id} - schedule_datetime: {job.schedule_datetime.strftime('%Y-%m-%d %I:%M:%S %p')}")
-            logger.info(f"📅 Daily job {job_id} - next_run: {next_run.strftime('%Y-%m-%d %I:%M:%S %p')}")
-            
-            if seconds_until <= 60:
-                process_batch_job.delay(job_id)
-                logger.info(f"🚀 Daily job {job_id} running immediately")
-            else:
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-                
-                process_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=seconds_until,
-                    queue="batch_app"
-                )
-                logger.info(f"📅 Daily job {job_id} scheduled for {next_run.strftime('%Y-%m-%d %I:%M %p')}")
-            
-            # Schedule next scheduler (1 day later)
-            next_scheduler = next_run + timedelta(days=1)
-            schedule_batch_job.apply_async(
-                args=(job_id,),
-                eta=next_scheduler,
-                queue="batch_scheduler"
-            )
-            return
-        
-        # ===== CUSTOM INTERVAL SCHEDULE - FIXED =====
-        if job.schedule_type == 'custom_interval':
-            if not job.interval_days:
-                job.status = 'failed'
-                job.error_message = "Interval days not configured"
-                job.save(update_fields=['status', 'error_message'])
-                return
-            
-            now = timezone.now()
-            interval = job.interval_days
-            
-            # ✅ FIX: Use the stored next_run_time if it exists
-            if job.next_run_time and job.next_run_time > now:
-                next_run = job.next_run_time
-            else:
-                # Calculate next run from schedule_datetime + (total_runs * interval)
-                next_run = job.schedule_datetime + timedelta(days=interval * job.total_runs)
-                while next_run <= now:
-                    next_run += timedelta(days=interval)
-            
-            seconds_until = int((next_run - now).total_seconds())
-            
-            logger.info(f"📅 Custom job {job_id} - schedule_datetime: {job.schedule_datetime.strftime('%Y-%m-%d %I:%M:%S %p')}")
-            logger.info(f"📅 Custom job {job_id} - total_runs: {job.total_runs}")
-            logger.info(f"📅 Custom job {job_id} - next_run: {next_run.strftime('%Y-%m-%d %I:%M:%S %p')}")
-            
-            if seconds_until <= 60:
-                process_batch_job.delay(job_id)
-                logger.info(f"🚀 Custom job {job_id} running immediately")
-            else:
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-                
-                process_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=seconds_until,
-                    queue="batch_app"
-                )
-                logger.info(f"📅 Custom job {job_id} scheduled for {next_run.strftime('%Y-%m-%d %I:%M %p')}")
-            
-            # Schedule next scheduler
-            next_scheduler = next_run + timedelta(days=interval)
-            schedule_batch_job.apply_async(
-                args=(job_id,),
-                eta=next_scheduler,
-                queue="batch_scheduler"
-            )
-            return        
-        # Unknown schedule type
-        logger.warning(f"⚠️ Unknown schedule type for {job_id}: {job.schedule_type}")
-        job.status = 'failed'
-        job.error_message = f"Unknown schedule type: {job.schedule_type}"
-        job.save(update_fields=['status', 'error_message'])
-            
-    except Exception as e:
-        logger.error(f"❌ Failed to schedule job {job_id}: {e}")
-        logger.error(traceback.format_exc())
-        
-        try:
-            job.status = 'failed'
-            job.error_message = f"Scheduling failed: {str(e)[:500]}"
-            job.save(update_fields=['status', 'error_message'])
-        except Exception as save_error:
-            logger.error(f"❌ Failed to update job status: {save_error}")
+
+
+@shared_task(queue="batch_scheduler")
+def check_pending_batch_jobs():
+    from django.utils import timezone
+
+    now = timezone.now()
+
+    jobs = BatchJob.objects.filter(
+        status="scheduled",
+        next_run_time__lte=now
+    )
+
+    for job in jobs:
+        process_batch_job.delay(job.job_id)
+# # ============================================================
+# # SCHEDULER - PERFECT TIME HANDLING FOR ALL SCHEDULE TYPES
+# # ============================================================
+
+# @shared_task(queue="batch_scheduler", max_retries=3)
+# def schedule_batch_job(job_id):
+#     """
+#     Schedule the job based on its schedule type
+
+#     ✅ FIXED: NEVER modify schedule_datetime
+#     ✅ FIXED: Weekly schedules preserve first run date
+#     ✅ FIXED: Timezone-aware comparisons
+#     """
+#     try:
+#         job = BatchJob.objects.get(job_id=job_id)
+#     except BatchJob.DoesNotExist:
+#         logger.error(f"❌ Job {job_id} not found")
+#         return
+
+#     if job.status in ['completed', 'cancelled']:
+#         logger.info(f"ℹ️ Job {job_id} is {job.status}, skipping scheduling")
+#         return
+
+#     try:
+#         # Check if end_date is reached
+#         if job.end_date and timezone.now() >= job.end_date:
+#             job.status = 'completed'
+#             job.save(update_fields=['status'])
+#             logger.info(f"📅 Job {job_id} ended (end_date reached)")
+#             return
+
+#         # ===== MULTIPLE DAILY SCHEDULE =====
+#         # ===== MULTIPLE DAILY SCHEDULE =====
+#         if job.schedule_type == 'multiple_daily':
+#             now = timezone.now()
+
+#             # ✅ FIX: Use the saved next_run_time from the job
+#             # This ensures we respect the time calculated in process_batch_job
+#             if job.next_run_time and job.next_run_time > now:
+#                 # Use existing next_run_time
+#                 next_run = job.next_run_time
+#                 seconds_until = int((next_run - now).total_seconds())
+
+#                 if seconds_until <= 60:
+#                     process_batch_job.delay(job_id)
+#                     logger.info(f"🚀 Multiple daily: Running immediately")
+#                 else:
+#                     process_batch_job.apply_async(
+#                         args=(job_id,),
+#                         countdown=seconds_until,
+#                         queue="batch_app"
+#                     )
+#                     logger.info(f"📅 Multiple daily: Scheduled at {next_run.strftime('%Y-%m-%d %I:%M %p')} (in {seconds_until}s)")
+
+#                 # Schedule next day's scheduler (24 hours)
+#                 schedule_batch_job.apply_async(
+#                     args=(job_id,),
+#                     countdown=86400,
+#                     queue="batch_scheduler"
+#                 )
+#                 return
+
+#             # ✅ If no next_run_time exists (first time), calculate the next one
+#             next_run = job._get_next_multiple_time(now)
+#             if next_run:
+#                 job.next_run_time = next_run
+#                 job.status = 'scheduled'
+#                 job.save(update_fields=['next_run_time', 'status'])
+
+#                 seconds_until = int((next_run - now).total_seconds())
+
+#                 if seconds_until <= 60:
+#                     process_batch_job.delay(job_id)
+#                     logger.info(f"🚀 Multiple daily: Running immediately")
+#                 else:
+#                     process_batch_job.apply_async(
+#                         args=(job_id,),
+#                         countdown=seconds_until,
+#                         queue="batch_app"
+#                     )
+#                     logger.info(f"📅 Multiple daily: Scheduled at {next_run.strftime('%Y-%m-%d %I:%M %p')} (in {seconds_until}s)")
+#             else:
+#                 job.status = 'failed'
+#                 job.error_message = "No times could be scheduled"
+#                 job.save(update_fields=['status', 'error_message'])
+#                 logger.error(f"❌ No times scheduled for {job_id}")
+#                 return
+
+#             # Schedule next day's scheduler (24 hours)
+#             schedule_batch_job.apply_async(
+#                 args=(job_id,),
+#                 countdown=86400,
+#                 queue="batch_scheduler"
+#             )
+#             return
+#         # ===== WEEKLY SCHEDULE - FIXED =====
+#         if job.schedule_type == 'weekly':
+#             now = timezone.now()
+
+#             # ✅ FIXED: Use schedule_datetime as the anchor for all calculations
+#             # First run: use the exact schedule_datetime the user selected
+#             if job.schedule_datetime > now:
+#                 next_run = job.schedule_datetime
+#             else:
+#                 # After first run: add 7 days from the original schedule_datetime
+#                 next_run = job.schedule_datetime
+#                 while next_run <= now:
+#                     next_run += timedelta(days=7)
+
+#             seconds_until = int((next_run - now).total_seconds())
+
+#             # Debug logging
+#             logger.info(f"📅 Weekly job {job_id} - schedule_datetime: {job.schedule_datetime.strftime('%Y-%m-%d %I:%M:%S %p')}")
+#             logger.info(f"📅 Weekly job {job_id} - next_run: {next_run.strftime('%Y-%m-%d %I:%M:%S %p')}")
+#             logger.info(f"📅 Weekly job {job_id} - seconds_until: {seconds_until}")
+
+#             if seconds_until <= 60:
+#                 process_batch_job.delay(job_id)
+#                 logger.info(f"🚀 Weekly job {job_id} running immediately")
+#             else:
+#                 # ✅ FIXED: Never modify schedule_datetime, only update next_run_time
+#                 job.next_run_time = next_run
+#                 job.status = 'scheduled'
+#                 job.save(update_fields=['next_run_time', 'status'])
+
+#                 process_batch_job.apply_async(
+#                     args=(job_id,),
+#                     countdown=seconds_until,
+#                     queue="batch_app"
+#                 )
+#                 logger.info(f"📅 Weekly job {job_id} scheduled for {next_run.strftime('%Y-%m-%d %I:%M %p')}")
+
+#             # Schedule next scheduler (7 days later)
+#             next_scheduler = next_run + timedelta(days=7)
+#             schedule_batch_job.apply_async(
+#                 args=(job_id,),
+#                 eta=next_scheduler,
+#                 queue="batch_scheduler"
+#             )
+#             return
+
+#         # ===== DAILY SCHEDULE - FIXED =====
+#         if job.schedule_type == 'daily':
+#             now = timezone.now()
+
+#             # ✅ FIXED: Use schedule_datetime as the anchor
+#             if job.schedule_datetime > now:
+#                 next_run = job.schedule_datetime
+#             else:
+#                 next_run = job.schedule_datetime
+#                 while next_run <= now:
+#                     next_run += timedelta(days=1)
+
+#             seconds_until = int((next_run - now).total_seconds())
+
+#             logger.info(f"📅 Daily job {job_id} - schedule_datetime: {job.schedule_datetime.strftime('%Y-%m-%d %I:%M:%S %p')}")
+#             logger.info(f"📅 Daily job {job_id} - next_run: {next_run.strftime('%Y-%m-%d %I:%M:%S %p')}")
+
+#             if seconds_until <= 60:
+#                 process_batch_job.delay(job_id)
+#                 logger.info(f"🚀 Daily job {job_id} running immediately")
+#             else:
+#                 job.next_run_time = next_run
+#                 job.status = 'scheduled'
+#                 job.save(update_fields=['next_run_time', 'status'])
+
+#                 process_batch_job.apply_async(
+#                     args=(job_id,),
+#                     countdown=seconds_until,
+#                     queue="batch_app"
+#                 )
+#                 logger.info(f"📅 Daily job {job_id} scheduled for {next_run.strftime('%Y-%m-%d %I:%M %p')}")
+
+#             # Schedule next scheduler (1 day later)
+#             next_scheduler = next_run + timedelta(days=1)
+#             schedule_batch_job.apply_async(
+#                 args=(job_id,),
+#                 eta=next_scheduler,
+#                 queue="batch_scheduler"
+#             )
+#             return
+
+#         # ===== CUSTOM INTERVAL SCHEDULE - FIXED =====
+#         if job.schedule_type == 'custom_interval':
+#             if not job.interval_days:
+#                 job.status = 'failed'
+#                 job.error_message = "Interval days not configured"
+#                 job.save(update_fields=['status', 'error_message'])
+#                 return
+
+#             now = timezone.now()
+#             interval = job.interval_days
+
+#             # ✅ FIX: Use the stored next_run_time if it exists
+#             if job.next_run_time and job.next_run_time > now:
+#                 next_run = job.next_run_time
+#             else:
+#                 # Calculate next run from schedule_datetime + (total_runs * interval)
+#                 next_run = job.schedule_datetime + timedelta(days=interval * job.total_runs)
+#                 while next_run <= now:
+#                     next_run += timedelta(days=interval)
+
+#             seconds_until = int((next_run - now).total_seconds())
+
+#             logger.info(f"📅 Custom job {job_id} - schedule_datetime: {job.schedule_datetime.strftime('%Y-%m-%d %I:%M:%S %p')}")
+#             logger.info(f"📅 Custom job {job_id} - total_runs: {job.total_runs}")
+#             logger.info(f"📅 Custom job {job_id} - next_run: {next_run.strftime('%Y-%m-%d %I:%M:%S %p')}")
+
+#             if seconds_until <= 60:
+#                 process_batch_job.delay(job_id)
+#                 logger.info(f"🚀 Custom job {job_id} running immediately")
+#             else:
+#                 job.next_run_time = next_run
+#                 job.status = 'scheduled'
+#                 job.save(update_fields=['next_run_time', 'status'])
+
+#                 process_batch_job.apply_async(
+#                     args=(job_id,),
+#                     countdown=seconds_until,
+#                     queue="batch_app"
+#                 )
+#                 logger.info(f"📅 Custom job {job_id} scheduled for {next_run.strftime('%Y-%m-%d %I:%M %p')}")
+
+#             # Schedule next scheduler
+#             next_scheduler = next_run + timedelta(days=interval)
+#             schedule_batch_job.apply_async(
+#                 args=(job_id,),
+#                 eta=next_scheduler,
+#                 queue="batch_scheduler"
+#             )
+#             return
+#         # Unknown schedule type
+#         logger.warning(f"⚠️ Unknown schedule type for {job_id}: {job.schedule_type}")
+#         job.status = 'failed'
+#         job.error_message = f"Unknown schedule type: {job.schedule_type}"
+#         job.save(update_fields=['status', 'error_message'])
+
+#     except Exception as e:
+#         logger.error(f"❌ Failed to schedule job {job_id}: {e}")
+#         logger.error(traceback.format_exc())
+
+#         try:
+#             job.status = 'failed'
+#             job.error_message = f"Scheduling failed: {str(e)[:500]}"
+#             job.save(update_fields=['status', 'error_message'])
+#         except Exception as save_error:
+#             logger.error(f"❌ Failed to update job status: {save_error}")
+
+
+
 
 
 # ============================================================
@@ -812,19 +827,19 @@ def cancel_daily_schedule(job_id):
     except BatchJob.DoesNotExist:
         logger.warning(f"⚠️ Job {job_id} not found for cancellation")
         return
-    
+
     try:
         # Check if job is already cancelled or completed
         if job.status in ['cancelled', 'completed']:
             logger.info(f"ℹ️ Job {job_id} already {job.status}, no action needed")
             return
-        
+
         # Update the job
         job.status = 'cancelled'
         job.next_run_time = None
         job.save(update_fields=['status', 'next_run_time'])
         logger.info(f"⛔ Schedule cancelled for {job_id}")
-        
+
     except DatabaseError as e:
         # Handle database errors
         logger.error(f"❌ Database error cancelling schedule for {job_id}: {e}")
@@ -836,7 +851,8 @@ def cancel_daily_schedule(job_id):
             logger.info(f"⛔ Schedule cancelled for {job_id} (full save)")
         except Exception as save_error:
             logger.error(f"❌ Failed to cancel schedule: {save_error}")
-            
+
     except Exception as e:
         logger.error(f"❌ Failed to cancel schedule for {job_id}: {e}")
         logger.error(traceback.format_exc())
+

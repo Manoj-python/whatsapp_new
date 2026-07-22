@@ -3396,9 +3396,9 @@ def get_payment_details_view(request):
 
     try:
         data = get_payment_details(app_key, mobile)
-        data['total_due'] = round(
-            data['due_amount'] + data['lpi_due'] + data['vas_due'] + data['collection_charges'], 2
-        )
+        #data['total_due'] = round(
+         #   data['due_amount'] + data['lpi_due'] + data['vas_due'] + data['collection_charges'], 2
+        #)
         # Remove internal fields
         # data.pop('finance_id', None)
         # data.pop('lpi_due', None)
@@ -3416,7 +3416,7 @@ def send_payment_template_view(request):
         return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
 
     app_key = request.GET.get('app')
-    current_chat = request.GET.get('current_chat')   # the chat we are viewing
+    current_chat = request.GET.get('current_chat')
     if not app_key:
         return JsonResponse({'success': False, 'error': 'app parameter required'}, status=200)
 
@@ -3425,79 +3425,107 @@ def send_payment_template_view(request):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
 
-    mobile_to_send = data.get('mobile')      # the edited number
-    amount = data.get('amount')
+    mobile_to_send = data.get('mobile')
+    amount_raw = data.get('amount')
+    option = data.get('option', 'part')   # 'total', 'emi', 'part'
     agent = get_agent_from_user(request.user)
+    sender_name = agent.name if agent else 'Agent'
 
-    sender_name = agent.name        
-    if not mobile_to_send or not amount:
+    if not mobile_to_send or amount_raw is None:
         return JsonResponse({'success': False, 'error': 'Mobile and amount required'})
 
-    # Normalize for API (10 digits) for the number we are sending to
+    # Normalize mobiles
     mobile_for_api = ''.join(filter(str.isdigit, mobile_to_send))
     if len(mobile_for_api) > 10:
         mobile_for_api = mobile_for_api[-10:]
 
-    # 🆕 Determine which number to use for payment link generation
-    # Use current_chat if provided, else fallback to mobile_to_send
     link_generation_mobile = current_chat if current_chat else mobile_to_send
     link_mobile_api = ''.join(filter(str.isdigit, link_generation_mobile))
     if len(link_mobile_api) > 10:
         link_mobile_api = link_mobile_api[-10:]
 
-    # Broadcast target: original chat number (or fallback)
     broadcast_mobile = current_chat if current_chat else mobile_to_send
-    broadcast_mobile_db = broadcast_mobile.strip()   # preserve +91 if present
+    broadcast_mobile_db = broadcast_mobile.strip()
 
-    # logger.info(f"📞 Sending to: {mobile_to_send} | Link from: {link_generation_mobile} | Broadcast to: {broadcast_mobile_db}")
-
+    # ---------- MAIN TRY BLOCK (Validation + Processing) ----------
     try:
+        # 1️⃣ FETCH PAYMENT DETAILS WITH BUSINESS RULES
+        details = get_payment_details(app_key, link_mobile_api)
+        customer_name = details['customer_name']
+        min_emi = details['min_emi_amount']
+        max_part = details['max_part_amount']
+        total_due = details['total_due']
+        finance_id = details['finance_id']
+
+        # 2️⃣ VALIDATE AMOUNT
+        try:
+            amount = float(amount_raw)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Invalid amount format'}, status=200)
+
+        if amount <= 0:
+            return JsonResponse({'success': False, 'error': 'Amount must be greater than zero'}, status=200)
+
+        error_msg = None
+        if option == 'total':
+            if abs(amount - total_due) > 0.01:
+                error_msg = f'Total due is ₹{total_due:.2f}. Please pay the exact total due.'
+        elif option == 'emi':
+            if abs(amount - min_emi) > 0.01:
+                error_msg = f'Minimum EMI amount is ₹{min_emi:.2f}. Please pay exactly ₹{min_emi:.2f}.'
+        else:  # part
+            if amount < min_emi:
+                error_msg = f'Minimum part payment is ₹{min_emi:.2f}. Please enter at least ₹{min_emi:.2f}.'
+            elif amount > max_part:
+                error_msg = f'Maximum part payment is ₹{max_part:.2f}. Please enter a lower amount (max ₹{max_part:.2f}).'
+
+        if error_msg:
+            return JsonResponse({
+                'success': False,
+                'error': error_msg,
+                'min_emi_amount': min_emi,
+                'max_part_amount': max_part,
+                'total_due': total_due
+            }, status=200)
+
+        # 3️⃣ VALIDATION PASSED – PROCEED WITH PAYMENT
         from adminpanel.views import APP_CONFIG
         cfg = APP_CONFIG[app_key]
         LogModel = cfg['log_model']
         ContactModel = cfg['contact_model']
         channel_group = cfg['channel_group']
         chat_prefix = cfg['chat_prefix']
-        app_name = cfg.get('app_name', '')
         get_template_text = cfg.get('get_template_text')
         render_template_text = cfg.get('render_template_text')
         template_name = cfg['templates'].get('payment', 'payment_gateway')
-        
 
-        # ✅ Generate payment link using the original chat number
+        # Generate payment link
         payment_url = generate_payment_link(app_key, link_mobile_api, amount)
-        details = get_payment_details(app_key, link_mobile_api)
-        customer_name = details['customer_name']
-        # logger.info(f"✅ Payment link: {payment_url}")
 
         # Fetch and render template
         if get_template_text and render_template_text:
             template_body = get_template_text(template_name)
-            logger.info(f"📄 Template body from Meta: {template_body}")
             if template_body:
                 parameters = [
                     {"type": "text", "text": customer_name},
                     {"type": "text", "text": str(amount)},
                     {"type": "text", "text": payment_url}
-                    
                 ]
                 rendered_message = render_template_text(template_body, parameters)
-                # Append a note about the target number
                 rendered_message += f"\n\n(Link sent to {mobile_to_send})"
             else:
                 rendered_message = f"Dear Customer, Click on {payment_url} to make payment of INR {amount} Regards 7799795111.-padmasai holdings private limited\n\n(Link sent to {mobile_to_send})"
         else:
             rendered_message = f"Dear Customer, Click on {payment_url} to make payment of INR {amount} Regards 7799795111.-padmasai holdings private limited\n\n(Link sent to {mobile_to_send})"
 
-        
-        # Send template to the edited number
-        result = send_whatsapp_payment_template(app_key, mobile_for_api,customer_name, amount, payment_url)
+        # Send WhatsApp template
+        result = send_whatsapp_payment_template(app_key, mobile_for_api, customer_name, amount, payment_url)
         logger.info(f"📨 WhatsApp response: {result}")
-        final_sender_name = sender_name
-        # Save log under the broadcast mobile (the chat we are viewing)
+
+        # Save log
         msg_id = result.get('messages', [{}])[0].get('id', '')
         log_entry = LogModel.objects.create(
-            customer_name=final_sender_name,
+            customer_name=sender_name,
             mobile=broadcast_mobile_db,
             sent_text_message=rendered_message,
             message_type="Sent",
@@ -3507,7 +3535,7 @@ def send_payment_template_view(request):
             message_id=msg_id,
         )
 
-        # Update contact for the broadcast mobile
+        # Update contact
         ContactModel.objects.update_or_create(
             mobile=broadcast_mobile_db,
             defaults={
@@ -3519,7 +3547,7 @@ def send_payment_template_view(request):
             }
         )
 
-        # Broadcast to the chat we are viewing
+        # Broadcast via WebSocket
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
         import re
@@ -3540,12 +3568,12 @@ def send_payment_template_view(request):
                         "message_type": "Sent",
                         "message_id": log_entry.message_id,
                         "status": "Sent",
-                        "sender_name": final_sender_name
+                        "sender_name": sender_name
                     }
                 }
             )
 
-        # Also update the sidebar for the broadcast mobile
+        # Sidebar update
         async_to_sync(channel_layer.group_send)(
             channel_group,
             {
@@ -3560,8 +3588,8 @@ def send_payment_template_view(request):
             }
         )
 
-        return JsonResponse({'success': True, 'result': result})
+        return JsonResponse({'success': True, 'result': result, 'amount': amount})
 
     except Exception as e:
         logger.error(f"Send payment error for {app_key}: {e}", exc_info=True)
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, status=200)

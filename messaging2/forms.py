@@ -50,7 +50,13 @@ TEMPLATE_CHOICES = [
     ("43", "new loans template (telugu)-[43]"),
     ("44", "Presale Notices PSF Borrower (English)-[44]"),
     ("45", "Presale Notices SMF Borrower (English)-[45]"),
-    ("46", "Pay Now Link (English)-[46]")
+    ("46", "Pay Now Link (English)-[46]"),
+    ("47", "RC/NOC Dispatched (English)-[47]"),
+    ("48", "HPT Completed (English)-[48]"),
+    ("49", "HPT Pending (English)-[49]"),
+    ("50", "RC/NOC Returned (English)-[50]"),
+  
+
 ]
 
 

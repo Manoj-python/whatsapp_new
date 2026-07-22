@@ -18,7 +18,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db import transaction, close_old_connections
 from django.db.models import F
-from .utils import open_legal_pdf 
+from .utils import open_legal_pdf
 
 from .models import *
 from .utils import *
@@ -195,7 +195,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     if (format_mobile(r.get("cust_mobile") or r.get("CustMobile") or "")) == mobile:
                         name = r.get("customer_name") or r.get("CustomerName") or ""
                         break
-                    
+
                 status_value = "Failed"
 
                 ERROR_MAP = {
@@ -315,7 +315,11 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             elif template_choice == "37":
                 pdf_filename = row.get("presale_notices_borrower_pdf")
                 folder = "legal_pdfs"
-             
+            elif template_choice == "41":
+                pdf_filename = row.get("hpt_pending_pdf")
+                folder = "noc_pdfs"
+                
+
             elif template_choice == "19":
                 pdf_filename = (
                     row.get("borrower_pdf_file")
@@ -494,7 +498,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 if (format_mobile(r.get("cust_mobile") or r.get("CustMobile") or "")) == mobile:
                     name = r.get("customer_name") or r.get("CustomerName") or ""
                     break
-                        
+
             status_value = "Failed"
 
             ERROR_MAP = {
@@ -524,7 +528,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             SmsWhatsAppLog.objects.create(
                 job_id=job_id,
                 customer_name=agent_name,
-                sender_name=name, 
+                sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
                 status=status_value,
@@ -669,5 +673,6 @@ def process_pending_webhook_updates():
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+
 
 

@@ -348,16 +348,21 @@
         <button id="attachBtn"><i class="fas fa-paperclip"></i></button>
         <input type="text" id="messageInput" placeholder="Type a message...">
       </div>
+ <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+
       <button id="micBtn" class="mic-btn" title="Record voice message">
         <i class="fas fa-microphone"></i>
       </button>
-      <button id="ptpBtn" title="Send Payment Confirmation" style="background: #FF6B35; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
-    <i class="fas fa-check-circle"></i>
+      <button id="nocBtn" class="noc-btn" title="Send NOC Document" style="background: #dc3545; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
+    <i class="fas fa-file-contract"></i>
 </button>
-      <button id="paymentBtn" title="Send Payment Link" style="background: #128C7E; width: 40px; height: 40px; border-radius: 50%;">
+  <button id="paymentBtn" title="Send Payment Link" style="background: #128C7E; width: 40px; height: 40px; border-radius: 50%;">
     <i class="fas fa-rupee-sign"></i>
 </button>
-      <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+      <button id="ptpBtn" title="Send Payment Confirmation" style="background: #FF6B35; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
+    <i class="fas fa-check-circle"></i>
+</button>    
+     
       <input type="file" id="mediaInput" style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx">
     </div>
     
@@ -507,7 +512,6 @@
                         <label>Customer Name</label>
                         <input type="text" id="payCustName" class="form-control" readonly>
                     </div>
-                    
                     <div class="mb-2">
                         <label>Loan Number</label>
                         <input type="text" id="payLoanNo" class="form-control" readonly>
@@ -516,32 +520,42 @@
                         <label>Vehicle Number</label>
                         <input type="text" id="payVehicleNo" class="form-control" readonly>
                     </div>
-                  <div class="mb-2">
-    <label>EMI Dues (INR)</label>
-    <input type="text" id="payEmiDues" class="form-control" readonly>
-</div>
-<div class="mb-2">
-    <label>LPI (INR)</label>
-    <input type="text" id="payLpi" class="form-control" readonly>
-</div>
-<div class="mb-2">
-    <label>Vas Due (INR)</label>
-    <input type="text" id="payVasDue" class="form-control" readonly>
-</div>
-<div class="mb-2">
-    <label>Total Due (INR) <span class="text-muted">(Auto-calculated)</span></label>
-    <input type="text" id="payTotalDue" class="form-control" readonly>
-</div>
-<div class="mb-2">
-    <label>Due Amount (INR) <span class="text-danger">*</span></label>
-    <input type="number" step="0.01" id="payAmount" class="form-control" required>
-    <small class="text-muted">Edit this if you want to adjust the amount for payment.</small>
-</div>
-<div class="mb-2">
+                    <div class="row">
+                        <div class="col-4"><label>EMI Dues</label><input type="text" id="payEmiDues" class="form-control" readonly></div>
+                        <div class="col-4"><label>LPI</label><input type="text" id="payLpi" class="form-control" readonly></div>
+                        <div class="col-4"><label>VAS Due</label><input type="text" id="payVasDue" class="form-control" readonly></div>
+                    </div>
+                    <div class="mb-2">
+                        <label>Total Due (INR)</label>
+                        <input type="text" id="payTotalDue" class="form-control" readonly>
+                    </div>
+
+                    <!-- 🆕 PAYMENT OPTIONS (RADIO BUTTONS) -->
+                    <div class="mb-2">
+                        <label>Payment Option</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="paymentOption" id="optTotal" value="total" checked>
+                            <label class="form-check-label" for="optTotal">Pay Total Due (₹<span id="payTotalLabel">0</span>)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="paymentOption" id="optEmi" value="emi">
+                            <label class="form-check-label" for="optEmi">Pay Minimum EMI (₹<span id="payMinEmiLabel">0</span>)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="paymentOption" id="optPart" value="part">
+                            <label class="form-check-label" for="optPart">Part Payment (Min ₹<span id="payMinPartLabel">0</span>, Max ₹<span id="payMaxPartLabel">0</span>)</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label>Due Amount (INR) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" id="payAmount" class="form-control" required>
+                        <small class="text-muted">You can edit this amount (must follow selected option rule).</small>
+                    </div>
+                    <div class="mb-2">
                         <label>Mobile Number <span class="text-danger">*</span></label>
-                        <!-- 🆕 Editable field -->
                         <input type="text" id="payMobile" class="form-control" required>
-                        <small class="text-muted">Edit this number to send the link to a different customer.</small>
+                        <small class="text-muted">Edit to send link to a different number.</small>
                     </div>
                 </form>
             </div>
@@ -596,6 +610,48 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success" id="ptpSubmitBtn">
                     <i class="fas fa-paper-plane"></i> Send Template
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NOC Modal -->
+<div class="modal fade" id="nocModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-file-contract"></i> Send NOC Document</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="nocLoading" class="text-center py-3">
+                    <i class="fas fa-spinner fa-spin"></i> Loading details...
+                </div>
+                <div id="nocDetails" style="display:none;">
+                    <div class="mb-2">
+                        <label class="fw-bold">Customer Name</label>
+                        <div id="nocCustName" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Loan Number</label>
+                        <div id="nocLoanNo" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Vehicle Number</label>
+                        <div id="nocVehicleNo" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Mobile</label>
+                        <div id="nocMobile" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div id="nocError" class="alert alert-danger" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="nocSendBtn" disabled>
+                    <i class="fas fa-paper-plane"></i> Send NOC
                 </button>
             </div>
         </div>
@@ -2462,6 +2518,9 @@ function getAppFromURL() {
 const APP_KEY = getAppFromURL();
 console.log('💰 Current app for payment:', APP_KEY);
 
+
+
+// --------------------- Open Payment Modal ---------------------
 async function openPaymentModal() {
     if (!selectedMobile) {
         showNotification('Select a contact first', 'warning');
@@ -2479,16 +2538,23 @@ async function openPaymentModal() {
     document.getElementById('payLpi').value = '...';
     document.getElementById('payVasDue').value = '...';
     document.getElementById('payTotalDue').value = '...';
+    document.getElementById('payTotalLabel').innerText = '0';
+    document.getElementById('payMinEmiLabel').innerText = '0';
+    document.getElementById('payMinPartLabel').innerText = '0';
+    document.getElementById('payMaxPartLabel').innerText = '0';
     document.getElementById('payAmount').value = '';
 
     try {
         const resp = await fetch(`/messaging2/api/payment-details/?app=${APP_KEY}&mobile=${encodeURIComponent(selectedMobile)}`);
         const data = await resp.json();
         if (data.success) {
+            // Using the computed values from backend (already capped/tiered)
+            const totalDue = parseFloat(data.total_due || 0);
+            const minEmi = parseFloat(data.min_emi_amount || 0);
+            const maxPart = parseFloat(data.max_part_amount || 0);
             const emiDue = parseFloat(data.due_amount || 0);
             const lpiDue = parseFloat(data.lpi_due || 0);
             const vasDue = parseFloat(data.vas_due || 0);
-            const totalDue = emiDue + lpiDue + vasDue;   // total due (includes collection charges if any)
 
             document.getElementById('payCustName').value = data.customer_name || '';
             document.getElementById('payLoanNo').value = data.loan_number || '';
@@ -2498,9 +2564,21 @@ async function openPaymentModal() {
             document.getElementById('payVasDue').value = vasDue.toFixed(2);
             document.getElementById('payTotalDue').value = totalDue.toFixed(2);
 
-            // ---------- Set default amount ----------
+            // Update labels
+            document.getElementById('payTotalLabel').innerText = totalDue.toFixed(2);
+            document.getElementById('payMinEmiLabel').innerText = minEmi.toFixed(2);
+            document.getElementById('payMinPartLabel').innerText = minEmi.toFixed(2);
+            document.getElementById('payMaxPartLabel').innerText = maxPart.toFixed(2);
+
+            // Set default amount to Total Due, and set min/max for input
             const amountInput = document.getElementById('payAmount');
-            amountInput.value = totalDue.toFixed(2);   // default = total due
+            amountInput.value = totalDue.toFixed(2);
+            amountInput.min = minEmi;
+            amountInput.max = maxPart;
+            amountInput.step = "0.01";
+
+            // Default radio: Total
+            document.getElementById('optTotal').checked = true;
 
         } else {
             showNotification(data.error || 'Could not fetch details', 'error');
@@ -2517,14 +2595,17 @@ async function sendPaymentTemplate() {
     const mobileToSend = document.getElementById('payMobile').value.trim();
     const amountInput = document.getElementById('payAmount');
     const amount = parseFloat(amountInput.value);
+    // 👇 Get selected option
+    const option = document.querySelector('input[name="paymentOption"]:checked').value;
 
     if (!mobileToSend) {
         showNotification('Please enter a valid mobile number', 'warning');
         return;
     }
-
-    // Amount validation is removed – any value is accepted (including empty)
-    // (The backend may still enforce its own rules)
+    if (isNaN(amount) || amount <= 0) {
+        showNotification('Please enter a valid amount', 'warning');
+        return;
+    }
 
     const btn = document.getElementById('paySubmitBtn');
     const originalHtml = btn.innerHTML;
@@ -2534,7 +2615,8 @@ async function sendPaymentTemplate() {
     try {
         const payload = {
             mobile: mobileToSend,
-            amount: amount
+            amount: amount,
+            option: option   // 🆕 Send option to backend for validation
         };
         const resp = await fetch(`/messaging2/api/send-payment-template/?app=${APP_KEY}&current_chat=${encodeURIComponent(selectedMobile)}`, {
             method: 'POST',
@@ -2546,7 +2628,16 @@ async function sendPaymentTemplate() {
             showNotification(`Payment link sent to ${mobileToSend}`, 'success');
             bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
         } else {
-            showNotification(data.error || 'Failed to send payment link', 'error');
+            // 👇 Backend nunchi exact error (minimum amount tho saha) vasthundi
+            showNotification(data.error, 'error');
+            // Optional: update the UI with the min/max from response
+            if (data.min_emi_amount) {
+                document.getElementById('payMinEmiLabel').innerText = data.min_emi_amount.toFixed(2);
+                document.getElementById('payMinPartLabel').innerText = data.min_emi_amount.toFixed(2);
+            }
+            if (data.max_part_amount) {
+                document.getElementById('payMaxPartLabel').innerText = data.max_part_amount.toFixed(2);
+            }
         }
     } catch (e) {
         showNotification('Error: ' + e.message, 'error');
@@ -2690,6 +2781,130 @@ async function sendPtpTemplate() {
     }
 }
 
+// ==================== NOC SEND ====================
+// ==================== NOC MODAL ====================
+async function openNocModal() {
+    if (!selectedMobile) {
+        showNotification('Select a contact first', 'warning');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('nocModal'));
+    modal.show();
+
+    // Reset UI
+    document.getElementById('nocLoading').style.display = 'block';
+    document.getElementById('nocDetails').style.display = 'none';
+    document.getElementById('nocError').style.display = 'none';
+    document.getElementById('nocSendBtn').disabled = true;
+
+    try {
+        const resp = await fetch(`/api/noc-details/?mobile=${encodeURIComponent(selectedMobile)}`);
+        const data = await resp.json();
+
+        if (data.success) {
+            document.getElementById('nocCustName').textContent = data.customer_name || '-';
+            document.getElementById('nocLoanNo').textContent = data.loan_number || '-';
+            document.getElementById('nocVehicleNo').textContent = data.vehicle_number || '-';
+            document.getElementById('nocMobile').textContent = selectedMobile;
+            document.getElementById('nocLoading').style.display = 'none';
+            document.getElementById('nocDetails').style.display = 'block';
+            document.getElementById('nocSendBtn').disabled = false;
+        } else {
+            document.getElementById('nocLoading').style.display = 'none';
+            document.getElementById('nocError').textContent = data.error || 'Failed to fetch details';
+            document.getElementById('nocError').style.display = 'block';
+        }
+    } catch (e) {
+        document.getElementById('nocLoading').style.display = 'none';
+        document.getElementById('nocError').textContent = 'Error: ' + e.message;
+        document.getElementById('nocError').style.display = 'block';
+    }
+}
+
+// Send NOC from modal
+// Send NOC from modal - NOW WITH INSTANT UI UPDATE
+document.getElementById('nocSendBtn').addEventListener('click', async function() {
+    const btn = this;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    btn.disabled = true;
+
+    // --- Create a temporary message (appears instantly) ---
+    const tempId = 'temp_noc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const custName = document.getElementById('nocCustName').textContent;
+    const vehicleNo = document.getElementById('nocVehicleNo').textContent;
+    const renderedText = `📄 NOC document sent for vehicle ${vehicleNo}`;
+
+    const tempMsg = {
+        id: tempId,
+        mobile: selectedMobile,
+        sent_text_message: renderedText,
+        content_type: 'document',       // will show document icon once media_file is set
+        media_file: '',                // placeholder
+        sent_at: new Date().toISOString(),
+        message_type: 'Sent',
+        message_id: tempId,
+        status: 'Sending...',
+        sender_name: 'You',
+        is_temp: true
+    };
+
+    // Append to chat and update contact list
+    appendMessage(tempMsg);
+    updateContactInList(tempMsg);
+    scrollToBottom();
+
+    try {
+        const resp = await fetch(`/api/send-noc/?mobile=${encodeURIComponent(selectedMobile)}&app=${APP_KEY}`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF }
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            // --- Update the temporary message with real data ---
+            const tempIndex = messages.findIndex(m => m.id === tempId);
+            if (tempIndex !== -1) {
+                messages[tempIndex] = {
+                    ...messages[tempIndex],
+                    id: data.message_id || messages[tempIndex].id,
+                    message_id: data.message_id || messages[tempIndex].message_id,
+                    media_file: data.media_file || '',
+                    status: 'Sent',
+                    is_temp: false,
+                    sent_text_message: data.rendered_text || renderedText,  // optional: show actual template text
+                };
+                // Re-render messages to show the document icon
+                renderMessages(messages, hasMoreMessages, null, false);
+            }
+            showNotification('NOC sent successfully!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('nocModal')).hide();
+        } else {
+            // --- Remove temporary message on failure ---
+            const tempIndex = messages.findIndex(m => m.id === tempId);
+            if (tempIndex !== -1) {
+                messages.splice(tempIndex, 1);
+                renderMessages(messages, hasMoreMessages, null, false);
+            }
+            showNotification(data.error || 'Failed to send NOC', 'error');
+        }
+    } catch (e) {
+        // --- Remove temporary message on error ---
+        const tempIndex = messages.findIndex(m => m.id === tempId);
+        if (tempIndex !== -1) {
+            messages.splice(tempIndex, 1);
+            renderMessages(messages, hasMoreMessages, null, false);
+        }
+        showNotification('Error: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
+});
+
+
+
   
   let casePanelBtn = document.getElementById('casePanelBtn');
 if (casePanelBtn) {
@@ -2721,6 +2936,11 @@ const ptpSubmitBtn = document.getElementById('ptpSubmitBtn');
 if (ptpSubmitBtn) {
     ptpSubmitBtn.addEventListener('click', sendPtpTemplate);
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const nocBtn = document.getElementById('nocBtn');
+    if (nocBtn) nocBtn.addEventListener('click', openNocModal);  // ✅ fixed
+});
 
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
