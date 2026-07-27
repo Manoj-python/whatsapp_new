@@ -361,7 +361,7 @@ def process_batch_job(self, job_id):
                 f"NextRun={job.next_run_time}"
             )
 
-    
+
         # -------------------------
         # 2. FULL BATCH
         # -------------------------
@@ -426,13 +426,12 @@ def process_batch_job(self, job_id):
                 logger.info(f"✅ ALL BATCHES COMPLETED for {job_id}")
 
             else:
-
                 # ============================================================
                 # DAILY - Next Run = Tomorrow Same Time
                 # ============================================================
                 if job.schedule_type == 'daily':
-                    # ✅ Calculate next run: schedule_datetime + (completed_batches * 1 day)
-                    next_run = job.schedule_datetime + timedelta(days=job.completed_batches)
+                    # ✅ CORRECT: Use total_runs (not completed_batches)
+                    next_run = job.schedule_datetime + timedelta(days=job.total_runs)  # ✅ FIXED
 
                     # ✅ Ensure it's in the future
                     now = timezone.now()
@@ -855,4 +854,5 @@ def cancel_daily_schedule(job_id):
     except Exception as e:
         logger.error(f"❌ Failed to cancel schedule for {job_id}: {e}")
         logger.error(traceback.format_exc())
+
 

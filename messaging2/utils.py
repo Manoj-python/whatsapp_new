@@ -1,4 +1,3 @@
-
 import re
 import requests
 from datetime import datetime
@@ -11,7 +10,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.conf import settings
 from .models import *
 
-PAYMENT_LINK2 = "https://smsquare.co.in/pay2"
+PAYMENT_LINK2 = "https://smsquare.info/"
 
 # -----------------------------------------------------
 # Upload media to WhatsApp Cloud
@@ -925,7 +924,226 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             ],
         ),
 
+        "51": (
+            "smsquare_info",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
 
+            ],
+        ),
+        "52": (
+            "bucket_one_psf",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+            ],
+        ),
+        "53": (
+            "smf_bucket_one",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+            ],
+        ),
+        "54": (
+            "bucket_two_psf",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+            ],
+        ),
+        "55": (
+            "smf_bucket_two",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+            ],
+        ),
+
+        "56": (
+            "psf_cust_three_bucket",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("legal_number", ""))
+                }
+            ],
+        ),
+        "57": (
+            "smf_cust_three_bucket",
+            "en",
+            [
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("legal_number", ""))
+                }
+            ],
+        ),
+        "58": (
+            "gur_psf_three_bucket",
+            "en",
+            [ 
+                {
+                    "type": "text",
+                    "text": str(row.get("guarantor_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("mobile_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("legal_number", ""))
+                }
+            ],
+        ),
+        "59": (
+            "smf_gur_three_bucket",
+            "en",
+            [ 
+                {
+                    "type": "text",
+                    "text": str(row.get("guarantor_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("customer_name", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("mobile_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("loan_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("vehicle_number", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("due_amount", ""))
+                },
+                {
+                    "type": "text",
+                    "text": str(row.get("legal_number", ""))
+                }
+            ],
+        ),
 
     }
 
@@ -1638,5 +1856,3 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, payment_u
             # logger.error(e.response.text)
 
         raise
-
-

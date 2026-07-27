@@ -36,8 +36,8 @@ from special_cases.models import CaseDescriptionLog as SplCaseDescriptionLog
 from messaging2.utils import get_template_text_from_whatsapp2
 from messaging.utils import get_template_text_from_whatsapp
 from .utils import render_template_text
-from messaging2.utils import upload_whatsapp_media2,build_payload2,open_legal_pdf2,format_mobile2
-from messaging.utils import upload_whatsapp_media,build_payload,open_legal_pdf,format_mobile
+from messaging2.utils import upload_whatsapp_media2,build_payload2,open_legal_pdf2,format_mobile2,send_whatsapp_media2
+from messaging.utils import upload_whatsapp_media,build_payload,open_legal_pdf,format_mobile,send_whatsapp_media
 
 # ============================================
 # APP CONFIGURATION
@@ -53,8 +53,9 @@ APP_CONFIG = {
         'chat_prefix': 'chat2', 
         'description_log_model': PsfCaseDescriptionLog,
         'upload_media_func': upload_whatsapp_media2,   # PSF's upload function
-         'build_payload_func': build_payload2, 
-         'format_mobile_func': format_mobile2,
+         'build_payload_func': build_payload2,       # PSF's upload
+        'send_media_func': send_whatsapp_media2,  
+        'format_mobile_func': format_mobile2,
          'open_legal_pdf_func': open_legal_pdf2,
         'templates': {
             'open': 'ticket_open',    # Replace with actual template name for PSF
@@ -85,10 +86,11 @@ APP_CONFIG = {
         'description_log_model': SmsCaseDescriptionLog,
         'get_template_text': get_template_text_from_whatsapp,
         'render_template_text': render_template_text,
-        'upload_media_func': upload_whatsapp_media2,   # PSF's upload function
-        'build_payload_func': build_payload2, 
-        'format_mobile_func': format_mobile2,
-        'open_legal_pdf_func': open_legal_pdf2,
+        'upload_media_func': upload_whatsapp_media,   # PSF's upload function
+        'build_payload_func': build_payload, 
+        'format_mobile_func': format_mobile,
+        'open_legal_pdf_func': open_legal_pdf,
+         'send_media_func': send_whatsapp_media,
         'templates': {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',

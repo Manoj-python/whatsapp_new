@@ -966,14 +966,17 @@ def send_welcome_message(app_key, mobile, customer_name=""):
     customer_name = customer_name or "Customer"
 
     free_text = (
-        f"👋 Welcome to {app_name}!\n\n"
-        f"Thank you for contacting us. We're here to assist you with loans, "
-        f"account information, EMI details, payments, and other services.\n\n"
-        f"Please let us know how we can help you today. "
-        f"Our virtual assistant is available 24/7 to support you.\n\n"
-        f"Type your query or select a service to get started."
-    )
-
+    f"Dear {customer_name},\n\n"
+    f"Welcome to the {app_name}.\n\n"
+    f"We invite you to experience a seamless way to manage your loan account securely online:\n\n"
+    f"• Payments: Pay EMIs and make part-payments\n"
+    f"• Statements: Download account & foreclosure statements\n"
+    f"• Tracking: View payment history & check foreclosure details\n\n"
+    f"👉 Login to your portal: https://smsquare.info\n\n"
+    f"We are happy to assist you every step of the way.\n\n"
+    f"Sincerely,\n\n"
+    f"{app_name}."
+)
     # Send WhatsApp message
     try:
         resp = send_whatsapp_text4(

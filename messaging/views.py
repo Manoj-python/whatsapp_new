@@ -1832,3 +1832,204 @@ def send_noc(request):
         'rendered_text': rendered_text,
         'media_file': media_file_path,   # optional, for frontend to show immediately
     })
+
+
+from django.views.decorators.http import require_GET, require_POST
+from .statement_pdf import build_statement_pdf
+from .utils import (
+    upload_whatsapp_media, send_whatsapp_media,
+    
+)
+
+
+
+from .statement_pdf import build_statement_pdf
+
+logger = logging.getLogger(__name__)
+
+@require_GET
+@require_GET
+def statement_details(request):
+    """Fetch loan details for the modal – uses get_payment_details for accuracy."""
+    mobile = request.GET.get('mobile')
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile required'}, status=400)
+    app_key = request.GET.get('app', 'psf')
+
+    if app_key not in APP_CONFIG:
+        return JsonResponse({'success': False, 'error': f'Invalid app: {app_key}'}, status=400)
+
+    try:
+        # 1. Get payment details (correct total_due, customer_name, vehicle_no, regular_emi)
+        payment_details = get_payment_details(app_key, mobile)
+        if not payment_details:
+            return JsonResponse({'success': False, 'error': 'No payment details found'}, status=404)
+
+        agreement_no = payment_details['loan_number']
+        finance_id = payment_details.get('finance_id', 0)
+
+        # 2. Fetch full loan data (for next_due_date, repayment_schedules, etc.)
+        loan = fetch_loan_details(app_key, agreement_no)
+        if not loan:
+            return JsonResponse({'success': False, 'error': 'Loan data not found'}, status=404)
+
+        # 3. Fetch LCC details (for address, branch, region, etc.)
+        lcc = fetch_lcc_details(app_key, agreement_no, finance_id)
+        if not lcc:
+            lcc = {}
+
+        # 4. Use payment_details for totals and customer name
+        total_due = payment_details.get('total_due', 0)
+        customer_name = payment_details.get('customer_name', '') or loan.get('primary_customer_name', '')
+        vehicle_no = payment_details.get('vehicle_no', '') or lcc.get('registration_no', '')
+
+        return JsonResponse({
+            'success': True,
+            'customer_name': customer_name,
+            'loan_number': agreement_no,
+            'vehicle_no': vehicle_no,
+            'due_amount': payment_details.get('due_amount', 0),
+            'lpi_due': payment_details.get('lpi_due', 0),
+            'vas_due': payment_details.get('vas_due', 0),
+            'total_due': total_due,
+            'regular_emi': payment_details.get('regular_emi', 0),
+            'next_due_date': loan.get('next_due_date', ''),
+            'address': lcc.get('address', ''),
+            'branch': lcc.get('branch', ''),
+            'region': lcc.get('region', ''),
+            'vehicle_class': lcc.get('vehicle_class', ''),
+        })
+    except Exception as e:
+        logger.exception("Statement details error")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+# messaging2/views.py (or your main views)
+
+from django.core.files.base import ContentFile
+from django.conf import settings
+import os
+from messaging2.utils import get_payment_details
+# messaging2/views.py
+
+@csrf_exempt
+@require_POST
+def send_statement(request):
+    mobile = request.POST.get('mobile')
+    app_key = request.POST.get('app', 'psf')
+    sender_name = request.POST.get('sender_name', 'You')
+
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile required'}, status=400)
+
+    config = APP_CONFIG.get(app_key)
+    if not config:
+        return JsonResponse({'success': False, 'error': 'Invalid app'}, status=400)
+
+    upload_func = config['upload_media_func']
+    send_func = config['send_media_func']
+    log_model = config['log_model']
+    contact_model = config.get('contact_model')  # ChatContact2, ChatContact, etc.
+
+    try:
+        # 1. Get payment details
+        payment_details = get_payment_details(app_key, mobile)
+        if not payment_details:
+            raise ValueError("No payment details found")
+
+        agreement_no = payment_details['loan_number']
+        finance_id = payment_details.get('finance_id', 0)
+
+        # 2. Fetch full loan data
+        loan = fetch_loan_details(app_key, agreement_no)
+        if not loan:
+            raise ValueError("Loan data not found")
+
+        # 3. Fetch LCC details
+        lcc = fetch_lcc_details(app_key, agreement_no, finance_id)
+        if not lcc:
+            lcc = {}
+
+        # 4. Merge payment_details
+        loan['regular_emi_amount'] = payment_details.get('regular_emi', loan.get('regular_emi_amount', 0))
+        loan['overdue_amount'] = payment_details.get('due_amount', loan.get('overdue_amount', 0))
+        loan['lpi_dues'] = payment_details.get('lpi_due', loan.get('lpi_dues', 0))
+        loan['total_vas_dues'] = payment_details.get('vas_due', loan.get('total_vas_dues', 0))
+        loan['total_due'] = payment_details.get('total_due', 0)
+        loan['vehicle_number'] = payment_details.get('vehicle_no', loan.get('vehicle_number', ''))
+
+        # 5. Build customer dict
+        customer = {
+            'customer_name': payment_details.get('customer_name', '') or loan.get('primary_customer_name', ''),
+            'contact': mobile,
+            'full_address': lcc.get('address', ''),
+            'dob': lcc.get('dob', ''),
+            'email': lcc.get('email', ''),
+            'father_name': lcc.get('father_name', ''),
+        }
+
+        # 6. Generate PDF
+        pdf_bytes = build_statement_pdf(customer, loan, lcc, app_name=config.get('app_name'))
+
+        # 7. Save to log model
+        from io import BytesIO
+        from django.core.files.base import ContentFile
+        from datetime import datetime, timezone
+
+        filename = f"statement_{agreement_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+        sent_text = f"📄 Statement for loan {agreement_no} sent"
+        log_entry = log_model(
+            mobile=mobile,
+            template_name='statement_pdf',
+            sent_text_message=sent_text,
+            status='Sent',
+            message_id='',
+            message_type='Sent',
+            content_type='document',
+            sender_name=sender_name,
+            customer_name=customer.get('customer_name', ''),
+            vehicle_number=loan.get('vehicle_number', ''),
+            sent_at=datetime.now(timezone.utc),
+        )
+        log_entry.media_file.save(filename, ContentFile(pdf_bytes), save=False)
+        log_entry.save()
+
+        # 8. Upload to WhatsApp
+        file_obj = BytesIO(pdf_bytes)
+        file_obj.name = filename
+        file_obj.content_type = "application/pdf"
+        upload_result = upload_func(file_obj)
+        media_id = upload_result.get('id')
+        send_result = send_func(
+            to_number=mobile,
+            media_id=media_id,
+            media_type='document',
+            caption=f"Statement for Loan {agreement_no}",
+            filename=filename
+        )
+        message_id = send_result.get('messages', [{}])[0].get('id')
+        log_entry.message_id = message_id
+        log_entry.save(update_fields=['message_id'])
+
+        # 9. UPDATE CONTACT MODEL (critical for UI)
+        if contact_model:
+            contact, created = contact_model.objects.get_or_create(mobile=mobile)
+            contact.last_msg = sent_text
+            contact.last_time = datetime.now(timezone.utc)
+            contact.last_type = 'document'
+            contact.last_status = 'Sent'
+            # If this is an agent sending, unread should not increase for the agent.
+            # Usually unread is for incoming messages, so we can leave it as is.
+            # If you want to set unread=0 for outgoing, you can do so, but not required.
+            contact.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Statement sent',
+            'message_id': message_id,
+            'media_url': log_entry.media_file.url if log_entry.media_file else '',
+            'loan_number': agreement_no,
+            'sent_text_message': sent_text,
+        })
+
+    except Exception as e:
+        logger.exception("Send statement error")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

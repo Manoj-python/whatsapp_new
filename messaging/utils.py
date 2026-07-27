@@ -11,7 +11,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.conf import settings
 from .models import *
 
-PAYMENT_LINK = "https://smsquare.co.in/pay2"
+PAYMENT_LINK = "https://smsquare.info/"
 from financehub.models import Lcc
 
 def lcc_details(mobile):
@@ -920,7 +920,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                             "text": format_whatsapp_date(row.get("dispatch_date", ""))
                         },
                     ],
-                ),                      
+                ),
                 "40": (
                     "hpt_completed",
                     "en",
@@ -933,7 +933,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                             "type": "text",
                             "text": str(row.get("vehicle_number", ""))
                         },
-                     
+
                     ],
                 ),
                 "41": (
@@ -948,7 +948,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                             "type": "text",
                             "text": str(row.get("vehicle_number", ""))
                         },
-                     
+
                     ],
                 ),
                 "42": (
@@ -963,9 +963,130 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                             "type": "text",
                             "text": str(row.get("vehicle_number", ""))
                         },
-                     
+
                     ],
                 ),
+                "43": (
+                    "smsquareinfo",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+
+                    ],
+                ),
+                "44": (
+                    "bucket_one",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("due_amount", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        }
+
+                    ],
+                ),
+                "45": (
+                    "bucket_two",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("due_amount", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        }
+
+                    ],
+                ),
+                "46": (
+                    "cust_three_bucket",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("due_amount", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("legal_number", ""))
+                        }
+
+                    ],
+                ),
+                "47": (
+                    "gur_three_bucket",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("guarantor_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("mobile_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("due_amount", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("legal_number", ""))
+                        }
+
+                    ],  
+                ),
+
+                
 
     }
 
@@ -1318,4 +1439,172 @@ def send_whatsapp_ptp_template(app_key, to, customer_name, amount, due_date, loa
         if hasattr(e, 'response') and e.response:
             logger.error(e.response.text)
         raise
+
+
+import re
+
+def camel_to_snake(name):
+    """Convert CamelCase to snake_case."""
+    name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+
+def normalize_keys(data):
+    """Recursively convert all dictionary keys from camelCase to snake_case."""
+    if isinstance(data, dict):
+        return {camel_to_snake(k): normalize_keys(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [normalize_keys(item) for item in data]
+    else:
+        return data
+
+
+import re
+import logging
+from typing import Dict, Any, Optional
+from messaging2.utils import call_allcloud_api
+
+logger = logging.getLogger(__name__)
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def _get_value(data: Dict, *keys) -> Any:
+    for key in keys:
+        if key in data:
+            return data[key]
+    return None
+
+def _safe_float(value) -> float:
+    try:
+        return float(value) if value is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+def _safe_str(value) -> str:
+    return '' if value is None else str(value)
+
+# ============================================================
+# EXTRACT LOAN DATA (from GetLoanAgreementNoAsync)
+# ============================================================
+
+def extract_loan_data(raw_data: Any) -> Dict[str, Any]:
+    if isinstance(raw_data, list) and raw_data:
+        raw_data = raw_data[0]
+    if not isinstance(raw_data, dict):
+        return {}
+
+    def get(*keys):
+        return _get_value(raw_data, *keys)
+
+    # Debug: log all keys to see what's available
+    logger.info(f"Raw loan data keys: {list(raw_data.keys())}")
+
+    loan = {
+        'agreement_no': _safe_str(get('AgreementNo', 'agreement_no')),
+        'primary_customer_name': _safe_str(get('PrimaryCustomerName', 'primary_customer_name', 'CustomerName')),
+        'loan_amount': _safe_float(get('LoanAmount', 'loan_amount', 'TotalAmount')),
+        'overdue_amount': _safe_float(get('OverDueAmount', 'overdue_amount', 'OverDueAmount')),
+        'lpi_dues': _safe_float(get('LPIDues', 'lpi_dues', 'LPCDue')),
+        'total_vas_dues': _safe_float(get('TotalVASDues', 'total_vas_dues', 'VasDueAmount')),
+        'emi_due_count': _safe_float(get('EMIDueCount', 'emi_due_count')),
+        'no_of_paid_emi': _safe_float(get('NoOfPaidEMI', 'no_of_paid_emi', 'PaidEMICount')),
+        'duration': int(_safe_float(get('Duration', 'duration', 'Tenure'))),
+        'start_date': _safe_str(get('StartDate', 'start_date', 'LoanDate')),
+        'disbursement_status': _safe_str(get('DisbursementStatus', 'disbursement_status', 'Status')),
+        'yearly_indicative_roi': _safe_float(get('YearlyIndicativeROI', 'yearly_indicative_roi', 'ROI')),
+        'effective_apr': _safe_float(get('EffectiveAPR', 'effective_apr', 'APR')),
+        'emi_start_date': _safe_str(get('EMIStartDate', 'emi_start_date', 'InstallmentStartDate')),
+        'emi_end_date': _safe_str(get('EMIEndDate', 'emi_end_date', 'InstallmentEndDate')),
+        'last_paid_date': _safe_str(get('LastPaidDate', 'last_paid_date')),
+        'installment_type_id': _safe_str(get('InstallmentTypeId', 'installment_type_id', 'Frequency')),
+        'mode_of_repayment_id': _safe_str(get('ModeOfRepaymentId', 'mode_of_repayment_id', 'RepaymentMode')),
+        'product_type': _safe_str(get('ProductType', 'product_type', 'LoanType')),
+        'vehicle_number': _safe_str(get('VehicleNumber', 'vehicle_number', 'RegistrationNo')),
+        'regular_emi_amount': _safe_float(get('RegularEMIAmount', 'regular_emi_amount', 'EMI')),
+    }
+
+    # ----- CRITICAL: Extract next_due_date from the correct key -----
+    # The actual API returns "NextPaymentDate" (with time)
+    next_due = get(
+        'NextPaymentDate',        # ✅ Primary key from live API
+        'next_payment_date',
+        'NextDueDate',
+        'next_due_date'
+    )
+    loan['next_due_date'] = _safe_str(next_due)
+
+    # Debug log to confirm
+    logger.info(f"Extracted next_due_date: {loan['next_due_date']}")
+
+    # ----- Repayment Schedules -----
+    schedules_raw = get('RepaymentSchedules', 'repayment_schedules')
+    schedules = []
+    if isinstance(schedules_raw, list):
+        for item in schedules_raw:
+            if not isinstance(item, dict):
+                continue
+            schedules.append({
+                'installment_no': int(_safe_float(item.get('InstallmentNo', item.get('installment_no', 0)))),
+                'due_amount': _safe_float(item.get('DueAmount', item.get('due_amount', 0))),
+                'due_date': _safe_str(item.get('DueDate', item.get('due_date'))),
+                'paid_amount': _safe_str(item.get('PaidAmount', item.get('paid_amount'))),
+                'payment_date': _safe_str(item.get('PaymentDate', item.get('payment_date'))),
+                'lpc_received': _safe_float(item.get('LPCReceived', item.get('lpc_received', 0))),
+                'lpc': _safe_float(item.get('LPC', item.get('lpc', 0))),
+                'payment_status': _safe_str(item.get('PaymentStatus', item.get('payment_status'))),
+                'pending_amount': _safe_float(item.get('PendingAmount', item.get('pending_amount', 0))),
+            })
+    loan['repayment_schedules'] = schedules
+
+    return loan
+
+# ============================================================
+# EXTRACT LCC DATA (from GetLccDetailsByAgreementNo)
+# ============================================================
+
+def extract_lcc_data(raw_data: Any) -> Dict[str, Any]:
+    if isinstance(raw_data, list) and raw_data:
+        raw_data = raw_data[0]
+    if not isinstance(raw_data, dict):
+        return {}
+
+    def get(*keys):
+        return _get_value(raw_data, *keys)
+
+    return {
+        'branch': _safe_str(get('Branch', 'branch')),
+        'region': _safe_str(get('Region', 'region')),
+        'registration_no': _safe_str(get('RegistrationNo', 'registration_no', 'VehicleNo')),
+        'vehicle_class': _safe_str(get('VehicleClass', 'vehicle_class')),
+        'customer_name': _safe_str(get('CustomerName', 'customer_name')),
+        'dob': _safe_str(get('DOB', 'dob', 'DateOfBirth')),
+        'email': _safe_str(get('Email', 'email', 'EmailID')),
+        'address': _safe_str(get('Address', 'address', 'CustomerAddress')),
+        'father_name': _safe_str(get('FatherName', 'father_name', 'SpouseName')),
+        'finance_id': _safe_str(get('FinanceId', 'finance_id')),
+        'lpc_due': _safe_float(get('LPCDue', 'lpc_due', 'LPIDues')),
+        'vas_due_amount': _safe_float(get('VasDueAmount', 'vas_due_amount')),
+        'total_dues': _safe_float(get('TotalDues', 'total_dues')),
+        'emi_due_count': _safe_float(get('EMIDueCount', 'emi_due_count')),
+    }
+
+# ============================================================
+# FETCH FUNCTIONS (used in views)
+# ============================================================
+
+def fetch_loan_details(app_key: str, agreement_no: str) -> Dict[str, Any]:
+    params = {"strAgreementNo": agreement_no}
+    data = call_allcloud_api(app_key, 'loan_api', method='GET', params=params)
+    if isinstance(data, dict) and 'data' in data:
+        data = data['data']
+    return extract_loan_data(data)
+
+def fetch_lcc_details(app_key: str, agreement_no: str, finance_id: str = "0") -> Dict[str, Any]:
+    payload = {"AgreementNo": agreement_no, "FinanceId": finance_id}
+    data = call_allcloud_api(app_key, 'lcc_api', payload=payload)
+    if isinstance(data, dict) and 'data' in data:
+        data = data['data']
+    return extract_lcc_data(data)
+
 

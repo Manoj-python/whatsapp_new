@@ -42,6 +42,12 @@ TEMPLATE_CHOICES = [
     ("40", "HPT Completed (English)-[40]"),
     ("41", "HPT Pending (English)-[41]"),
     ("42", "RC/NOC Returned (English)-[42]"),
+    ("43", "SMSquare portal (English)-[43]"),
+    ("44", "One Bucket (English)-[44]"),
+    ("45", "Two Buckets (English)-[45]"),
+    ("46", "Three Buckets and Above Customer (English)-[46]"),
+    ("47", "Three Buckets and Above Guarantor (English)-[47]")
+    
 
  
 ]

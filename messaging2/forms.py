@@ -55,6 +55,16 @@ TEMPLATE_CHOICES = [
     ("48", "HPT Completed (English)-[48]"),
     ("49", "HPT Pending (English)-[49]"),
     ("50", "RC/NOC Returned (English)-[50]"),
+    ("51", "SMSquare portal (English)-[51]"),
+    ("52", "One Bucket PSF (English)-[52]"),
+    ("53", "One Bucket SMF (English)-[53]"),
+    ("54", "Two Buckets PSF (English)-[54]"),
+    ("55", "Two Buckets SMF (English)-[55]"),
+    ("56", "Three Buckets and Above PSF Customer (English)-[56]"),
+    ("57", "Three Buckets and Above SMF Customer (English)-[57]"),
+    ("58", "Three Buckets and Above PSF Guarantor (English)-[58]"),
+    ("59", "Three Buckets and Above SMF Guarantor (English)-[59]"),
+ 
   
 
 ]

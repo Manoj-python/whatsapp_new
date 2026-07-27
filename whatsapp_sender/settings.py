@@ -57,6 +57,12 @@ INSTALLED_APPS = [
 #ELASTICSEARCH_DSL_AUTO_REFRESH = True
 
 
+LEGAL_NAME = "SM SQUARE CREDIT SERVICES PRIVATE LIMITED"
+COMPANY_ADDRESS = "H.No - 5-4-156, Flat No - 1403, 14Th Floor, T19 Towers - 2, Mg Road, Ranigunj Hyderabad; Telangana; Postal Code: 500003"
+
+HELPLINE_NUMBER = "1800-xxx-xxx"
+GRIEVANCE_EMAIL = "grievance@example.com"
+
 MIN_PART_PAYMENT = 100.0
 
 # -------------------------------------------------------

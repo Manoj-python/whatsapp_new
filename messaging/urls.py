@@ -27,7 +27,8 @@ urlpatterns = [
     path('api/ptp-details/', views.get_ptp_details_view, name='get_ptp_details'),
 path('api/noc-details/', views.noc_details, name='noc_details'),
         path('api/send-noc/', views.send_noc, name='send_noc'),
-    
+    path('api/statement-details/', views.statement_details, name='statement_details'),
+    path('api/send-statement/', views.send_statement, name='send_statement'),    
 
    
 ]
