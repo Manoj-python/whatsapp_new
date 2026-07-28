@@ -3427,7 +3427,7 @@ def send_payment_template_view(request):
 
     mobile_to_send = data.get('mobile')
     amount_raw = data.get('amount')
-    option = data.get('option', 'part')   # 'total', 'emi', 'part'
+    option = data.get('option', 'part')
     agent = get_agent_from_user(request.user)
     sender_name = agent.name if agent else 'Agent'
 
@@ -3447,9 +3447,8 @@ def send_payment_template_view(request):
     broadcast_mobile = current_chat if current_chat else mobile_to_send
     broadcast_mobile_db = broadcast_mobile.strip()
 
-    # ---------- MAIN TRY BLOCK (Validation + Processing) ----------
     try:
-        # 1️⃣ FETCH PAYMENT DETAILS WITH BUSINESS RULES
+        # 1. Fetch payment details
         details = get_payment_details(app_key, link_mobile_api)
         customer_name = details['customer_name']
         min_emi = details['min_emi_amount']
@@ -3457,7 +3456,7 @@ def send_payment_template_view(request):
         total_due = details['total_due']
         finance_id = details['finance_id']
 
-        # 2️⃣ VALIDATE AMOUNT
+        # 2. Validate amount
         try:
             amount = float(amount_raw)
         except (TypeError, ValueError):
@@ -3488,7 +3487,10 @@ def send_payment_template_view(request):
                 'total_due': total_due
             }, status=200)
 
-        # 3️⃣ VALIDATION PASSED – PROCEED WITH PAYMENT
+        # 3. Generate payment link – returns (full_url, token)
+        payment_url, payment_token = generate_payment_link(app_key, link_mobile_api, amount)
+
+        # 4. Prepare fallback message (uses full URL)
         from adminpanel.views import APP_CONFIG
         cfg = APP_CONFIG[app_key]
         LogModel = cfg['log_model']
@@ -3499,10 +3501,6 @@ def send_payment_template_view(request):
         render_template_text = cfg.get('render_template_text')
         template_name = cfg['templates'].get('payment', 'payment_gateway')
 
-        # Generate payment link
-        payment_url = generate_payment_link(app_key, link_mobile_api, amount)
-
-        # Fetch and render template
         if get_template_text and render_template_text:
             template_body = get_template_text(template_name)
             if template_body:
@@ -3518,11 +3516,13 @@ def send_payment_template_view(request):
         else:
             rendered_message = f"Dear Customer, Click on {payment_url} to make payment of INR {amount} Regards 7799795111.-padmasai holdings private limited\n\n(Link sent to {mobile_to_send})"
 
-        # Send WhatsApp template
-        result = send_whatsapp_payment_template(app_key, mobile_for_api, customer_name, amount, payment_url)
+        # 5. Send WhatsApp template using token directly
+        result = send_whatsapp_payment_template(app_key, mobile_for_api, customer_name, amount, payment_token)
         logger.info(f"📨 WhatsApp response: {result}")
+        logger.info(f"🌐 Payment URL: {payment_url}")
+        logger.info(f"🔑 Payment Token: {payment_token}")
 
-        # Save log
+        # 6. Save log
         msg_id = result.get('messages', [{}])[0].get('id', '')
         log_entry = LogModel.objects.create(
             customer_name=sender_name,
@@ -3535,7 +3535,7 @@ def send_payment_template_view(request):
             message_id=msg_id,
         )
 
-        # Update contact
+        # 7. Update contact
         ContactModel.objects.update_or_create(
             mobile=broadcast_mobile_db,
             defaults={
@@ -3547,7 +3547,7 @@ def send_payment_template_view(request):
             }
         )
 
-        # Broadcast via WebSocket
+        # 8. Broadcast via WebSocket (unchanged)
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
         import re
@@ -3573,7 +3573,6 @@ def send_payment_template_view(request):
                 }
             )
 
-        # Sidebar update
         async_to_sync(channel_layer.group_send)(
             channel_group,
             {

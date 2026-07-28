@@ -362,9 +362,24 @@
        <button id="micBtn" class="mic-btn" title="Record voice message">
         <i class="fas fa-microphone"></i>
       </button>
-      <button id="nocBtn" class="noc-btn" title="Send NOC Document" style="background: #dc3545; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
-    <i class="fas fa-file-contract"></i>
-</button>
+ <div class="btn-group">
+        <button class="btn btn-secondary dropdown-toggle" type="button" id="documentsDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius: 50%; width: 40px; height: 40px; padding: 0; border: none; background: #6c757d; color: white;">
+            <i class="fas fa-file-alt"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="documentsDropdown" style="min-width: 200px;">
+            <li>
+                <button class="dropdown-item" onclick="openStatementModal()">
+                    <i class="fas fa-file-pdf text-primary"></i> Statement PDF
+                </button>
+            </li>
+            <li>
+                <button class="dropdown-item" onclick="openNocModal()">
+                    <i class="fas fa-file-contract text-danger"></i> NOC Document
+                </button>
+            </li>
+        </ul>
+    </div>
+
  <button id="paymentBtn" title="Send Payment Link" style="background: #128C7E; margin-right: 8px; color: white; border: none; width: 40px; height: 40px; border-radius: 50%;">
     <i class="fas fa-rupee-sign"></i>
 </button>
@@ -665,6 +680,49 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger" id="nocSendBtn" disabled>
                     <i class="fas fa-paper-plane"></i> Send NOC
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Statement Modal -->
+<div class="modal fade" id="statementModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-file-pdf"></i> Send Statement</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="statementLoading" class="text-center py-3">
+                    <i class="fas fa-spinner fa-spin"></i> Loading details...
+                </div>
+                <div id="statementDetails" style="display:none;">
+                    <div class="mb-2">
+                        <label class="fw-bold">Customer Name</label>
+                        <div id="statementCustName" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Loan Number</label>
+                        <div id="statementLoanNo" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Vehicle Number</label>
+                        <div id="statementVehicleNo" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Total Due</label>
+                        <div id="statementTotalDue" class="border rounded p-2 bg-light">-</div>
+                    </div>
+                    <div id="statementError" class="alert alert-danger" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="statementSendBtn" disabled>
+                    <i class="fas fa-paper-plane"></i> Send Statement
                 </button>
             </div>
         </div>
@@ -2858,13 +2916,7 @@ async function sendPtpTemplate() {
     }
 }
 
- let casePanelBtn = document.getElementById('casePanelBtn');
-if (casePanelBtn) {
-  casePanelBtn.onclick = function(e) {
-    e.preventDefault();
-    openCaseSidebar();
-  };
-}
+
 
 // ==================== NOC SEND ====================
 // ==================== NOC MODAL ====================
@@ -2987,6 +3039,122 @@ document.getElementById('nocSendBtn').addEventListener('click', async function()
         btn.disabled = false;
     }
 });
+
+// ─── Statement Functions ──────────────────────────────────────────
+
+async function openStatementModal() {
+    if (!selectedMobile) {
+        showNotification('Select a contact first', 'warning');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('statementModal'));
+    modal.show();
+
+    document.getElementById('statementLoading').style.display = 'block';
+    document.getElementById('statementDetails').style.display = 'none';
+    document.getElementById('statementError').style.display = 'none';
+    document.getElementById('statementSendBtn').disabled = true;
+
+    try {
+        const resp = await fetch(`/api/statement-details/?app=${APP_KEY}&mobile=${encodeURIComponent(selectedMobile)}`);
+        const data = await resp.json();
+
+        if (data.success) {
+            document.getElementById('statementCustName').textContent = data.customer_name || '-';
+            document.getElementById('statementLoanNo').textContent = data.loan_number || '-';
+            document.getElementById('statementVehicleNo').textContent = data.vehicle_no || '-';
+            document.getElementById('statementTotalDue').textContent = '₹' + parseFloat(data.total_due || 0).toFixed(2);
+            document.getElementById('statementLoading').style.display = 'none';
+            document.getElementById('statementDetails').style.display = 'block';
+            document.getElementById('statementSendBtn').disabled = false;
+        } else {
+            document.getElementById('statementLoading').style.display = 'none';
+            document.getElementById('statementError').textContent = data.error || 'Failed to fetch details';
+            document.getElementById('statementError').style.display = 'block';
+        }
+    } catch (e) {
+        document.getElementById('statementLoading').style.display = 'none';
+        document.getElementById('statementError').textContent = 'Error: ' + e.message;
+        document.getElementById('statementError').style.display = 'block';
+    }
+}
+
+document.getElementById('statementSendBtn').addEventListener('click', async function() {
+    const btn = this;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    btn.disabled = true;
+
+    // Temporary "Sending..." message
+    const tempId = 'temp_statement_' + Date.now();
+    const tempMsg = {
+        id: tempId,
+        mobile: selectedMobile,
+        sent_text_message: '📄 Sending statement...',
+        content_type: 'text',
+        sent_at: new Date().toISOString(),
+        message_type: 'Sent',
+        message_id: tempId,
+        status: 'Sending...',
+        sender_name: 'You',
+        is_temp: true
+    };
+    appendMessage(tempMsg);
+    scrollToBottom();
+
+    try {
+        const formData = new FormData();
+        formData.append('mobile', selectedMobile);
+        formData.append('app', APP_KEY);
+        formData.append('sender_name', currentUser.name || 'You');
+        const resp = await fetch('/api/send-statement/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF },
+            body: formData
+        });
+        const data = await resp.json();
+
+        // Remove temporary
+        const tempIndex = messages.findIndex(m => m.id === tempId);
+        if (tempIndex !== -1) messages.splice(tempIndex, 1);
+
+        if (data.success) {
+            // Reload messages from server
+            sendWS({ type: 'get_messages', mobile: selectedMobile, limit: 30 });
+            showNotification('Statement sent!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('statementModal')).hide();
+        } else {
+            renderMessages(messages, hasMoreMessages, null, false);
+            showNotification(data.error || 'Failed to send statement', 'error');
+        }
+    } catch (e) {
+        const tempIndex = messages.findIndex(m => m.id === tempId);
+        if (tempIndex !== -1) {
+            messages.splice(tempIndex, 1);
+            renderMessages(messages, hasMoreMessages, null, false);
+        }
+        showNotification('Error: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
+});
+// ─── Attach event listener to the button ──────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    const stmtBtn = document.getElementById('statementBtn');
+    if (stmtBtn) stmtBtn.addEventListener('click', openStatementModal);
+});
+
+
+  
+  let casePanelBtn = document.getElementById('casePanelBtn');
+if (casePanelBtn) {
+  casePanelBtn.onclick = function(e) {
+    e.preventDefault();
+    openCaseSidebar();
+  };
+}
 
 
 // --- NEW: Mark as Unread button ---

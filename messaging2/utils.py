@@ -1430,16 +1430,18 @@ PAYMENT_CONFIG = {
             'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e',
         },
         'qr_api': {
-            'base_url': 'https://prod-apiv2-padmasai.allcloud.app/api',
-            'endpoint': '/paymentgateway/GetQRCode',
-            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e',   # as per your new example
+            'base_url': 'https://smsquare.info/api',
+            'endpoint': '/payment-link',
+            'api_key': 'uSZPjPUREaJMt8D3dtdz8jq23lFDDT3VLdTD-KvuNXerCK4c1cAkc6qlY1rnvliE',
         },
+      
+
         'whatsapp': {
             'phone_number_id': settings.WHATSAPP2_PHONE_NUMBER_ID,
             'access_token': settings.WHATSAPP2_ACCESS_TOKEN,
             'api_version': "v22.0",
         },
-        'template_name': 'pay_now_link',
+        'template_name': 'pay_link',
     },
     'sms': {   # or whatever app_key you use, e.g. 'psf'
         'app_name': 'SM SQUARE CREDIT SERVICES PRIVATE LIMITED',
@@ -1455,10 +1457,11 @@ PAYMENT_CONFIG = {
             'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb',
         },
         # ----- QR Code API (to generate payment link) -----
+
         'qr_api': {
-            'base_url': 'https://prod-apiv2-smsquare.allcloud.app/api',
-            'endpoint': '/paymentgateway/GetQRCode',
-            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb',   # as per your new example
+            'base_url': 'https://smsquare.info/api',
+            'endpoint': '/payment-link',
+            'api_key': 'uSZPjPUREaJMt8D3dtdz8jq23lFDDT3VLdTD-KvuNXerCK4c1cAkc6qlY1rnvliE',
         },
 
         # ----- WhatsApp config (unchanged) -----
@@ -1467,7 +1470,7 @@ PAYMENT_CONFIG = {
             'access_token': settings.WHATSAPP_ACCESS_TOKEN,
             'api_version': 'v22.0',
         },
-        'template_name': 'pay_now_link',
+        'template_name': 'pay_link',
     },
 
     # 'spl': {
@@ -1716,68 +1719,50 @@ def get_payment_details(app_key, mobile):
         'regular_emi': emi,               # The EMI used for calculation
     }
 
+
+
 def generate_payment_link(app_key, mobile, amount):
     config = get_payment_config(app_key)
-
     details = get_payment_details(app_key, mobile)
     finance_id = details['finance_id']
-    lpi_due = details['lpi_due']
-    vas_due = details['vas_due']
-    collection_charges = details['collection_charges']
-
-    total_amount = float(amount)
-
-    penalties = lpi_due + vas_due + collection_charges
-
-    if total_amount < penalties:
-        # If the user pays less than total penalties, allocate entire amount to LPI
-        # and set others to zero. This avoids negative DueAmount.
-        lpi_amount = total_amount
-        vas_amount = 0.0
-        collection_amount = 0.0
-        due_amount = 0.0
-    else:
-        lpi_amount = lpi_due
-        vas_amount = vas_due
-        collection_amount = collection_charges
-        due_amount = total_amount - penalties
-
-    qr_payload = {
-        "FinanceId": finance_id,
-        "DueAmount": round(due_amount, 2),
-        "CollectionCharges": round(collection_amount, 2),
-        "LPIAmount": round(lpi_amount, 2),
-        "ShowQR": False,
-        "SMSLink": False,
-        "HandLoan": 0,
-        "VasDue": round(vas_amount, 2),
-        "IsAdvanceReceipt": True,
-        "CollectionType": 0,
-        "TotalAmount": round(total_amount, 2)
-    }
 
     qr_api = config['qr_api']
     url = qr_api['base_url'] + qr_api['endpoint']
     headers = {
-        "Authorization": qr_api['auth_token'],
+        "x-api-key": qr_api['api_key'],
         "Content-Type": "application/json"
     }
+    payload = {
+        "finance_id": finance_id,
+        "amount": float(amount)
+    }
 
-    response = requests.post(url, json=qr_payload, headers=headers, timeout=30)
+    # 🔍 LOG THE REQUEST
+    # logger.info(f"🔗 Payment Link Request URL: {url}")
+    # logger.info(f"📦 Payment Link Payload: {payload}")
+
+    response = requests.post(url, json=payload, headers=headers, timeout=30)
     response.raise_for_status()
-    qr_response = response.json()
+    data = response.json()
 
-    payment_url = qr_response.get('URL')
-    if not payment_url:
-        raise ValueError("Payment URL not generated")
-    return payment_url
+    # 🔍 LOG THE FULL RESPONSE
+    logger.info(f"✅ Payment Link Response: {json.dumps(data, indent=2)}")
 
+    payment_url = data.get('link')
+    payment_token = data.get('token')
+    if not payment_url or not payment_token:
+        raise ValueError("Payment link or token not generated")
 
-def send_whatsapp_payment_template(app_key, to, customer_name, amount, payment_url):
+    return payment_url, payment_token
+
+def send_whatsapp_payment_template(app_key, to, customer_name, amount, short_code):
+    """
+    Send WhatsApp template with a payment link button.
+    - short_code: the token from the payment link (e.g., '83bc07ad...')
+    """
     config = get_payment_config(app_key)
     wa_config = config['whatsapp']
-
-    template_name = config.get("template_name", "pay_now_link")
+    template_name = config.get("template_name", "pay_link")
 
     url = f"https://graph.facebook.com/{wa_config['api_version']}/{wa_config['phone_number_id']}/messages"
 
@@ -1786,35 +1771,19 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, payment_u
         "Content-Type": "application/json"
     }
 
-    # Extract only the dynamic part from the URL
-    # Example:
-    # https://alcd.in/XscHQI
-    # becomes
-    # XscHQI
-
-    short_code = payment_url.rstrip("/").split("/")[-1]
-
     payload = {
         "messaging_product": "whatsapp",
         "to": to,
         "type": "template",
         "template": {
             "name": template_name,
-            "language": {
-                "code": "en"
-            },
+            "language": {"code": "en"},
             "components": [
                 {
                     "type": "body",
                     "parameters": [
-                        {
-                            "type": "text",
-                            "text": customer_name
-                        },
-                        {
-                            "type": "text",
-                            "text": str(amount)
-                        }
+                        {"type": "text", "text": customer_name},
+                        {"type": "text", "text": str(amount)}
                     ]
                 },
                 {
@@ -1822,37 +1791,20 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, payment_u
                     "sub_type": "url",
                     "index": "0",
                     "parameters": [
-                        {
-                            "type": "text",
-                            "text": short_code
-                        }
+                        {"type": "text", "text": short_code}   # ✅ token directly
                     ]
                 }
             ]
         }
     }
 
-    # logger.info("WhatsApp Payload:")
-    # logger.info(payload)
-
     try:
-        response = requests.post(
-            url,
-            json=payload,
-            headers=headers,
-            timeout=15
-        )
-
-        logger.info(response.text)
-
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
         response.raise_for_status()
+        logger.info(f"WhatsApp template sent to {to}")
         return response.json()
-
     except requests.exceptions.RequestException as e:
         logger.error(f"WhatsApp request failed: {e}")
-
-        if getattr(e, "response", None):
-            pass
-            # logger.error(e.response.text)
-
+        if e.response:
+            logger.error(e.response.text)
         raise

@@ -61,7 +61,7 @@ APP_CONFIG = {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
             'welcome':'welcome_message',
-            'payment':'pay_now_link',
+            'payment':'pay_link',
           
             'ptp': {
         'en': 'ptp_confirm_en',
@@ -95,7 +95,7 @@ APP_CONFIG = {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
             'welcome':'welcome_message',
-            'payment':'pay_now_link',
+            'payment':'pay_link',
             'ptp': {
         'en': 'ptp_confirm_en',
         'te': 'ptp_confirm_te'
