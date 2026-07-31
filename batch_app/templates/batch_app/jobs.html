@@ -1,4 +1,4 @@
-<!-- batch_app/templates/batch_app/jobs.html - ENHANCED LIST -->
+<!-- batch_app/templates/batch_app/jobs.html - ENHANCED LIST WITH SCHEDULE TIME, NEXT RUN & 12-HOUR FORMAT -->
 {% extends 'batch_app/base.html' %}
 
 {% block page_title %}Batch Jobs{% endblock %}
@@ -41,9 +41,13 @@
                             <th>App</th>
                             <th>Template</th>
                             <th>Status</th>
+                            <th>Schedule</th>
+                            <th>Next Run</th>
                             <th>Progress</th>
                             <th>Batches</th>
-                            <th>Sent/Failed</th>
+                            <th>Sent</th>
+                            <th>Skipped</th>
+                            <th>Failed</th>
                             <th>Created</th>
                             <th style="width:80px;">Actions</th>
                         </tr>
@@ -53,21 +57,60 @@
                         <tr>
                             <td>
                                 <a href="{% url 'batch_job_detail' job.job_id %}" class="text-decoration-none fw-semibold">
-                                    {{ job.job_name|truncatechars:25 }}
+                                    {{ job.job_name|truncatechars:18 }}
                                 </a>
                             </td>
                             <td>
                                 <span class="badge bg-info bg-opacity-10 text-info">{{ job.target_app|title }}</span>
                             </td>
-                            <td><code>{{ job.template_name|truncatechars:12 }}</code></td>
+                            <td><code>{{ job.template_name|truncatechars:10 }}</code></td>
                             <td>
                                 <span class="badge-status badge-{{ job.status }}">
                                     {{ job.status|upper }}
                                 </span>
                             </td>
+                            <td class="schedule-time">
+                                {% if job.schedule_type == 'multiple_daily' %}
+                                    <span class="badge bg-primary bg-opacity-10 text-primary">
+                                        <i class="fas fa-clock me-1"></i>
+                                        {% for time in job.schedule_times|slice:":2" %}
+                                            {{ time|time:"h:i A" }}
+                                            {% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                        {% if job.schedule_times|length > 2 %}
+                                            +{{ job.schedule_times|length|add:"-2" }} more
+                                        {% endif %}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-primary bg-opacity-10 text-primary">
+                                        <i class="fas fa-clock me-1"></i>
+                                        {{ job.schedule_datetime|date:"h:i A" }}
+                                    </span>
+                                {% endif %}
+                                <br>
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar-alt me-1"></i>
+                                    {{ job.schedule_datetime|date:"M d, Y" }}
+                                </small>
+                            </td>
+                            <td class="next-run-time">
+                                {% if job.next_run_time %}
+                                    <span class="badge bg-success bg-opacity-10 text-success">
+                                        <i class="fas fa-hourglass-half me-1"></i>
+                                        {{ job.next_run_time|date:"h:i A" }}
+                                    </span>
+                                    <br>
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar-alt me-1"></i>
+                                        {{ job.next_run_time|date:"M d, Y" }}
+                                    </small>
+                                {% else %}
+                                    <span class="text-muted">Not scheduled</span>
+                                {% endif %}
+                            </td>
                             <td>
-                                <div class="d-flex align-items-center gap-2" style="min-width:100px;">
-                                    <div class="progress-custom flex-grow-1" style="width:80px;">
+                                <div class="d-flex align-items-center gap-2" style="min-width:85px;">
+                                    <div class="progress-custom flex-grow-1" style="width:65px;">
                                         <div class="progress-bar-custom {% if job.progress_percentage == 100 %}success{% elif job.progress_percentage > 50 %}warning{% else %}danger{% endif %}" 
                                              style="width: {{ job.progress_percentage }}%"></div>
                                     </div>
@@ -77,10 +120,24 @@
                             <td>{{ job.completed_batches }}/{{ job.total_batches }}</td>
                             <td>
                                 <span class="text-success">{{ job.sent_count }}</span>
-                                <span class="text-muted">/</span>
+                            </td>
+                            <td>
+                                <span class="text-warning">{{ job.skipped_count|default:0 }}</span>
+                            </td>
+                            <td>
                                 <span class="text-danger">{{ job.failed_count }}</span>
                             </td>
-                            <td class="text-muted small">{{ job.created_at|date:"Y-m-d H:i" }}</td>
+                            <td class="created-time">
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                                    <i class="fas fa-clock me-1"></i>
+                                    {{ job.created_at|date:"h:i A" }}
+                                </span>
+                                <br>
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar-alt me-1"></i>
+                                    {{ job.created_at|date:"M d, Y" }}
+                                </small>
+                            </td>
                             <td>
                                 <a href="{% url 'batch_job_detail' job.job_id %}" class="btn btn-sm btn-outline-primary" title="View Details">
                                     <i class="fas fa-eye"></i>
@@ -89,7 +146,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center py-5">
+                            <td colspan="13" class="text-center py-5">
                                 <i class="fas fa-inbox fa-2x text-muted d-block mb-3"></i>
                                 <p class="text-muted">No jobs found</p>
                                 <a href="{% url 'batch_job_create' %}" class="btn btn-primary">
@@ -146,4 +203,429 @@
         {% endif %}
     </div>
 </div>
+
+<style>
+/* ===== DARK MODE SUPPORT ===== */
+
+/* Card */
+[data-bs-theme="dark"] .card {
+    background: #1E293B;
+    border: 1px solid #334155;
+}
+
+[data-bs-theme="dark"] .card-header {
+    border-bottom: 1px solid #334155;
+    color: #F1F5F9;
+}
+
+[data-bs-theme="dark"] .card-footer {
+    border-top: 1px solid #334155;
+    background: #1E293B;
+}
+
+[data-bs-theme="dark"] .card-footer .text-muted {
+    color: #94A3B8 !important;
+}
+
+/* Table */
+[data-bs-theme="dark"] .table {
+    color: #E2E8F0;
+}
+
+[data-bs-theme="dark"] .table thead th {
+    background: #1E293B;
+    color: #94A3B8;
+    border-bottom: 2px solid #334155;
+}
+
+[data-bs-theme="dark"] .table tbody td {
+    border-bottom: 1px solid #334155;
+    color: #E2E8F0;
+}
+
+[data-bs-theme="dark"] .table tbody tr:hover {
+    background: #2D3748;
+}
+
+[data-bs-theme="dark"] .table-container {
+    border: 1px solid #334155;
+}
+
+/* Badges */
+[data-bs-theme="dark"] .badge-status.badge-scheduled {
+    background: #1E3A5F;
+    color: #93C5FD;
+}
+[data-bs-theme="dark"] .badge-status.badge-running {
+    background: #064E3B;
+    color: #6EE7B7;
+}
+[data-bs-theme="dark"] .badge-status.badge-completed {
+    background: #065F46;
+    color: #6EE7B7;
+}
+[data-bs-theme="dark"] .badge-status.badge-failed {
+    background: #7F1D1D;
+    color: #FCA5A5;
+}
+[data-bs-theme="dark"] .badge-status.badge-pending {
+    background: #78350F;
+    color: #FCD34D;
+}
+[data-bs-theme="dark"] .badge-status.badge-paused {
+    background: #78350F;
+    color: #FCD34D;
+}
+[data-bs-theme="dark"] .badge-status.badge-cancelled {
+    background: #374151;
+    color: #9CA3AF;
+}
+
+[data-bs-theme="dark"] .badge.bg-secondary {
+    background: #374151 !important;
+    color: #9CA3AF !important;
+}
+
+[data-bs-theme="dark"] .badge.bg-info.bg-opacity-10 {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: #93C5FD !important;
+}
+
+[data-bs-theme="dark"] .badge.bg-primary.bg-opacity-10 {
+    background: rgba(79, 70, 229, 0.15) !important;
+    color: #818CF8 !important;
+}
+
+[data-bs-theme="dark"] .badge.bg-success.bg-opacity-10 {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #6EE7B7 !important;
+}
+
+[data-bs-theme="dark"] .badge.bg-secondary.bg-opacity-10 {
+    background: rgba(148, 163, 184, 0.15) !important;
+    color: #94A3B8 !important;
+}
+
+/* Text Colors in Dark Mode */
+[data-bs-theme="dark"] .text-success {
+    color: #6EE7B7 !important;
+}
+[data-bs-theme="dark"] .text-warning {
+    color: #FCD34D !important;
+}
+[data-bs-theme="dark"] .text-danger {
+    color: #FCA5A5 !important;
+}
+[data-bs-theme="dark"] .text-muted {
+    color: #94A3B8 !important;
+}
+[data-bs-theme="dark"] .text-info {
+    color: #93C5FD !important;
+}
+[data-bs-theme="dark"] .text-primary {
+    color: #818CF8 !important;
+}
+[data-bs-theme="dark"] .text-secondary {
+    color: #94A3B8 !important;
+}
+
+/* Progress Bar */
+[data-bs-theme="dark"] .progress-custom {
+    background: #334155;
+}
+
+[data-bs-theme="dark"] .progress-custom .progress-bar-custom.success {
+    background: linear-gradient(90deg, #10B981, #059669);
+}
+[data-bs-theme="dark"] .progress-custom .progress-bar-custom.warning {
+    background: linear-gradient(90deg, #F59E0B, #D97706);
+}
+[data-bs-theme="dark"] .progress-custom .progress-bar-custom.danger {
+    background: linear-gradient(90deg, #EF4444, #DC2626);
+}
+
+/* Links */
+[data-bs-theme="dark"] a.text-decoration-none.fw-semibold {
+    color: #F1F5F9;
+}
+[data-bs-theme="dark"] a.text-decoration-none.fw-semibold:hover {
+    color: #818CF8;
+}
+
+[data-bs-theme="dark"] .btn-outline-primary {
+    border-color: #818CF8;
+    color: #818CF8;
+}
+[data-bs-theme="dark"] .btn-outline-primary:hover {
+    background: #818CF8;
+    color: #0F172A;
+}
+
+/* Pagination */
+[data-bs-theme="dark"] .page-link {
+    background: #1E293B;
+    border-color: #334155;
+    color: #94A3B8;
+}
+[data-bs-theme="dark"] .page-link:hover {
+    background: #2D3748;
+    border-color: #475569;
+    color: #F1F5F9;
+}
+[data-bs-theme="dark"] .page-item.active .page-link {
+    background: #4F46E5;
+    border-color: #4F46E5;
+    color: white;
+}
+[data-bs-theme="dark"] .page-item.disabled .page-link {
+    background: #1E293B;
+    border-color: #334155;
+    color: #475569;
+}
+
+/* Code */
+[data-bs-theme="dark"] code {
+    background: #2D3748;
+    color: #E2E8F0;
+}
+
+/* Empty State */
+[data-bs-theme="dark"] .fa-inbox {
+    color: #475569 !important;
+}
+
+/* Buttons */
+[data-bs-theme="dark"] .btn-success {
+    background: #10B981;
+}
+[data-bs-theme="dark"] .btn-success:hover {
+    background: #059669;
+}
+
+[data-bs-theme="dark"] .btn-primary {
+    background: #4F46E5;
+}
+[data-bs-theme="dark"] .btn-primary:hover {
+    background: #4338CA;
+}
+
+/* Form Select in Dark Mode */
+[data-bs-theme="dark"] .form-select {
+    background: #1E293B;
+    border-color: #334155;
+    color: #F1F5F9;
+}
+[data-bs-theme="dark"] .form-select:focus {
+    background: #1E293B;
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+}
+[data-bs-theme="dark"] .form-select option {
+    background: #1E293B;
+    color: #F1F5F9;
+}
+
+/* ===== BASE STYLES ===== */
+.badge-status {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge-pending { background: #FEF3C7; color: #D97706; }
+.badge-scheduled { background: #DBEAFE; color: #2563EB; }
+.badge-running { background: #D1FAE5; color: #059669; }
+.badge-completed { background: #A7F3D0; color: #065F46; }
+.badge-paused { background: #FDE68A; color: #B45309; }
+.badge-failed { background: #FEE2E2; color: #DC2626; }
+.badge-cancelled { background: #E5E7EB; color: #6B7280; }
+
+/* Schedule & Next Run Time Styles */
+.schedule-time .badge,
+.next-run-time .badge,
+.created-time .badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+}
+
+.schedule-time .text-muted,
+.next-run-time .text-muted,
+.created-time .text-muted {
+    font-size: 11px;
+}
+
+.schedule-time i,
+.next-run-time i,
+.created-time i {
+    font-size: 11px;
+}
+
+.progress-custom {
+    height: 6px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    overflow: hidden;
+}
+
+.progress-custom .progress-bar-custom {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+}
+
+.progress-custom .progress-bar-custom.success {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+.progress-custom .progress-bar-custom.warning {
+    background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+.progress-custom .progress-bar-custom.danger {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.table-container {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid #f1f5f9;
+}
+
+.table {
+    margin: 0;
+    font-size: 13px;
+}
+
+.table thead th {
+    background: #F8FAFC;
+    color: #475569;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #E2E8F0;
+    padding: 10px 12px;
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: 10px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.table tbody tr:hover {
+    background: #F8FAFC;
+}
+
+.card {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.card-header {
+    background: transparent;
+    border-bottom: 1px solid #f1f5f9;
+    padding: 16px 20px;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 0;
+}
+
+.card-footer {
+    background: transparent;
+    border-top: 1px solid #f1f5f9;
+    padding: 12px 20px;
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 6px 14px;
+    transition: all 0.3s ease;
+    font-size: 12px;
+}
+
+.btn-success {
+    background: #10B981;
+    border: none;
+    color: white;
+}
+.btn-success:hover {
+    background: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+}
+
+.btn-outline-primary {
+    border: 2px solid #4F46E5;
+    color: #4F46E5;
+    background: transparent;
+}
+.btn-outline-primary:hover {
+    background: #4F46E5;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(79, 70, 229, 0.3);
+}
+
+.pagination .page-link {
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #4F46E5;
+    border-color: #E2E8F0;
+}
+.pagination .page-link:hover {
+    background: #F1F5F9;
+    border-color: #94A3B8;
+}
+.pagination .page-item.active .page-link {
+    background: #4F46E5;
+    border-color: #4F46E5;
+    color: white;
+}
+.pagination .page-item.disabled .page-link {
+    color: #94A3B8;
+}
+
+code {
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #0F172A;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .table thead th {
+        font-size: 9px;
+        padding: 8px 10px;
+    }
+    .table tbody td {
+        font-size: 12px;
+        padding: 8px 10px;
+    }
+    .schedule-time .badge,
+    .next-run-time .badge,
+    .created-time .badge {
+        font-size: 10px;
+        padding: 2px 8px;
+    }
+    .schedule-time .text-muted,
+    .next-run-time .text-muted,
+    .created-time .text-muted {
+        font-size: 10px;
+    }
+}
+</style>
 {% endblock %}

@@ -25,12 +25,12 @@ urlpatterns = [
     path('secure-document/<int:log_id>/', views.view_secure_document, name='secure_document'),
     path('api/send-ptp-template/', views.send_ptp_template_view, name='send_ptp_template'),
     path('api/ptp-details/', views.get_ptp_details_view, name='get_ptp_details'),
-path('api/noc-details/', views.noc_details, name='noc_details'),
-        path('api/send-noc/', views.send_noc, name='send_noc'),
+    path('api/noc-details/', views.noc_details, name='noc_details'),
+    path('api/send-noc/', views.send_noc, name='send_noc'),
     path('api/statement-details/', views.statement_details, name='statement_details'),
     path('api/send-statement/', views.send_statement, name='send_statement'),    
-
-   
+    path('download-skipped/<str:job_id>/', views.download_skipped_report, name='download_skipped_report'),    
+    path('api/send-foreclosure/', views.send_foreclosure, name='send_foreclosure'),     
 ]
 
 if settings.DEBUG:

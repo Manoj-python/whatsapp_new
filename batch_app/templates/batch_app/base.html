@@ -1,6 +1,6 @@
-<!-- templates/base.html - COMPLETE UI OVERHAUL -->
+<!-- templates/base.html - COMPLETE UI WITH DARK/LIGHT MODE & COMPANY NAMES -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -29,6 +29,23 @@
             --card-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
             --card-shadow-hover: 0 10px 40px rgba(0,0,0,0.12);
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --border-color: #E2E8F0;
+            --text-color: #0F172A;
+            --text-muted: #64748B;
+            --card-bg: #ffffff;
+            --sidebar-bg: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
+        }
+
+        /* ===== DARK MODE VARIABLES ===== */
+        [data-bs-theme="dark"] {
+            --bg-color: #0F172A;
+            --border-color: #334155;
+            --text-color: #F1F5F9;
+            --text-muted: #94A3B8;
+            --card-bg: #1E293B;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+            --card-shadow-hover: 0 10px 40px rgba(0,0,0,0.4);
+            --sidebar-bg: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
         }
 
         * {
@@ -39,6 +56,24 @@
             background: var(--bg-color);
             min-height: 100vh;
             overflow-x: hidden;
+            color: var(--text-color);
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748B;
         }
 
         /* ===== SIDEBAR ===== */
@@ -48,7 +83,7 @@
             left: 0;
             width: var(--sidebar-width);
             height: 100vh;
-            background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
+            background: var(--sidebar-bg);
             padding: 0;
             z-index: 1050;
             transition: var(--transition);
@@ -65,7 +100,7 @@
         }
 
         .sidebar-brand {
-            padding: 24px 20px;
+            padding: 20px 20px;
             border-bottom: 1px solid rgba(255,255,255,0.06);
             display: flex;
             align-items: center;
@@ -82,6 +117,7 @@
             justify-content: center;
             font-size: 20px;
             color: white;
+            flex-shrink: 0;
         }
 
         .sidebar-brand .brand-text {
@@ -89,6 +125,7 @@
             font-size: 18px;
             font-weight: 700;
             letter-spacing: -0.5px;
+            white-space: nowrap;
         }
         .sidebar-brand .brand-text span {
             color: #818CF8;
@@ -115,7 +152,7 @@
             color: #94A3B8;
             border-radius: 10px;
             text-decoration: none;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
             transition: var(--transition);
             margin-bottom: 2px;
@@ -124,9 +161,18 @@
 
         .sidebar-nav .nav-link i {
             width: 20px;
-            font-size: 16px;
+            font-size: 15px;
             text-align: center;
             flex-shrink: 0;
+        }
+
+        .sidebar-nav .nav-link .company-name {
+            font-size: 10px;
+            color: #64748B;
+            display: block;
+            margin-left: 0;
+            font-weight: 400;
+            opacity: 0.7;
         }
 
         .sidebar-nav .nav-link:hover {
@@ -135,10 +181,20 @@
             transform: translateX(4px);
         }
 
+        .sidebar-nav .nav-link:hover .company-name {
+            color: #94A3B8;
+            opacity: 1;
+        }
+
         .sidebar-nav .nav-link.active {
             background: rgba(79, 70, 229, 0.2);
             color: #818CF8;
             box-shadow: inset 3px 0 0 #4F46E5;
+        }
+
+        .sidebar-nav .nav-link.active .company-name {
+            color: #818CF8;
+            opacity: 1;
         }
 
         .sidebar-nav .nav-link .badge {
@@ -154,6 +210,36 @@
             background: #10B981;
         }
 
+        /* ===== SIDEBAR APP LINKS WITH COMPANY NAMES ===== */
+        .app-link-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+        .app-link-wrapper .nav-link {
+            padding: 8px 14px;
+        }
+        .app-link-wrapper .nav-link .app-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .app-link-wrapper .nav-link .company-name {
+            font-size: 10px;
+            color: #64748B;
+            display: block;
+            padding-left: 32px;
+            margin-top: -4px;
+            margin-bottom: 4px;
+            font-weight: 400;
+            opacity: 0.7;
+            transition: var(--transition);
+        }
+        .app-link-wrapper .nav-link:hover .company-name {
+            color: #94A3B8;
+            opacity: 1;
+        }
+
         /* ===== MAIN CONTENT ===== */
         .main-wrapper {
             margin-left: var(--sidebar-width);
@@ -163,9 +249,9 @@
 
         /* ===== TOP NAVBAR ===== */
         .topbar {
-            background: white;
-            padding: 16px 32px;
-            border-bottom: 1px solid #E2E8F0;
+            background: var(--card-bg);
+            padding: 12px 32px;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -173,32 +259,38 @@
             top: 0;
             z-index: 1040;
             backdrop-filter: blur(20px);
-            background: rgba(255,255,255,0.9);
+            background: rgba(var(--card-bg-rgb, 255,255,255), 0.9);
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        [data-bs-theme="dark"] .topbar {
+            background: rgba(30, 41, 59, 0.95);
         }
 
         .topbar .page-title h4 {
             font-weight: 700;
             margin: 0;
-            color: #0F172A;
+            color: var(--text-color);
+            transition: color 0.3s ease;
         }
         .topbar .page-title small {
-            color: #64748B;
+            color: var(--text-muted);
             font-size: 13px;
         }
 
         .topbar-right {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
         }
 
         .topbar-right .btn-icon {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             border-radius: 10px;
             border: none;
-            background: #F1F5F9;
-            color: #475569;
+            background: var(--bg-color);
+            color: var(--text-muted);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -207,7 +299,7 @@
         }
 
         .topbar-right .btn-icon:hover {
-            background: #E2E8F0;
+            background: var(--border-color);
             transform: scale(1.05);
         }
 
@@ -219,29 +311,49 @@
             height: 8px;
             background: #EF4444;
             border-radius: 50%;
-            border: 2px solid white;
+            border: 2px solid var(--card-bg);
+        }
+
+        /* ===== THEME TOGGLE ===== */
+        .theme-toggle {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            border: none;
+            background: var(--bg-color);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .theme-toggle:hover {
+            background: var(--border-color);
+            transform: scale(1.05);
         }
 
         .user-profile {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 6px 12px 6px 6px;
+            padding: 4px 12px 4px 4px;
             border-radius: 30px;
-            background: #F1F5F9;
+            background: var(--bg-color);
             cursor: pointer;
             transition: var(--transition);
             text-decoration: none;
-            color: #0F172A;
+            color: var(--text-color);
         }
 
         .user-profile:hover {
-            background: #E2E8F0;
+            background: var(--border-color);
         }
 
         .user-profile .avatar {
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             background: linear-gradient(135deg, #4F46E5, #7C3AED);
             color: white;
@@ -249,12 +361,13 @@
             align-items: center;
             justify-content: center;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
+            flex-shrink: 0;
         }
 
         .user-profile .username {
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         /* ===== CONTENT AREA ===== */
@@ -268,18 +381,24 @@
             border-radius: 16px;
             box-shadow: var(--card-shadow);
             transition: var(--transition);
-            background: white;
+            background: var(--card-bg);
+            border: 1px solid transparent;
         }
 
         .card:hover {
             box-shadow: var(--card-shadow-hover);
         }
 
+        [data-bs-theme="dark"] .card {
+            border-color: var(--border-color);
+        }
+
         .card-header {
             background: transparent;
-            border-bottom: 1px solid #F1F5F9;
+            border-bottom: 1px solid var(--border-color);
             padding: 20px 24px;
             font-weight: 600;
+            color: var(--text-color);
         }
 
         .card-body {
@@ -290,8 +409,8 @@
         .stat-card {
             padding: 20px 24px;
             border-radius: 16px;
-            background: white;
-            border: 1px solid #F1F5F9;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
             transition: var(--transition);
         }
 
@@ -313,12 +432,12 @@
         .stat-card .stat-number {
             font-size: 28px;
             font-weight: 700;
-            color: #0F172A;
+            color: var(--text-color);
             line-height: 1.2;
         }
 
         .stat-card .stat-label {
-            color: #64748B;
+            color: var(--text-muted);
             font-size: 14px;
             font-weight: 500;
         }
@@ -340,6 +459,22 @@
         .badge-paused { background: #FDE68A; color: #B45309; }
         .badge-failed { background: #FEE2E2; color: #DC2626; }
         .badge-cancelled { background: #E5E7EB; color: #6B7280; }
+
+        [data-bs-theme="dark"] .badge-pending { background: #78350F; color: #FCD34D; }
+        [data-bs-theme="dark"] .badge-scheduled { background: #1E3A5F; color: #93C5FD; }
+        [data-bs-theme="dark"] .badge-running { background: #064E3B; color: #6EE7B7; }
+        [data-bs-theme="dark"] .badge-completed { background: #065F46; color: #6EE7B7; }
+        [data-bs-theme="dark"] .badge-paused { background: #78350F; color: #FCD34D; }
+        [data-bs-theme="dark"] .badge-failed { background: #7F1D1D; color: #FCA5A5; }
+        [data-bs-theme="dark"] .badge-cancelled { background: #374151; color: #9CA3AF; }
+
+        .badge-success { background: #D1FAE5 !important; color: #065F46 !important; }
+        .badge-warning { background: #FEF3C7 !important; color: #D97706 !important; }
+        .badge-danger { background: #FEE2E2 !important; color: #DC2626 !important; }
+
+        [data-bs-theme="dark"] .badge-success { background: #064E3B !important; color: #6EE7B7 !important; }
+        [data-bs-theme="dark"] .badge-warning { background: #78350F !important; color: #FCD34D !important; }
+        [data-bs-theme="dark"] .badge-danger { background: #7F1D1D !important; color: #FCA5A5 !important; }
 
         /* ===== BUTTONS ===== */
         .btn {
@@ -393,34 +528,35 @@
         }
 
         .btn-outline-secondary {
-            border: 2px solid #E2E8F0;
-            color: #475569;
+            border: 2px solid var(--border-color);
+            color: var(--text-muted);
         }
         .btn-outline-secondary:hover {
-            background: #F1F5F9;
-            border-color: #94A3B8;
+            background: var(--bg-color);
+            border-color: var(--text-muted);
         }
 
         /* ===== TABLE ===== */
         .table-container {
             overflow-x: auto;
             border-radius: 12px;
-            border: 1px solid #F1F5F9;
+            border: 1px solid var(--border-color);
         }
 
         .table {
             margin: 0;
             font-size: 14px;
+            color: var(--text-color);
         }
 
         .table thead th {
-            background: #F8FAFC;
-            color: #475569;
+            background: var(--bg-color);
+            color: var(--text-muted);
             font-weight: 600;
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            border-bottom: 2px solid #E2E8F0;
+            border-bottom: 2px solid var(--border-color);
             padding: 12px 16px;
             white-space: nowrap;
         }
@@ -428,18 +564,18 @@
         .table tbody td {
             padding: 12px 16px;
             vertical-align: middle;
-            border-bottom: 1px solid #F1F5F9;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .table tbody tr:hover {
-            background: #F8FAFC;
+            background: var(--bg-color);
         }
 
         /* ===== PROGRESS BAR ===== */
         .progress-custom {
             height: 6px;
             border-radius: 10px;
-            background: #F1F5F9;
+            background: var(--border-color);
             overflow: hidden;
         }
 
@@ -453,11 +589,9 @@
         .progress-custom .progress-bar-custom.success {
             background: linear-gradient(90deg, #10B981, #059669);
         }
-
         .progress-custom .progress-bar-custom.warning {
             background: linear-gradient(90deg, #F59E0B, #D97706);
         }
-
         .progress-custom .progress-bar-custom.danger {
             background: linear-gradient(90deg, #EF4444, #DC2626);
         }
@@ -465,19 +599,26 @@
         /* ===== FORMS ===== */
         .form-control, .form-select {
             border-radius: 10px;
-            border: 2px solid #E2E8F0;
+            border: 2px solid var(--border-color);
             padding: 10px 14px;
             font-size: 14px;
             transition: var(--transition);
+            background: var(--card-bg);
+            color: var(--text-color);
         }
 
         .form-control:focus, .form-select:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+            background: var(--card-bg);
         }
 
         .form-control.is-invalid {
             border-color: var(--danger-color);
+        }
+
+        .form-control::placeholder {
+            color: var(--text-muted);
         }
 
         /* ===== TOAST / ALERT ===== */
@@ -503,6 +644,128 @@
         .alert-info {
             background: #DBEAFE;
             color: #1E40AF;
+        }
+
+        [data-bs-theme="dark"] .alert-success {
+            background: #064E3B;
+            color: #6EE7B7;
+        }
+        [data-bs-theme="dark"] .alert-danger {
+            background: #7F1D1D;
+            color: #FCA5A5;
+        }
+        [data-bs-theme="dark"] .alert-warning {
+            background: #78350F;
+            color: #FCD34D;
+        }
+        [data-bs-theme="dark"] .alert-info {
+            background: #1E3A5F;
+            color: #93C5FD;
+        }
+
+        /* ===== TOAST NOTIFICATIONS ===== */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast-custom {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            margin-bottom: 12px;
+            min-width: 300px;
+            max-width: 450px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideInRight 0.4s ease forwards;
+            border-left: 4px solid var(--primary-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .toast-custom.success { border-left-color: var(--success-color); }
+        .toast-custom.error { border-left-color: var(--danger-color); }
+        .toast-custom.warning { border-left-color: var(--warning-color); }
+
+        .toast-custom .toast-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .toast-custom .toast-content {
+            flex: 1;
+        }
+        .toast-custom .toast-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+        .toast-custom .toast-message {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .toast-custom .btn-link {
+            color: var(--text-muted);
+            padding: 0;
+        }
+        .toast-custom .btn-link:hover {
+            color: var(--text-color);
+        }
+
+        /* ===== DETAIL ITEMS ===== */
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            color: var(--text-color);
+            font-size: 13px;
+            text-align: right;
+            max-width: 60%;
+        }
+
+        .detail-value code {
+            background: var(--bg-color);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--text-color);
+        }
+
+        /* ===== BREADCRUMB ===== */
+        .breadcrumb {
+            background: transparent;
+            padding: 0;
+            margin-bottom: 20px;
+        }
+
+        .breadcrumb-item a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        .breadcrumb-item a:hover {
+            text-decoration: underline;
+        }
+        .breadcrumb-item.active {
+            color: var(--text-muted);
         }
 
         /* ===== RESPONSIVE ===== */
@@ -548,6 +811,13 @@
             .user-profile .username {
                 display: none;
             }
+            .toast-custom {
+                min-width: 250px;
+                max-width: 350px;
+            }
+            .content-area {
+                padding: 12px;
+            }
         }
 
         /* ===== ANIMATIONS ===== */
@@ -573,50 +843,6 @@
 
         .pulse {
             animation: pulse 1.5s ease-in-out infinite;
-        }
-
-        /* ===== TOAST NOTIFICATIONS ===== */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        }
-
-        .toast-custom {
-            background: white;
-            border-radius: 12px;
-            padding: 16px 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-            margin-bottom: 12px;
-            min-width: 300px;
-            max-width: 450px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            animation: slideInRight 0.4s ease forwards;
-            border-left: 4px solid var(--primary-color);
-        }
-
-        .toast-custom.success { border-left-color: var(--success-color); }
-        .toast-custom.error { border-left-color: var(--danger-color); }
-        .toast-custom.warning { border-left-color: var(--warning-color); }
-
-        .toast-custom .toast-icon {
-            font-size: 24px;
-            flex-shrink: 0;
-        }
-        .toast-custom .toast-content {
-            flex: 1;
-        }
-        .toast-custom .toast-title {
-            font-weight: 600;
-            font-size: 14px;
-            color: #0F172A;
-        }
-        .toast-custom .toast-message {
-            font-size: 13px;
-            color: #64748B;
         }
 
         @keyframes slideInRight {
@@ -678,20 +904,56 @@
             </a>
 
             <div class="nav-section">Messaging Apps</div>
-            <a class="nav-link" href="{% url 'upload_and_send' %}">
-                <i class="fas fa-envelope text-primary"></i> App 1 - Messaging
-            </a>
-            <a class="nav-link" href="{% url 'upload_and_send2' %}">
-                <i class="fas fa-envelope text-info"></i> App 2 - Messaging2
-            </a>
-            <a class="nav-link" href="{% url 'chat_dashboard' %}">
-                <i class="fas fa-comments text-success"></i> App 1 Chat
-            </a>
-            <a class="nav-link" href="{% url 'chat_dashboard2' %}">
-                <i class="fas fa-comments text-success"></i> App 2 Chat
-            </a>
+            
+            <!-- App 1 - SMSquare -->
+            <div class="app-link-wrapper">
+                <a class="nav-link" href="{% url 'upload_and_send' %}">
+                    <span class="app-label">
+                        <i class="fas fa-envelope text-primary"></i> App 1 - Messaging
+                    </span>
+                </a>
+                <span class="company-name" style="display:block; padding-left:46px; font-size:10px; color:#64748B; opacity:0.7; margin-top:-4px; margin-bottom:4px;">
+                    SM SQUARE CREDIT SERVICES PRIVATE LIMITED
+                </span>
+            </div>
+            
+            <!-- App 2 - Padma Sai -->
+            <div class="app-link-wrapper">
+                <a class="nav-link" href="{% url 'upload_and_send2' %}">
+                    <span class="app-label">
+                        <i class="fas fa-envelope text-info"></i> App 2 - Messaging2
+                    </span>
+                </a>
+                <span class="company-name" style="display:block; padding-left:46px; font-size:10px; color:#64748B; opacity:0.7; margin-top:-4px; margin-bottom:4px;">
+                    PADMA SAI HOLDINGS PRIVATE LIMITED
+                </span>
+            </div>
 
-        
+            <!-- App 1 Chat -->
+            <div class="app-link-wrapper">
+                <a class="nav-link" href="{% url 'chat_dashboard' %}">
+                    <span class="app-label">
+                        <i class="fas fa-comments text-success"></i> App 1 Chat
+                    </span>
+                </a>
+                <span class="company-name" style="display:block; padding-left:46px; font-size:10px; color:#64748B; opacity:0.7; margin-top:-4px; margin-bottom:4px;">
+                    SM SQUARE CREDIT SERVICES PRIVATE LIMITED
+                </span>
+            </div>
+
+            <!-- App 2 Chat -->
+            <div class="app-link-wrapper">
+                <a class="nav-link" href="{% url 'chat_dashboard2' %}">
+                    <span class="app-label">
+                        <i class="fas fa-comments text-success"></i> App 2 Chat
+                    </span>
+                </a>
+                <span class="company-name" style="display:block; padding-left:46px; font-size:10px; color:#64748B; opacity:0.7; margin-top:-4px; margin-bottom:4px;">
+                    PADMA SAI HOLDINGS PRIVATE LIMITED
+                </span>
+            </div>
+
+            <div class="nav-section">Account</div>
             <a class="nav-link" href="{% url 'messaging_logout' %}">
                 <i class="fas fa-sign-out-alt text-danger"></i> Logout
             </a>
@@ -704,7 +966,7 @@
         <header class="topbar">
             <div class="d-flex align-items-center gap-3">
                 <!-- Mobile Toggle -->
-                <button class="btn btn-icon d-lg-none" id="sidebarToggle" style="background:transparent; width:40px; height:40px; border-radius:10px; border:1px solid #E2E8F0;">
+                <button class="btn btn-icon d-lg-none" id="sidebarToggle" style="background:transparent; width:40px; height:40px; border-radius:10px; border:1px solid var(--border-color);">
                     <i class="fas fa-bars"></i>
                 </button>
                 <div class="page-title">
@@ -714,6 +976,11 @@
             </div>
             
             <div class="topbar-right">
+                <!-- Theme Toggle -->
+                <button class="theme-toggle" id="themeToggle" title="Toggle Dark/Light Mode">
+                    <i class="fas fa-moon" id="themeIcon"></i>
+                </button>
+
                 <!-- Refresh Button -->
                 <button class="btn btn-icon" id="refreshBtn" title="Refresh">
                     <i class="fas fa-sync-alt"></i>
@@ -731,7 +998,7 @@
                         {{ user.username|first|upper }}
                     </div>
                     <span class="username">{{ user.username|default:"Guest" }}</span>
-                    <i class="fas fa-chevron-down" style="font-size:12px; color:#94A3B8;"></i>
+                    <i class="fas fa-chevron-down" style="font-size:12px; color:var(--text-muted);"></i>
                 </a>
             </div>
         </header>
@@ -770,6 +1037,37 @@
     
     <script>
         // ============================================================
+        // THEME TOGGLE (Dark/Light Mode)
+        // ============================================================
+        (function() {
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const html = document.documentElement;
+            
+            // Check saved theme
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            html.setAttribute('data-bs-theme', savedTheme);
+            updateIcon(savedTheme);
+            
+            themeToggle.addEventListener('click', function() {
+                const currentTheme = html.getAttribute('data-bs-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                
+                html.setAttribute('data-bs-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                updateIcon(newTheme);
+            });
+            
+            function updateIcon(theme) {
+                if (theme === 'dark') {
+                    themeIcon.className = 'fas fa-sun';
+                } else {
+                    themeIcon.className = 'fas fa-moon';
+                }
+            }
+        })();
+
+        // ============================================================
         // SIDEBAR TOGGLE (Mobile)
         // ============================================================
         document.getElementById('sidebarToggle')?.addEventListener('click', function() {
@@ -787,61 +1085,6 @@
         // ============================================================
         function showToast(title, message, type = 'info') {
             const container = document.getElementById('toastContainer');
-            const icons = {
-                success: '✅',
-                error: '❌',
-                warning: '⚠️',
-                info: 'ℹ️'
-            };
-            
-            const toast = document.createElement('div');
-            toast.className = `toast-custom ${type}`;
-            toast.innerHTML = `
-                <div class="toast-icon">${icons[type] || 'ℹ️'}</div>
-                <div class="toast-content">
-                    <div class="toast-title">${title}</div>
-                    <div class="toast-message">${message}</div>
-                </div>
-                <button class="btn btn-sm btn-link text-muted" onclick="this.closest('.toast-custom').remove()" style="padding:0;">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
-            
-            container.appendChild(toast);
-            
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                toast.classList.add('hiding');
-                setTimeout(() => toast.remove(), 300);
-            }, 5000);
-        }
-
-        // ============================================================
-        // AJAX ACTION HANDLER - ALL ACTIONS WORK IMMEDIATELY
-        // ============================================================
-                // ============================================================
-        // COMPLETE AJAX ACTION HANDLER - FIXED DELETE & ALL ACTIONS
-        // ============================================================
-
-        // Helper to get CSRF cookie
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-
-        // Show toast notification
-        function showToast(title, message, type = 'info') {
-            const container = document.getElementById('toastContainer');
             if (!container) return;
             
             const icons = {
@@ -866,7 +1109,6 @@
             
             container.appendChild(toast);
             
-            // Auto-remove after 5 seconds
             setTimeout(() => {
                 toast.classList.add('hiding');
                 setTimeout(() => toast.remove(), 300);
@@ -874,14 +1116,8 @@
         }
 
         // ============================================================
-        // PERFORM ACTION - UPDATED WITH DELETE FIX
+        // CSRF Helper
         // ============================================================
-        
-        // ============================================================
-        // COMPLETE AJAX ACTION HANDLER - FIXED DELETE
-        // ============================================================
-
-        // Helper to get CSRF cookie
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -897,69 +1133,25 @@
             return cookieValue;
         }
 
-        // Show toast notification
-        function showToast(title, message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            if (!container) return;
-            
-            const icons = {
-                success: '✅',
-                error: '❌',
-                warning: '⚠️',
-                info: 'ℹ️'
-            };
-            
-            const toast = document.createElement('div');
-            toast.className = `toast-custom ${type}`;
-            toast.innerHTML = `
-                <div class="toast-icon">${icons[type] || 'ℹ️'}</div>
-                <div class="toast-content">
-                    <div class="toast-title">${title}</div>
-                    <div class="toast-message">${message}</div>
-                </div>
-                <button class="btn btn-sm btn-link text-muted" onclick="this.closest('.toast-custom').remove()" style="padding:0;">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
-            
-            container.appendChild(toast);
-            
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                toast.classList.add('hiding');
-                setTimeout(() => toast.remove(), 300);
-            }, 5000);
-        }
-
         // ============================================================
-        // PERFORM ACTION - UPDATED WITH FIXED DELETE
+        // PERFORM ACTION
         // ============================================================
-        
         function performAction(jobId, action, button) {
-            // Show loading state
             const originalHtml = button.innerHTML;
             button.disabled = true;
             button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
             
-            // Get CSRF token from multiple sources
             let csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-            if (!csrfToken) {
-                csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
-            }
             if (!csrfToken) {
                 csrfToken = getCookie('csrftoken');
             }
             
-            // Determine URL - DELETE uses different endpoint
             let url;
             if (action === 'delete') {
                 url = `/batch/jobs/${jobId}/delete/`;
             } else {
                 url = `/batch/jobs/${jobId}/${action}/`;
             }
-            
-            console.log(`🔵 Sending ${action} request to:`, url);
-            console.log(`🔵 CSRF Token:`, csrfToken);
             
             $.ajax({
                 url: url,
@@ -969,13 +1161,9 @@
                     'X-Requested-With': 'XMLHttpRequest'
                 },
                 data: {
-                    // Send empty data with CSRF token in body too (for extra safety)
                     csrfmiddlewaretoken: csrfToken || ''
                 },
                 success: function(data) {
-                    console.log(`✅ ${action} successful:`, data);
-                    
-                    // Messages for each action
                     const messages = {
                         'pause': { title: '⏸️ Paused', msg: 'Job paused successfully' },
                         'resume': { title: '▶️ Resumed', msg: 'Job resumed successfully' },
@@ -986,15 +1174,10 @@
                     };
                     
                     const info = messages[action] || { title: '✅ Done', msg: data.message || 'Action completed' };
-                    
-                    // Use server response message if available
-                    if (data.message) {
-                        info.msg = data.message;
-                    }
+                    if (data.message) info.msg = data.message;
                     
                     showToast(info.title, info.msg, 'success');
                     
-                    // Handle redirect after action
                     setTimeout(() => {
                         if (action === 'delete') {
                             window.location.href = '/batch/jobs/';
@@ -1004,22 +1187,17 @@
                     }, 800);
                 },
                 error: function(xhr) {
-                    console.error(`❌ ${action} failed:`, xhr);
-                    
                     let errorMsg = 'Action failed';
                     try {
                         const data = JSON.parse(xhr.responseText);
                         errorMsg = data.error || data.message || errorMsg;
                     } catch(e) {
-                        // If response is HTML, try to extract error message
                         if (xhr.responseText) {
                             const match = xhr.responseText.match(/<div class="alert alert-danger">(.*?)<\/div>/);
                             if (match) errorMsg = match[1];
                         }
                     }
                     showToast('❌ Error', errorMsg, 'error');
-                    
-                    // Restore button
                     button.disabled = false;
                     button.innerHTML = originalHtml;
                 }
@@ -1027,9 +1205,8 @@
         }
 
         // ============================================================
-        // DELETE WITH CONFIRMATION
+        // CONFIRM DELETE
         // ============================================================
-        
         function confirmDelete(jobId, button) {
             if (confirm('⚠️ Delete this job permanently?\n\nThis action cannot be undone. All logs will be deleted.')) {
                 performAction(jobId, 'delete', button);
@@ -1037,9 +1214,8 @@
         }
 
         // ============================================================
-        // ALL ACTIONS WITH CONFIRMATION
+        // CONFIRM ACTION
         // ============================================================
-        
         function confirmAction(jobId, action, button) {
             const messages = {
                 'cancel': '⛔ Cancel this job?\n\nThis will stop all future runs.',
@@ -1054,6 +1230,7 @@
             
             performAction(jobId, action, button);
         }
+
         // ============================================================
         // REFRESH BUTTON
         // ============================================================
@@ -1091,7 +1268,6 @@
             });
         }
 
-        // Update on load and every 30 seconds
         document.addEventListener('DOMContentLoaded', updateJobCount);
         setInterval(updateJobCount, 30000);
 
@@ -1099,12 +1275,10 @@
         // KEYBOARD SHORTCUTS
         // ============================================================
         document.addEventListener('keydown', function(e) {
-            // Ctrl+R to refresh
             if (e.ctrlKey && e.key === 'r') {
                 e.preventDefault();
                 window.location.reload();
             }
-            // Escape to close modals
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal.show').forEach(modal => {
                     const closeBtn = modal.querySelector('.btn-close, [data-bs-dismiss="modal"]');
@@ -1114,6 +1288,7 @@
         });
 
         console.log('🚀 Batch App UI Loaded Successfully');
+        console.log('🌓 Theme toggle available - Click the moon/sun icon in top bar');
     </script>
 
     {% block extra_js %}{% endblock %}

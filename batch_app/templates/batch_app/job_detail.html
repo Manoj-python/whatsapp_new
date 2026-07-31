@@ -1,4 +1,4 @@
-<!-- batch_app/templates/batch_app/job_detail.html - 12-Hour AM/PM Format with Multiple Daily Support -->
+<!-- batch_app/templates/batch_app/job_detail.html - WITH DARK/LIGHT MODE SUPPORT -->
 
 {% extends 'batch_app/base.html' %}
 
@@ -22,7 +22,7 @@
         <span class="badge bg-primary">{{ timezone }}</span>
     </div>
 
-    <!-- ===== STATS ROW ===== -->
+    <!-- ===== STATS ROW - WITH SKIPPED COUNT ===== -->
     <div class="row g-4 mb-4">
         <div class="col-md-3">
             <div class="stat-card">
@@ -54,7 +54,9 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        
+        <!-- ===== SENT STAT ===== -->
+        <div class="col-md-2">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
@@ -67,7 +69,24 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        
+        <!-- ===== SKIPPED STAT ===== -->
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label">Skipped</div>
+                        <div class="stat-number text-warning">{{ job.skipped_count }}</div>
+                    </div>
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                        <i class="fas fa-forward"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ===== FAILED STAT ===== -->
+        <div class="col-md-2">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
@@ -177,8 +196,7 @@
 
                     <hr>
 
-                    <!-- ===== SCHEDULE INFO (12-HOUR FORMAT) WITH MULTIPLE DAILY SUPPORT ===== -->
-                    <!-- ===== SCHEDULE INFO (12-HOUR FORMAT) WITH MULTIPLE DAILY SUPPORT ===== -->
+                    <!-- ===== SCHEDULE INFO ===== -->
                     <div class="detail-section mb-4">
                         <h6 class="text-muted mb-3">
                             <i class="fas fa-calendar-alt me-2"></i>
@@ -186,7 +204,6 @@
                             <span class="badge bg-success ms-2">IST (12-hour)</span>
                         </h6>
                         
-                        <!-- ===== SCHEDULE TYPE BADGE ===== -->
                         <div class="mb-3">
                             <span class="badge bg-primary fs-6">
                                 <i class="fas fa-clock me-1"></i>
@@ -205,7 +222,6 @@
                             <span class="badge bg-info ms-2">{{ job.get_schedule_info }}</span>
                         </div>
                         
-                        <!-- ===== FIRST RUN ===== -->
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <div class="detail-item">
@@ -233,7 +249,6 @@
                             </div>
                             
                             {% elif job.schedule_type == 'multiple_daily' %}
-                            <!-- ===== MULTIPLE DAILY: Show ALL times ===== -->
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <span class="detail-label">Multiple Times</span>
@@ -251,7 +266,6 @@
                                     </span>
                                 </div>
                             </div>
-                            <!-- Show total count -->
                             <div class="col-md-12">
                                 <div class="detail-item">
                                     <span class="detail-label">Total Runs Per Day</span>
@@ -262,7 +276,6 @@
                             </div>
                             
                             {% elif job.schedule_type == 'weekly' %}
-                            <!-- ===== WEEKLY: Show day name correctly ===== -->
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <span class="detail-label">Schedule</span>
@@ -328,7 +341,6 @@
                             </div>
                         </div>
                         
-                        <!-- Time Zone Debug Info -->
                         <div class="mt-3 p-2 bg-light rounded">
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
@@ -339,7 +351,7 @@
                     </div>
                     <hr>
 
-                    <!-- ===== CREATION INFO (12-HOUR FORMAT) ===== -->
+                    <!-- ===== CREATION INFO ===== -->
                     <div class="detail-section">
                         <h6 class="text-muted mb-3">
                             <i class="fas fa-user me-2"></i>
@@ -440,8 +452,29 @@
                         
                         <hr>
                         
+                        <!-- ===== SEPARATE REPORT DOWNLOAD BUTTONS ===== -->
+                        <label class="fw-semibold small text-muted mb-1">📊 Download Reports</label>
+                        
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="{% url 'batch_job_report' job.job_id %}?status=success" class="btn btn-success btn-sm flex-grow-1">
+                                <i class="fas fa-check-circle me-1"></i> Success
+                            </a>
+                            <a href="{% url 'batch_job_report' job.job_id %}?status=skipped" class="btn btn-warning btn-sm flex-grow-1">
+                                <i class="fas fa-forward me-1"></i> Skipped
+                            </a>
+                            <a href="{% url 'batch_job_report' job.job_id %}?status=failed" class="btn btn-danger btn-sm flex-grow-1">
+                                <i class="fas fa-times-circle me-1"></i> Failed
+                            </a>
+                        </div>
+                        
                         <a href="{% url 'batch_job_report' job.job_id %}" class="btn btn-outline-primary">
-                            <i class="fas fa-file-download me-2"></i> Download Report
+                            <i class="fas fa-file-download me-2"></i> Full Report
+                        </a>
+                        
+                        <hr>
+                        
+                        <a href="{% url 'batch_job_edit' job.job_id %}" class="btn btn-outline-warning">
+                            <i class="fas fa-edit me-2"></i> Edit Job
                         </a>
                         
                         <button class="btn btn-outline-danger" onclick="confirmDelete('{{ job.job_id }}', this)">
@@ -466,6 +499,12 @@
                         </div>
                         <div class="col-6">
                             <div class="p-2 bg-light rounded text-center">
+                                <div class="text-muted small">Skipped</div>
+                                <div class="fw-bold text-warning">{{ job.skipped_count }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Failed</div>
                                 <div class="fw-bold text-danger">{{ job.failed_count }}</div>
                             </div>
@@ -476,15 +515,17 @@
                                 <div class="fw-bold">{{ job.completed_batches }}/{{ job.total_batches }}</div>
                             </div>
                         </div>
-                        <div class="col-6">
+                        <div class="col-12">
                             <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Success Rate</div>
                                 <div class="fw-bold">
-                                    {% if job.total_customers > 0 %}
-                                        {% widthratio job.sent_count job.total_customers 100 %}%
-                                    {% else %}
-                                        0%
-                                    {% endif %}
+                                    {% with total=job.sent_count|add:job.failed_count|add:job.skipped_count %}
+                                        {% if total > 0 %}
+                                            {% widthratio job.sent_count total 100 %}%
+                                        {% else %}
+                                            0%
+                                        {% endif %}
+                                    {% endwith %}
                                 </div>
                             </div>
                         </div>
@@ -504,6 +545,143 @@
 </div>
 
 <style>
+    /* ===== DARK MODE SUPPORT ===== */
+    [data-bs-theme="dark"] .detail-item {
+        border-bottom: 1px solid #334155;
+    }
+    
+    [data-bs-theme="dark"] .detail-label {
+        color: #94A3B8;
+    }
+    
+    [data-bs-theme="dark"] .detail-value {
+        color: #F1F5F9;
+    }
+    
+    [data-bs-theme="dark"] .detail-value code {
+        background: #2D3748;
+        color: #E2E8F0;
+    }
+    
+    [data-bs-theme="dark"] .stat-card {
+        background: #1E293B;
+        border: 1px solid #334155;
+    }
+    
+    [data-bs-theme="dark"] .stat-card .stat-number {
+        color: #F1F5F9;
+    }
+    
+    [data-bs-theme="dark"] .stat-card .stat-label {
+        color: #94A3B8;
+    }
+    
+    [data-bs-theme="dark"] .progress-custom {
+        background: #334155;
+    }
+    
+    [data-bs-theme="dark"] .bg-light {
+        background-color: #1E293B !important;
+    }
+    
+    [data-bs-theme="dark"] .badge.bg-success {
+        background-color: #064E3B !important;
+        color: #6EE7B7 !important;
+    }
+    
+    [data-bs-theme="dark"] .badge.bg-info {
+        background-color: #1E3A5F !important;
+        color: #93C5FD !important;
+    }
+    
+    [data-bs-theme="dark"] .badge.bg-primary {
+        background-color: #1E3A5F !important;
+        color: #93C5FD !important;
+    }
+    
+    [data-bs-theme="dark"] .badge.bg-warning {
+        background-color: #78350F !important;
+        color: #FCD34D !important;
+    }
+    
+    [data-bs-theme="dark"] .badge.bg-danger {
+        background-color: #7F1D1D !important;
+        color: #FCA5A5 !important;
+    }
+    
+    [data-bs-theme="dark"] .badge-status.badge-scheduled {
+        background: #1E3A5F;
+        color: #93C5FD;
+    }
+    [data-bs-theme="dark"] .badge-status.badge-running {
+        background: #064E3B;
+        color: #6EE7B7;
+    }
+    [data-bs-theme="dark"] .badge-status.badge-completed {
+        background: #065F46;
+        color: #6EE7B7;
+    }
+    [data-bs-theme="dark"] .badge-status.badge-failed {
+        background: #7F1D1D;
+        color: #FCA5A5;
+    }
+    [data-bs-theme="dark"] .badge-status.badge-pending {
+        background: #78350F;
+        color: #FCD34D;
+    }
+    [data-bs-theme="dark"] .badge-status.badge-paused {
+        background: #78350F;
+        color: #FCD34D;
+    }
+    [data-bs-theme="dark"] .badge-status.badge-cancelled {
+        background: #374151;
+        color: #9CA3AF;
+    }
+    
+    [data-bs-theme="dark"] .badge-success {
+        background: #064E3B !important;
+        color: #6EE7B7 !important;
+    }
+    [data-bs-theme="dark"] .badge-warning {
+        background: #78350F !important;
+        color: #FCD34D !important;
+    }
+    [data-bs-theme="dark"] .badge-danger {
+        background: #7F1D1D !important;
+        color: #FCA5A5 !important;
+    }
+    
+    [data-bs-theme="dark"] .alert-info {
+        background: #1E3A5F;
+        color: #93C5FD;
+    }
+    
+    [data-bs-theme="dark"] .alert-danger {
+        background: #7F1D1D;
+        color: #FCA5A5;
+    }
+    
+    [data-bs-theme="dark"] .text-muted {
+        color: #94A3B8 !important;
+    }
+    
+    [data-bs-theme="dark"] .text-success {
+        color: #6EE7B7 !important;
+    }
+    
+    [data-bs-theme="dark"] .text-warning {
+        color: #FCD34D !important;
+    }
+    
+    [data-bs-theme="dark"] .text-danger {
+        color: #FCA5A5 !important;
+    }
+    
+    [data-bs-theme="dark"] .text-primary {
+        color: #818CF8 !important;
+    }
+
+    /* ===== BASE STYLES ===== */
     .detail-section {
         padding: 4px 0;
     }
@@ -619,14 +797,12 @@
     .badge-failed { background: #fee2e2; color: #dc2626; }
     .badge-cancelled { background: #e5e7eb; color: #6b7280; }
     
-    /* Multiple Daily Time Chips */
-    .badge-success {
-        background: #d1fae5 !important;
-        color: #065f46 !important;
-        font-size: 12px;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-weight: 600;
-    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-warning { background: #fef3c7; color: #d97706; }
+    .badge-danger { background: #fee2e2; color: #dc2626; }
+    
+    .badge-success { background: #d1fae5 !important; color: #065f46 !important; }
+    .badge-warning { background: #fef3c7 !important; color: #d97706 !important; }
+    .badge-danger { background: #fee2e2 !important; color: #dc2626 !important; }
 </style>
 {% endblock %}

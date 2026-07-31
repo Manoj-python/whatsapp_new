@@ -23,6 +23,11 @@ from .models import *
 from .utils import *
 from adminpanel.utils import clean_whatsapp_text
 
+# ============================================================
+# 🔥 IMPORT API CHECK FUNCTIONS
+# ============================================================
+from .utils import needs_api_check, check_smsquare_payment_status
+
 logger = get_task_logger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -60,7 +65,7 @@ def upload_legal_pdf_to_whatsapp2(pdf_filename, folder):
 
 
 @shared_task(bind=True, queue="messaging2")
-def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id,user_id=None, chunk_size=100):
+def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id,user_id=None, chunk_size=250):
     template_choice = str(template_choice)
     close_old_connections()
     from django.contrib.auth.models import User
@@ -99,15 +104,6 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id,user_id=
     total = len(rows)
 
     # Total customers
-    # if template_choice == "17":
-    #     job.total_customers = len({
-    #         format_mobile(r.get("cust_mobile") or r.get("CustMobile"))
-    #         for r in rows
-    #         if r.get("cust_mobile") or r.get("CustMobile")
-    #     })
-    # else:
-    #     job.total_customers = total
-
     job.save(update_fields=["total_customers"])
 
     if total == 0:
@@ -119,16 +115,16 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id,user_id=
     # Create batches
     for i in range(0, total, chunk_size):
         process_bulk_whatsapp_batch2.apply_async(
-            args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total),agent_name),
+            args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total), agent_name),
             queue="messaging2",
         )
 
 
 # ==================================================
-# BATCH WORKER (FIXED VERSION)
+# BATCH WORKER (UPDATED WITH API CHECK)
 # ==================================================
 @shared_task(bind=True, queue="messaging2")
-def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, start, end,agent_name="System"):
+def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, start, end, agent_name="System"):
     from django.db import close_old_connections
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
@@ -138,6 +134,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
     import pandas as pd
     import time
     import re
+    from pathlib import Path
 
     close_old_connections()
     template_choice = str(template_choice)
@@ -159,6 +156,13 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
     failed_records = []
     local_success = 0
     local_failed = 0
+    local_skipped = 0  # ✅ Track PAID customers who are skipped
+
+    # ==================================================
+    # ✅ CHECK IF THIS TEMPLATE NEEDS API CHECK
+    # ==================================================
+    check_api = needs_api_check(template_choice)
+    logger.info(f"📋 Template {template_choice} - API Check: {'YES' if check_api else 'NO'}")
 
     # ==================================================
     # 🔽 NORMAL FLOW
@@ -176,7 +180,9 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
     for row in rows:
         name = row.get("customer_name") or row.get("CustomerName") or ""
         mobile = format_mobile2(row.get("cust_mobile") or row.get("CustMobile") or "")
+        loan_number = row.get("loan_number") or row.get("LoanNumber") or row.get("agreement_no") or row.get("AgreementNo")
 
+        # Validate mobile
         try:
             check = check_whatsapp_number2(mobile)
         except Exception as e:
@@ -210,14 +216,66 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             local_failed += 1
             continue
 
+        # ============================================================
+        # 🔍 API CHECK - Skip PAID customers
+        # ============================================================
+        should_skip = False
+        skip_reason = ""
+        total_due = 0
+
+        if check_api:
+            try:
+                # Call the API check function
+                status = check_smsquare_payment_status(mobile, loan_number)
+                
+                if status.get('is_paid', False):
+                    # ✅ PAID → Skip (no message)
+                    should_skip = True
+                    total_due = status.get('total_due', 0)
+                    skip_reason = f"PAID - Total Due: ₹{total_due}"
+                    logger.info(f"✅ {mobile} - PAID, skipping")
+                    local_skipped += 1
+                    
+                    # ✅ LOG THE SKIPPED CUSTOMER
+                    SmsWhatsAppLog2.objects.create(
+                        job_id=job_id,
+                        customer_name=agent_name,
+                        sender_name=name,
+                        mobile=mobile,
+                        template_name=template_choice,
+                        status='PAID',
+                        message_type='Skipped',
+                        error_message=f"Customer is PAID (Total Due: ₹{total_due})",
+                        sent_text_message=f"PAID - No message sent (Total Due: ₹{total_due})",
+                        sent_at=timezone.now(),
+                    )
+                    continue  # ⬅️ SKIP SENDING
+                    
+                else:
+                    # ❌ UNPAID → Continue to send
+                    total_due = status.get('total_due', 0)
+                    logger.info(f"❌ {mobile} - UNPAID (₹{total_due}) - Sending message")
+                    
+            except Exception as api_error:
+                # If API fails, assume UNPAID (send reminder)
+                logger.warning(f"⚠️ API Error for {mobile}: {api_error}")
+                logger.warning(f"📱 {mobile} - Assuming UNPAID, sending")
+        else:
+            # ❌ No API check → Send to ALL
+            logger.info(f"📱 {mobile} - No API check, sending")
+
+        # If skipped, continue to next customer
+        if should_skip:
+            continue
+
         try:
             media_id = None
             folder = None
             pdf_filename = None
-            is_document = False  # ✅ Track if this is a document
+            is_document = False
 
             # ==================================================
-            # 📁 SELECT PDF + FOLDER (FIXED)
+            # 📁 SELECT PDF + FOLDER
             # ==================================================
             if template_choice in ("13", "14", "21", "22", "23", "24", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42","44","45","49"):
                 is_document = True
@@ -303,7 +361,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             msg_id = resp.json()["messages"][0]["id"]
 
             # ==================================================
-            # 📝 CREATE LOG (FIXED CONTENT TYPE)
+            # 📝 CREATE LOG
             # ==================================================
             log_content_type = "document" if is_document and pdf_filename else "text"
 
@@ -317,7 +375,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                 status="Sent",
                 message_id=msg_id,
                 message_type="Sent",
-                content_type=log_content_type,  # ✅ Correct content type
+                content_type=log_content_type,
             )
 
             # ==================================================
@@ -328,26 +386,22 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     print("PDF NAME:", pdf_filename)
                     print("FOLDER:", folder)
 
-                    # Get PDF bytes
                     pdf_bytes = open_legal_pdf2(pdf_filename, folder)
 
                     if not pdf_bytes:
                         raise ValueError("Empty PDF")
 
-                    # Validate it's bytes
                     if not isinstance(pdf_bytes, bytes):
                         pdf_bytes = bytes(pdf_bytes)
 
                     print(f"✅ PDF bytes received, size: {len(pdf_bytes)} bytes")
                     original_filename = Path(pdf_filename).name
 
-                    # Save to storage
                     saved_path = default_storage.save(
                         f"chat_media2/{original_filename}",
                         ContentFile(pdf_bytes)
                     )
 
-                    # Update log with media file
                     SmsWhatsAppLog2.objects.filter(id=log.id).update(
                         media_file=saved_path,
                         content_type="document"
@@ -359,12 +413,10 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     print(f"❌ PDF SAVE FAILED: {e}")
                     import traceback
                     traceback.print_exc()
-                    # Don't fail the entire message if PDF save fails
 
             # ==================================================
             # 📝 UPDATE CONTACT
             # ==================================================
-            # Update contact – but preserve existing unread count
             contact, created = ChatContact2.objects.get_or_create(
                 mobile=mobile,
                 defaults={
@@ -376,15 +428,13 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                 }
             )
             if not created:
-                # Only update non‑unread fields
                 ChatContact2.objects.filter(mobile=mobile).update(
                     last_msg=rendered_text or "[Media]",
                     last_time=timezone.now(),
                     last_type="Sent",
                     last_status="Sent"
-                    # ❌ 'unread' is NOT updated – it stays as it was
                 )
-                contact.refresh_from_db()   # fetch the current unread value
+                contact.refresh_from_db()
 
             # ==================================================
             # 🔄 WEBSOCKET BROADCAST
@@ -415,7 +465,6 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     }
                 )
 
-            # Update global contacts
             async_to_sync(channel_layer.group_send)(
                 "global_contacts2",
                 {
@@ -441,7 +490,6 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             import traceback
             traceback.print_exc()
 
-            # Map error codes to specific statuses
             status_value = "Failed"
 
             ERROR_MAP = {
@@ -475,7 +523,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                 sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
-                status=status_value,  # ✅ Now uses mapped status
+                status=status_value,
                 message_type="Sent",
                 error_message=err_msg,
                 content_type="text",
@@ -486,21 +534,33 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
         time.sleep(0.1)
 
     # ==================================================
-    # 📊 UPDATE JOB PROGRESS
+    # 📊 UPDATE JOB PROGRESS (WITH SKIPPED COUNT)
     # ==================================================
     BulkJob2.objects.filter(job_id=job_id).update(
-        sent_count=F("sent_count") + (local_success + local_failed),
+        sent_count=F("sent_count") + local_success,
         success_count=F("success_count") + local_success,
         failed_count=F("failed_count") + local_failed,
+        skipped_count=F("skipped_count") + local_skipped,  # ✅ ADD THIS
     )
 
     job.refresh_from_db()
 
-    if job.sent_count >= job.total_customers:
+    # ✅ Check ALL processed customers
+    processed = job.sent_count + job.skipped_count + job.failed_count
+
+    # Log summary for this batch
+    logger.info(f"📊 Batch {start}-{end} Summary: Sent={local_success}, Skipped={local_skipped}, Failed={local_failed}")
+    logger.info(f"📊 Job Progress: {processed}/{job.total_customers} (Sent={job.sent_count}, Skipped={job.skipped_count}, Failed={job.failed_count})")
+
+    if processed >= job.total_customers:
         job.status = "Completed"
         job.completed_at = timezone.now()
         job.save(update_fields=["status", "completed_at"])
         finalize_bulk_job2.delay(job_id)
+        logger.info(f"✅ Job {job_id} COMPLETED!")
+    else:
+        logger.info(f"⏳ Job {job_id} in progress: {processed}/{job.total_customers}")
+
 
 # ==================================================
 # FINALIZER
@@ -517,12 +577,9 @@ def finalize_bulk_job2(self, job_id):
     if job.success_report and job.failed_report:
         return
 
-    # Get all field names from SmsWhatsAppLog (avoid auto-created ones like id, but include them anyway)
     from django.apps import apps
     model = SmsWhatsAppLog2
     field_names = [f.name for f in model._meta.get_fields() if not f.auto_created]
-    # For better readability, you can also define a fixed list of columns you want in reports
-    # field_names = ['id', 'job_id', 'customer_name', 'mobile', 'template_name', 'status', 'sent_text_message', 'error_message', ...]
 
     success_qs = SmsWhatsAppLog2.objects.filter(
         job_id=job_id, status__in=["Sent", "Delivered", "Read"]
@@ -533,7 +590,6 @@ def finalize_bulk_job2(self, job_id):
         job_id=job_id
     )
 
-    # Build DataFrames – always with correct columns
     if success_qs.exists():
         success_df = pd.DataFrame(list(success_qs.values()))
     else:
@@ -544,7 +600,6 @@ def finalize_bulk_job2(self, job_id):
     else:
         failed_df = pd.DataFrame(columns=field_names)
 
-    # 🔥 Remove timezone from datetime columns (same as before)
     for df in [success_df, failed_df]:
         for col in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[col]):
@@ -556,17 +611,14 @@ def finalize_bulk_job2(self, job_id):
     success_buffer = io.BytesIO()
     failed_buffer = io.BytesIO()
 
-    # Always write both files (even empty ones)
     success_df.to_excel(success_buffer, index=False)
     failed_df.to_excel(failed_buffer, index=False)
 
-    # Delete old files if they exist (optional but safe)
     if default_storage.exists(success_path):
         default_storage.delete(success_path)
     if default_storage.exists(failed_path):
         default_storage.delete(failed_path)
 
-    # Save both reports unconditionally
     default_storage.save(success_path, ContentFile(success_buffer.getvalue()))
     job.success_report = success_path
 
@@ -599,7 +651,6 @@ def process_pending_webhook_updates():
         msg_id = key.replace("pending_wa_status_", "")
         status_type = data.get('status')
 
-        # Try to find the message now
         obj = SmsWhatsAppLog2.objects.filter(message_id=msg_id).first()
 
         if obj:
@@ -616,12 +667,18 @@ def process_pending_webhook_updates():
             print(f"✅ Processed pending status for {msg_id} -> {norm}")
             cache.delete(key)
         else:
-            # If older than 60 seconds, remove
             timestamp = data.get('timestamp')
             if timestamp:
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+
+
+
+
+
+
+
 
 
 
@@ -964,19 +1021,19 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         return
 
     customer_name = customer_name or "Customer"
-
     free_text = (
-    f"Dear {customer_name},\n\n"
-    f"Welcome to the {app_name}.\n\n"
-    f"We invite you to experience a seamless way to manage your loan account securely online:\n\n"
-    f"• Payments: Pay EMIs and make part-payments\n"
-    f"• Statements: Download account & foreclosure statements\n"
-    f"• Tracking: View payment history & check foreclosure details\n\n"
-    f"👉 Login to your portal: https://smsquare.info\n\n"
-    f"We are happy to assist you every step of the way.\n\n"
-    f"Sincerely,\n\n"
-    f"{app_name}."
+   
+    f"Dear *{customer_name}*,\n\n"
+    f"🎉 *Scratch & Win Alert!* 🎁\n\n"
+    f"Try your luck and *win up to ₹1,000!* 💰✨\n\n"
+    f"👉 Visit our *Customer Service Portal* and scratch your lucky card today.\n\n"
+    f"🔗 *Portal:* https://smsquare.info\n\n"
+    f"⏳ *Offer valid until 31st July only!* Don't miss out! 🍀\n\n"
+    f"Regards,\n"
+    f"*{app_name}*"
 )
+
+
     # Send WhatsApp message
     try:
         resp = send_whatsapp_text4(

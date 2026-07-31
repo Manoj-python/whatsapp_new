@@ -1,4 +1,4 @@
-<!-- batch_app/templates/batch_app/dashboard.html - ENHANCED -->
+<!-- batch_app/templates/batch_app/dashboard.html - ENHANCED WITH SKIPPED COUNT -->
 {% extends 'batch_app/base.html' %}
 
 {% block page_title %}Dashboard{% endblock %}
@@ -62,9 +62,9 @@
         </div>
     </div>
 
-    <!-- Quick Stats -->
+    <!-- Quick Stats with Skipped -->
     <div class="row g-4 mb-4">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
@@ -72,12 +72,25 @@
                         <div class="stat-number text-success">{{ total_sent|floatformat:0 }}</div>
                     </div>
                     <div class="stat-icon bg-success bg-opacity-10 text-success">
-                        <i class="fas fa-envelope"></i>
+                        <i class="fas fa-check-circle"></i>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label">Total Skipped (PAID)</div>
+                        <div class="stat-number text-warning">{{ total_skipped|floatformat:0 }}</div>
+                    </div>
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                        <i class="fas fa-forward"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
@@ -85,7 +98,7 @@
                         <div class="stat-number text-danger">{{ total_failed|floatformat:0 }}</div>
                     </div>
                     <div class="stat-icon bg-danger bg-opacity-10 text-danger">
-                        <i class="fas fa-envelope"></i>
+                        <i class="fas fa-times-circle"></i>
                     </div>
                 </div>
             </div>
@@ -127,7 +140,9 @@
                             <th>App</th>
                             <th>Status</th>
                             <th>Progress</th>
-                            <th>Sent/Failed</th>
+                            <th>Sent</th>
+                            <th>Skipped</th>
+                            <th>Failed</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -156,18 +171,22 @@
                             </td>
                             <td>
                                 <span class="text-success">{{ job.sent_count }}</span>
-                                <span class="text-muted">/</span>
+                            </td>
+                            <td>
+                                <span class="text-warning">{{ job.skipped_count|default:0 }}</span>
+                            </td>
+                            <td>
                                 <span class="text-danger">{{ job.failed_count }}</span>
                             </td>
                             <td>
-                                <a href="{% url 'batch_job_detail' job.job_id %}" class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'batch_job_detail' job.job_id %}" class="btn btn-sm btn-outline-primary" title="View Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">
+                            <td colspan="8" class="text-center py-4 text-muted">
                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                 No jobs created yet
                             </td>

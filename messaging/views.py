@@ -215,17 +215,41 @@ def upload_and_send(request):
 
     return render(request, "messaging/index.html", {"form": form})
 
+
+
+
+
+
 # -----------------------------------------------------
 # Bulk Job Status Page
 # -----------------------------------------------------
+# views.py - Update job_status function
+
 def job_status(request, job_id):
     job = get_object_or_404(BulkJob, job_id=job_id)
-    progress = 0
+    
+    # ✅ Calculate progress based on ALL processed (sent + skipped + failed)
+    processed = job.sent_count + job.skipped_count + job.failed_count
+    
     if job.total_customers > 0:
-        progress = round((job.sent_count / job.total_customers) * 100, 2)
-    return render(request, "messaging/job_status.html", {"job": job, "progress": progress})
-
-
+        progress = round((processed / job.total_customers) * 100, 2)
+    else:
+        progress = 0
+    
+    # ✅ Auto-complete if all customers are processed but status not updated
+    if processed >= job.total_customers and job.status != 'Completed':
+        job.status = 'Completed'
+        job.completed_at = timezone.now()
+        job.save(update_fields=['status', 'completed_at'])
+        # Trigger report generation if not already done
+        if not job.success_report and not job.failed_report:
+            finalize_bulk_job.delay(job_id)
+    
+    return render(request, "messaging/job_status.html", {
+        "job": job,
+        "progress": progress,
+        "processed": processed
+    })
 # -----------------------------------------------------
 # Download Success Report (redirect to S3)
 # -----------------------------------------------------
@@ -246,6 +270,66 @@ def download_failed_report(request, job_id):
 
     raise Http404("Failed report not found.")
 
+
+
+# views.py - Add skipped report download
+
+# views.py - Update download_skipped_report
+
+def download_skipped_report(request, job_id):
+    """Download skipped (PAID) customers report"""
+    job = get_object_or_404(BulkJob, job_id=job_id)
+    
+    if job.skipped_count == 0:
+        raise Http404("No skipped customers found for this job")
+    
+    # ✅ Check for PAID, Skipped, or any status that indicates skip
+    skipped_qs = SmsWhatsAppLog.objects.filter(
+        job_id=job_id,
+        status__in=['PAID', 'Skipped', 'Paid']
+    )
+    
+    # ✅ Also check message_type = 'Skipped'
+    if not skipped_qs.exists():
+        skipped_qs = SmsWhatsAppLog.objects.filter(
+            job_id=job_id,
+            message_type='Skipped'
+        )
+    
+    # ✅ Fallback: check error_message for PAID
+    if not skipped_qs.exists():
+        skipped_qs = SmsWhatsAppLog.objects.filter(
+            job_id=job_id,
+            error_message__icontains='PAID'
+        )
+    
+    if skipped_qs.exists():
+        import io
+        import pandas as pd
+        from django.http import HttpResponse
+        
+        df = pd.DataFrame(list(skipped_qs.values()))
+        
+        # Remove timezone from datetime columns
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.tz_localize(None)
+        
+        buffer = io.BytesIO()
+        df.to_excel(buffer, index=False)
+        
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{job_id}_skipped.xlsx"'
+        return response
+    
+    raise Http404("No skipped data found")
+
+
+
+
 from adminpanel.views import get_agent_from_user
 # -----------------------------------------------------
 # CHAT DASHBOARD
@@ -262,12 +346,14 @@ def chat_dashboard(request):
         if normalized not in seen:
             seen.add(normalized)
             mobile_list.append({"mobile": normalized})
+    agent_name = agent.name if hasattr(agent, 'name') and agent.name else request.user.get_full_name() or request.user.username
     return render(request, "messaging/chat.html", {
         "mobile_list": mobile_list,
         "user_name": request.user.username,
         "MEDIA_URL": settings.MEDIA_URL,
         "agent": agent,
         "user": request.user,
+        "agent_name": agent_name,
     })
 
 
@@ -1844,23 +1930,23 @@ from .utils import (
 
 
 from .statement_pdf import build_statement_pdf
+from messaging2.utils import get_payment_details
 
 logger = logging.getLogger(__name__)
 
-@require_GET
+
 @require_GET
 def statement_details(request):
-    """Fetch loan details for the modal – uses get_payment_details for accuracy."""
+    """Fetch loan details for the modal – returns consistent total due."""
     mobile = request.GET.get('mobile')
     if not mobile:
         return JsonResponse({'success': False, 'error': 'Mobile required'}, status=400)
     app_key = request.GET.get('app', 'psf')
 
-    if app_key not in APP_CONFIG:
+    if app_key not in APP_CONFIG:   # your APP_CONFIG dict
         return JsonResponse({'success': False, 'error': f'Invalid app: {app_key}'}, status=400)
 
     try:
-        # 1. Get payment details (correct total_due, customer_name, vehicle_no, regular_emi)
         payment_details = get_payment_details(app_key, mobile)
         if not payment_details:
             return JsonResponse({'success': False, 'error': 'No payment details found'}, status=404)
@@ -1868,29 +1954,27 @@ def statement_details(request):
         agreement_no = payment_details['loan_number']
         finance_id = payment_details.get('finance_id', 0)
 
-        # 2. Fetch full loan data (for next_due_date, repayment_schedules, etc.)
         loan = fetch_loan_details(app_key, agreement_no)
         if not loan:
             return JsonResponse({'success': False, 'error': 'Loan data not found'}, status=404)
 
-        # 3. Fetch LCC details (for address, branch, region, etc.)
-        lcc = fetch_lcc_details(app_key, agreement_no, finance_id)
-        if not lcc:
-            lcc = {}
+        lcc = fetch_lcc_details(app_key, agreement_no, finance_id) or {}
 
-        # 4. Use payment_details for totals and customer name
-        total_due = payment_details.get('total_due', 0)
-        customer_name = payment_details.get('customer_name', '') or loan.get('primary_customer_name', '')
-        vehicle_no = payment_details.get('vehicle_no', '') or lcc.get('registration_no', '')
+        # ---- Compute total due consistently ----
+        # Use loan's LPIDues and TotalVASDues – NOT the repayment API values.
+        due_amount = payment_details.get('due_amount', 0)
+        lpi_due = loan.get('lpi_dues', 0)          # from GetLoanAgreementNoAsync
+        vas_due = loan.get('total_vas_dues', 0)    # from GetLoanAgreementNoAsync
+        total_due = due_amount + lpi_due + vas_due
 
         return JsonResponse({
             'success': True,
-            'customer_name': customer_name,
+            'customer_name': payment_details.get('customer_name', ''),
             'loan_number': agreement_no,
-            'vehicle_no': vehicle_no,
-            'due_amount': payment_details.get('due_amount', 0),
-            'lpi_due': payment_details.get('lpi_due', 0),
-            'vas_due': payment_details.get('vas_due', 0),
+            'vehicle_no': payment_details.get('vehicle_no', ''),
+            'due_amount': due_amount,
+            'lpi_due': lpi_due,
+            'vas_due': vas_due,
             'total_due': total_due,
             'regular_emi': payment_details.get('regular_emi', 0),
             'next_due_date': loan.get('next_due_date', ''),
@@ -1902,17 +1986,15 @@ def statement_details(request):
     except Exception as e:
         logger.exception("Statement details error")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-# messaging2/views.py (or your main views)
 
-from django.core.files.base import ContentFile
-from django.conf import settings
-import os
-from messaging2.utils import get_payment_details
-# messaging2/views.py
 
 @csrf_exempt
 @require_POST
 def send_statement(request):
+    """
+    Generate and send Statement PDF via WhatsApp.
+    Uses loan-level LPIDues and TotalVASDues (NOT repayment API values).
+    """
     mobile = request.POST.get('mobile')
     app_key = request.POST.get('app', 'psf')
     sender_name = request.POST.get('sender_name', 'You')
@@ -1920,17 +2002,17 @@ def send_statement(request):
     if not mobile:
         return JsonResponse({'success': False, 'error': 'Mobile required'}, status=400)
 
-    config = APP_CONFIG.get(app_key)
+    config = APP_CONFIG.get(app_key)   # your config dict
     if not config:
         return JsonResponse({'success': False, 'error': 'Invalid app'}, status=400)
 
     upload_func = config['upload_media_func']
     send_func = config['send_media_func']
     log_model = config['log_model']
-    contact_model = config.get('contact_model')  # ChatContact2, ChatContact, etc.
+    contact_model = config.get('contact_model')
 
     try:
-        # 1. Get payment details
+        # 1. Get payment details (customer name, vehicle no, regular EMI, due amount)
         payment_details = get_payment_details(app_key, mobile)
         if not payment_details:
             raise ValueError("No payment details found")
@@ -1938,22 +2020,18 @@ def send_statement(request):
         agreement_no = payment_details['loan_number']
         finance_id = payment_details.get('finance_id', 0)
 
-        # 2. Fetch full loan data
+        # 2. Fetch full loan data (has correct LPIDues, TotalVASDues, schedules)
         loan = fetch_loan_details(app_key, agreement_no)
         if not loan:
             raise ValueError("Loan data not found")
 
-        # 3. Fetch LCC details
-        lcc = fetch_lcc_details(app_key, agreement_no, finance_id)
-        if not lcc:
-            lcc = {}
+        # 3. Fetch LCC details (address, branch, region, vehicle, DOB, etc.)
+        lcc = fetch_lcc_details(app_key, agreement_no, finance_id) or {}
 
-        # 4. Merge payment_details
+        # 4. Merge ONLY safe fields from payment_details.
+        #    IMPORTANT: Do NOT overwrite lpi_dues or total_vas_dues with repayment API values.
         loan['regular_emi_amount'] = payment_details.get('regular_emi', loan.get('regular_emi_amount', 0))
         loan['overdue_amount'] = payment_details.get('due_amount', loan.get('overdue_amount', 0))
-        loan['lpi_dues'] = payment_details.get('lpi_due', loan.get('lpi_dues', 0))
-        loan['total_vas_dues'] = payment_details.get('vas_due', loan.get('total_vas_dues', 0))
-        loan['total_due'] = payment_details.get('total_due', 0)
         loan['vehicle_number'] = payment_details.get('vehicle_no', loan.get('vehicle_number', ''))
 
         # 5. Build customer dict
@@ -1970,12 +2048,9 @@ def send_statement(request):
         pdf_bytes = build_statement_pdf(customer, loan, lcc, app_name=config.get('app_name'))
 
         # 7. Save to log model
-        from io import BytesIO
-        from django.core.files.base import ContentFile
-        from datetime import datetime, timezone
-
         filename = f"statement_{agreement_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
         sent_text = f"📄 Statement for loan {agreement_no} sent"
+
         log_entry = log_model(
             mobile=mobile,
             template_name='statement_pdf',
@@ -1987,7 +2062,7 @@ def send_statement(request):
             sender_name=sender_name,
             customer_name=customer.get('customer_name', ''),
             vehicle_number=loan.get('vehicle_number', ''),
-            sent_at=datetime.now(timezone.utc),
+            sent_at=datetime.now(),
         )
         log_entry.media_file.save(filename, ContentFile(pdf_bytes), save=False)
         log_entry.save()
@@ -2009,16 +2084,13 @@ def send_statement(request):
         log_entry.message_id = message_id
         log_entry.save(update_fields=['message_id'])
 
-        # 9. UPDATE CONTACT MODEL (critical for UI)
+        # 9. Update contact model (for UI last message)
         if contact_model:
             contact, created = contact_model.objects.get_or_create(mobile=mobile)
             contact.last_msg = sent_text
             contact.last_time = datetime.now(timezone.utc)
             contact.last_type = 'document'
             contact.last_status = 'Sent'
-            # If this is an agent sending, unread should not increase for the agent.
-            # Usually unread is for incoming messages, so we can leave it as is.
-            # If you want to set unread=0 for outgoing, you can do so, but not required.
             contact.save()
 
         return JsonResponse({
@@ -2032,4 +2104,134 @@ def send_statement(request):
 
     except Exception as e:
         logger.exception("Send statement error")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+# ===================== foreclosure ===============================
+
+from .foreclosure_statement_pdf import build_foreclosure_statement_pdf
+
+
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+@require_POST
+def send_foreclosure(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    mobile = data.get('mobile')
+    app_key = data.get('app', 'psf')
+    sender_name = data.get('sender_name', 'You')
+
+    if not mobile:
+        return JsonResponse({'success': False, 'error': 'Mobile required'}, status=400)
+
+    config = APP_CONFIG.get(app_key)   # make sure APP_CONFIG is in scope
+    if not config:
+        return JsonResponse({'success': False, 'error': f'Invalid app: {app_key}'}, status=400)
+
+    upload_func = config['upload_media_func']
+    send_func = config['send_media_func']
+    log_model = config['log_model']
+    contact_model = config.get('contact_model')
+
+    try:
+        # 1. Get payment details
+        payment_details = get_payment_details(app_key, mobile)
+        if not payment_details:
+            raise ValueError("No payment details found")
+
+        agreement_no = payment_details['loan_number']
+        finance_id = payment_details.get('finance_id', 0)
+
+        # 2. Fetch full loan data (has correct LPIDues, TotalPrincipalDue, etc.)
+        loan = fetch_loan_details(app_key, agreement_no)
+        if not loan:
+            raise ValueError("Loan data not found")
+
+        # 3. Fetch LCC details (address, branch, vehicle, DOB, etc.)
+        lcc = fetch_lcc_details(app_key, agreement_no, finance_id) or {}
+
+        # 4. Merge safe fields from payment_details (do NOT overwrite lpi_dues or total_vas_dues)
+        loan['regular_emi_amount'] = payment_details.get('regular_emi', loan.get('regular_emi_amount', 0))
+        loan['overdue_amount'] = payment_details.get('due_amount', loan.get('overdue_amount', 0))
+        loan['vehicle_number'] = payment_details.get('vehicle_no', loan.get('vehicle_number', ''))
+
+        # 5. Build customer dict
+        customer = {
+            'customer_name': payment_details.get('customer_name', '') or loan.get('primary_customer_name', ''),
+            'contact': mobile,
+            'full_address': lcc.get('address', ''),
+            'dob': lcc.get('dob', ''),
+            'email': lcc.get('email', ''),
+            'father_name': lcc.get('father_name', ''),
+        }
+
+        # 6. Generate foreclosure PDF using the corrected logic
+        pdf_bytes = build_foreclosure_statement_pdf(
+            customer_name=customer['customer_name'],
+            customer_contact=customer['contact'],
+            customer_dob=customer['dob'],
+            loan_dict=loan,
+            lcc_dict=lcc,
+        )
+
+        # 7. Save to log model
+        filename = f"foreclosure_{agreement_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+        sent_text = f"📄 Foreclosure statement for loan {agreement_no} sent"
+
+        log_entry = log_model(
+            mobile=mobile,
+            template_name='foreclosure_pdf',
+            sent_text_message=sent_text,
+            status='Sent',
+            message_id='',
+            message_type='Sent',
+            content_type='document',
+            sender_name=sender_name,
+            customer_name=customer.get('customer_name', ''),
+            vehicle_number=loan.get('vehicle_number', ''),
+            sent_at=timezone.now(),      # ✅ FIXED
+        )
+        log_entry.media_file.save(filename, ContentFile(pdf_bytes), save=False)
+        log_entry.save()
+
+        # 8. Upload and send via WhatsApp
+        file_obj = BytesIO(pdf_bytes)
+        file_obj.name = filename
+        file_obj.content_type = "application/pdf"
+        upload_result = upload_func(file_obj)
+        media_id = upload_result.get('id')
+        send_result = send_func(
+            to_number=mobile,
+            media_id=media_id,
+            media_type='document',
+            caption=f"Foreclosure Statement for Loan {agreement_no}",
+            filename=filename
+        )
+        message_id = send_result.get('messages', [{}])[0].get('id')
+        log_entry.message_id = message_id
+        log_entry.save(update_fields=['message_id'])
+
+        # 9. Update contact model
+        if contact_model:
+            contact, created = contact_model.objects.get_or_create(mobile=mobile)
+            contact.last_msg = sent_text
+            contact.last_time = timezone.now()   # ✅ FIXED
+            contact.last_type = 'document'
+            contact.last_status = 'Sent'
+            contact.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Foreclosure statement sent',
+            'message_id': message_id,
+            'media_url': log_entry.media_file.url if log_entry.media_file else '',
+            'loan_number': agreement_no,
+            'sent_text_message': sent_text,
+        })
+
+    except Exception as e:
+        logger.exception("Send foreclosure error")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

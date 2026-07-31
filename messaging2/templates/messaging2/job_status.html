@@ -20,6 +20,23 @@
         .progress-bar {
             transition: width 0.5s ease-in-out;
         }
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px 16px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: #6c757d;
+        }
+        .stat-sent .stat-number { color: #198754; }
+        .stat-skipped .stat-number { color: #ffc107; }
+        .stat-failed .stat-number { color: #dc3545; }
     </style>
     <script>
         // Auto-refresh every 5 seconds until 100%
@@ -35,14 +52,41 @@
     <div class="progress-container">
         <h3 class="text-center mb-4">📤 WhatsApp Bulk Sending Progress</h3>
 
+        <!-- Job Details -->
         <div class="mb-3">
             <p><strong>Job ID:</strong> {{ job.job_id }}</p>
             <p><strong>Template:</strong> {{ job.template_name }}</p>
             <p><strong>Total Customers:</strong> {{ job.total_customers }}</p>
-            <p><strong>Sent:</strong> {{ job.sent_count }}</p>
-            <p><strong>Status:</strong> {{ job.status }}</p>
+            <p><strong>Status:</strong> 
+                <span class="badge {% if job.status == 'Completed' %}bg-success{% elif job.status == 'Running' %}bg-primary{% elif job.status == 'Failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                    {{ job.status }}
+                </span>
+            </p>
         </div>
 
+        <!-- Stats Row -->
+        <div class="row g-2 mb-3">
+            <div class="col-4">
+                <div class="stat-card stat-sent">
+                    <div class="stat-number">{{ job.sent_count }}</div>
+                    <div class="stat-label">✅ Sent</div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="stat-card stat-skipped">
+                    <div class="stat-number">{{ job.skipped_count|default:0 }}</div>
+                    <div class="stat-label">⏭️ Skipped (PAID)</div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="stat-card stat-failed">
+                    <div class="stat-number">{{ job.failed_count }}</div>
+                    <div class="stat-label">❌ Failed</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
         <div class="progress mb-3" style="height: 30px;">
             <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
                  role="progressbar"
@@ -56,21 +100,31 @@
 
         <div class="text-center">
             <h5 id="progressValue">{{ progress }}</h5>
+            <p class="text-muted small">
+                Processed: {{ processed }} / {{ job.total_customers }}
+                {% if job.skipped_count > 0 %}
+                    <span class="text-warning">({{ job.skipped_count }} skipped)</span>
+                {% endif %}
+            </p>
+            
             {% if progress < 100 %}
-                <p class="text-muted">Processing... Please wait</p>
+                <p class="text-muted">⏳ Processing... Please wait</p>
             {% else %}
-                <p class="text-success fw-bold">✅ All messages sent!</p>
-           <a href="{% url 'download_success_report2' job.job_id %}" class="btn btn-success btn-sm">
-    Download Success Report
-</a>
-
-<a href="{% url 'download_failed_report2' job.job_id %}" class="btn btn-danger btn-sm">
-    Download Failed Report
-</a>
-
+                <div class="alert alert-success">
+                    ✅ All messages processed!
+                </div>
+                
+                <div class="d-flex flex-wrap gap-2 justify-content-center mt-3">
+                    <a href="{% url 'download_success_report2' job.job_id %}" class="btn btn-success btn-sm">
+                        📥 Download Success Report
+                    </a>
+                    
+                    <a href="{% url 'download_failed_report2' job.job_id %}" class="btn btn-danger btn-sm">
+                        ❌ Download Failed Report
+                    </a>
+                </div>
             {% endif %}
         </div>
     </div>
 </body>
 </html>
-

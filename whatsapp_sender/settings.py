@@ -62,6 +62,7 @@ COMPANY_ADDRESS = "H.No - 5-4-156, Flat No - 1403, 14Th Floor, T19 Towers - 2, M
 
 HELPLINE_NUMBER = "1800-xxx-xxx"
 GRIEVANCE_EMAIL = "grievance@example.com"
+PORTAL_BASE_URL = "https://smsquare.info"
 
 MIN_PART_PAYMENT = 100.0
 

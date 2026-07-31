@@ -1513,31 +1513,25 @@ def extract_loan_data(raw_data: Any) -> Dict[str, Any]:
         'start_date': _safe_str(get('StartDate', 'start_date', 'LoanDate')),
         'disbursement_status': _safe_str(get('DisbursementStatus', 'disbursement_status', 'Status')),
         'yearly_indicative_roi': _safe_float(get('YearlyIndicativeROI', 'yearly_indicative_roi', 'ROI')),
-        'effective_apr': _safe_float(get('EffectiveAPR', 'effective_apr', 'APR')),
+        'effective_apr': _safe_float(get('EffectiveAPRPercente', 'effective_apr', 'APR')),
         'emi_start_date': _safe_str(get('EMIStartDate', 'emi_start_date', 'InstallmentStartDate')),
         'emi_end_date': _safe_str(get('EMIEndDate', 'emi_end_date', 'InstallmentEndDate')),
         'last_paid_date': _safe_str(get('LastPaidDate', 'last_paid_date')),
         'installment_type_id': _safe_str(get('InstallmentTypeId', 'installment_type_id', 'Frequency')),
-        'mode_of_repayment_id': _safe_str(get('ModeOfRepaymentId', 'mode_of_repayment_id', 'RepaymentMode')),
+        'mode_of_repayment_id': _safe_str(get('ModeOfRePaymentId', 'mode_of_repayment_id', 'RepaymentMode','PaymentMode')),
         'product_type': _safe_str(get('ProductType', 'product_type', 'LoanType')),
         'vehicle_number': _safe_str(get('VehicleNumber', 'vehicle_number', 'RegistrationNo')),
         'regular_emi_amount': _safe_float(get('RegularEMIAmount', 'regular_emi_amount', 'EMI')),
+        # ---- NEW: LPC interest rate (used in LPI projection) ----
+        'lpc_interest_pct': _safe_float(get('LPCInterest', 'lpc_interest_pct', 'LPCInterest')),
     }
 
-    # ----- CRITICAL: Extract next_due_date from the correct key -----
-    # The actual API returns "NextPaymentDate" (with time)
-    next_due = get(
-        'NextPaymentDate',        # ✅ Primary key from live API
-        'next_payment_date',
-        'NextDueDate',
-        'next_due_date'
-    )
+    # ----- Extract next_due_date -----
+    next_due = get('NextEMIDueDate', 'next_payment_date', 'NextDueDate', 'next_due_date')
     loan['next_due_date'] = _safe_str(next_due)
-
-    # Debug log to confirm
     logger.info(f"Extracted next_due_date: {loan['next_due_date']}")
 
-    # ----- Repayment Schedules -----
+    # ----- Repayment Schedules (with all fields needed) -----
     schedules_raw = get('RepaymentSchedules', 'repayment_schedules')
     schedules = []
     if isinstance(schedules_raw, list):
@@ -1554,14 +1548,41 @@ def extract_loan_data(raw_data: Any) -> Dict[str, Any]:
                 'lpc': _safe_float(item.get('LPC', item.get('lpc', 0))),
                 'payment_status': _safe_str(item.get('PaymentStatus', item.get('payment_status'))),
                 'pending_amount': _safe_float(item.get('PendingAmount', item.get('pending_amount', 0))),
+                'payment_mode': _safe_str(item.get('PaymentMode', item.get('payment_mode'))),
+                # ---- FORECLOSURE FIELDS (per installment) ----
+                'principal': _safe_float(item.get('Principal', item.get('principal', 0))),
+                'interest': _safe_float(item.get('Interest', item.get('interest', 0))),
+                'principal_os': _safe_float(item.get('PrincipalOS', item.get('principal_os', 0))),
             })
     loan['repayment_schedules'] = schedules
+    last_paid_date = ''
+    for sch in reversed(loan['repayment_schedules']):
+        if sch.get('payment_date'):
+            parts = [p.strip() for p in str(sch['payment_date']).split(',') if p.strip()]
+            if parts:
+                last_paid_date = parts[-1]
+                break
+    loan['last_paid_date'] = last_paid_date
+
+    # ----- VAS List (for insurance / VAS charge) -----
+    vas_raw = get('VASs', 'vas_list')  # AllCloud key is 'VASs'
+    vas_list = []
+    if isinstance(vas_raw, list):
+        for item in vas_raw:
+            if not isinstance(item, dict):
+                continue
+            vas_list.append({
+                'name': _safe_str(item.get('Name', item.get('name', ''))),
+                'amount': _safe_float(item.get('Amount', item.get('amount', 0))),
+                'vas_type_id': _safe_str(item.get('VASTypeId', item.get('vas_type_id', ''))),
+                'received_amount': _safe_float(item.get('ReceivedAmount', item.get('received_amount', 0))),
+                'received_date': _safe_str(item.get('ReceivedDate', item.get('received_date', ''))),
+                'due_date': _safe_str(item.get('DueDate', item.get('due_date', ''))),
+                'vas_due': _safe_float(item.get('VASDue', item.get('vas_due', 0))),
+            })
+    loan['vas_list'] = vas_list
 
     return loan
-
-# ============================================================
-# EXTRACT LCC DATA (from GetLccDetailsByAgreementNo)
-# ============================================================
 
 def extract_lcc_data(raw_data: Any) -> Dict[str, Any]:
     if isinstance(raw_data, list) and raw_data:
@@ -1580,13 +1601,15 @@ def extract_lcc_data(raw_data: Any) -> Dict[str, Any]:
         'customer_name': _safe_str(get('CustomerName', 'customer_name')),
         'dob': _safe_str(get('DOB', 'dob', 'DateOfBirth')),
         'email': _safe_str(get('Email', 'email', 'EmailID')),
-        'address': _safe_str(get('Address', 'address', 'CustomerAddress')),
+        'address': _safe_str(get('CustomerAddr', 'address', 'CustomerAddress')),
         'father_name': _safe_str(get('FatherName', 'father_name', 'SpouseName')),
         'finance_id': _safe_str(get('FinanceId', 'finance_id')),
         'lpc_due': _safe_float(get('LPCDue', 'lpc_due', 'LPIDues')),
         'vas_due_amount': _safe_float(get('VasDueAmount', 'vas_due_amount')),
         'total_dues': _safe_float(get('TotalDues', 'total_dues')),
         'emi_due_count': _safe_float(get('EMIDueCount', 'emi_due_count')),
+        # ---- ADD hand_loan_due_amount (if available) ----
+        'hand_loan_due_amount': _safe_float(get('HandLoanDueAmount', 'hand_loan_due_amount', 0)),
     }
 
 # ============================================================
@@ -1608,3 +1631,221 @@ def fetch_lcc_details(app_key: str, agreement_no: str, finance_id: str = "0") ->
     return extract_lcc_data(data)
 
 
+# ======================== foreclosure =============================================
+import datetime as dt
+import re
+from typing import Optional
+from reportlab.lib.pdfencrypt import StandardEncryption
+
+_DOB_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%m/%d/%Y")
+
+def dob_password(dob: str) -> Optional[str]:
+    if not dob:
+        return None
+    head = re.split(r"[T ]", dob.strip(), maxsplit=1)[0]
+    for fmt in _DOB_FORMATS:
+        try:
+            parsed = dt.datetime.strptime(head, fmt).date()
+        except ValueError:
+            continue
+        return parsed.strftime("%d%m%Y")
+    return None
+
+PASSWORD_HINT_SUFFIX = "_password-DOB-DDMMYYYY"
+
+def filename_with_hint(stem: str, dob: str) -> str:
+    suffix = PASSWORD_HINT_SUFFIX if dob_password(dob) else ""
+    return f"{stem}{suffix}.pdf"
+
+def encryption_for(dob: str) -> Optional[StandardEncryption]:
+    password = dob_password(dob)
+    if not password:
+        return None
+    return StandardEncryption(
+        userPassword=password,
+        ownerPassword=password,
+        canPrint=1,
+        canModify=0,
+        canCopy=0,
+        canAnnotate=0,
+    )
+
+from io import BytesIO
+import qrcode
+
+def qr_png(url: str) -> bytes:
+    img = qrcode.make(url, border=1)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+from datetime import datetime, timedelta, timezone as dt_timezone
+from urllib.parse import urljoin
+from itsdangerous import URLSafeSerializer, BadSignature
+from django.conf import settings
+
+IST = dt_timezone(timedelta(hours=5, minutes=30))
+
+DOC_LABELS = {
+    "statement": "Statement of Account",
+    "foreclosure": "Foreclosure Statement",
+    "receipt": "Payment Receipt",
+    "charge_receipt": "Charge Receipt",
+}
+
+def _serializer():
+    return URLSafeSerializer(settings.SECRET_KEY, salt="portal-doc-verify")
+
+def sign_document(doc_type: str, agreement_no: str, amount: float, doc_date: str) -> str:
+    payload = {
+        "doc": doc_type,
+        "agr": agreement_no,
+        "amt": round(float(amount), 2),
+        "date": doc_date,
+        "gen": datetime.now(IST).strftime("%Y-%m-%d %H:%M"),
+    }
+    return _serializer().dumps(payload)
+
+def verify_token(token: str) -> Optional[dict]:
+    try:
+        return _serializer().loads(token)
+    except BadSignature:
+        return None
+
+def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -> str:
+    token = sign_document(doc_type, agreement_no, amount, doc_date)
+    base = settings.PORTAL_BASE_URL.rstrip("/") + "/"  # Must be defined in settings
+    return urljoin(base, f"verify/{token}")
+
+
+
+
+
+# messaging/utils.py - Add at the top after imports
+
+# ============================================================
+# 🔥 API CHECK CONFIGURATION
+# ============================================================
+
+API_CHECK_TEMPLATES = [
+    "1", "2", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+]
+
+def needs_api_check(template_id):
+    """Check if template needs API check (PAID/UNPAID)"""
+    return str(template_id) in API_CHECK_TEMPLATES
+
+# SMSquare LCC API Configuration
+SMSQUARE_LCC_URL = "https://prod-api-smsquare.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
+SMSQUARE_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb"
+def check_smsquare_payment_status(mobile, agreement_no=None):
+    """
+    Check if SMSquare customer has PAID or UNPAID
+    Uses LCC API with Agreement Number
+    
+    If agreement_no is provided → Use it directly
+    If not provided → Try to get from Lcc table
+    
+    Returns: {'is_paid': True/False, 'total_due': amount}
+    """
+    import json  # ✅ Add this import
+    
+    try:
+        # Step 1: Get agreement number
+        if not agreement_no:
+            from financehub.models import Lcc
+            mobile_clean = ''.join(filter(str.isdigit, mobile))
+            if len(mobile_clean) > 10:
+                mobile_clean = mobile_clean[-10:]
+            
+            lcc_record = Lcc.objects.filter(cust_mobile=mobile_clean).first()
+            if not lcc_record:
+                lcc_record = Lcc.objects.filter(guarantor_mobile=mobile_clean).first()
+            
+            if not lcc_record:
+                return {
+                    'is_paid': True,
+                    'total_due': 0,
+                    'status': 'no_loan'
+                }
+            
+            agreement_no = lcc_record.loan_number
+        
+        # Step 2: Call LCC API
+        headers = {
+            "Authorization": SMSQUARE_LCC_AUTH,
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "AgreementNo": agreement_no,
+            "FinanceId": 0
+        }
+        
+        response = requests.post(SMSQUARE_LCC_URL, headers=headers, json=payload, timeout=30)
+        
+        # ✅ Step 3: Check response status
+        if response.status_code != 200:
+            print(f"⚠️ LCC API HTTP {response.status_code}: {response.text[:200]}")
+            return {
+                'is_paid': False,
+                'total_due': 0,
+                'status': 'api_error',
+                'error': f"HTTP {response.status_code}"
+            }
+        
+        # ✅ Step 4: Parse JSON safely
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            print(f"⚠️ Invalid JSON response: {response.text[:200]}")
+            return {
+                'is_paid': False,
+                'total_due': 0,
+                'status': 'api_error',
+                'error': 'Invalid JSON response'
+            }
+        
+        # ✅ Step 5: If response is a string, parse again
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                print(f"⚠️ String response not JSON: {data[:200]}")
+                return {
+                    'is_paid': False,
+                    'total_due': 0,
+                    'status': 'api_error',
+                    'error': 'String response not JSON'
+                }
+        
+        # ✅ Step 6: Calculate total arrears
+        total_dues = float(data.get('TotalDues', 0))
+        lpc_due = float(data.get('LPCDue', 0))
+        vas_due = float(data.get('VasDueAmount', 0))
+        total_arrears = total_dues + lpc_due + vas_due
+        
+        return {
+            'is_paid': total_arrears == 0,  # 0 = PAID, >0 = UNPAID
+            'total_due': total_arrears,
+            'customer_name': data.get('CustomerName', ''),
+            'loan_number': agreement_no
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ LCC API Request Error: {e}")
+        return {
+            'is_paid': False,
+            'total_due': 0,
+            'status': 'api_error',
+            'error': str(e)
+        }
+    except Exception as e:
+        print(f"❌ SMSquare LCC API Error: {e}")
+        # If API fails, assume UNPAID (send reminder)
+        return {
+            'is_paid': False,
+            'total_due': 0,
+            'status': 'api_error',
+            'error': str(e)
+        }

@@ -1433,6 +1433,7 @@ PAYMENT_CONFIG = {
             'base_url': 'https://smsquare.info/api',
             'endpoint': '/payment-link',
             'api_key': 'uSZPjPUREaJMt8D3dtdz8jq23lFDDT3VLdTD-KvuNXerCK4c1cAkc6qlY1rnvliE',
+            "financier_name":"padmasai"
         },
       
 
@@ -1462,6 +1463,7 @@ PAYMENT_CONFIG = {
             'base_url': 'https://smsquare.info/api',
             'endpoint': '/payment-link',
             'api_key': 'uSZPjPUREaJMt8D3dtdz8jq23lFDDT3VLdTD-KvuNXerCK4c1cAkc6qlY1rnvliE',
+            "financier_name":"smsquare"
         },
 
         # ----- WhatsApp config (unchanged) -----
@@ -1734,7 +1736,8 @@ def generate_payment_link(app_key, mobile, amount):
     }
     payload = {
         "finance_id": finance_id,
-        "amount": float(amount)
+        "amount": float(amount),
+        "financier_name": qr_api.get('financier_name', 'padmasai')   # ✅ dynamic
     }
 
     # 🔍 LOG THE REQUEST
@@ -1808,3 +1811,147 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, short_cod
         if e.response:
             logger.error(e.response.text)
         raise
+
+
+
+
+
+
+
+API_CHECK_TEMPLATES = [
+    "1", "2", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+]
+
+def needs_api_check(template_id):
+    """Check if template needs API check (PAID/UNPAID)"""
+    return str(template_id) in API_CHECK_TEMPLATES
+
+
+def check_smsquare_payment_status(mobile, agreement_no=None):
+    """
+    Check if Padma Sai (messaging2) customer has PAID or UNPAID
+    
+    API: https://prod-api-padmasai.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo
+    Auth: amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e
+    
+    Returns: {'is_paid': True/False, 'total_due': amount}
+    """
+    import json
+    import requests
+    from financehub.models import Lcc
+    
+    try:
+        # Step 1: Get agreement number if not provided
+        if not agreement_no:
+            mobile_clean = ''.join(filter(str.isdigit, mobile))
+            if len(mobile_clean) > 10:
+                mobile_clean = mobile_clean[-10:]
+            
+            # Try to find in Lcc table
+            lcc_record = Lcc.objects.filter(cust_mobile=mobile_clean).first()
+            if not lcc_record:
+                lcc_record = Lcc.objects.filter(guarantor_mobile=mobile_clean).first()
+            
+            if not lcc_record:
+                # No loan found → Treat as PAID (skip)
+                return {
+                    'is_paid': True,
+                    'total_due': 0,
+                    'status': 'no_loan'
+                }
+            
+            agreement_no = lcc_record.loan_number
+        
+        # Step 2: Call Padma Sai LCC API (messaging2)
+        SMSQUARE_LCC_URL = "https://prod-api-padmasai.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
+        SMSQUARE_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e"
+        
+        headers = {
+            "Authorization": SMSQUARE_LCC_AUTH,
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "AgreementNo": agreement_no,
+            "FinanceId": 0
+        }
+        
+        response = requests.post(SMSQUARE_LCC_URL, headers=headers, json=payload, timeout=30)
+        
+        # Step 3: Check response status
+        if response.status_code != 200:
+            return {
+                'is_paid': False,
+                'total_due': 0,
+                'status': 'api_error',
+                'error': f"HTTP {response.status_code}"
+            }
+        
+        # Step 4: Parse JSON
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            return {
+                'is_paid': False,
+                'total_due': 0,
+                'status': 'api_error',
+                'error': 'Invalid JSON response'
+            }
+        
+        # Step 5: If response is a string, parse again
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                return {
+                    'is_paid': False,
+                    'total_due': 0,
+                    'status': 'api_error',
+                    'error': 'String response not JSON'
+                }
+        
+        # Step 6: Calculate total arrears from response
+        # Response fields: TotalDues, LPCDue, VasDueAmount
+        total_dues = float(data.get('TotalDues', 0))
+        lpc_due = float(data.get('LPCDue', 0))
+        vas_due = float(data.get('VasDueAmount', 0))
+        total_arrears = total_dues + lpc_due + vas_due
+        
+        # Example response:
+        # {
+        #   "TotalDues": 10110.00,
+        #   "LPCDue": 80.0,
+        #   "VasDueAmount": 0.0,
+        #   "CustomerName": "DEPILLI GOVINDA",
+        #   ...
+        # }
+        
+        return {
+            'is_paid': total_arrears == 0,  # 0 = PAID, >0 = UNPAID
+            'total_due': total_arrears,
+            'customer_name': data.get('CustomerName', ''),
+            'loan_number': agreement_no,
+            'finance_id': data.get('FinanceId', 0),
+            'registration_no': data.get('RegistrationNo', ''),
+            'vehicle_class': data.get('VehicleClass', ''),
+            'region': data.get('Region', ''),
+            'branch': data.get('Branch', ''),
+            'status': 'success'
+        }
+        
+    except requests.exceptions.RequestException as e:
+        # API error → Assume UNPAID (send reminder)
+        return {
+            'is_paid': False,
+            'total_due': 0,
+            'status': 'api_error',
+            'error': str(e)
+        }
+    except Exception as e:
+        # Any other error → Assume UNPAID (send reminder)
+        return {
+            'is_paid': False,
+            'total_due': 0,
+            'status': 'api_error',
+            'error': str(e)
+        }

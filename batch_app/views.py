@@ -218,6 +218,8 @@ def get_job_data(job):
 # VIEWS
 # ============================================================
 
+
+
 def dashboard(request):
     try:
         context = {
@@ -226,6 +228,7 @@ def dashboard(request):
             'completed_jobs': BatchJob.objects.filter(status='completed').count(),
             'failed_jobs': BatchJob.objects.filter(status='failed').count(),
             'total_sent': BatchJob.objects.aggregate(total=models.Sum('sent_count'))['total'] or 0,
+            'total_skipped': BatchJob.objects.aggregate(total=models.Sum('skipped_count'))['total'] or 0,  # ← ADD THIS
             'total_failed': BatchJob.objects.aggregate(total=models.Sum('failed_count'))['total'] or 0,
             'recent_jobs': BatchJob.objects.order_by('-created_at')[:10],
             'discovered_apps': get_all_messaging_apps(),
@@ -995,35 +998,70 @@ def batch_job_logs(request, job_id):
 # BATCH JOB REPORT
 # ============================================================
 
+import io
+import pandas as pd
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from .models import BatchJob, BatchLog
+
 def batch_job_report(request, job_id):
-    try:
-        import io
-        import pandas as pd
+    """
+    Generate Excel report with support for status filtering.
+    GET params:
+        ?status=success  - Only success (Sent, Delivered, Read)
+        ?status=skipped  - Only skipped (Skipped, PAID)
+        ?status=failed   - Only failed
+        (no param)       - All logs
+    """
+    job = get_object_or_404(BatchJob, job_id=job_id)
+    
+    # Base queryset
+    logs = BatchLog.objects.filter(job=job)
+    
+    # Apply status filter
+    status_filter = request.GET.get('status', 'all')
+    
+    if status_filter == 'success':
+        # Success: Sent, Delivered, Read statuses
+        logs = logs.filter(status__in=['Sent', 'Delivered', 'Read'])
+        filename_suffix = "success"
+    elif status_filter == 'skipped':
+        # Skipped: Skipped, PAID statuses
+        logs = logs.filter(status__in=['Skipped', 'PAID'])
+        filename_suffix = "skipped"
+    elif status_filter == 'failed':
+        # Failed: Failed status
+        logs = logs.filter(status='Failed')
+        filename_suffix = "failed"
+    else:
+        filename_suffix = "full"
+    
+    # Convert to DataFrame
+    data = [{
+        'Mobile': log.mobile,
+        'Customer Name': log.customer_name,
+        'Status': log.status,
+        'Message ID': log.message_id,
+        'Error': log.error_message,
+        'Sent At': format_datetime_12hr(log.sent_at, show_seconds=True) if log.sent_at else '',
+    } for log in logs]
+    
+    df = pd.DataFrame(data)
+    buffer = io.BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
+    
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="batch_{job.job_id}_{filename_suffix}_report.xlsx"'
+    return response
 
-        job = get_object_or_404(BatchJob, job_id=job_id)
-        logs = BatchLog.objects.filter(job=job)
 
-        data = [{
-            'Mobile': log.mobile,
-            'Customer Name': log.customer_name,
-            'Status': log.status,
-            'Message ID': log.message_id,
-            'Error': log.error_message,
-            'Sent At': format_datetime_12hr(log.sent_at, show_seconds=True),
-        } for log in logs]
 
-        df = pd.DataFrame(data)
-        buffer = io.BytesIO()
-        df.to_excel(buffer, index=False)
-        buffer.seek(0)
 
-        response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = f'attachment; filename="batch_{job.job_id}_report.xlsx"'
-        return response
 
-    except Exception as e:
-        messages.error(request, f'❌ Error generating report: {str(e)}')
-        return redirect('batch_job_detail', job_id=job_id)
 
 
 # ============================================================

@@ -93,6 +93,7 @@ class BulkJob2(models.Model):
     excel_file = models.CharField(max_length=500, blank=True, default='')
     success_report = models.FileField(upload_to="reports2/", blank=True, null=True)
     failed_report = models.FileField(upload_to="reports2/", blank=True, null=True)
+    skipped_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)

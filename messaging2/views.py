@@ -225,12 +225,34 @@ def upload_and_send2(request):
         form = UploadForm2()
     return render(request, "messaging2/index.html", {"form": form})
 
+
+
+
 def job_status2(request, job_id):
     job = get_object_or_404(BulkJob2, job_id=job_id)
-    progress = 0
+    
+    # ✅ Calculate progress based on ALL processed (sent + skipped + failed)
+    processed = job.sent_count + job.skipped_count + job.failed_count
+    
     if job.total_customers > 0:
-        progress = round((job.sent_count / job.total_customers) * 100, 2)
-    return render(request, "messaging2/job_status.html", {"job": job, "progress": progress})
+        progress = round((processed / job.total_customers) * 100, 2)
+    else:
+        progress = 0
+    
+    # ✅ Auto-complete if all customers are processed but status not updated
+    if processed >= job.total_customers and job.status != 'Completed':
+        job.status = 'Completed'
+        job.completed_at = timezone.now()
+        job.save(update_fields=['status', 'completed_at'])
+        # Trigger report generation if not already done
+        if not job.success_report and not job.failed_report:
+            finalize_bulk_job2.delay(job_id)
+    
+    return render(request, "messaging2/job_status.html", {
+        "job": job,
+        "progress": progress,
+        "processed": processed
+    })
 
 def download_success_report2(request, job_id):
     job = get_object_or_404(BulkJob2, job_id=job_id)
@@ -243,6 +265,67 @@ def download_failed_report2(request, job_id):
     if job.failed_report:
         return redirect(default_storage.url(job.failed_report.name))
     raise Http404("Failed report not found.")
+
+
+
+
+
+# messaging2/views.py - Add this function
+
+def download_skipped_report2(request, job_id):
+    """Download skipped (PAID) customers report"""
+    job = get_object_or_404(BulkJob2, job_id=job_id)
+    
+    if job.skipped_count == 0:
+        raise Http404("No skipped customers found for this job")
+    
+    # ✅ Check for PAID, Skipped, or any status that indicates skip
+    skipped_qs = SmsWhatsAppLog2.objects.filter(
+        job_id=job_id,
+        status__in=['PAID', 'Skipped', 'Paid']
+    )
+    
+    # ✅ Also check message_type = 'Skipped'
+    if not skipped_qs.exists():
+        skipped_qs = SmsWhatsAppLog2.objects.filter(
+            job_id=job_id,
+            message_type='Skipped'
+        )
+    
+    # ✅ Fallback: check error_message for PAID
+    if not skipped_qs.exists():
+        skipped_qs = SmsWhatsAppLog2.objects.filter(
+            job_id=job_id,
+            error_message__icontains='PAID'
+        )
+    
+    if skipped_qs.exists():
+        import io
+        import pandas as pd
+        from django.http import HttpResponse
+        
+        df = pd.DataFrame(list(skipped_qs.values()))
+        
+        # Remove timezone from datetime columns
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.tz_localize(None)
+        
+        buffer = io.BytesIO()
+        df.to_excel(buffer, index=False)
+        
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{job_id}_skipped.xlsx"'
+        return response
+    
+    raise Http404("No skipped data found")
+
+
+
+
 
 # -----------------------------------------------------
 # CHAT DASHBOARD (PSF only)

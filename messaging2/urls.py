@@ -33,9 +33,9 @@ urlpatterns = [
 
 
    path('agent-dashboard/', views.agent_dashboard2, name='agent_dashboard'),
-path('executive-dashboard/', views.executive_dashboard2, name='executive_dashboard'),
-path('manager-dashboard/', views.manager_dashboard2, name='manager_dashboard'),
-path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
+   path('executive-dashboard/', views.executive_dashboard2, name='executive_dashboard'),
+   path('manager-dashboard/', views.manager_dashboard2, name='manager_dashboard'),
+   path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
     # path('admin_dashboard/', admin_dashboard, name='admin_dashboard'),
     
     # ============================================
@@ -68,7 +68,7 @@ path('head-dashboard/', views.head_dashboard2, name='head_dashboard'),
     path('manager-cases/', views.manager_cases_api, name='manager_cases_api'),
     path('head-cases/', views.head_cases_api, name='head_cases_api'),
     path('export-cases-excel/', views.export_cases_excel, name='export_cases_excel'),
-path('export-group-cases/', views.export_group_cases_excel, name='export_group_cases_excel'),
+    path('export-group-cases/', views.export_group_cases_excel, name='export_group_cases_excel'),
      path('api/fetch-padmasai/', views.fetch_padmasai_details, name='fetch_padmasai'),
      path('executive/export/', views.export_executive_cases, name='export_executive_cases'),
       path('api/payment-details/', views.get_payment_details_view, name='payment_details'),
@@ -77,5 +77,6 @@ path('export-group-cases/', views.export_group_cases_excel, name='export_group_c
      # -----------------------------
     # Real-time Chat Features (App2)
     # -----------------------------
+    path('download-skipped/<uuid:job_id>/', views.download_skipped_report2, name='download_skipped_report2')
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
