@@ -14,10 +14,14 @@ urlpatterns = [
     path('jobs/<str:job_id>/logs/', views.batch_job_logs, name='batch_job_logs'),
     path('jobs/<str:job_id>/report/', views.batch_job_report, name='batch_job_report'),
     
+    # ✅ EDIT - MUST come BEFORE the action pattern
+    path('jobs/<str:job_id>/edit/', views.batch_job_edit, name='batch_job_edit'),
+    
     # ⚠️ IMPORTANT: delete/ must come BEFORE the action pattern
     path('jobs/<str:job_id>/delete/', views.batch_job_delete, name='batch_job_delete'),
     
     # Action pattern - catches all other actions (pause, resume, cancel, etc.)
+    # ⚠️ This must be LAST
     path('jobs/<str:job_id>/<str:action>/', views.batch_job_action, name='batch_job_action'),
     
     # API
@@ -25,5 +29,8 @@ urlpatterns = [
     path('api/templates/', views.get_templates_api, name='api_templates'),
     path('api/batch/<str:job_id>/status/', views.batch_job_status_api, name='api_batch_status'),
     path('api/jobs/count/', views.job_count_api, name='job_count_api'),
-    path('jobs/<str:job_id>/edit/', views.batch_job_edit, name='batch_job_edit'),
+    
+    # NEW: Execution monitoring endpoints
+    path('api/executions/<str:job_id>/', views.get_executions_api, name='api_executions'),
+    path('api/execution/<int:execution_id>/', views.get_execution_detail_api, name='api_execution_detail'),
 ]

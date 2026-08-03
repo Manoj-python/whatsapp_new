@@ -18,7 +18,8 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db import transaction, close_old_connections
 from django.db.models import F
-
+import os
+from django.conf import settings
 from .models import *
 from .utils import *
 from adminpanel.utils import clean_whatsapp_text
@@ -1003,6 +1004,28 @@ def send_ticket_close_message(app_key, case_id):
 
 
 
+# messaging2/tasks.py
+
+import logging
+import re
+import requests
+from celery import shared_task
+from django.utils import timezone
+from django.core.cache import cache
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
+from .models import *
+from .utils import *
+from adminpanel.views import APP_CONFIG
+from adminpanel.utils import clean_whatsapp_text
+
+logger = logging.getLogger(__name__)
+
+# ──────────────────────────────────────────────────────────────────
+#  SEND WELCOME MESSAGE – APP‑AWARE (PSF, SMS, SPL)
+# ──────────────────────────────────────────────────────────────────
+
 @shared_task(queue="ticket_messages")
 def send_welcome_message(app_key, mobile, customer_name=""):
     try:
@@ -1013,28 +1036,34 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         app_name = cfg['app_name']
         chat_prefix = cfg.get('chat_prefix', 'chat2')
         whatsapp_creds = cfg.get('whatsapp', {})
+        upload_media = cfg['upload_media_func']
+        send_media = cfg['send_media_func']
+        open_pdf = cfg['open_legal_pdf_func']
+        format_mobile = cfg['format_mobile_func']
+        welcome_pdf = cfg.get('welcome_pdf', {})
     except KeyError:
         return
 
-    mobile = format_mobile2(mobile)
+    mobile = format_mobile(mobile)
     if not mobile:
         return
 
     customer_name = customer_name or "Customer"
+
+    # ---------- 1. SEND WELCOME TEXT ----------
     free_text = (
-   
-    f"Dear *{customer_name}*,\n\n"
-    f"🎉 *Scratch & Win Alert!* 🎁\n\n"
-    f"Try your luck and *win up to ₹1,000!* 💰✨\n\n"
-    f"👉 Visit our *Customer Service Portal* and scratch your lucky card today.\n\n"
-    f"🔗 *Portal:* https://smsquare.info\n\n"
-    f"⏳ *Offer valid until 31st July only!* Don't miss out! 🍀\n\n"
-    f"Regards,\n"
-    f"*{app_name}*"
-)
+        f"Dear *{customer_name}*,\n\n"
+        f"🎉 *Scratch & Win Alert!* 🎁\n\n"
+        f"Try your luck and *win up to ₹1,000!* 💰✨\n\n"
+        f"👉 Visit our *Customer Service Portal* and scratch your lucky card today.\n\n"
+        f"🔗 *Portal:* https://smsquare.info\n\n"
+        f"⏳ *Offer valid until 31st July only!* Don't miss this exciting opportunity! 🍀\n\n"
+        f"*Scratch Now • Win Instantly • Claim Your Reward!*\n\n"
+        f"Regards,\n"
+        f"*{app_name}*"
+    )
 
-
-    # Send WhatsApp message
+    # Send text message (using existing send_whatsapp_text4)
     try:
         resp = send_whatsapp_text4(
             to_number=mobile,
@@ -1050,7 +1079,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         status = "Failed"
         error = str(e)
 
-    # Log the sent message
+    # Log text message
     log = LogModel.objects.create(
         customer_name=app_name,
         mobile=mobile,
@@ -1063,7 +1092,54 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         error_message=error,
     )
 
-    # Update or create contact – DO NOT reset unread for existing contacts
+    # ---------- 2. SEND WELCOME PDF (if configured) ----------
+    if welcome_pdf:
+        try:
+            # Fetch PDF bytes using the app's open_legal_pdf_func
+            pdf_bytes = open_pdf(welcome_pdf['filename'], welcome_pdf['folder'])
+            # Prepare file-like object for upload
+            from io import BytesIO
+            file_obj = BytesIO(pdf_bytes)
+            file_obj.name = welcome_pdf['filename']  # e.g., "Customer_Guide.pdf"
+            
+            # Upload to WhatsApp
+            upload_resp = upload_media(file_obj)
+            media_id = upload_resp.get("id")
+            if media_id:
+                # Send document
+                send_resp = send_media(
+                    to_number=mobile,
+                    media_id=media_id,
+                    media_type="document",
+                    caption="Your Customer Guide",   # optional caption
+                    filename=welcome_pdf['filename']
+                )
+                doc_msg_id = send_resp.get("messages", [{}])[0].get("id", "")
+                doc_status = "Sent"
+                doc_error = ""
+            else:
+                doc_msg_id = ""
+                doc_status = "Failed"
+                doc_error = "Media upload did not return an ID"
+        except Exception as e:
+            doc_msg_id = ""
+            doc_status = "Failed"
+            doc_error = str(e)
+
+        # Log the document message
+        LogModel.objects.create(
+            customer_name=app_name,
+            mobile=mobile,
+            template_name="",
+            sent_text_message=f"PDF: {welcome_pdf['filename']}",  # store filename
+            status=doc_status,
+            message_id=doc_msg_id,
+            message_type="Sent",
+            content_type="document",
+            error_message=doc_error,
+        )
+
+    # ---------- 3. UPDATE / CREATE CONTACT (existing logic) ----------
     contact, created = ContactModel.objects.get_or_create(
         mobile=mobile,
         defaults={
@@ -1071,20 +1147,19 @@ def send_welcome_message(app_key, mobile, customer_name=""):
             "last_time": timezone.now(),
             "last_type": "Sent",
             "last_status": status,
-            "unread": 0,          # only for new contacts
+            "unread": 0,
         }
     )
     if not created:
-        # Update only non‑unread fields
         ContactModel.objects.filter(mobile=mobile).update(
             last_msg="👋 Welcome message sent",
             last_time=timezone.now(),
             last_type="Sent",
             last_status=status,
         )
-        contact.refresh_from_db()   # get current unread count
+        contact.refresh_from_db()
 
-    # WebSocket broadcast – send the real unread count
+    # ---------- 4. WEBSOCKET BROADCAST (unchanged) ----------
     try:
         channel_layer = get_channel_layer()
         gm = re.sub(r"\D", "", mobile)
@@ -1119,7 +1194,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
                     "last_time": timezone.now().isoformat(),
                     "last_type": "Sent",
                     "last_status": status,
-                    "unread": contact.unread,   # ✅ preserve unread count
+                    "unread": contact.unread,
                 }
             }
         )

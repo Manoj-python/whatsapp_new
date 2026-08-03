@@ -1086,7 +1086,11 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     ],  
                 ),
 
-                
+               "48": (
+                    "doc_sms_portal",
+                    "en",
+                    []
+                ), 
 
     }
 
@@ -1102,7 +1106,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
     # --------------------------------------------------
     # TEMPLATES WITH DOCUMENT HEADER
     # --------------------------------------------------
-    if choice in ("19", "20", "21", "25", "30", "31", "32", "33", "35", "37","41"):
+    if choice in ("19", "20", "21", "25", "30", "31", "32", "33", "35", "37","41","48"):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
@@ -1136,7 +1140,8 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
             pdf_source = row.get("presale_notices_borrower_pdf")
         elif choice == "41":
             pdf_source = row.get("hpt_pending_pdf")
-
+        elif choice == "48":
+            pdf_source = row.get("doc_sms_portal_pdf")
 
         else:  # choice == "19"
             pdf_source = (
@@ -1728,7 +1733,7 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-    "1", "2", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+     "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
 ]
 
 def needs_api_check(template_id):

@@ -385,7 +385,10 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             elif template_choice == "41":
                 pdf_filename = row.get("hpt_pending_pdf")
                 folder = "noc_pdfs"
-                
+            
+            elif template_choice == "48":
+                pdf_filename = row.get("doc_sms_portal_pdf")
+                folder = "noc_pdfs"                
             elif template_choice == "19":
                 pdf_filename = (
                     row.get("borrower_pdf_file")

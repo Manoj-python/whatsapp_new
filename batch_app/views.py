@@ -7,6 +7,8 @@ from django.shortcuts import render
 # ✅ ALL SCHEDULE TYPES SUPPORTED
 # ✅ FIXED: Weekly schedule preserves first run date
 # ✅ FIXED: 5-minute tolerance for date validation
+# ✅ NEW: BatchExecution monitoring and management
+# ✅ NEW: Execution details API endpoint
 
 import json
 import uuid
@@ -22,7 +24,7 @@ from django.utils import timezone
 from django.db import models
 import traceback
 
-from .models import BatchJob, BatchLog
+from .models import BatchJob, BatchLog, BatchExecution
 
 # ✅ Import tasks module
 import batch_app.tasks as tasks
@@ -147,6 +149,13 @@ def get_job_data(job):
         # ✅ Format schedule time in 12-hour format
         schedule_time_str = schedule_ist.strftime('%I:%M %p') if schedule_ist else 'Not set'
 
+        # Get execution stats
+        total_executions = BatchExecution.objects.filter(job=job).count()
+        completed_executions = BatchExecution.objects.filter(job=job, status='completed').count()
+        failed_executions = BatchExecution.objects.filter(job=job, status='failed').count()
+        running_executions = BatchExecution.objects.filter(job=job, status='running').count()
+        pending_executions = BatchExecution.objects.filter(job=job, status='pending').count()
+
         return {
             # Basic Info
             'job_id': job.job_id,
@@ -205,6 +214,15 @@ def get_job_data(job):
             'schedule_datetime_obj': job.schedule_datetime,
             'next_run_time_obj': job.next_run_time,
             'end_date_obj': job.end_date,
+
+            # ✅ Execution stats (NEW)
+            'execution_stats': {
+                'total': total_executions,
+                'completed': completed_executions,
+                'failed': failed_executions,
+                'running': running_executions,
+                'pending': pending_executions,
+            }
         }
     except Exception as e:
         return {
@@ -218,8 +236,6 @@ def get_job_data(job):
 # VIEWS
 # ============================================================
 
-
-
 def dashboard(request):
     try:
         context = {
@@ -228,7 +244,7 @@ def dashboard(request):
             'completed_jobs': BatchJob.objects.filter(status='completed').count(),
             'failed_jobs': BatchJob.objects.filter(status='failed').count(),
             'total_sent': BatchJob.objects.aggregate(total=models.Sum('sent_count'))['total'] or 0,
-            'total_skipped': BatchJob.objects.aggregate(total=models.Sum('skipped_count'))['total'] or 0,  # ← ADD THIS
+            'total_skipped': BatchJob.objects.aggregate(total=models.Sum('skipped_count'))['total'] or 0,
             'total_failed': BatchJob.objects.aggregate(total=models.Sum('failed_count'))['total'] or 0,
             'recent_jobs': BatchJob.objects.order_by('-created_at')[:10],
             'discovered_apps': get_all_messaging_apps(),
@@ -294,7 +310,6 @@ def batch_job_list(request):
     except Exception as e:
         messages.error(request, f'❌ Error loading jobs: {str(e)}')
         return render(request, 'batch_app/jobs.html', {'jobs': []})
-
 
 
 # ============================================================
@@ -543,11 +558,13 @@ def batch_job_create(request):
                 created_by=request.user.username if request.user.is_authenticated else 'System',
             )
 
-            # ✅ Schedule the job
+            # ✅ Schedule the job using the new scheduler
             try:
                 from batch_app import tasks
                 job.next_run_time = job.schedule_datetime
                 job.save(update_fields=["next_run_time"])
+                # Use the new scheduler
+                tasks.schedule_batch_job.delay(job.job_id)
             except Exception as e:
                 messages.warning(request, f'⚠️ Job created but scheduling failed: {str(e)}')
 
@@ -590,7 +607,6 @@ def batch_job_create(request):
         return render(request, 'batch_app/job_form.html', {})
 
 
-
 # ============================================================
 # BATCH JOB DETAIL
 # ============================================================
@@ -599,7 +615,10 @@ def batch_job_detail(request, job_id):
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
         logs = BatchLog.objects.filter(job=job).order_by('-sent_at')[:50]
-
+        
+        # Get executions for this job
+        executions = BatchExecution.objects.filter(job=job).order_by('batch_number')
+        
         templates = get_templates_from_app(job.target_app)
         template_label = next((t['label'] for t in templates if t['id'] == job.template_name), job.template_name)
 
@@ -617,10 +636,26 @@ def batch_job_detail(request, job_id):
                 'sent_at_raw': log.sent_at,
             })
 
+        # Format executions for display
+        formatted_executions = []
+        for exec in executions:
+            formatted_executions.append({
+                'batch_number': exec.batch_number,
+                'total_customers': exec.total_customers,
+                'sent_count': exec.sent_count,
+                'failed_count': exec.failed_count,
+                'skipped_count': exec.skipped_count,
+                'status': exec.status,
+                'error_message': exec.error_message,
+                'started_at': format_datetime_12hr(exec.started_at, show_seconds=True) if exec.started_at else '-',
+                'completed_at': format_datetime_12hr(exec.completed_at, show_seconds=True) if exec.completed_at else '-',
+            })
+
         return render(request, 'batch_app/job_detail.html', {
             'job': job,
             'job_data': job_data,
             'logs': formatted_logs,
+            'executions': formatted_executions,
             'progress': job.progress_percentage(),
             'template_label': template_label,
             'current_time': format_datetime_12hr(timezone.now()),
@@ -635,7 +670,6 @@ def batch_job_detail(request, job_id):
 # ============================================================
 # BATCH JOB EDIT
 # ============================================================
-
 def batch_job_edit(request, job_id):
     """Edit an existing batch job"""
     job = get_object_or_404(BatchJob, job_id=job_id)
@@ -793,19 +827,54 @@ def batch_job_edit(request, job_id):
             job.completed_batches = 0
             job.sent_count = 0
             job.failed_count = 0
+            job.skipped_count = 0
             job.total_runs = 0
             job.completed_runs = 0
             job.completed_at = None
 
-            job.next_run_time = job.schedule_datetime
+            # ✅ Delete existing executions (they will be recreated)
+            BatchExecution.objects.filter(job=job).delete()
+
+            # ✅ Calculate correct next run time
+            now = timezone.now()
+            
+            if schedule_type == 'daily':
+                next_run = schedule_datetime_obj
+                while next_run <= now:
+                    next_run += timedelta(days=1)
+                job.next_run_time = next_run
+                
+            elif schedule_type == 'weekly':
+                next_run = schedule_datetime_obj
+                while next_run <= now:
+                    next_run += timedelta(days=7)
+                job.next_run_time = next_run
+                
+            elif schedule_type == 'custom_interval':
+                interval = int(interval_days) if interval_days else 1
+                next_run = schedule_datetime_obj
+                while next_run <= now:
+                    next_run += timedelta(days=interval)
+                job.next_run_time = next_run
+                
+            elif schedule_type == 'multiple_daily':
+                # For multiple daily, use the _get_next_multiple_time method
+                # Temporarily set the schedule_times and schedule_datetime
+                job.schedule_times = schedule_times
+                job.schedule_datetime = schedule_datetime_obj
+                next_run = job._get_next_multiple_time(now)
+                job.next_run_time = next_run if next_run else schedule_datetime_obj
 
             job.save()
 
-            # ✅ Reschedule the job
+            # ✅ Reschedule the job using the new scheduler
             try:
-                job.next_run_time = job.schedule_datetime
-                job.save(update_fields=["next_run_time"])
-                messages.success(request, f'✅ Job "{job.job_name}" updated and rescheduled!')
+                tasks.schedule_batch_job.delay(job.job_id)
+                messages.success(
+                    request, 
+                    f'✅ Job "{job.job_name}" updated and rescheduled! '
+                    f'Next run: {job.next_run_time.strftime("%Y-%m-%d %I:%M %p")}'
+                )
             except Exception as e:
                 messages.warning(request, f'⚠️ Job updated but scheduling failed: {str(e)}')
 
@@ -845,52 +914,105 @@ def batch_job_edit(request, job_id):
     except Exception as e:
         messages.error(request, f'❌ Error loading edit form: {str(e)}')
         return redirect('batch_job_detail', job_id=job.job_id)
-
-
 # ============================================================
 # BATCH JOB ACTIONS
 # ============================================================
-
 @csrf_exempt
 def batch_job_action(request, job_id, action):
+    # ✅ Define is_ajax at the START
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        # ❌ REMOVE THIS BLOCK - 'edit' should NOT be handled here
+        # if action == 'edit':
+        #     if is_ajax:
+        #         return JsonResponse({
+        #             'success': True,
+        #             'redirect_url': f'/batch/jobs/{job_id}/edit/'
+        #         })
+        #     else:
+        #         return redirect('batch_job_edit', job_id=job.job_id)
 
         if action == 'pause':
             job.status = 'paused'
-            job.save()
+            job.save(update_fields=['status'])
+
             message = f'⏸️ Job "{job.job_name}" paused!'
 
         elif action == 'resume':
-            job.status = 'pending'
-            job.save()
-            job.next_run_time = job.schedule_datetime
-            job.save(update_fields=["next_run_time"])
-            message = f'▶️ Job "{job.job_name}" resumed!'
+            # Resume without changing the schedule
+            job.status = 'scheduled'
 
+            # Preserve existing next run time
+            if job.next_run_time is None:
+                job.next_run_time = job.schedule_datetime
+
+            job.save(update_fields=['status', 'next_run_time'])
+
+            # Queue the scheduler only once
+            tasks.schedule_batch_job.delay(job.job_id)
+
+            message = f'▶️ Job "{job.job_name}" resumed!'
         elif action == 'cancel':
             job.status = 'cancelled'
-          
             job.save()
+            try:
+                from .models import BatchExecution
+                BatchExecution.objects.filter(job=job, status__in=['pending', 'running']).update(status='cancelled')
+            except:
+                pass
             tasks.cancel_daily_schedule.delay(job.job_id)
             message = f'⛔ Job "{job.job_name}" cancelled!'
 
         elif action == 'restart':
+            try:
+                from .models import BatchExecution
+                BatchExecution.objects.filter(job=job).delete()
+            except:
+                pass
             job.current_batch = 0
             job.completed_batches = 0
             job.sent_count = 0
             job.failed_count = 0
+            job.skipped_count = 0
             job.total_runs = 0
             job.completed_runs = 0
-            job.status = 'pending'
+            job.status = 'scheduled'
             job.completed_at = None
-
+            
+            now = timezone.now()
+            
+            if job.schedule_type == 'daily':
+                next_run = job.schedule_datetime
+                while next_run <= now:
+                    next_run += timedelta(days=1)
+                job.next_run_time = next_run
+                
+            elif job.schedule_type == 'weekly':
+                next_run = job.schedule_datetime
+                while next_run <= now:
+                    next_run += timedelta(days=7)
+                job.next_run_time = next_run
+                
+            elif job.schedule_type == 'custom_interval':
+                interval = job.interval_days or 1
+                next_run = job.schedule_datetime
+                while next_run <= now:
+                    next_run += timedelta(days=interval)
+                job.next_run_time = next_run
+                
+            elif job.schedule_type == 'multiple_daily':
+                next_run = job._get_next_multiple_time(now)
+                job.next_run_time = next_run if next_run else job.schedule_datetime
+            
             job.save()
+            tasks.schedule_batch_job.delay(job.job_id)
             message = f'🔄 Job "{job.job_name}" restarted!'
 
         elif action == 'force_run':
-            tasks.process_batch_job.delay(job.job_id)
+            tasks.process_batch_scheduler.delay(job.job_id)
             message = f'🚀 Job "{job.job_name}" started!'
 
         else:
@@ -903,7 +1025,8 @@ def batch_job_action(request, job_id, action):
             return JsonResponse({
                 'success': True,
                 'message': message,
-                'status': job.status
+                'status': job.status,
+                'next_run_time': job.next_run_time.strftime('%Y-%m-%d %I:%M %p') if job.next_run_time else None
             })
         else:
             messages.success(request, message)
@@ -918,8 +1041,7 @@ def batch_job_action(request, job_id, action):
         else:
             messages.error(request, f'❌ Error: {str(e)}')
             return redirect('batch_job_detail', job_id=job_id)
-
-
+        
 @csrf_exempt
 def batch_job_delete(request, job_id):
     try:
@@ -927,8 +1049,10 @@ def batch_job_delete(request, job_id):
         job_name = job.job_name
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-        # ✅ Cancel any scheduled tasks
+        # ✅ Cancel any scheduled tasks and delete executions
         tasks.cancel_daily_schedule.delay(job.job_id)
+        BatchExecution.objects.filter(job=job).delete()
+        
         # Delete the job
         job.delete()
 
@@ -1057,15 +1181,100 @@ def batch_job_report(request, job_id):
     )
     response['Content-Disposition'] = f'attachment; filename="batch_{job.job_id}_{filename_suffix}_report.xlsx"'
     return response
+# ============================================================
+# NEW: BATCH EXECUTIONS API
+# ============================================================
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_executions_api(request, job_id):
+    """
+    Get all executions for a job with detailed status
+    """
+    try:
+        job = BatchJob.objects.get(job_id=job_id)
+    except BatchJob.DoesNotExist:
+        return JsonResponse({"error": "Job not found"}, status=404)
 
+    try:
+        executions = BatchExecution.objects.filter(job=job).order_by('batch_number')
+        
+        data = []
+        for exec in executions:
+            data.append({
+                'batch_number': exec.batch_number,
+                'total_customers': exec.total_customers,
+                'sent_count': exec.sent_count,
+                'failed_count': exec.failed_count,
+                'skipped_count': exec.skipped_count,
+                'status': exec.status,
+                'error_message': exec.error_message,
+                'started_at': format_datetime_12hr(exec.started_at) if exec.started_at else None,
+                'completed_at': format_datetime_12hr(exec.completed_at) if exec.completed_at else None,
+                'created_at': format_datetime_12hr(exec.created_at),
+            })
+        
+        stats = {
+            'total': len(data),
+            'completed': BatchExecution.objects.filter(job=job, status='completed').count(),
+            'failed': BatchExecution.objects.filter(job=job, status='failed').count(),
+            'running': BatchExecution.objects.filter(job=job, status='running').count(),
+            'pending': BatchExecution.objects.filter(job=job, status='pending').count(),
+            'cancelled': BatchExecution.objects.filter(job=job, status='cancelled').count(),
+        }
 
-
-
+        return JsonResponse({
+            'success': True,
+            'job_id': job.job_id,
+            'job_name': job.job_name,
+            'total_batches': job.total_batches,
+            'completed_batches': job.completed_batches,
+            'stats': stats,
+            'executions': data
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 # ============================================================
-# API: BATCH JOB STATUS
+# NEW: EXECUTION DETAIL API
+# ============================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_execution_detail_api(request, execution_id):
+    """
+    Get detailed information about a specific execution
+    """
+    try:
+        execution = BatchExecution.objects.get(id=execution_id)
+    except BatchExecution.DoesNotExist:
+        return JsonResponse({"error": "Execution not found"}, status=404)
+
+    try:
+        return JsonResponse({
+            'success': True,
+            'id': execution.id,
+            'job_id': execution.job.job_id,
+            'batch_number': execution.batch_number,
+            'start_row': execution.start_row,
+            'end_row': execution.end_row,
+            'total_customers': execution.total_customers,
+            'sent_count': execution.sent_count,
+            'failed_count': execution.failed_count,
+            'skipped_count': execution.skipped_count,
+            'status': execution.status,
+            'error_message': execution.error_message,
+            'started_at': format_datetime_12hr(execution.started_at) if execution.started_at else None,
+            'completed_at': format_datetime_12hr(execution.completed_at) if execution.completed_at else None,
+            'created_at': format_datetime_12hr(execution.created_at),
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+# ============================================================
+# API: BATCH JOB STATUS (UPDATED with execution stats)
 # ============================================================
 
 @csrf_exempt
@@ -1077,6 +1286,15 @@ def batch_job_status_api(request, job_id):
         return JsonResponse({"error": "Job not found"}, status=404)
 
     try:
+        # Get execution stats
+        execution_stats = {
+            'total': BatchExecution.objects.filter(job=job).count(),
+            'completed': BatchExecution.objects.filter(job=job, status='completed').count(),
+            'failed': BatchExecution.objects.filter(job=job, status='failed').count(),
+            'running': BatchExecution.objects.filter(job=job, status='running').count(),
+            'pending': BatchExecution.objects.filter(job=job, status='pending').count(),
+        }
+
         return JsonResponse({
             "job_id": job.job_id,
             "job_name": job.job_name,
@@ -1087,6 +1305,7 @@ def batch_job_status_api(request, job_id):
             "total_customers": job.total_customers,
             "sent": job.sent_count,
             "failed": job.failed_count,
+            "skipped": job.skipped_count,
             "total_batches": job.total_batches,
             "completed_batches": job.completed_batches,
             "current_batch": job.current_batch,
@@ -1102,12 +1321,10 @@ def batch_job_status_api(request, job_id):
             "created_at": format_datetime_12hr(job.created_at),
             "started_at": format_datetime_12hr(job.started_at),
             "completed_at": format_datetime_12hr(job.completed_at),
-            "schedule_datetime_iso": job.schedule_datetime.isoformat() if job.schedule_datetime else None,
-            "next_run_time_iso": job.next_run_time.isoformat() if job.next_run_time else None,
+            "execution_stats": execution_stats,
             "timezone": "Asia/Kolkata (IST)",
             "utc_offset": "+05:30",
             "format": "12-hour (AM/PM)",
         })
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-

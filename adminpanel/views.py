@@ -56,7 +56,11 @@ APP_CONFIG = {
          'build_payload_func': build_payload2,       # PSF's upload
         'send_media_func': send_whatsapp_media2,  
         'format_mobile_func': format_mobile2,
-         'open_legal_pdf_func': open_legal_pdf2,
+        'open_legal_pdf_func': open_legal_pdf2,
+        'welcome_pdf': {                        # 👈 NEW
+            'folder': 'noc_pdfs',
+            'filename': 'SMSquare_Portal_Customer_Guide.pdf'
+        },
         'templates': {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',
@@ -90,7 +94,11 @@ APP_CONFIG = {
         'build_payload_func': build_payload, 
         'format_mobile_func': format_mobile,
         'open_legal_pdf_func': open_legal_pdf,
-         'send_media_func': send_whatsapp_media,
+        'send_media_func': send_whatsapp_media,
+        'welcome_pdf': {                        # 👈 NEW
+            'folder': 'noc_pdfs',
+            'filename': 'SMSquare_Portal_Customer_Guide.pdf'
+        },
         'templates': {
             'open': 'ticket_open',    # Replace with actual template name for PSF
             'close': 'ticket_closed',

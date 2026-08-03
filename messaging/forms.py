@@ -46,8 +46,8 @@ TEMPLATE_CHOICES = [
     ("44", "One Bucket (English)-[44]"),
     ("45", "Two Buckets (English)-[45]"),
     ("46", "Three Buckets and Above Customer (English)-[46]"),
-    ("47", "Three Buckets and Above Guarantor (English)-[47]")
-    
+    ("47", "Three Buckets and Above Guarantor (English)-[47]"),
+    ("48", "doc_sms_portal (English)-[48]"),    
 
  
 ]

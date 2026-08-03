@@ -1819,7 +1819,7 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, short_cod
 
 
 API_CHECK_TEMPLATES = [
-    "1", "2", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+     "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47","52","54","56","58"
 ]
 
 def needs_api_check(template_id):
