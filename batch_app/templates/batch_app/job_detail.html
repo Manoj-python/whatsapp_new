@@ -46,7 +46,14 @@
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
                         <div class="stat-label">Batches</div>
-                        <div class="stat-number">{{ job.completed_batches }}/{{ job.total_batches }}</div>
+                        <div class="stat-number">
+                            {{ job.completed_batches }}/{{ job.total_batches }}
+                            {% if job.total_runs > 0 %}
+                                <small class="text-muted" style="font-size: 12px; display: block; font-weight: normal;">
+                                    Run #{{ job.total_runs }}
+                                </small>
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="stat-icon bg-success bg-opacity-10 text-success">
                         <i class="fas fa-layer-group"></i>
@@ -54,7 +61,6 @@
                 </div>
             </div>
         </div>
-        
         <!-- ===== SENT STAT ===== -->
         <div class="col-md-2">
             <div class="stat-card">
@@ -512,9 +518,15 @@
                         <div class="col-6">
                             <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Batches Done</div>
-                                <div class="fw-bold">{{ job.completed_batches }}/{{ job.total_batches }}</div>
+                                <div class="fw-bold">
+                                    {{ job.completed_batches }}/{{ job.total_batches }}
+                                    {% if job.total_runs > 0 %}
+                                        <br>
+                                        <small class="text-muted" style="font-size: 12px;">Run #{{ job.total_runs }}</small>
+                                    {% endif %}
+                                </div>
                             </div>
-                        </div>
+                        </div>                      
                         <div class="col-12">
                             <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Success Rate</div>

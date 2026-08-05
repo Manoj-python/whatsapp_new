@@ -26,6 +26,11 @@ import traceback
 
 from .models import BatchJob, BatchLog, BatchExecution
 
+
+import logging
+logger = logging.getLogger(__name__)
+
+
 # ✅ Import tasks module
 import batch_app.tasks as tasks
 
@@ -1122,11 +1127,13 @@ def batch_job_logs(request, job_id):
 # BATCH JOB REPORT
 # ============================================================
 
+
 import io
 import pandas as pd
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from .models import BatchJob, BatchLog
+from .app_discovery import get_app_log_model
 
 def batch_job_report(request, job_id):
     """
@@ -1139,8 +1146,17 @@ def batch_job_report(request, job_id):
     """
     job = get_object_or_404(BatchJob, job_id=job_id)
     
-    # Base queryset
-    logs = BatchLog.objects.filter(job=job)
+    # 🔥 FIX: Get the correct LogModel for this app
+    LogModel = get_app_log_model(job.target_app)
+    
+    if not LogModel:
+        # Fallback to BatchLog if no app-specific model
+        logs = BatchLog.objects.filter(job=job)
+        logger.warning(f"⚠️ No LogModel found for app {job.target_app}, using BatchLog")
+    else:
+        # Get logs from the app-specific model
+        logs = LogModel.objects.filter(job_id=job)
+        logger.info(f"✅ Found {logs.count()} logs from {job.target_app}")
     
     # Apply status filter
     status_filter = request.GET.get('status', 'all')
@@ -1161,18 +1177,38 @@ def batch_job_report(request, job_id):
         filename_suffix = "full"
     
     # Convert to DataFrame
-    data = [{
-        'Mobile': log.mobile,
-        'Customer Name': log.customer_name,
-        'Status': log.status,
-        'Message ID': log.message_id,
-        'Error': log.error_message,
-        'Sent At': format_datetime_12hr(log.sent_at, show_seconds=True) if log.sent_at else '',
-    } for log in logs]
+    data = []
+    for log in logs:
+        data.append({
+            'Mobile': getattr(log, 'mobile', ''),
+            'Customer Name': getattr(log, 'customer_name', ''),
+            'Status': getattr(log, 'status', ''),
+            'Message ID': getattr(log, 'message_id', ''),
+            'Error': getattr(log, 'error_message', ''),
+            'Sent At': format_datetime_12hr(log.sent_at, show_seconds=True) if hasattr(log, 'sent_at') else '',
+        })
     
     df = pd.DataFrame(data)
     buffer = io.BytesIO()
-    df.to_excel(buffer, index=False)
+    
+    # Use ExcelWriter with proper formatting
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Report')
+        
+        # Auto-adjust column widths
+        worksheet = writer.sheets['Report']
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+    
     buffer.seek(0)
     
     response = HttpResponse(
@@ -1181,6 +1217,8 @@ def batch_job_report(request, job_id):
     )
     response['Content-Disposition'] = f'attachment; filename="batch_{job.job_id}_{filename_suffix}_report.xlsx"'
     return response
+
+
 # ============================================================
 # NEW: BATCH EXECUTIONS API
 # ============================================================

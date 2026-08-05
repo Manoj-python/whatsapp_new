@@ -4,7 +4,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 from adminpanel.models import SupportGroup,Subgroup,Category
-
+import uuid
 # ============================================
 # WHATSAPP & CHAT LOGS (unchanged, kept as is)
 # ============================================
@@ -369,7 +369,18 @@ class Case(models.Model):
     ])
     created_by = models.CharField(max_length=255, blank=True, null=True)
     ticket_open_message_sent = models.BooleanField(default=False)
-    ticket_close_message_sent = models.BooleanField(default=False)    
+    ticket_close_message_sent = models.BooleanField(default=False)
+    customer_token = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        db_index=True
+    )
+
+    # 📱 Alternative contact number
+    alt_contact = models.CharField(max_length=20, blank=True, null=True)
+
+    # 👁️ Timestamp when customer last viewed the ticket
+    customer_viewed_at = models.DateTimeField(null=True, blank=True)    
     class Meta:
         ordering = ['-created_at']
         indexes = [

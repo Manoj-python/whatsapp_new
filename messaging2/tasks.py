@@ -1057,7 +1057,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
         f"Try your luck and *win up to ₹1,000!* 💰✨\n\n"
         f"👉 Visit our *Customer Service Portal* and scratch your lucky card today.\n\n"
         f"🔗 *Portal:* https://smsquare.info\n\n"
-        f"⏳ *Offer valid until 31st July only!* Don't miss this exciting opportunity! 🍀\n\n"
+        f"⏳ *Offer valid until 5th August only!* Don't miss this exciting opportunity! 🍀\n\n"
         f"*Scratch Now • Win Instantly • Claim Your Reward!*\n\n"
         f"Regards,\n"
         f"*{app_name}*"

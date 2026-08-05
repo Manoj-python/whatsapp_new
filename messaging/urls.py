@@ -2,6 +2,14 @@ from django.urls import path
 from . import views
 from django.conf import settings
 from django.conf.urls.static import static
+from .api.customer_views import (
+    customer_create_ticket,
+    customer_ticket_detail,
+    customer_ticket_track,
+    customer_tickets_by_mobile,
+    customer_add_comment,
+    customer_reopen_ticket,
+)
 
 urlpatterns = [
     path('', views.upload_and_send, name='upload_and_send'),
@@ -30,8 +38,16 @@ urlpatterns = [
     path('api/statement-details/', views.statement_details, name='statement_details'),
     path('api/send-statement/', views.send_statement, name='send_statement'),    
     path('download-skipped/<str:job_id>/', views.download_skipped_report, name='download_skipped_report'),    
-    path('api/send-foreclosure/', views.send_foreclosure, name='send_foreclosure'),     
+    path('api/send-foreclosure/', views.send_foreclosure, name='send_foreclosure'),
+
+    path('customer/tickets/create/', customer_create_ticket, name='customer_create_ticket'),
+    path('customer/tickets/<uuid:token>/', customer_ticket_detail, name='customer_ticket_detail'),
+    path('customer/tickets/<uuid:token>/track/', customer_ticket_track, name='customer_ticket_track'),
+    path('customer/tickets/<uuid:token>/comments/', customer_add_comment, name='customer_add_comment'),
+    path('customer/tickets/<uuid:token>/reopen/', customer_reopen_ticket, name='customer_reopen_ticket'),
+    path('customer/tickets/', customer_tickets_by_mobile, name='customer_tickets_by_mobile'),        
 ]
+
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

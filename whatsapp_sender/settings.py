@@ -29,8 +29,9 @@ SESSION_COOKIE_AGE = 30 * 60          # 30 minutes in seconds
 SESSION_SAVE_EVERY_REQUEST = True     # Resets the expiry time on every request
 
 # -------------------------------------------------------
-# INSTALLED APPS
+# INSTALLED APP
 # -------------------------------------------------------
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -41,6 +42,9 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "channels",
     "storages",
+    'rest_framework',
+    'rest_framework.authtoken',
+    'corsheaders',
 
     "adminpanel",
     "messaging",
@@ -70,6 +74,7 @@ MIN_PART_PAYMENT = 100.0
 # MIDDLEWARE
 # -------------------------------------------------------
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -78,6 +83,34 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
+# Remove or comment out CORS_ALLOWED_ORIGINS
+
+CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+CORS_ALLOW_HEADERS = ['*']   # or specify as needed
+
+# DRF settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',   # for internal APIs
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '1000/hour',   # or '100/day' etc.
+        'user': '10000/hour',
+    }
+}
+
+# File upload limit
+DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
+
 
 ROOT_URLCONF = "whatsapp_sender.urls"
 

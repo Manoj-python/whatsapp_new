@@ -2,6 +2,7 @@
 # messaging/models.py
 from django.db import models
 from django.utils import timezone
+import uuid
 
 class SmsWhatsAppLog(models.Model):
     job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
@@ -242,7 +243,19 @@ class Case(models.Model):
     ])
     created_by = models.CharField(max_length=255, blank=True, null=True)
     ticket_open_message_sent = models.BooleanField(default=False)
-    ticket_close_message_sent = models.BooleanField(default=False)    
+    ticket_close_message_sent = models.BooleanField(default=False)
+    customer_token = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        db_index=True
+    )
+
+    # 📱 Alternative contact number
+    alt_contact = models.CharField(max_length=20, blank=True, null=True)
+
+    # 👁️ Timestamp when customer last viewed the ticket
+    customer_viewed_at = models.DateTimeField(null=True, blank=True)
+    
     class Meta:
         ordering = ['-created_at']
         indexes = [

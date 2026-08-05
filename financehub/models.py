@@ -40,7 +40,8 @@ class Lcc(models.Model):
     lead_owner = models.CharField(max_length=255, blank=True, null=True)
     latest_status = models.CharField(max_length=255, blank=True, null=True)
     suitcase=models.CharField(max_length=50,null=True,blank=True)
-
+    coborrower_name=models.CharField(max_length=50,null=True,blank=True)
+    coborrower_mobile=models.CharField(max_length=50,null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         indexes = [

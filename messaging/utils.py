@@ -1733,7 +1733,7 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-     "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+     "3", "5", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
 ]
 
 def needs_api_check(template_id):

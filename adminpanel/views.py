@@ -29,6 +29,7 @@ from django.conf import settings
 from messaging.models import CaseDescriptionLog as SmsCaseDescriptionLog
 from messaging2.models import CaseDescriptionLog as PsfCaseDescriptionLog
 from special_cases.models import CaseDescriptionLog as SplCaseDescriptionLog
+from django.utils import timezone
 
 # ============================================
 # APP CONFIGURATION
@@ -184,6 +185,99 @@ def get_app_from_request(request):
     if app not in APP_CONFIG:
         app = 'psf'
     return app
+
+from django.http import HttpResponse
+from openpyxl import Workbook
+
+from adminpanel.views import APP_CONFIG
+
+
+def export_all_cases(request):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "All Cases"
+
+    headers = [
+        "Application",
+        "Case ID",
+        "Customer Name",
+        "Mobile",
+        "Email",
+        "Loan Number",
+        "Vehicle Number",
+        "Group",
+        "Subgroup",
+        "Category",
+        "Status",
+        "Priority",
+        "Current Level",
+        "Assigned To",
+        "Created At",
+        "Updated At",
+        "Issue Description",
+    ]
+
+    ws.append(headers)
+
+    # Loop through all configured apps
+    for app_key, config in APP_CONFIG.items():
+
+        CaseModel = config.get("case_model")
+        app_name = config.get("name", app_key)
+
+        if not CaseModel:
+            continue
+
+        cases = (
+            CaseModel.objects
+            .filter(status__in=["Open", "In Progress"])
+            .select_related(
+                "group",
+                "subgroup",
+                "category",
+                "assigned_to",
+            )
+            .order_by("-created_at")
+        )
+
+        for case in cases:
+            ws.append([
+                app_name,
+                case.case_id,
+                case.customer_name,
+                case.mobile,
+                case.email,
+                case.loan_number,
+                case.vehicle_number,
+                case.group.name if case.group else "",
+                case.subgroup.name if case.subgroup else "",
+                case.category.name if case.category else "",
+                case.status,
+                case.priority,
+                case.current_level,
+                case.assigned_to_name or "",
+                case.created_at.strftime("%d-%m-%Y %H:%M"),
+                case.updated_at.strftime("%d-%m-%Y %H:%M"),
+                case.issue_description or "",
+            ])
+
+    # Auto-size columns
+    for column_cells in ws.columns:
+        length = max(len(str(cell.value or "")) for cell in column_cells)
+        ws.column_dimensions[column_cells[0].column_letter].width = min(length + 3, 50)
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    filename = f"All_Cases_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    wb.save(response)
+
+    return response
+
+
 
 from messaging2.views import auto_assign
 import uuid 
@@ -847,7 +941,7 @@ def dashboard(request):
 
     # ─── Base queryset ──────────────────────────────────────────
     all_cases = CaseModel.objects.select_related('category')  # for categories
-
+    active_cases = all_cases.filter(status__in=['Open', 'In Progress'])
     # ─── Stats ──────────────────────────────────────────────────
     stats = {
         'total_cases': all_cases.count(),
@@ -869,7 +963,7 @@ def dashboard(request):
     category_stats = []
     categories = Category.objects.all().order_by('name')
     for cat in categories:
-        count = all_cases.filter(category=cat).count()
+        count = active_cases.filter(category=cat).count()
         if count > 0:
             category_stats.append({
                 'name': cat.name,

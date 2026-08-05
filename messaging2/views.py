@@ -1410,57 +1410,106 @@ from django.core.cache import cache
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from financehub.models import Lcc
+from django.db.models import Q
+
 
 logger = logging.getLogger(__name__)
 
+
 @csrf_exempt
 def fetch_padmasai_details(request):
-    mobile = request.GET.get('mobile')
+    """
+    Fetch Padmasai customer details by matching the given mobile number against:
+        - Customer Mobile
+        - Guarantor Mobile
+        - Co-borrower Mobile
+
+    Supports both:
+        9876543210
+        919876543210
+    """
+
+    mobile = request.GET.get("mobile", "").strip()
+
     if not mobile:
-        return JsonResponse({'success': False, 'error': 'Mobile number required'}, status=200)
+        return JsonResponse({
+            "success": False,
+            "error": "Mobile number required"
+        }, status=200)
 
-    # Normalize: remove '+', spaces, and any non-digit characters
+    # Remove spaces, +91, -, etc.
     clean_mobile = ''.join(filter(str.isdigit, mobile))
-    # If it starts with 91, keep it; otherwise it's already without country code.
 
-    # Generate possible variations
-    possible_numbers = [clean_mobile]
-    if clean_mobile.startswith('91'):
-        # Also try without the leading 91
-        possible_numbers.append(clean_mobile[2:])
+    if not clean_mobile:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid mobile number"
+        }, status=200)
+
+    # Generate possible mobile formats
+    if clean_mobile.startswith("91") and len(clean_mobile) > 10:
+        possible_numbers = [clean_mobile, clean_mobile[2:]]
     else:
-        # Also try with 91 prefixed
-        possible_numbers.append('91' + clean_mobile)
+        possible_numbers = [clean_mobile, f"91{clean_mobile}"]
 
-    # Optional cache (key based on original mobile)
-    cache_key = f'lcc_{clean_mobile}'
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return JsonResponse({'success': True, **cached})
+    # Remove duplicates
+    possible_numbers = list(set(possible_numbers))
+
+    cache_key = f"padmasai_{clean_mobile}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return JsonResponse({
+            "success": True,
+            **cached_data
+        })
 
     try:
-        lcc_record = None
-        for num in possible_numbers:
-            lcc_record = Lcc.objects.filter(cust_mobile=num).first()
-            if lcc_record:
-                break
+        lcc_record = (
+            Lcc.objects
+            .filter(
+                Q(cust_mobile__in=possible_numbers) |
+                Q(guarantor_mobile__in=possible_numbers) |
+                Q(coborrower_mobile__in=possible_numbers)
+            )
+            .only(
+                "customer_name",
+                "loan_number",
+                "vehicle_no"
+            )
+            .first()
+        )
 
         if not lcc_record:
-            logger.info(f"❌ No LCC record for mobile {mobile} (tried: {possible_numbers})")
-            return JsonResponse({'success': False, 'error': 'No details found'}, status=200)
+            logger.info(
+                "No LCC record found for mobile %s (searched %s)",
+                mobile,
+                possible_numbers
+            )
+            return JsonResponse({
+                "success": False,
+                "error": "No details found"
+            }, status=200)
 
-        result = {
-            'customer_name': lcc_record.customer_name or '',
-            'agreement_no': lcc_record.loan_number or '',
-            'vehicle_no': lcc_record.vehicle_no or '',
+        response = {
+            "customer_name": lcc_record.customer_name or "",
+            "agreement_no": lcc_record.loan_number or "",
+            "vehicle_no": lcc_record.vehicle_no or "",
         }
-        cache.set(cache_key, result, 300)
-        return JsonResponse({'success': True, **result})
+
+        # Cache for 5 minutes
+        cache.set(cache_key, response, timeout=300)
+
+        return JsonResponse({
+            "success": True,
+            **response
+        })
 
     except Exception as e:
-        logger.error(f"LCC query error: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=200)
-
+        logger.exception("Error fetching Padmasai details")
+        return JsonResponse({
+            "success": False,
+            "error": "Internal server error"
+        }, status=200)
 
 # ============================================
 # ESCALATION DASHBOARDS (APP-AWARE)
