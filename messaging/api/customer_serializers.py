@@ -1,7 +1,7 @@
 # messaging2/api/customer_serializers.py
 
 from rest_framework import serializers
-from messaging2.models import Case, CaseComment
+from messaging.models import Case, CaseComment
 import os
 
 # ─── File Size Limits ──────────────────────────────────────────
@@ -95,7 +95,7 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
 
         # 🔔 Send WhatsApp open ticket message (async)
         from messaging2.tasks import send_ticket_open_message
-        send_ticket_open_message.delay('psf', case.id)
+        send_ticket_open_message.delay('sms', case.id)
 
         return case
 

@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q
 
-from messaging2.models import Case, CaseComment
+from messaging.models import Case, CaseComment
 from messaging.api.customer_serializers import (
     CustomerTicketCreateSerializer,
     CustomerTicketDetailSerializer,
@@ -19,16 +19,9 @@ from adminpanel.views import APP_CONFIG
 
 # ─── Helper to get app from query parameters ───────────────────
 def get_app_from_request(request):
-    """Return app key from ?app= query param, default to 'psf'."""
-    return request.query_params.get('app', 'psf')
+    # We keep this for possible other uses, but for case creation we force 'sms'
+    return request.query_params.get('app', 'sms') 
 
-# ─── Helper to get Case model for a given app ──────────────────
-def get_case_model(app_key):
-    """Return the Case model class for the given app key."""
-    config = APP_CONFIG.get(app_key)
-    if config and 'case_model' in config:
-        return config['case_model']
-    return Case   # fallback
 
 # ──────────────────────────────────────────────────────────────────
 #  PUBLIC CUSTOMER ENDPOINTS
@@ -40,34 +33,33 @@ def get_case_model(app_key):
 @permission_classes([permissions.AllowAny])
 def customer_create_ticket(request):
     """
-    Create a new ticket for a specific app.
-    Also creates/updates a ChatContact entry so the ticket appears in the chat dashboard.
+    Create a new ticket – always stored in the unified SMS case table.
     """
-    app = get_app_from_request(request)
-    CaseModel = get_case_model(app)
+    # Force app to 'sms' for case creation
+    app = 'sms'   # ✅ hardcoded
 
-    # Get the contact model for this app
+    # Get the contact model for this app (SMS)
     config = APP_CONFIG.get(app)
     ContactModel = config.get('contact_model') if config else None
 
     mutable_data = request.data.copy()
-    mutable_data['source_app'] = app
+    mutable_data['source_app'] = app   # explicitly set
 
     serializer = CustomerTicketCreateSerializer(
         data=mutable_data,
-        context={'request': request, 'app': app}
+        context={'request': request, 'app': app}   # pass 'sms'
     )
     if not serializer.is_valid():
         return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    case = serializer.save()
+    case = serializer.save()   # uses Case from messaging.models
 
-    # ─── Create/Update ChatContact ──────────────────────────────
+    # ─── Create/Update ChatContact (SMS app's contact model) ──────────
     if ContactModel:
         mobile = case.mobile
         last_msg = f"📩 Ticket created: {case.case_id}"
         contact, created = ContactModel.objects.get_or_create(
-            mobile=mobile,
+            mobile=mobile, 
             defaults={
                 'last_msg': last_msg,
                 'last_time': timezone.now(),
@@ -78,17 +70,15 @@ def customer_create_ticket(request):
             }
         )
         if not created:
-            # Update only the fields we want to change
             ContactModel.objects.filter(mobile=mobile).update(
                 last_msg=last_msg,
                 last_time=timezone.now(),
                 last_type='System',
                 last_status=case.status,
                 current_level=case.current_level,
-                # Do NOT reset unread count – preserve existing unread
             )
 
-        # Optional: WebSocket broadcast to refresh contact list
+        # WebSocket broadcast (SMS app channel)
         try:
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
@@ -110,8 +100,7 @@ def customer_create_ticket(request):
                         }
                     }
                 )
-        except Exception as e:
-            # Don't fail the request if WebSocket broadcast fails
+        except Exception:
             pass
 
     return Response({
@@ -122,6 +111,7 @@ def customer_create_ticket(request):
         'message': 'Ticket created successfully! Please save your token for tracking.',
         'tracking_url': f"/customer/tickets/{case.customer_token}/"
     }, status=status.HTTP_201_CREATED)
+
 
 
 @api_view(['GET'])
