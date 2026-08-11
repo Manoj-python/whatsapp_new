@@ -46,6 +46,7 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             'group': {'required': True},
+            # 'subgroup': {'required': True},
             'category': {'required': True},
             'issue_description': {'required': True},
             'loan_number': {'required': False, 'allow_null': True, 'allow_blank': True},
@@ -68,7 +69,7 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
         validated_data['case_id'] = case_id
         validated_data['source'] = 'Customer Portal'
         validated_data['status'] = 'Open'
-        validated_data['current_level'] = 'ESC1'
+        validated_data['current_level'] = 'ESC2'
         validated_data['priority'] = 'Medium'
         validated_data['created_by'] = 'Customer Portal'
         app = self.context.get('app', 'sms')
@@ -172,10 +173,55 @@ class CustomerTicketDetailSerializer(serializers.ModelSerializer):
 
 # ─── Ticket List (for customer dashboard) ─────────────────────
 
+# messaging2/api/customer_serializers.py
+
 class CustomerTicketListSerializer(serializers.ModelSerializer):
+    """List serializer with detailed fields for case overview."""
+    status_display = serializers.SerializerMethodField()
+    level_display = serializers.SerializerMethodField()
+    last_escalation_reason = serializers.SerializerMethodField()
+    
+    # ForeignKey fields nunchi names extract cheyyataniki
+    group_name = serializers.CharField(source='group.name', read_only=True, default=None)
+    subgroup_name = serializers.CharField(source='subgroup.name', read_only=True, default=None)
+
     class Meta:
         model = Case
         fields = [
-            'case_id', 'customer_name', 'mobile', 'status',
-            'priority', 'created_at', 'customer_token'
+            'case_id', 'customer_name', 'mobile', 'email',
+            'loan_number', 'vehicle_number',
+            'issue_description',      # ✅ issue description
+            'status', 'priority',
+            'current_level',           # ✅ current level (ESC1, ESC2..)
+            'created_at', 'updated_at',
+            'resolved_at', 
+            'resolution_notes',        # ✅ resolution notes (if resolved)
+            'reopen_count', 
+            'status_display', 
+            'level_display',
+            'customer_token',
+            'group_name',   
+            'last_escalation_reason',             # ✅ department name
+            'subgroup_name'            # ✅ subgroup name
         ]
+    def get_last_escalation_reason(self, obj):
+        last_log = obj.escalation_logs.order_by('-created_at').first()
+        return last_log.reason if last_log else None
+
+    def get_status_display(self, obj):
+        mapping = {
+            'Open': '🟢 Open',
+            'In Progress': '🟡 In Progress',
+            'Resolved': '✅ Resolved',
+            'Closed': '🔒 Closed',
+            'Reopened': '🔄 Reopened'
+        }
+        return mapping.get(obj.status, obj.status)
+
+    def get_level_display(self, obj):
+        level = obj.current_level or 'ESC1'
+        icons = {
+            'ESC1': '📞', 'ESC2': '⚖️', 'ESC3': '⭐',
+            'ESC4': '📊', 'ESC5': '🔒', 'RESOLVED': '✅', 'CLOSED': '🔒'
+        }
+        return f"{icons.get(level, '')} {level}"

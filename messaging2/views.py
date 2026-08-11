@@ -3174,15 +3174,15 @@ def create_case_from_chat_api2(request):
         data = json.loads(request.body)
         mobile = data.get('mobile', '')
 
-        # Get app‑aware models (case, contact, log)
+        # 1️⃣ Normalize mobile (matching All Cases API)
+        from messaging2.utils import format_mobile2
+        mobile = format_mobile2(mobile)
+
+        # 2️⃣ Get app‑aware models
         CaseModel, ContactModel, LogModel, _ = get_models_for_app(request)
 
-        # ✅ Dynamic log check – uses correct app's log table
-        # if not LogModel.objects.filter(mobile=mobile).exists():
-        #     app_key = request.GET.get('app', 'psf')
-        #     return JsonResponse({
-        #         'error': f'This number has no WhatsApp messages in the {app_key} app. Cannot create case here.'
-        #     }, status=400)
+        # 3️⃣ Get app key (used for source_app and description log)
+        app_key = get_app_from_request(request)   # e.g., 'sms' or 'psf'
 
         customer_name = data.get('customer_name') or mobile
         agent_name = data.get('agent_name', 'Agent')
@@ -3191,10 +3191,11 @@ def create_case_from_chat_api2(request):
         vehicle_number = data.get('vehicle_no', data.get('vehicle_number', ''))
         group_name = data.get('group', 'Collections')
         subgroup_id = data.get('subgroup_id', None)
-        category_id = data.get('category_id', None)   # now required
+        category_id = data.get('category_id', None)
         escalate_to = data.get('escalate_to', None)
         force_new = data.get('force_new', False)
-        source=data.get('source','')
+        source = data.get('source', '')
+
         # ─── Validate group ─────────────────────────────────────────────
         group_obj = SupportGroup.objects.filter(name=group_name).first()
         if not group_obj:
@@ -3264,10 +3265,14 @@ def create_case_from_chat_api2(request):
             created_by=agent_name,
             group=group_obj,
             subgroup=subgroup_obj,
-            category=category_obj,   # category is always set now
+            category=category_obj,
             assigned_to=None,
             assigned_to_name=None,
         )
+
+        # ✅ CRITICAL FIX: Set source_app to match the app key
+        case.source_app = app_key
+        case.save(update_fields=['source_app'])
 
         # ─── Assignment & Escalation Logic ─────────────────────────────
         if initial_level == 'ESC1':
@@ -3293,19 +3298,16 @@ def create_case_from_chat_api2(request):
         )
 
         # ─── Log the initial description (if any) ──────────────────────
-        app_key = get_app_from_request(request)
         DescriptionLogModel = APP_CONFIG[app_key]['description_log_model']
         if case.issue_description:
-            
             DescriptionLogModel.objects.create(
-        case=case,
-        previous_description="",
-        new_description=case.issue_description,
-        changed_by=agent_name or "System",
-        changed_by_role="System",
-        level=case.current_level,  # initial level
-    )
-        send_ticket_open_message.delay(app_key, case.id)
+                case=case,
+                previous_description="",
+                new_description=case.issue_description,
+                changed_by=agent_name or "System",
+                changed_by_role="System",
+                level=case.current_level,
+            )
 
         # ─── Response ────────────────────────────────────────────────────
         return JsonResponse({
@@ -3326,9 +3328,8 @@ def create_case_from_chat_api2(request):
 
     except Exception as e:
         import traceback
-        print(traceback.format_exc())   # for debugging
+        print(traceback.format_exc())
         return JsonResponse({'error': str(e)}, status=500)
-
     
 @login_required
 def get_description_history_api(request, case_id):

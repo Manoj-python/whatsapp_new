@@ -25,12 +25,8 @@ from django.db import models
 import traceback
 
 from .models import BatchJob, BatchLog, BatchExecution
-
-
 import logging
 logger = logging.getLogger(__name__)
-
-
 # ✅ Import tasks module
 import batch_app.tasks as tasks
 
@@ -616,7 +612,15 @@ def batch_job_create(request):
 # BATCH JOB DETAIL
 # ============================================================
 
+# ============================================================
+# BATCH JOB DETAIL - COMPLETE FIXED VERSION
+# ============================================================
+
 def batch_job_detail(request, job_id):
+    """
+    Display detailed information about a batch job.
+    All times in 12-hour IST format with AM/PM.
+    """
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
         logs = BatchLog.objects.filter(job=job).order_by('-sent_at')[:50]
@@ -624,11 +628,17 @@ def batch_job_detail(request, job_id):
         # Get executions for this job
         executions = BatchExecution.objects.filter(job=job).order_by('batch_number')
         
+        # Get template label with fallback
         templates = get_templates_from_app(job.target_app)
-        template_label = next((t['label'] for t in templates if t['id'] == job.template_name), job.template_name)
+        template_label = job.template_name
+        for t in templates:
+            if t.get('id') == job.template_name or t.get('name') == job.template_name:
+                template_label = t.get('label', job.template_name)
+                break
 
         job_data = get_job_data(job)
 
+        # Format logs for display
         formatted_logs = []
         for log in logs:
             formatted_logs.append({
@@ -637,7 +647,7 @@ def batch_job_detail(request, job_id):
                 'status': log.status,
                 'message_id': log.message_id,
                 'error_message': log.error_message,
-                'sent_at': format_datetime_12hr(log.sent_at, show_seconds=True),
+                'sent_at': format_datetime_12hr(log.sent_at, show_seconds=True) if hasattr(log, 'sent_at') else '-',
                 'sent_at_raw': log.sent_at,
             })
 
@@ -649,28 +659,41 @@ def batch_job_detail(request, job_id):
                 'total_customers': exec.total_customers,
                 'sent_count': exec.sent_count,
                 'failed_count': exec.failed_count,
-                'skipped_count': exec.skipped_count,
+                'skipped_count': getattr(exec, 'skipped_count', 0),
                 'status': exec.status,
                 'error_message': exec.error_message,
                 'started_at': format_datetime_12hr(exec.started_at, show_seconds=True) if exec.started_at else '-',
                 'completed_at': format_datetime_12hr(exec.completed_at, show_seconds=True) if exec.completed_at else '-',
             })
 
+        # Safely calculate progress
+        try:
+            progress = job.progress_percentage()
+        except AttributeError:
+            if job.total_customers > 0:
+                processed = job.sent_count + job.failed_count + getattr(job, 'skipped_count', 0)
+                progress = int((processed / job.total_customers) * 100)
+            else:
+                progress = 0
+
+        # Render with all required variables
         return render(request, 'batch_app/job_detail.html', {
             'job': job,
             'job_data': job_data,
             'logs': formatted_logs,
             'executions': formatted_executions,
-            'progress': job.progress_percentage(),
+            'progress': progress,
             'template_label': template_label,
             'current_time': format_datetime_12hr(timezone.now()),
             'timezone': 'Asia/Kolkata (IST)',
-            'format_type': '12-hour (AM/PM)',
+            'format_type': '12-hour (AM/PM)',  # ✅ CRITICAL FIX
         })
+        
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         messages.error(request, f'❌ Error loading job details: {str(e)}')
         return redirect('batch_job_list')
-
 
 # ============================================================
 # BATCH JOB EDIT
@@ -1126,7 +1149,9 @@ def batch_job_logs(request, job_id):
 # ============================================================
 # BATCH JOB REPORT
 # ============================================================
-
+# ============================================================
+# BATCH JOB REPORT - FIXED VERSION
+# ============================================================
 
 import io
 import pandas as pd
@@ -1217,7 +1242,6 @@ def batch_job_report(request, job_id):
     )
     response['Content-Disposition'] = f'attachment; filename="batch_{job.job_id}_{filename_suffix}_report.xlsx"'
     return response
-
 
 # ============================================================
 # NEW: BATCH EXECUTIONS API

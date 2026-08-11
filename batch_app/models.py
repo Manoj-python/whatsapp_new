@@ -77,10 +77,11 @@ class BatchJob(models.Model):
     sent_count = models.IntegerField(default=0)
     failed_count = models.IntegerField(default=0)
     skipped_count = models.IntegerField(default=0)
-    total_runs = models.IntegerField(default=0, help_text="Total number of times this job has run")     
+
     
     # Run Tracking
-    total_runs = models.IntegerField(default=0)
+    total_runs = models.IntegerField(default=0)    
+    # Run Tracking
     completed_runs = models.IntegerField(default=0)
     
     # Timestamps
