@@ -2462,13 +2462,14 @@ function renderMessage(msg){
     } catch(e) { 
         timeDisplay = 'Just now'; 
     } 
-    
+
 let senderName = '';
-    if (isSent) {
-        senderName = currentUser.name || 'Agent';
-    } else {
-        senderName = msg.sender_name || msg.customer_name || 'Customer';
-    }
+
+if (isSent) {
+    senderName = msg.sender_name || 'Agent';
+} else {
+    senderName = msg.sender_name || msg.customer_name || 'Customer';
+}    
     
     let contentHtml = ''; 
     
