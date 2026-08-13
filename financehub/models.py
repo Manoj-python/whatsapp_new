@@ -95,6 +95,9 @@ class CollectionAllocations(models.Model):
     employee_id = models.CharField(
         max_length=150, null=True, blank=True, db_index=True
     )
+    reassigned_at = models.DateTimeField(null=True, blank=True)
+
+    previous_employee_id=models.CharField(max_length=150,null=True,blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

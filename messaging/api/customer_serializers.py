@@ -45,8 +45,8 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
             'group', 'subgroup', 'category'
         ]
         extra_kwargs = {
-            'group': {'required': True},
-            # 'subgroup': {'required': True},
+            'group': {'required': False, 'allow_null': True},
+            'subgroup': {'required': False, 'allow_null': True},
             'category': {'required': True},
             'issue_description': {'required': True},
             'loan_number': {'required': False, 'allow_null': True, 'allow_blank': True},
@@ -56,6 +56,10 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if not data.get('mobile') and not data.get('email'):
             raise serializers.ValidationError("Mobile or Email is required.")
+        
+        if not data.get('category'):
+            raise serializers.ValidationError("Category is required.")
+            
         return data
 
     def create(self, validated_data):
@@ -63,6 +67,14 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
         import uuid
 
         attachment = validated_data.pop('attachment', None)
+        category_obj = validated_data.get('category')
+        
+        # ─── Auto-assign Group from Category ──────────────
+        # Category model lo already group undhi, adhe assign avvali
+        if category_obj and category_obj.group:
+            validated_data['group'] = category_obj.group
+            # Subgroup kuda category nunchi assign avvali (if needed)
+            # validated_data['subgroup'] = category_obj.subgroup
 
         # Auto‑generate case ID
         case_id = f"CASE-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
@@ -77,6 +89,7 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
 
         case = super().create(validated_data)
 
+        # Handle attachment
         if attachment:
             validate_file_size(attachment)
             from django.core.files.storage import default_storage
@@ -94,12 +107,11 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
             case.issue_description += f"\n\n📎 Attachment: {attachment.name}"
             case.save(update_fields=['issue_description'])
 
-        # 🔔 Send WhatsApp open ticket message (async)
+        # 🔔 Send WhatsApp open ticket message
         from messaging2.tasks import send_ticket_open_message
         send_ticket_open_message.delay('sms', case.id)
 
         return case
-
 
 # ─── Customer Comment ──────────────────────────────────────────
 

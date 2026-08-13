@@ -45,7 +45,7 @@ def send_whatsapp_template4(to_number, template_name, parameters=None,
     print("========== META RESPONSE ==========")
     print("Status Code:", resp.status_code)
     print("Response:", resp.text)
-    resp = requests.post(url, headers=headers, json=payload, timeout=30)
+    #resp = requests.post(url, headers=headers, json=payload, timeout=30)
 
     print("====================================")
     print("Mobile:", to_number)
