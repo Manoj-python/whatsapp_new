@@ -2842,3 +2842,355 @@ def employee_monthly_attendance(request):
         })
 
     return render(request, "financehub/employee_monthly_attendance.html", context)
+
+
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.db.models import Q
+import json
+import logging
+from .models import EmployeeMaster
+
+logger = logging.getLogger(__name__)
+
+def employee_list_view(request):
+    """View to display employee list with search functionality"""
+    return render(request, 'financehub/employee_list.html')
+
+from django.db.models import Q
+import re
+
+def search_employees(request):
+    """Search employees - handles both text and number searches"""
+    query = request.GET.get('q', '').strip()
+    
+    if query:
+        # Build search filters
+        filters = Q()
+        
+        # 1. Text search (works for letters)
+        filters |= Q(employee_name__icontains=query)
+        filters |= Q(curr_designation__icontains=query)
+        filters |= Q(curr_department__icontains=query)
+        filters |= Q(email__icontains=query)
+        filters |= Q(official_email_ids__icontains=query)
+        filters |= Q(father_name__icontains=query)
+        filters |= Q(curr_location__icontains=query)
+        filters |= Q(curr_organisation__icontains=query)
+        filters |= Q(present_address__icontains=query)
+        filters |= Q(reporting_to_collections__icontains=query)
+        filters |= Q(reporting_to_sales__icontains=query)
+        
+        # 2. Number search (digits)
+        if query.isdigit():
+            # Try exact match on IDs
+            filters |= Q(id=query)
+            
+            # Try exact match on employee_number
+            filters |= Q(employee_number=query)
+            
+            # Try employee_number with common prefixes
+            prefixes = ['EMP-', 'EMP', 'E-', 'E', 'EMP/']
+            for prefix in prefixes:
+                filters |= Q(employee_number=f"{prefix}{query}")
+                filters |= Q(employee_number__icontains=f"{prefix}{query}")
+            
+            # Try phone numbers
+            filters |= Q(phone__icontains=query)
+            filters |= Q(official_mobile_nos__icontains=query)
+            filters |= Q(aadhaar_number__icontains=query)
+        
+        # 3. If query has both letters and numbers, search everything
+        else:
+            filters |= Q(employee_number__icontains=query)
+            filters |= Q(phone__icontains=query)
+            filters |= Q(official_mobile_nos__icontains=query)
+            filters |= Q(aadhaar_number__icontains=query)
+        
+        employees = EmployeeMaster.objects.filter(filters).distinct()
+    else:
+        employees = EmployeeMaster.objects.all()
+    
+    employees = employees.order_by('employee_number')
+    
+    # Return ALL fields
+    result = []
+    for emp in employees:
+        result.append({
+            'id': emp.id,
+            'employee_number': emp.employee_number or '',
+            'employee_name': emp.employee_name or '',
+            'joined_on': emp.joined_on or '',
+            'dob': emp.dob or '',
+            'father_name': emp.father_name or '',
+            'blood_group': emp.blood_group or '',
+            'aadhaar_number': emp.aadhaar_number or '',
+            'curr_designation': emp.curr_designation or '',
+            'curr_department': emp.curr_department or '',
+            'curr_location': emp.curr_location or '',
+            'curr_organisation': emp.curr_organisation or '',
+            'phone': emp.phone or '',
+            'official_mobile_nos': emp.official_mobile_nos or '',
+            'email': emp.email or '',
+            'official_email_ids': emp.official_email_ids or '',
+            'present_address': emp.present_address or '',
+            'reporting_to_collections': emp.reporting_to_collections or '',
+            'reporting_to_sales': emp.reporting_to_sales or '',
+            'gross': emp.gross or '',
+            'ta': emp.ta or '',
+            'erepf': emp.erepf or '',
+            'eresi': emp.eresi or '',
+            'ctc': emp.ctc or '',
+            'status': emp.status or 'ACTIVE',
+            'lwd': emp.lwd or '',
+            'tenth_memo': emp.tenth_memo or '',
+            'inter_memo': emp.inter_memo or '',
+            'cheque': emp.cheque or '',
+            'bond': emp.bond or '',
+            'notice_period': emp.notice_period or '',
+            'date': emp.date or '',
+            'notice_status': emp.notice_status or '',
+        })
+    
+    return JsonResponse(result, safe=False)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def edit_employee_phone(request):
+    """API endpoint to edit employee details - ALL FIELDS"""
+    try:
+        logger.info(f"Received POST request to edit_employee_phone")
+        
+        data = json.loads(request.body)
+        logger.info(f"Request data: {data}")
+        
+        employee_id = data.get('id')
+        
+        if not employee_id:
+            return JsonResponse({'error': 'Employee ID is required'}, status=400)
+        
+        try:
+            employee = EmployeeMaster.objects.get(id=employee_id)
+        except EmployeeMaster.DoesNotExist:
+            logger.error(f"Employee with ID {employee_id} not found")
+            return JsonResponse({'error': 'Employee not found'}, status=404)
+        
+        # Update ALL editable fields
+        fields_to_update = [
+            'phone', 'official_mobile_nos', 'reporting_to_collections', 
+            'reporting_to_sales', 'email', 'official_email_ids',
+            'curr_designation', 'curr_department', 'curr_location',
+            'employee_number', 'employee_name', 'joined_on', 'dob',
+            'father_name', 'present_address', 'aadhaar_number',
+            'curr_organisation', 'gross', 'ta', 'erepf', 'eresi', 'ctc',
+            'status', 'lwd', 'tenth_memo', 'inter_memo', 'cheque',
+            'bond', 'notice_period', 'date', 'notice_status', 'blood_group'
+        ]
+        
+        for field in fields_to_update:
+            value = data.get(field, '').strip()
+            setattr(employee, field, value if value else '')
+        
+        employee.save()
+        logger.info(f"Successfully updated employee {employee_id}")
+        
+        # Return all fields
+        return JsonResponse({
+            'success': True,
+            'message': 'Employee details updated successfully',
+            'data': {
+                'id': employee.id,
+                'employee_number': employee.employee_number,
+                'employee_name': employee.employee_name,
+                'phone': employee.phone,
+                'official_mobile_nos': employee.official_mobile_nos,
+                'reporting_to_collections': employee.reporting_to_collections,
+                'reporting_to_sales': employee.reporting_to_sales,
+                'email': employee.email,
+                'official_email_ids': employee.official_email_ids,
+                'curr_designation': employee.curr_designation,
+                'curr_department': employee.curr_department,
+                'curr_location': employee.curr_location,
+                'joined_on': employee.joined_on,
+                'dob': employee.dob,
+                'father_name': employee.father_name,
+                'present_address': employee.present_address,
+                'aadhaar_number': employee.aadhaar_number,
+                'curr_organisation': employee.curr_organisation,
+                'gross': employee.gross,
+                'ta': employee.ta,
+                'erepf': employee.erepf,
+                'eresi': employee.eresi,
+                'ctc': employee.ctc,
+                'status': employee.status or 'ACTIVE',
+                'lwd': employee.lwd,
+                'tenth_memo': employee.tenth_memo,
+                'inter_memo': employee.inter_memo,
+                'cheque': employee.cheque,
+                'bond': employee.bond,
+                'notice_period': employee.notice_period,
+                'date': employee.date,
+                'notice_status': employee.notice_status,
+                'blood_group': employee.blood_group,
+            }
+        })
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {str(e)}")
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in edit_employee_phone: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def toggle_employee_status(request):
+    """API endpoint to toggle employee status between ACTIVE and INACTIVE"""
+    try:
+        logger.info(f"Received POST request to toggle_employee_status")
+        
+        data = json.loads(request.body)
+        logger.info(f"Request data: {data}")
+        
+        employee_id = data.get('id')
+        
+        if not employee_id:
+            return JsonResponse({'error': 'Employee ID is required'}, status=400)
+        
+        try:
+            employee = EmployeeMaster.objects.get(id=employee_id)
+        except EmployeeMaster.DoesNotExist:
+            logger.error(f"Employee with ID {employee_id} not found")
+            return JsonResponse({'error': 'Employee not found'}, status=404)
+        
+        # Toggle status
+        current_status = employee.status or 'ACTIVE'
+        new_status = 'LEFT' if current_status.upper() == 'ACTIVE' else 'ACTIVE'
+        employee.status = new_status
+        employee.save()
+        
+        logger.info(f"Successfully toggled employee {employee_id} status to {new_status}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Employee status updated to {new_status}',
+            'data': {
+                'id': employee.id,
+                'employee_number': employee.employee_number,
+                'employee_name': employee.employee_name,
+                'status': employee.status
+            }
+        })
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {str(e)}")
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in toggle_employee_status: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+import pandas as pd
+from io import BytesIO
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+from .models import CollectionAllocations
+
+@login_required
+def export_collection_allocations_excel(request):
+    """
+    Export Collection Allocations data to Excel
+    """
+    # Get all data (you can add filters if needed)
+    queryset = CollectionAllocations.objects.all().order_by('-created_at')
+    
+    # Prepare data for Excel
+    data = []
+    for obj in queryset:
+        data.append({
+            'ID': obj.id,
+            'Company': obj.company or '',
+            'Loan Number': obj.loan_number or '',
+            'Branch': obj.branch or '',
+            'Manager (CM)': obj.cm or '',
+            'Manager Employee ID': obj.manager_employee_id or '',
+            'Team Lead (TL)': obj.tl or '',
+            'TL Employee ID': obj.tl_employee_id or '',
+            'Executive Name': obj.executive_name or '',
+            'Executive Employee ID': obj.employee_id or '',
+            'Previous Executive ID': obj.previous_employee_id or '',
+            'Reassigned At': obj.reassigned_at.strftime('%d-%m-%Y %H:%M') if obj.reassigned_at else '',
+            'Created At': obj.created_at.strftime('%d-%m-%Y %H:%M') if obj.created_at else '',
+        })
+    
+    # Create DataFrame
+    df = pd.DataFrame(data)
+    
+    # Create Excel file in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Collection Allocations')
+        
+        # Auto-adjust column widths
+        worksheet = writer.sheets['Collection Allocations']
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+    
+    output.seek(0)
+    
+    # Create HTTP response
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="collection_allocations_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+    return response
+
+
+import json
+import logging
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from .models import EmployeeMaster
+
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_all_employees(request):
+    """API endpoint to delete ALL employees"""
+    try:
+        logger.info("Delete ALL employees request received")
+        
+        # Count before deletion
+        count = EmployeeMaster.objects.count()
+        
+        if count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No employees found to delete'
+            }, status=400)
+        
+        # Delete all employees
+        EmployeeMaster.objects.all().delete()
+        
+        logger.info(f"Successfully deleted all {count} employees")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Successfully deleted all {count} employees'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in delete_all_employees: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)

@@ -93,6 +93,9 @@
         {% csrf_token %}
         <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-ca">CA DELETE</button></a>
     </form>
+ <a href="{% url 'export_collection_allocations' %}" class="btn btn-success">
+    <i class="fas fa-file-excel"></i>CA Download Excel
+</a>
 {% endif %}
 </div>
 

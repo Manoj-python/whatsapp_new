@@ -570,7 +570,7 @@ class EmployeeMaster(models.Model):
 
     aadhaar_number = models.CharField(max_length=100, null=True, blank=True)
     curr_organisation = models.CharField(max_length=255, null=True, blank=True)
-
+    blood_group=models.CharField(max_length=50,null=True,blank=True)
     gross = models.CharField(max_length=100, null=True, blank=True)
     ta = models.CharField(max_length=100, null=True, blank=True)
     erepf = models.CharField(max_length=100, null=True, blank=True)

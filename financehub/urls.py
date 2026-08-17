@@ -53,4 +53,15 @@ urlpatterns = [
     path("employee-monthly-attendance/", views.employee_monthly_attendance, name="employee_monthly_attendance"),
     # Add this to your urlpatterns
 
+    path('employees/', views.employee_list_view, name='employee_list'),
+    
+    # API endpoints
+    path('api/employees/search/', views.search_employees, name='search_employees'),
+    path('api/employees/edit-phone/', views.edit_employee_phone, name='edit_employee_phone'),
+    path('api/employees/toggle-status/', views.toggle_employee_status, name='toggle_employee_status'),
+    path('export-collection-allocations/', views.export_collection_allocations_excel, name='export_collection_allocations'),
+        path('api/employees/delete-all/', views.delete_all_employees, name='delete_all_employees'),
+    
+
+
 ]

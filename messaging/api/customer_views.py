@@ -168,6 +168,14 @@ def customer_ticket_track(request, token):
     })
 
 
+def get_case_model(app_key):
+    """Return the Case model class for the given app key."""
+    config = APP_CONFIG.get(app_key)
+    if config and 'case_model' in config:
+        return config['case_model']
+    return Case   # fallback to SMS
+
+    
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def customer_tickets_by_mobile(request):
@@ -178,28 +186,52 @@ def customer_tickets_by_mobile(request):
     """
     mobile = request.query_params.get('mobile')
     if not mobile:
-        return Response({'error': 'mobile parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'mobile required'}, status=status.HTTP_400_BAD_REQUEST)
 
     mobile = format_mobile2(mobile)
     app_filter = request.query_params.get('app')
 
-    # Base queryset – all cases for this mobile
-    queryset = Case.objects.filter(mobile=mobile)
-
+    # ✅ If app_filter is provided, use the correct app-specific model
     if app_filter:
-        # Filter by source_app if provided
-        queryset = queryset.filter(source_app=app_filter)
+        CaseModel = get_case_model(app_filter)   # ← Use app-specific model
+        cases = CaseModel.objects.filter(mobile=mobile).order_by('-created_at')
+        serializer = CustomerTicketListSerializer(cases, many=True)
+        return Response({
+            'tickets': serializer.data,
+            'count': cases.count(),
+            'app': app_filter
+        })
 
-    cases = queryset.order_by('-created_at')
-
-    if not cases.exists():
-        return Response({'tickets': [], 'message': 'No tickets found for this number'})
-
-    serializer = CustomerTicketListSerializer(cases, many=True)
+    # If no app filter, search across ALL apps
+    tickets = []
+    for app_key, cfg in APP_CONFIG.items():
+        CaseModel = cfg['case_model']
+        cases = CaseModel.objects.filter(mobile=mobile).order_by('-created_at')
+        for case in cases:
+            tickets.append({
+                'case_id': case.case_id,
+                'customer_name': case.customer_name,
+                'mobile': case.mobile,
+                'status': case.status,
+                'priority': case.priority,
+                'created_at': case.created_at.isoformat(),
+                'customer_token': case.customer_token,
+                'app': app_key,
+                'current_level': case.current_level,
+                'issue_description': case.issue_description,
+                'resolution_notes': case.resolution_notes,
+                'loan_number': case.loan_number,
+                'vehicle_number': case.vehicle_number,
+                'group_name': case.group.name if case.group else None,
+                'subgroup_name': case.subgroup.name if case.subgroup else None,
+                'category_name': case.category.name if case.category else None,
+                'status_display': case.status,
+            })
+    
     return Response({
-        'tickets': serializer.data,
-        'count': cases.count(),
-        'app': app_filter or 'all'   # inform the customer which filter was applied
+        'tickets': tickets,
+        'count': len(tickets),
+        'app': 'all'
     })
 
 
