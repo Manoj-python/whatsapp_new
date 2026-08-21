@@ -43,6 +43,11 @@ class Lcc(models.Model):
     coborrower_name=models.CharField(max_length=50,null=True,blank=True)
     coborrower_mobile=models.CharField(max_length=50,null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    chassis_number=models.CharField(max_length=100,null=True,blank=True)
+    engine_number=models.CharField(max_length=100,null=True,blank=True)
+    model=models.CharField(max_length=100,null=True,blank=True)
+    make=models.CharField(max_length=100,null=True,blank=True)
+
     class Meta:
         indexes = [
             models.Index(fields=['loan_number']),  # Already exists
@@ -898,3 +903,89 @@ class NocModel(models.Model):
 
     def __str__(self):
         return self.customer_name
+
+
+class OpenRepo(models.Model):
+    """
+    Open Repository model for tracking repo vehicles and customer details.
+    """
+    company = models.CharField(max_length=100, null=True, blank=True)
+    remarks = models.CharField(max_length=200, null=True, blank=True)
+    bsp_loading = models.CharField(max_length=100, null=True, blank=True)
+    branch = models.CharField(max_length=100, null=True, blank=True)
+    customer_name = models.CharField(max_length=100, null=True, blank=True)
+    loan_no = models.CharField(max_length=100, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    vehicle_type = models.CharField(max_length=100, null=True, blank=True)
+    vehicle_class = models.CharField(max_length=100, null=True, blank=True)
+    engine_no = models.CharField(max_length=100, null=True, blank=True)
+    chassis_no = models.CharField(max_length=100, null=True, blank=True)
+    installment_date = models.CharField(max_length=100, null=True, blank=True)
+    due_amount = models.CharField(max_length=100, null=True, blank=True)
+    emi_due = models.CharField(max_length=100, null=True, blank=True)
+    created_at = models.DateField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'openrepo'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['loan_no']),
+            models.Index(fields=['vehicle_no']),
+            models.Index(fields=['customer_name']),
+            models.Index(fields=['branch']),
+            models.Index(fields=['company']),
+        ]
+
+    def __str__(self):
+        return self.customer_name or self.loan_no or "OpenRepo"
+
+
+class SalesCollectionAllocations(models.Model):
+    company = models.CharField(max_length=255, null=True, blank=True)
+
+    # Core
+    loan_number = models.CharField(max_length=150, db_index=True)
+
+    # Location
+    branch = models.CharField(max_length=255, null=True, blank=True)
+
+    # =============================
+    # DISPLAY FIELDS (NAMES)
+    # =============================
+    cm = models.CharField(max_length=255, null=True, blank=True)              # Manager Name
+    tl = models.CharField(max_length=255, null=True, blank=True)              # TL Name
+    executive_name = models.CharField(max_length=255, null=True, blank=True)  # Executive Name
+
+    # =============================
+    # LOGIC FIELDS (EMPLOYEE IDs)
+    # =============================
+    manager_employee_id = models.CharField(
+        max_length=150, null=True, blank=True, db_index=True
+    )
+
+    tl_employee_id = models.CharField(
+        max_length=150, null=True, blank=True, db_index=True
+    )
+
+    # 👉 THIS IS THE EXECUTIVE LOGIN ID
+    employee_id = models.CharField(
+        max_length=150, null=True, blank=True, db_index=True
+    )
+    # reassigned_at = models.DateTimeField(null=True, blank=True)
+
+    # previous_employee_id=models.CharField(max_length=150,null=True,blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "Sales_Collection_Allocations"
+        indexes = [
+            models.Index(fields=['loan_number']),
+            models.Index(fields=['manager_employee_id']),
+            models.Index(fields=['tl_employee_id']),
+            models.Index(fields=['employee_id']),
+            models.Index(fields=['company']),
+        ]  # DO NOT CHANGE
+
+    def __str__(self):
+        return f"{self.loan_number}"

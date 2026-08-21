@@ -169,11 +169,11 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
         if Model.__name__ in ["Lcc"]:
             unique_field = "loan_number"
 
-        elif Model.__name__ in ["Clu", "Dialer", "DueNotice", "EmployeeMaster", "Paid", "CollectionAllocations"]:
+        elif Model.__name__ in ["Clu", "Dialer", "DueNotice", "EmployeeMaster", "Paid", "CollectionAllocations","OpenRepo"]:
             unique_field = None
 
         else:
-            for field in ["loan_number", "agreement_number", "employee_number", "ticket_id"]:
+            for field in ["loan_number", "agreement_number", "employee_number", "ticket_id","loan_no"]:
                 if field in model_fields:
                     unique_field = field
                     break

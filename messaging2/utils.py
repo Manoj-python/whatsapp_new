@@ -1,60 +1,438 @@
+
 import re
 import requests
 from datetime import datetime
 from django.conf import settings
-from typing import Tuple, Dict, Any, Optional,List
+from typing import Tuple, Dict, Any, Optional, List
 from pathlib import Path
-import requests
 import mimetypes
 from django.core.files.uploadedfile import UploadedFile
-from django.conf import settings
+
 from .models import *
 
 PAYMENT_LINK2 = "https://smsquare.info/"
 
-# -----------------------------------------------------
-# Upload media to WhatsApp Cloud
-# -----------------------------------------------------
-# def upload_whatsapp_media2(file_obj):
-#     """
-#     Upload media to WhatsApp Cloud API
-#     Returns media ID
-#     """
-#     access_token = settings.WHATSAPP2_ACCESS_TOKEN
-#     phone_number_id = settings.WHATSAPP2_PHONE_NUMBER_ID
-#     url = f"https://graph.facebook.com/v22.0/{phone_number_id}/media"
-#     headers = {"Authorization": f"Bearer {access_token}"}
+# ============================================================
+# 🔥 API CHECK CONFIGURATION
+# ============================================================
 
-#     # Reset file pointer to beginning
-#     if hasattr(file_obj, 'seek'):
-#         file_obj.seek(0)
+API_CHECK_TEMPLATES = [
+    "3", "5", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47",
+    "52", "53", "54", "55", "56", "57", "58", "59"
+]
 
-#     # Get file name and content type
-#     if hasattr(file_obj, 'name'):
-#         filename = file_obj.name
-#     else:
-#         filename = "media_file"
+def needs_api_check(template_id):
+    """Check if template needs API check (PAID/UNPAID)"""
+    return str(template_id) in API_CHECK_TEMPLATES
 
-#     content_type = getattr(file_obj, 'content_type', None)
-#     if not content_type:
-#         content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
 
-#     files = {
-#         'file': (filename, file_obj.read(), content_type)
-#     }
-#     data = {'messaging_product': 'whatsapp'}
+# ============================================================
+# 🔥 LCC API CONFIGURATION (Padma Sai)
+# ============================================================
 
-#     try:
-#         resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
-#         resp.raise_for_status()
-#         result = resp.json()
-#         print(f"Media uploaded successfully. ID: {result.get('id')}")
-#         return result
-#     except Exception as e:
-#         print(f"Media upload error: {e}")
-#         print(f"Response: {resp.text if 'resp' in locals() else 'No response'}")
-#         raise
+SMSQUARE2_LCC_URL = "https://prod-api-padmasai.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
+SMSQUARE2_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e"
 
+
+# ============================================================
+# 🔥 Call Loan Details API (Padma Sai)
+# ============================================================
+
+def call_loan_details_api2(agreement_no):
+    """
+    Fetch loan details including repayment schedule from AllCloud API (Padma Sai)
+    """
+    url = f"https://prod-apiv2-padmasai.allcloud.app/api/loan/GetLoanAgreementNoAsync?strAgreementNo={agreement_no}"
+    
+    headers = {
+        "Authorization": SMSQUARE2_LCC_AUTH,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error fetching loan details: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"Response: {e.response.text}")
+        return None
+
+
+# ============================================================
+# 🔥 get_total_overdue_from_schedule2() - Full Logic
+# ============================================================
+
+def get_total_overdue_from_schedule2(mobile, agreement_no=None, include_upcoming=True):
+    """
+    Calculate total pending amount including:
+    - Overdue EMI + Current Month EMI (if include_upcoming=True)
+    - VAS Dues (from VASs list)
+    - LPI Dues (from LPIDues field)
+
+    Returns: {
+        'total_overdue': EMI overdue (with or without upcoming),
+        'total_due': total_overdue + VAS + LPI,
+        'customer_name': str,
+        'loan_number': str,
+        'is_paid': bool,
+        'vas_due': float,
+        'lpi_due': float,
+        'emi_due_count': float,
+        'status': 'paid' | 'unpaid'
+    }
+    """
+    from datetime import datetime
+
+    try:
+        # Step 1: Get agreement number
+        if not agreement_no:
+            from financehub.models import Lcc
+            mobile_clean = ''.join(filter(str.isdigit, mobile))
+            if len(mobile_clean) > 10:
+                mobile_clean = mobile_clean[-10:]
+
+            lcc_record = Lcc.objects.filter(cust_mobile=mobile_clean).first()
+            if not lcc_record:
+                lcc_record = Lcc.objects.filter(guarantor_mobile=mobile_clean).first()
+
+            if not lcc_record:
+                return {
+                    'total_overdue': 0,
+                    'total_due': 0,
+                    'customer_name': '',
+                    'loan_number': '',
+                    'is_paid': True,
+                    'vas_due': 0,
+                    'lpi_due': 0,
+                    'emi_due_count': 0,
+                    'status': 'paid'
+                }
+
+            agreement_no = lcc_record.loan_number
+            print(f"🔍 Found agreement_no: {agreement_no}")
+
+        # Step 2: Call Loan Details API
+        print(f"📡 Calling Loan Details API for: {agreement_no}")
+        data = call_loan_details_api2(agreement_no)
+
+        if not data:
+            return {
+                'total_overdue': 0,
+                'total_due': 0,
+                'customer_name': '',
+                'loan_number': agreement_no,
+                'is_paid': False,
+                'vas_due': 0,
+                'lpi_due': 0,
+                'emi_due_count': 0,
+                'error': 'API returned no data',
+                'status': 'unpaid'
+            }
+
+        # Step 3: Get Customer Name
+        customer_name = data.get('CustomerName', '') or data.get('PrimaryCustomerName', '')
+        if not customer_name:
+            from financehub.models import Lcc
+            lcc_record = Lcc.objects.filter(loan_number=agreement_no).first()
+            if lcc_record:
+                customer_name = lcc_record.customer_name or ''
+
+        # Step 4: Get LPI Dues
+        lpi_due = float(data.get('LPIDues', 0) or 0)
+        print(f"📊 LPI Dues: ₹{lpi_due}")
+
+        # Step 5: Calculate VAS Dues
+        vas_due = float(data.get('TotalVASDues', 0) or 0)
+        print(f"📊 TotalVASDues from API: ₹{vas_due}")
+
+        # Optional: Log VAS list count for debugging
+        vas_list = data.get('VASs', [])
+        print(f"📊 VAS List count: {len(vas_list)}")
+
+        # Step 6: Calculate EMI Overdue from RepaymentSchedules
+        schedules = data.get('RepaymentSchedules', [])
+        print(f"📊 RepaymentSchedules count: {len(schedules)}")
+
+        emi_overdue = 0.0
+        emi_due_count = 0.0
+        today = datetime.now().date()
+        current_month = today.month
+        current_year = today.year
+        print(f"📅 Today: {today}")
+
+        for installment in schedules:
+            due_date_str = installment.get('DueDate', '')
+            payment_status = installment.get('PaymentStatus', '')
+            pending_amount = float(installment.get('PendingAmount', 0) or 0)
+            due_amount = float(installment.get('DueAmount', 0) or 0)
+            inst_no = installment.get('InstallmentNo', '')
+
+            if not due_date_str:
+                continue
+
+            try:
+                if 'T' in due_date_str:
+                    due_date = datetime.strptime(due_date_str, '%Y-%m-%dT%H:%M:%S').date()
+                else:
+                    due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                continue
+
+            is_overdue = due_date < today
+            is_current_month = (due_date.month == current_month and due_date.year == current_year)
+
+            # 🔥 Include or exclude based on include_upcoming parameter
+            if include_upcoming:
+                # Include both overdue AND upcoming
+                should_include = (is_overdue or is_current_month) and payment_status != 'Paid'
+            else:
+                # Include ONLY overdue
+                should_include = is_overdue and payment_status != 'Paid'
+
+            if should_include:
+                if pending_amount > 0:
+                    emi_overdue += pending_amount
+                    # ✅ Add fractional EMI count
+                    emi_due_count += pending_amount / due_amount
+                    status_label = "Overdue" if is_overdue else "Current"
+                    print(f"  🔹 Installment {inst_no}: {status_label} Pending ₹{pending_amount} (Due: {due_date})")
+                else:
+                    emi_overdue += due_amount
+                    # ✅ Add full EMI count
+                    emi_due_count += 1
+                    status_label = "Overdue" if is_overdue else "Current"
+                    print(f"  🔹 Installment {inst_no}: {status_label} Due ₹{due_amount} (Due: {due_date})")
+
+        # Print appropriate label based on include_upcoming
+        if include_upcoming:
+            print(f"💰 EMI Overdue (Overdue + Current Month): ₹{emi_overdue}")
+        else:
+            print(f"💰 EMI Overdue (Overdue Only): ₹{emi_overdue}")
+
+        print(f"📊 EMI Due Count: {emi_due_count}")
+
+        # Step 7: Calculate Total Due
+        total_due = emi_overdue + vas_due + lpi_due
+        is_paid = total_due == 0
+
+        print(f"💰 Total Due: ₹{total_due} (EMI: ₹{emi_overdue} + VAS: ₹{vas_due} + LPI: ₹{lpi_due})")
+
+        return {
+            'total_overdue': round(emi_overdue, 2),
+            'total_due': round(total_due, 2),
+            'customer_name': customer_name,
+            'loan_number': agreement_no,
+            'is_paid': is_paid,
+            'vas_due': round(vas_due, 2),
+            'lpi_due': round(lpi_due, 2),
+            'emi_due_count': round(emi_due_count, 2),
+            'status': 'paid' if is_paid else 'unpaid'
+        }
+
+    except Exception as e:
+        print(f"❌ Schedule Calculation Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'total_overdue': 0,
+            'total_due': 0,
+            'customer_name': '',
+            'loan_number': agreement_no or '',
+            'is_paid': False,
+            'vas_due': 0,
+            'lpi_due': 0,
+            'emi_due_count': 0,
+            'error': str(e),
+            'status': 'unpaid'
+        }
+
+
+# ============================================================
+# 🔥 check_smsquare_payment_status2() - WITH SEIZE DATE CHECK
+# ============================================================
+
+def check_smsquare_payment_status2(mobile, agreement_no=None):
+    """
+    Check if Padma Sai customer has PAID or UNPAID
+    Uses LCC API with Agreement Number
+
+    If agreement_no is provided → Use it directly
+    If not provided → Try to get from Lcc table
+
+    Returns: {'is_paid': True/False, 'total_due': amount, 'seize_date': str or None}
+    """
+    import json
+
+    try:
+        # Step 1: Get agreement number
+        if not agreement_no:
+            from financehub.models import Lcc
+            mobile_clean = ''.join(filter(str.isdigit, mobile))
+            if len(mobile_clean) > 10:
+                mobile_clean = mobile_clean[-10:]
+
+            lcc_record = Lcc.objects.filter(cust_mobile=mobile_clean).first()
+            if not lcc_record:
+                lcc_record = Lcc.objects.filter(guarantor_mobile=mobile_clean).first()
+
+            if not lcc_record:
+                return {
+                    'is_paid': True,
+                    'total_due': 0,
+                    'seize_date': None,  # ✅ ADD
+                    'status': 'no_loan'
+                }
+
+            agreement_no = lcc_record.loan_number
+
+        # Step 2: Call LCC API
+        headers = {
+            "Authorization": SMSQUARE2_LCC_AUTH,
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "AgreementNo": agreement_no,
+            "FinanceId": 0
+        }
+
+        response = requests.post(SMSQUARE2_LCC_URL, headers=headers, json=payload, timeout=30)
+
+        # ✅ Step 3: Check response status
+        if response.status_code != 200:
+            print(f"⚠️ LCC API HTTP {response.status_code}: {response.text[:200]}")
+            return {
+                'is_paid': False,
+                'total_due': 0,
+                'seize_date': None,  # ✅ ADD
+                'status': 'api_error',
+                'error': f"HTTP {response.status_code}"
+            }
+
+        # ✅ Step 4: Parse JSON safely
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            print(f"⚠️ Invalid JSON response: {response.text[:200]}")
+            return {
+                'is_paid': False,
+                'total_due': 0,
+                'seize_date': None,  # ✅ ADD
+                'status': 'api_error',
+                'error': 'Invalid JSON response'
+            }
+
+        # ✅ Step 5: If response is a string, parse again
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                print(f"⚠️ String response not JSON: {data[:200]}")
+                return {
+                    'is_paid': False,
+                    'total_due': 0,
+                    'seize_date': None,  # ✅ ADD
+                    'status': 'api_error',
+                    'error': 'String response not JSON'
+                }
+
+        # ✅ Step 6: Calculate total arrears
+        total_dues = float(data.get('TotalDues', 0))
+        lpc_due = float(data.get('LPCDue', 0))
+        vas_due = float(data.get('VasDueAmount', 0))
+        total_arrears = total_dues + lpc_due + vas_due
+
+        # ✅ Step 7: Get SeizeDate
+        seize_date = data.get('SeizeDate', None)
+        if seize_date and isinstance(seize_date, str):
+            if 'T' in seize_date:
+                seize_date = seize_date.split('T')[0]
+
+        return {
+            'is_paid': total_arrears == 0,  # 0 = PAID, >0 = UNPAID
+            'total_due': total_arrears,
+            'customer_name': data.get('CustomerName', ''),
+            'loan_number': agreement_no,
+            'seize_date': seize_date  # ✅ ADD
+        }
+
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ LCC API Request Error: {e}")
+        return {
+            'is_paid': False,
+            'total_due': 0,
+            'seize_date': None,  # ✅ ADD
+            'status': 'api_error',
+            'error': str(e)
+        }
+    except Exception as e:
+        print(f"❌ SMSquare LCC API Error: {e}")
+        # If API fails, assume UNPAID (send reminder)
+        return {
+            'is_paid': False,
+            'total_due': 0,
+            'seize_date': None,  # ✅ ADD
+            'status': 'api_error',
+            'error': str(e)
+        }
+
+
+# ============================================================
+# 🔥 HELPER: Get Real-time Due Amount (Combined)
+# ============================================================
+
+def get_real_time_due2(mobile, agreement_no=None, use_schedule=True):
+    """
+    Get real-time due amount for a customer
+
+    If use_schedule=True: Uses RepaymentSchedules (for bucket templates)
+    If use_schedule=False: Uses LCC API (for other templates)
+    """
+    if use_schedule:
+        return get_total_overdue_from_schedule2(mobile, agreement_no)
+    else:
+        return check_smsquare_payment_status2(mobile, agreement_no)
+
+
+# ============================================================
+# 🔥 EXISTING FUNCTIONS (Keep everything below as is)
+# ============================================================
+
+def lcc_details2(mobile):
+    """
+    Fetch customer details from LCC table using mobile number.
+    Returns dict with customer_name, loan_number, vehicle_no or None if not found.
+    """
+    if not mobile:
+        return None
+
+    clean = mobile.lstrip('+').strip()
+    possible_numbers = [clean]
+    if clean.startswith('91'):
+        possible_numbers.append(clean[2:])
+    else:
+        possible_numbers.append('91' + clean)
+
+    for num in possible_numbers:
+        record = Lcc.objects.filter(cust_mobile=num).first()
+        if record:
+            return {
+                'customer_name': record.customer_name or '',
+                'loan_number': record.loan_number or '',
+                'vehicle_no': record.vehicle_no or '',
+            }
+    return None
+
+
+# ... rest of your existing functions remain unchanged ...
+# (upload_whatsapp_media2, send_whatsapp_media2, send_whatsapp_text2,
+#  sanitize_template_text2, split_text_into_chunks2, format_mobile2,
+#  format_whatsapp_date2, open_legal_pdf2, check_whatsapp_number2,
+#  get_template_text_from_whatsapp2, render_template_text2,
+#  send_second_message_for_mobile2, build_payload2, etc.)
 
 def upload_whatsapp_media2(file_obj):
     """
@@ -441,6 +819,7 @@ def render_template_text2(template_body: str, parameters: list) -> str:
     for i, p in enumerate(parameters, start=1):
         out = out.replace(f"{{{{{i}}}}}", str(p.get("text", "")))
     return out
+
 
 
 # ---------------------------
@@ -1818,140 +2197,3 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, short_cod
 
 
 
-API_CHECK_TEMPLATES = [
-     "3", "5", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47","52","54","56","58"
-]
-
-def needs_api_check(template_id):
-    """Check if template needs API check (PAID/UNPAID)"""
-    return str(template_id) in API_CHECK_TEMPLATES
-
-
-def check_smsquare_payment_status(mobile, agreement_no=None):
-    """
-    Check if Padma Sai (messaging2) customer has PAID or UNPAID
-    
-    API: https://prod-api-padmasai.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo
-    Auth: amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e
-    
-    Returns: {'is_paid': True/False, 'total_due': amount}
-    """
-    import json
-    import requests
-    from financehub.models import Lcc
-    
-    try:
-        # Step 1: Get agreement number if not provided
-        if not agreement_no:
-            mobile_clean = ''.join(filter(str.isdigit, mobile))
-            if len(mobile_clean) > 10:
-                mobile_clean = mobile_clean[-10:]
-            
-            # Try to find in Lcc table
-            lcc_record = Lcc.objects.filter(cust_mobile=mobile_clean).first()
-            if not lcc_record:
-                lcc_record = Lcc.objects.filter(guarantor_mobile=mobile_clean).first()
-            
-            if not lcc_record:
-                # No loan found → Treat as PAID (skip)
-                return {
-                    'is_paid': True,
-                    'total_due': 0,
-                    'status': 'no_loan'
-                }
-            
-            agreement_no = lcc_record.loan_number
-        
-        # Step 2: Call Padma Sai LCC API (messaging2)
-        SMSQUARE_LCC_URL = "https://prod-api-padmasai.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
-        SMSQUARE_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e"
-        
-        headers = {
-            "Authorization": SMSQUARE_LCC_AUTH,
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "AgreementNo": agreement_no,
-            "FinanceId": 0
-        }
-        
-        response = requests.post(SMSQUARE_LCC_URL, headers=headers, json=payload, timeout=30)
-        
-        # Step 3: Check response status
-        if response.status_code != 200:
-            return {
-                'is_paid': False,
-                'total_due': 0,
-                'status': 'api_error',
-                'error': f"HTTP {response.status_code}"
-            }
-        
-        # Step 4: Parse JSON
-        try:
-            data = response.json()
-        except json.JSONDecodeError:
-            return {
-                'is_paid': False,
-                'total_due': 0,
-                'status': 'api_error',
-                'error': 'Invalid JSON response'
-            }
-        
-        # Step 5: If response is a string, parse again
-        if isinstance(data, str):
-            try:
-                data = json.loads(data)
-            except json.JSONDecodeError:
-                return {
-                    'is_paid': False,
-                    'total_due': 0,
-                    'status': 'api_error',
-                    'error': 'String response not JSON'
-                }
-        
-        # Step 6: Calculate total arrears from response
-        # Response fields: TotalDues, LPCDue, VasDueAmount
-        total_dues = float(data.get('TotalDues', 0))
-        lpc_due = float(data.get('LPCDue', 0))
-        vas_due = float(data.get('VasDueAmount', 0))
-        total_arrears = total_dues + lpc_due + vas_due
-        
-        # Example response:
-        # {
-        #   "TotalDues": 10110.00,
-        #   "LPCDue": 80.0,
-        #   "VasDueAmount": 0.0,
-        #   "CustomerName": "DEPILLI GOVINDA",
-        #   ...
-        # }
-        
-        return {
-            'is_paid': total_arrears == 0,  # 0 = PAID, >0 = UNPAID
-            'total_due': total_arrears,
-            'customer_name': data.get('CustomerName', ''),
-            'loan_number': agreement_no,
-            'finance_id': data.get('FinanceId', 0),
-            'registration_no': data.get('RegistrationNo', ''),
-            'vehicle_class': data.get('VehicleClass', ''),
-            'region': data.get('Region', ''),
-            'branch': data.get('Branch', ''),
-            'status': 'success'
-        }
-        
-    except requests.exceptions.RequestException as e:
-        # API error → Assume UNPAID (send reminder)
-        return {
-            'is_paid': False,
-            'total_due': 0,
-            'status': 'api_error',
-            'error': str(e)
-        }
-    except Exception as e:
-        # Any other error → Assume UNPAID (send reminder)
-        return {
-            'is_paid': False,
-            'total_due': 0,
-            'status': 'api_error',
-            'error': str(e)
-        }

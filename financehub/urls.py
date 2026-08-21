@@ -61,6 +61,8 @@ urlpatterns = [
     path('api/employees/toggle-status/', views.toggle_employee_status, name='toggle_employee_status'),
     path('export-collection-allocations/', views.export_collection_allocations_excel, name='export_collection_allocations'),
         path('api/employees/delete-all/', views.delete_all_employees, name='delete_all_employees'),
+         path('openrepo/', views.openrepo_list, name='openrepo_list'),
+         path('collection-allocations/', views.collection_allocations_list, name='collection_allocations_list'),
     
 
 

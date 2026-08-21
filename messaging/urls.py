@@ -18,6 +18,8 @@ urlpatterns = [
     path('job/<str:job_id>/', views.job_status, name='job_status'),
     path('download-success/<str:job_id>/', views.download_success_report, name='download_success_report'),
     path('download-failed/<str:job_id>/', views.download_failed_report, name='download_failed_report'),
+    path('download-skipped/<str:job_id>/', views.download_skipped_report, name='download_skipped_report'), 
+    
 
     path("chat/", views.chat_dashboard, name="chat_dashboard"),
     path("api/messages/<str:mobile>/", views.chat_messages_api, name="chat_messages_api"),

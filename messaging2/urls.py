@@ -12,7 +12,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/', views.job_status2, name='job_status2'),
     path('download-success/<uuid:job_id>/', views.download_success_report2, name='download_success_report2'),
     path('download-failed/<uuid:job_id>/', views.download_failed_report2, name='download_failed_report2'),
-
+    path('download-skipped/<uuid:job_id>/', views.download_skipped_report2, name='download_skipped_report2'),
     # Chat dashboard and APIs
     path('chat/', views.chat_dashboard2, name='chat_dashboard2'),
     path('api/messages/<str:mobile>/', views.chat_messages_api2, name='chat_messages_api2'),

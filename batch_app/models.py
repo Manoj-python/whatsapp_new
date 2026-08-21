@@ -46,7 +46,7 @@ class BatchJob(models.Model):
     
     # Template
     template_id = models.CharField(max_length=10, help_text="Template ID from forms.py (e.g., 36)", blank=True, null=True)
-    template_name = models.CharField(max_length=100, help_text="Actual template name from WhatsApp (e.g., new_loans_te)")
+    template_name = models.CharField(max_length=100, help_text="Actual template name from WhatsApp (e.g., new_loans_te)", blank=True, null=True)
     template_language = models.CharField(max_length=10, default='en', help_text="Language code (en, te, hi, kn)")
     
     # Excel File Path
@@ -77,11 +77,11 @@ class BatchJob(models.Model):
     sent_count = models.IntegerField(default=0)
     failed_count = models.IntegerField(default=0)
     skipped_count = models.IntegerField(default=0)
+    total_runs = models.IntegerField(default=0, help_text="Total number of times this job has run")
 
     
     # Run Tracking
-    total_runs = models.IntegerField(default=0)    
-    # Run Tracking
+    total_runs = models.IntegerField(default=0)
     completed_runs = models.IntegerField(default=0)
     
     # Timestamps

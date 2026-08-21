@@ -254,6 +254,42 @@ SMART_HEADER_MAP = {
     "phonenumber": "phone_number",
     "phone_number": "phone_number",
     "remarks": "remarks",
+
+    # -------------------------------------------------------
+    # OpenRepo - Uses customer_name
+    # -------------------------------------------------------
+    "company": "company",
+    "remarks": "remarks",
+    "bsploading": "bsp_loading",
+    "bsp_loading": "bsp_loading",
+    "branch": "branch",
+    "customername": "customer_name",
+    "customer_name": "customer_name",
+    "loanno": "loan_no",
+    "loan_no": "loan_no",
+    "loannumber": "loan_no",
+    "loan_number": "loan_no",
+    "vehicleno": "vehicle_no",
+    "vehicle_no": "vehicle_no",
+    "vehiclenumber": "vehicle_no",
+    "vehicle_number": "vehicle_no",
+    "vehicletype": "vehicle_type",
+    "vehicle_type": "vehicle_type",
+    "vehicleclass": "vehicle_class",
+    "vehicle_class": "vehicle_class",
+    "engineno": "engine_no",
+    "engine_no": "engine_no",
+    "chassisno": "chassis_no",
+    "chassis_no": "chassis_no",
+    "installmentdate": "installment_date",
+    "installment_date": "installment_date",
+    "dueamount": "due_amount",
+    "due_amount": "due_amount",
+    "emidue": "emi_due",
+    "emi_due": "emi_due",
+    "emidues": "emi_due",
+    "emi_dues": "emi_due",
+
 }
 
 # ============================================================
@@ -440,6 +476,20 @@ def clean_header(header: str, model_name: str = None):
         return special_mapping.get(h, h)
 
     # ============================================================
+    # CollectionAllocations
+    # ============================================================
+    elif model_name == "SalesCollectionAllocations":
+        special_mapping = {
+            "loannumber": "loan_number",
+            "loan_no": "loan_number",
+            "employeeid": "employee_id",
+            "manageremployeeid": "manager_employee_id",
+            "tlemployeeid": "tl_employee_id",
+            "executivename": "executive_name",
+        }
+        return special_mapping.get(h, h)
+
+    # ============================================================
     # Repo
     # ============================================================
     elif model_name == "Repo":
@@ -603,6 +653,42 @@ def clean_header(header: str, model_name: str = None):
         }
         return special_mapping.get(h, h)
 
+    elif model_name == "OpenRepo":
+        special_mapping = {
+            "company": "company",
+            "remarks": "remarks",
+            "bsploading": "bsp_loading",
+            "branch": "branch",
+            "customername": "customer_name",
+            "customer_name": "customer_name",
+            "loanno": "loan_no",
+            "loan_no": "loan_no",
+            "loannumber": "loan_no",
+            "loan_number": "loan_no",
+            "vehicleno": "vehicle_no",
+            "vehicle_no": "vehicle_no",
+            "vehiclenumber": "vehicle_no",
+            "vehicle_number": "vehicle_no",
+            "vehicletype": "vehicle_type",
+            "vehicle_type": "vehicle_type",
+            "vehicleclass": "vehicle_class",
+            "vehicle_class": "vehicle_class",
+            "engineno": "engine_no",
+            "engine_no": "engine_no",
+            "chassisno": "chassis_no",
+            "chassis_no": "chassis_no",
+            "installmentdate": "installment_date",
+            "installment_date": "installment_date",
+            "dueamount": "due_amount",
+            "due_amount": "due_amount",
+            "emidue": "emi_due",
+            "emi_due": "emi_due",
+            "emidues": "emi_due",
+            "emi_dues": "emi_due",
+        }
+        return special_mapping.get(h, h)
+
+
 
     # ============================================================
     # FALLBACK: Return the cleaned header as-is
@@ -661,6 +747,7 @@ def get_model_by_type(file_type: str):
     mapping = {
         "lcc": "Lcc",
         "collection_allocations": "CollectionAllocations",
+        "sales_collection_allocations":"SalesCollectionAllocations",
         "clu": "Clu",
         "repo": "Repo",
         "paid": "Paid",
@@ -678,6 +765,7 @@ def get_model_by_type(file_type: str):
         "upi": "Upi",
         "executive_visit_scheduling": "ExecutiveVisitScheduling",
         "nocmodel": "NocModel",
+        "openrepo":"OpenRepo"
     }
 
     model_name = mapping.get(file_type.lower())
@@ -697,12 +785,15 @@ def get_unique_field(model):
     Returns natural unique field for duplicate prevention.
     """
     # Models that should allow all rows (no unique check)
-    no_unique_models = ["dialer", "paid", "clu"]
+    no_unique_models = ["dialer", "paid", "clu","openrepo"]
 
     if model.__name__.lower() in no_unique_models:
         return None
     if model.__name__ == "NocModel":
         return "vehicle_number"
+    if model.__name__ == "OpenRepo":
+            return "loan_no"
+    
 
     priority = [
         "loan_number",

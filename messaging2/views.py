@@ -228,6 +228,10 @@ def upload_and_send2(request):
 
 
 
+# messaging2/views.py - Replace job_status2
+
+from django.http import JsonResponse  # ← Make sure this is imported
+
 def job_status2(request, job_id):
     job = get_object_or_404(BulkJob2, job_id=job_id)
     
@@ -247,6 +251,19 @@ def job_status2(request, job_id):
         # Trigger report generation if not already done
         if not job.success_report and not job.failed_report:
             finalize_bulk_job2.delay(job_id)
+    
+    # 🔥 AJAX request - return JSON for live updates
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'status': job.status,
+            'total_customers': job.total_customers,
+            'sent_count': job.sent_count,
+            'skipped_count': job.skipped_count,
+            'failed_count': job.failed_count,
+            'processed': processed,
+            'progress': progress,
+            'completed_at': job.completed_at.isoformat() if job.completed_at else None,
+        })
     
     return render(request, "messaging2/job_status.html", {
         "job": job,
@@ -271,32 +288,39 @@ def download_failed_report2(request, job_id):
 
 
 # messaging2/views.py - Add this function
+# messaging2/views.py - Replace download_skipped_report2
 
 def download_skipped_report2(request, job_id):
-    """Download skipped (PAID) customers report"""
+    """Download SKIPPED report - PAID + SEIZED + <0.2 EMI"""
     job = get_object_or_404(BulkJob2, job_id=job_id)
     
     if job.skipped_count == 0:
         raise Http404("No skipped customers found for this job")
     
-    # ✅ Check for PAID, Skipped, or any status that indicates skip
+    # ✅ Use the saved skipped_report file if it exists
+    if hasattr(job, 'skipped_report') and job.skipped_report:
+        return redirect(default_storage.url(job.skipped_report.name))
+    
+    # ✅ Fallback: generate on the fly with SEIZED included
     skipped_qs = SmsWhatsAppLog2.objects.filter(
         job_id=job_id,
-        status__in=['PAID', 'Skipped', 'Paid']
+        status__in=['PAID', 'Skipped', 'Paid', 'SEIZED']  # ← Added SEIZED
     )
     
-    # ✅ Also check message_type = 'Skipped'
     if not skipped_qs.exists():
         skipped_qs = SmsWhatsAppLog2.objects.filter(
             job_id=job_id,
             message_type='Skipped'
         )
     
-    # ✅ Fallback: check error_message for PAID
     if not skipped_qs.exists():
+        from django.db.models import Q
         skipped_qs = SmsWhatsAppLog2.objects.filter(
-            job_id=job_id,
-            error_message__icontains='PAID'
+            job_id=job_id
+        ).filter(
+            Q(error_message__icontains='PAID') |
+            Q(error_message__icontains='SEIZED') |
+            Q(error_message__icontains='EMI overdue - skipped')
         )
     
     if skipped_qs.exists():
@@ -306,7 +330,6 @@ def download_skipped_report2(request, job_id):
         
         df = pd.DataFrame(list(skipped_qs.values()))
         
-        # Remove timezone from datetime columns
         for col in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[col]):
                 df[col] = df[col].dt.tz_localize(None)
@@ -322,6 +345,7 @@ def download_skipped_report2(request, job_id):
         return response
     
     raise Http404("No skipped data found")
+
 
 
 

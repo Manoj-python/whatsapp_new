@@ -27,7 +27,8 @@ from adminpanel.utils import clean_whatsapp_text
 # ============================================================
 # 🔥 IMPORT API CHECK FUNCTIONS
 # ============================================================
-from .utils import needs_api_check, check_smsquare_payment_status
+
+from .utils import needs_api_check, check_smsquare_payment_status2, get_total_overdue_from_schedule2
 
 logger = get_task_logger(__name__)
 logger.setLevel(logging.INFO)
@@ -119,8 +120,6 @@ def process_bulk_whatsapp2(self, excel_s3_path, template_choice, job_id,user_id=
             args=(excel_s3_path, template_choice, job_id, i, min(i + chunk_size, total), agent_name),
             queue="messaging2",
         )
-
-
 # ==================================================
 # BATCH WORKER (UPDATED WITH API CHECK)
 # ==================================================
@@ -150,6 +149,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
     # Read Excel chunk
     with default_storage.open(excel_s3_path, "rb") as f:
+
         df = pd.read_excel(io.BytesIO(f.read()), dtype=str).fillna("")
 
     rows = df.to_dict("records")[start:end]
@@ -171,7 +171,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
     media_cache = {}
 
-    session = make_session()
+    session = requests.Session()
     session.headers.update({
         "Authorization": f"Bearer {settings.WHATSAPP2_ACCESS_TOKEN}"
     })
@@ -182,6 +182,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
         name = row.get("customer_name") or row.get("CustomerName") or ""
         mobile = format_mobile2(row.get("cust_mobile") or row.get("CustMobile") or "")
         loan_number = row.get("loan_number") or row.get("LoanNumber") or row.get("agreement_no") or row.get("AgreementNo")
+        excel_amount = row.get("due_amount") or row.get("DueAmount") or "0"
 
         # Validate mobile
         try:
@@ -218,26 +219,78 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             continue
 
         # ============================================================
-        # 🔍 API CHECK - Skip PAID customers
+        # 🔍 SEIZE DATE CHECK - Skip seized vehicles
         # ============================================================
-        should_skip = False
-        skip_reason = ""
-        total_due = 0
+        try:
+            lcc_status = check_smsquare_payment_status2(mobile, loan_number)
+            seize_date = lcc_status.get('seize_date')
+            
+            if seize_date:
+                print(f"⛔ {mobile} - Vehicle seized on {seize_date}, skipping")
+                local_skipped += 1
+                SmsWhatsAppLog2.objects.create(
+                    job_id=job_id,
+                    customer_name=agent_name,
+                    sender_name=name,
+                    mobile=mobile,
+                    template_name=template_choice,
+                    status='SEIZED',
+                    message_type='Skipped',
+                    error_message=f"Vehicle seized on {seize_date}",
+                    sent_text_message=f"SEIZED - Vehicle seized on {seize_date}",
+                    sent_at=timezone.now(),
+                )
+                continue
+        except Exception as e:
+            print(f"⚠️ SeizeDate check failed for {mobile}: {e}")
+            # Continue with normal flow
 
+        # ============================================================
+        # 🔍 API CHECK - For bucket templates, use schedule API
+        # ============================================================
+        real_time_due = None
+        is_paid = False
         if check_api:
             try:
-                # Call the API check function
-                status = check_smsquare_payment_status(mobile, loan_number)
-                
-                if status.get('is_paid', False):
-                    # ✅ PAID → Skip (no message)
-                    should_skip = True
-                    total_due = status.get('total_due', 0)
-                    skip_reason = f"PAID - Total Due: ₹{total_due}"
-                    logger.info(f"✅ {mobile} - PAID, skipping")
+                # 🔥 For bucket templates (52-59), use RepaymentSchedules
+                if template_choice in ["52", "53", "54", "55", "56", "57", "58", "59"]:
+                    # ✅ INCLUDE current month for bucket templates (reminders)
+                    status = get_total_overdue_from_schedule2(mobile, loan_number, include_upcoming=True)
+                    print(f"📊 Using SCHEDULE API for template {template_choice} (INCLUDING current month)")
+                else:
+                    # ✅ EXCLUDE current month for other templates (legal, notices, etc.)
+                    status = get_total_overdue_from_schedule2(mobile, loan_number, include_upcoming=False)
+                    print(f"📊 Using SCHEDULE API for template {template_choice} (EXCLUDING current month)")
+
+                real_time_due = status.get('total_due', 0)
+                is_paid = status.get('is_paid', False)
+
+                # 🔥 Get EMI due count and apply 0.2 tolerance
+                emi_due_count = status.get('emi_due_count', 0)
+                print(f"📊 EMI Due Count: {emi_due_count}")
+                # 🔥 SKIP if less than 0.2 EMI overdue
+                if emi_due_count < 0.2:
+                    print(f"✅ {mobile} - Skipping (only {emi_due_count} EMI overdue)")
                     local_skipped += 1
-                    
-                    # ✅ LOG THE SKIPPED CUSTOMER
+                    SmsWhatsAppLog2.objects.create(
+                        job_id=job_id,
+                        customer_name=agent_name,
+                        sender_name=name,
+                        mobile=mobile,
+                        template_name=template_choice,
+                        status='SKIPPED',
+                        message_type='Skipped',
+                        error_message=f"Only {emi_due_count} EMI overdue - skipped",
+                        sent_text_message=f"Skipped - only {emi_due_count} EMI overdue",
+                        sent_at=timezone.now(),
+                    )
+                    continue
+
+                if is_paid:
+                    # ✅ PAID → Skip (no message)
+                    print(f"✅ {mobile} - PAID (₹{real_time_due}), skipping")
+                    local_skipped += 1
+
                     SmsWhatsAppLog2.objects.create(
                         job_id=job_id,
                         customer_name=agent_name,
@@ -246,29 +299,30 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                         template_name=template_choice,
                         status='PAID',
                         message_type='Skipped',
-                        error_message=f"Customer is PAID (Total Due: ₹{total_due})",
-                        sent_text_message=f"PAID - No message sent (Total Due: ₹{total_due})",
+                        error_message=f"Customer is PAID (Excel: ₹{excel_amount} | Actual: ₹{real_time_due})",
+                        sent_text_message=f"PAID - No message sent (Excel: ₹{excel_amount} | Actual: ₹{real_time_due})",
                         sent_at=timezone.now(),
                     )
-                    continue  # ⬅️ SKIP SENDING
-                    
+                    continue
                 else:
-                    # ❌ UNPAID → Continue to send
-                    total_due = status.get('total_due', 0)
-                    logger.info(f"❌ {mobile} - UNPAID (₹{total_due}) - Sending message")
-                    
+                    # ✅ UNPAID - UPDATE ROW WITH REAL-TIME AMOUNT
+                    if real_time_due is not None:
+                        row['due_amount'] = str(real_time_due)
+                        print(f"🔄 {mobile} - UNPAID (Excel: ₹{excel_amount} → Actual: ₹{real_time_due})")
+
+                        if status.get('customer_name'):
+                            row['customer_name'] = status.get('customer_name')
+
             except Exception as api_error:
-                # If API fails, assume UNPAID (send reminder)
-                logger.warning(f"⚠️ API Error for {mobile}: {api_error}")
-                logger.warning(f"📱 {mobile} - Assuming UNPAID, sending")
+                print(f"⚠️ API Error for {mobile}: {api_error}")
+                print(f"📱 {mobile} - Using Excel data (₹{excel_amount})")
         else:
-            # ❌ No API check → Send to ALL
-            logger.info(f"📱 {mobile} - No API check, sending")
+            # ❌ No API check → Send with Excel data
+            print(f"📱 {mobile} - No API check, using Excel data (₹{excel_amount})")
 
-        # If skipped, continue to next customer
-        if should_skip:
-            continue
-
+        # ============================================================
+        # 📤 SEND MESSAGE (With updated real-time amount)
+        # ============================================================
         try:
             media_id = None
             folder = None
@@ -366,17 +420,24 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
             # ==================================================
             log_content_type = "document" if is_document and pdf_filename else "text"
 
+            # ✅ Include both Excel and Actual amounts in log for bucket templates
+            log_text = rendered_text
+            if check_api and not is_paid and template_choice in ["52", "53", "54", "55", "56", "57", "58", "59"]:
+                log_text = f"{rendered_text}\n\n📊 Excel: ₹{excel_amount} | Actual: ₹{real_time_due}"
+
             log = SmsWhatsAppLog2.objects.create(
                 job_id=job_id,
                 customer_name=agent_name,
                 sender_name=name,
                 mobile=mobile,
                 template_name=template_choice,
-                sent_text_message=rendered_text,
+                sent_text_message=log_text,
                 status="Sent",
                 message_id=msg_id,
                 message_type="Sent",
                 content_type=log_content_type,
+                # 🆕 Store both amounts for debugging
+                error_message=f"Excel: ₹{excel_amount} | Actual: ₹{real_time_due}" if check_api and template_choice in ["52", "53", "54", "55", "56", "57", "58", "59"] else "",
             )
 
             # ==================================================
@@ -454,7 +515,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                         "message": {
                             "id": log.id,
                             "mobile": mobile,
-                            "sent_text_message": rendered_text,
+                            "sent_text_message": log_text,
                             "content_type": log_content_type,
                             "media_file": log.media_file.url if log.media_file else "",
                             "sent_at": log.sent_at.isoformat(),
@@ -472,7 +533,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
                     "type": "contact.update",
                     "contact": {
                         "mobile": mobile,
-                        "last_msg": rendered_text or "[Media]",
+                        "last_msg": log_text or "[Media]",
                         "last_time": timezone.now().isoformat(),
                         "last_type": "Sent",
                         "last_status": "Sent",
@@ -483,7 +544,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
             success_records.append([name, mobile, msg_id])
             local_success += 1
-            print(f"✅ Successfully sent to {mobile} - Message ID: {msg_id}")
+            print(f"✅ Successfully sent to {mobile} - Amount: ₹{row.get('due_amount', 0)}")
 
         except Exception as e:
             err_msg = str(e)
@@ -560,12 +621,11 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
         finalize_bulk_job2.delay(job_id)
         logger.info(f"✅ Job {job_id} COMPLETED!")
     else:
-        logger.info(f"⏳ Job {job_id} in progress: {processed}/{job.total_customers}")
-
-
+        logger.info(f"⏳ Job {job_id} in progress: {processed}/{job.total_customers}")        
 # ==================================================
 # FINALIZER
 # ==================================================
+# messaging2/tasks.py - REPLACE finalize_bulk_job2 with this
 
 @shared_task(bind=True, queue="messaging2")
 def finalize_bulk_job2(self, job_id):
@@ -575,65 +635,122 @@ def finalize_bulk_job2(self, job_id):
         return
 
     # Prevent double execution
-    if job.success_report and job.failed_report:
+    if job.success_report and job.failed_report and job.skipped_report:
         return
 
     from django.apps import apps
     model = SmsWhatsAppLog2
     field_names = [f.name for f in model._meta.get_fields() if not f.auto_created]
 
+    # ============================================================
+    # ✅ SUCCESS REPORT - Only Sent, Delivered, Read
+    # ============================================================
     success_qs = SmsWhatsAppLog2.objects.filter(
-        job_id=job_id, status__in=["Sent", "Delivered", "Read"]
-    )
-    failed_qs = SmsWhatsAppLog2.objects.exclude(
+        job_id=job_id, 
         status__in=["Sent", "Delivered", "Read"]
-    ).filter(
-        job_id=job_id
     )
 
-    if success_qs.exists():
-        success_df = pd.DataFrame(list(success_qs.values()))
-    else:
-        success_df = pd.DataFrame(columns=field_names)
+    # ============================================================
+    # ❌ FAILED REPORT - Only actual failures (NOT skipped)
+    # ============================================================
+    failed_qs = SmsWhatsAppLog2.objects.filter(
+        job_id=job_id
+    ).exclude(
+        status__in=["Sent", "Delivered", "Read", "PAID", "Skipped", "Paid", "SEIZED"]
+    ).exclude(
+        message_type="Skipped"
+    )
 
-    if failed_qs.exists():
-        failed_df = pd.DataFrame(list(failed_qs.values()))
-    else:
-        failed_df = pd.DataFrame(columns=field_names)
+    # If no failed found with above, try with status='Failed'
+    if not failed_qs.exists():
+        failed_qs = SmsWhatsAppLog2.objects.filter(
+            job_id=job_id,
+            status__in=[
+                'Failed', 'Blocked', 'Not on WhatsApp', 'Invalid',
+                'NOT_ON_WHATSAPP', 'BLOCKED_BY_USER', 'BLOCKED_BY_BUSINESS',
+                'OPTED_OUT', 'TOKEN_ERROR', 'UNKNOWN_ERROR', 'RATE_LIMIT',
+                'TEMPLATE_NOT_FOUND', 'TEMPLATE_DISABLED', 'TEMPLATE_PAUSED',
+                '24H_WINDOW_EXPIRED', 'UNSUPPORTED_MESSAGE_TYPE'
+            ]
+        )
 
-    for df in [success_df, failed_df]:
+    # ============================================================
+    # ⏭️ SKIPPED REPORT - PAID + SEIZED + SKIPPED (<0.2 EMI)
+    # ============================================================
+    skipped_qs = SmsWhatsAppLog2.objects.filter(
+        job_id=job_id,
+        status__in=["PAID", "Skipped", "Paid", "SEIZED"]
+    )
+
+    # Also check message_type = 'Skipped'
+    if not skipped_qs.exists():
+        skipped_qs = SmsWhatsAppLog2.objects.filter(
+            job_id=job_id,
+            message_type="Skipped"
+        )
+
+    # Fallback: check error_message for PAID, SEIZED, or EMI skip
+    if not skipped_qs.exists():
+        from django.db.models import Q
+        skipped_qs = SmsWhatsAppLog2.objects.filter(
+            job_id=job_id
+        ).filter(
+            Q(error_message__icontains='PAID') |
+            Q(error_message__icontains='SEIZED') |
+            Q(error_message__icontains='EMI overdue - skipped')
+        )
+
+    # ============================================================
+    # 📊 BUILD DATAFRAMES
+    # ============================================================
+    success_df = pd.DataFrame(list(success_qs.values())) if success_qs.exists() else pd.DataFrame(columns=field_names)
+    failed_df = pd.DataFrame(list(failed_qs.values())) if failed_qs.exists() else pd.DataFrame(columns=field_names)
+    skipped_df = pd.DataFrame(list(skipped_qs.values())) if skipped_qs.exists() else pd.DataFrame(columns=field_names)
+
+    # 🔥 Remove timezone from datetime columns
+    for df in [success_df, failed_df, skipped_df]:
         for col in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[col]):
                 df[col] = df[col].dt.tz_localize(None)
 
+    # ============================================================
+    # 💾 SAVE REPORTS
+    # ============================================================
     success_path = f"reports2/{job_id}_success.xlsx"
     failed_path = f"reports2/{job_id}_failed.xlsx"
+    skipped_path = f"reports2/{job_id}_skipped.xlsx"
 
     success_buffer = io.BytesIO()
     failed_buffer = io.BytesIO()
+    skipped_buffer = io.BytesIO()
 
+    # Write all three files
     success_df.to_excel(success_buffer, index=False)
     failed_df.to_excel(failed_buffer, index=False)
+    skipped_df.to_excel(skipped_buffer, index=False)
 
-    if default_storage.exists(success_path):
-        default_storage.delete(success_path)
-    if default_storage.exists(failed_path):
-        default_storage.delete(failed_path)
+    # Delete old files if they exist
+    for path in [success_path, failed_path, skipped_path]:
+        if default_storage.exists(path):
+            default_storage.delete(path)
 
+    # Save all three reports
     default_storage.save(success_path, ContentFile(success_buffer.getvalue()))
     job.success_report = success_path
 
     default_storage.save(failed_path, ContentFile(failed_buffer.getvalue()))
     job.failed_report = failed_path
 
+    default_storage.save(skipped_path, ContentFile(skipped_buffer.getvalue()))
+    job.skipped_report = skipped_path  # ← Make sure this field exists in BulkJob2
+
     job.status = "Completed"
     job.completed_at = timezone.now()
     job.save(update_fields=[
-        "success_report", "failed_report", "status", "completed_at"
+        "success_report", "failed_report", "skipped_report", "status", "completed_at"
     ])
 
-    logger.info("Job %s COMPLETED and both reports generated", job_id)
-
+    logger.info("Job %s COMPLETED with success, failed, and skipped reports", job_id)
 
 @shared_task
 def process_pending_webhook_updates():
@@ -673,6 +790,12 @@ def process_pending_webhook_updates():
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+
+
+
+
+
+
 
 
 

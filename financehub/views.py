@@ -22,9 +22,11 @@ import uuid
 from .models import (
     UploadHistory,
     Lcc,
+    SalesCollectionAllocations,
     Feedback,
     ExecutiveVisitScheduling,
     Clu,
+    OpenRepo,
     NocModel,
     Freshdesk,
     DueNotice,
@@ -117,6 +119,7 @@ from .models import UploadHistory
 FILE_TYPES = [
     ("lcc", "LCC"),
     ("collection_allocations", "Collection Allocations"),
+    ("sales_collection_allocations", "Sales Collection Allocations"),
     ("clu", "CLU"),
     ("repo", "Repo"),
     ("paid", "Paid"),
@@ -132,7 +135,8 @@ FILE_TYPES = [
     ("smsquare", "SMSquare"),
     ("upi", "UPI"),
     ("executive_visit_scheduling", "Executive Visit Scheduling"),
-    ("NocModel","NocModel")
+    ("NocModel","NocModel"),
+    ("OpenRepo","OpenRepo")
 
 
 ]
@@ -837,6 +841,61 @@ from django.shortcuts import render
 from django.db.models import Q
 import datetime
 from .models import Feedback
+
+
+
+@login_required
+def openrepo_list(request):
+    """
+    List OpenRepo records with search and pagination
+    """
+    queryset = OpenRepo.objects.all().order_by('-created_at')
+    
+    # Search functionality
+    search = request.GET.get('search', '').strip()
+    if search:
+        queryset = queryset.filter(
+            Q(customer_name__icontains=search) |
+            Q(loan_no__icontains=search) |
+            Q(vehicle_no__icontains=search) |
+            Q(branch__icontains=search) |
+            Q(company__icontains=search) |
+            Q(engine_no__icontains=search) |
+            Q(chassis_no__icontains=search) |
+            Q(remarks__icontains=search)
+        )
+    
+    # Statistics
+    total_records = queryset.count()
+    unique_customers = queryset.values('customer_name').distinct().count()
+    total_vehicles = queryset.exclude(vehicle_no='').count()
+    total_branches = queryset.values('branch').distinct().count()
+    
+    # Pagination
+    paginator = Paginator(queryset, 50)
+    page = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page)
+    
+    # Build query string for pagination
+    query_string = ''
+    if search:
+        query_string = f'search={search}&'
+    
+    context = {
+        'page_obj': page_obj,
+        'search': search,
+        'total_records': total_records,
+        'unique_customers': unique_customers,
+        'total_vehicles': total_vehicles,
+        'total_branches': total_branches,
+        'query_string': query_string,
+    }
+    return render(request, 'financehub/openrepo.html', context)
+
+
+
+
+
 
 
 # ---------------------------------------------------------------------
@@ -3194,3 +3253,57 @@ def delete_all_employees(request):
     except Exception as e:
         logger.error(f"Error in delete_all_employees: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def collection_allocations_list(request):
+    """
+    View to display Collection Allocations with search and pagination.
+    Uses the same UI as Open Repo Data page.
+    """
+    
+    # Base queryset - ordered by created_at descending (latest first)
+    queryset = CollectionAllocations.objects.all().order_by('-created_at', 'loan_number')
+    
+    # Search functionality
+    search_query = request.GET.get('search', '').strip()
+    
+    if search_query:
+        queryset = queryset.filter(
+            Q(loan_number__icontains=search_query) |
+            Q(branch__icontains=search_query) |
+            Q(cm__icontains=search_query) |
+            Q(tl__icontains=search_query) |
+            Q(executive_name__icontains=search_query) |
+            Q(employee_id__icontains=search_query) |
+            Q(company__icontains=search_query) |
+            Q(previous_employee_id__icontains=search_query)
+        )
+    
+    # Statistics (before pagination)
+    total_records = queryset.count()
+    unique_executives = queryset.values('executive_name').distinct().count()
+    unique_managers = queryset.values('cm').distinct().count()
+    total_branches = queryset.values('branch').distinct().count()
+    total_companies = queryset.values('company').distinct().count()
+    
+    # Pagination - 20 records per page (match your UI)
+    paginator = Paginator(queryset, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Preserve search query in pagination links
+    query_string = f"search={search_query}" if search_query else ""
+    
+    context = {
+        'page_obj': page_obj,
+        'search': search_query,
+        'query_string': query_string,
+        'total_records': total_records,
+        'unique_executives': unique_executives,
+        'unique_managers': unique_managers,
+        'total_branches': total_branches,
+        'total_companies': total_companies,
+    }
+    
+    return render(request, 'financehub/collection_allocations_list.html', context)
