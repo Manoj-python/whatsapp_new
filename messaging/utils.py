@@ -19,7 +19,7 @@ from financehub.models import Lcc
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-    "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+   "1", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
 ]
 
 def needs_api_check(template_id):
@@ -833,7 +833,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
     templates = {
         "1": ("emi_reminder", "en", [
             {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("total_dues", ""))},
+            {"type": "text", "text": str(row.get("due_amount", ""))},
             {"type": "text", "text": str(row.get("loan_number", ""))},
             {"type": "text", "text": format_whatsapp_date(row.get("installment_date", ""))},
             {"type": "text", "text": PAYMENT_LINK},

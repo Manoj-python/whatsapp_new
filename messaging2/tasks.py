@@ -253,7 +253,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
         if check_api:
             try:
                 # 🔥 For bucket templates (52-59), use RepaymentSchedules
-                if template_choice in ["52", "53", "54", "55", "56", "57", "58", "59"]:
+                if template_choice in ["52", "54", "56", "58","1"]:
                     # ✅ INCLUDE current month for bucket templates (reminders)
                     status = get_total_overdue_from_schedule2(mobile, loan_number, include_upcoming=True)
                     print(f"📊 Using SCHEDULE API for template {template_choice} (INCLUDING current month)")
@@ -422,7 +422,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
             # ✅ Include both Excel and Actual amounts in log for bucket templates
             log_text = rendered_text
-            if check_api and not is_paid and template_choice in ["52", "53", "54", "55", "56", "57", "58", "59"]:
+            if check_api and not is_paid and template_choice in ["52", "54", "56", "58","1"]:
                 log_text = f"{rendered_text}\n\n📊 Excel: ₹{excel_amount} | Actual: ₹{real_time_due}"
 
             log = SmsWhatsAppLog2.objects.create(

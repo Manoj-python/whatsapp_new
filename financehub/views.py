@@ -3011,6 +3011,7 @@ def search_employees(request):
             'notice_period': emp.notice_period or '',
             'date': emp.date or '',
             'notice_status': emp.notice_status or '',
+            'gender':emp.gender or ''
         })
     
     return JsonResponse(result, safe=False)
@@ -3045,7 +3046,7 @@ def edit_employee_phone(request):
             'father_name', 'present_address', 'aadhaar_number',
             'curr_organisation', 'gross', 'ta', 'erepf', 'eresi', 'ctc',
             'status', 'lwd', 'tenth_memo', 'inter_memo', 'cheque',
-            'bond', 'notice_period', 'date', 'notice_status', 'blood_group'
+            'bond', 'notice_period', 'date', 'notice_status', 'blood_group','gender'
         ]
         
         for field in fields_to_update:
@@ -3093,6 +3094,7 @@ def edit_employee_phone(request):
                 'date': employee.date,
                 'notice_status': employee.notice_status,
                 'blood_group': employee.blood_group,
+                'gender':employee.gender
             }
         })
     except json.JSONDecodeError as e:

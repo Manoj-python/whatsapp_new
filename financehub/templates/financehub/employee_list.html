@@ -438,6 +438,25 @@
             margin-top: 4px;
         }
 
+        /* Gender dropdown styling */
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: white;
+            appearance: auto;
+        }
+
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
         .modal-footer {
             display: flex;
             gap: 12px;
@@ -481,6 +500,29 @@
             transform: none;
         }
 
+        .btn-danger {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #dc3545;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            transform: scale(1.02);
+        }
+
+        .btn-danger:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
         .toast {
             position: fixed;
             bottom: 30px;
@@ -513,38 +555,64 @@
         .toast i {
             font-size: 22px;
         }
+
         .table-scroll {
-    overflow-x: auto;
-    overflow-y: auto;
-    max-height: 600px;
-    padding: 0 5px;
-}
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 600px;
+            padding: 0 5px;
+        }
 
-.table-scroll table {
-    min-width: 2000px; /* Forces horizontal scroll */
-    width: auto;
-    white-space: nowrap;
-}
+        .table-scroll table {
+            min-width: 2000px;
+            width: auto;
+            white-space: nowrap;
+        }
 
-.table-scroll thead th {
-    position: sticky;
-    top: 0;
-    background: #f8f9fa;
-    z-index: 10;
-    padding: 10px 8px;
-    font-size: 11px;
-    text-align: left;
-    font-weight: 600;
-    color: #495057;
-    border-bottom: 2px solid #e9ecef;
-}
+        .table-scroll thead th {
+            position: sticky;
+            top: 0;
+            background: #f8f9fa;
+            z-index: 10;
+            padding: 10px 8px;
+            font-size: 11px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+        }
 
-.table-scroll tbody td {
-    padding: 8px 8px;
-    font-size: 12px;
-    vertical-align: middle;
-    border-bottom: 1px solid #f1f3f5;
-}
+        .table-scroll tbody td {
+            padding: 8px 8px;
+            font-size: 12px;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f3f5;
+        }
+
+        .gender-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+            text-align: center;
+            min-width: 50px;
+        }
+
+        .gender-badge.male {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .gender-badge.female {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .gender-badge.other {
+            background: #e2e3e5;
+            color: #383d41;
+        }
 
         @media (max-width: 768px) {
             .header {
@@ -593,11 +661,10 @@
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
-<!-- Delete All Button -->
-<button class="btn btn-danger" onclick="deleteAllEmployees()" 
-        style="padding: 10px 20px; border: none; border-radius: 25px; font-size: 14px; font-weight: 600; cursor: pointer; background: #dc3545; color: white;">
-    <i class="fas fa-trash"></i> Delete All
-</button>
+                <!-- Delete All Button -->
+                <button class="btn-danger" onclick="deleteAllEmployees()">
+                    <i class="fas fa-trash"></i> Delete All
+                </button>
                 <div class="stats">
                     <span><i class="fas fa-user"></i> <span id="totalCount">0</span></span>
                     <span><i class="fas fa-circle" style="color: #28a745;"></i> <span id="activeCount">0</span></span>
@@ -607,249 +674,258 @@
         </div>
 
         <!-- Table -->
-        <!-- Table -->
-<div class="table-wrapper">
-    <div class="table-scroll">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Emp No</th>
-                    <th>Name</th>
-                    <th>Joined On</th>
-                    <th>DOB</th>
-                    <th>Father's Name</th>
-                    <th>Blood Group</th>
-                    <th>Aadhaar</th>
-                    <th>Designation</th>
-                    <th>Department</th>
-                    <th>Location</th>
-                    <th>Organisation</th>
-                    <th>Phone</th>
-                    <th>Official Mobile</th>
-                    <th>Email</th>
-                    <th>Official Email</th>
-                    <th>Address</th>
-                    <th>Reporting (Collections)</th>
-                    <th>Reporting (Sales)</th>
-                    <th>Gross</th>
-                    <th>TA</th>
-                    <th>ER EPF</th>
-                    <th>ER ESI</th>
-                    <th>CTC</th>
-                    <th>Status</th>
-                    <th>LWD</th>
-                    <th>Tenth Memo</th>
-                    <th>Inter Memo</th>
-                    <th>Cheque</th>
-                    <th>Bond</th>
-                    <th>Notice Period</th>
-                    <th>Date</th>
-                    <th>Notice Status</th>
-                    <th style="text-align: center;">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="employeeTableBody">
-                <tr>
-                    <td colspan="34" class="loading">
-                        <i class="fas fa-spinner"></i>
-                        <div style="margin-top: 10px;">Loading employees...</div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-    </div>
-
-   <!-- Edit Modal -->
-<!-- Edit Modal - COMPLETE VERSION -->
-<div class="modal-overlay" id="editModal">
-    <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header">
-            <h2><i class="fas fa-edit"></i> Edit Employee Details</h2>
-            <button class="modal-close" onclick="closeModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <form id="editForm" onsubmit="event.preventDefault(); saveEmployeeChanges();">
-                <input type="hidden" id="editEmployeeId">
-
-                <!-- ======== SECTION 1: Personal Information ======== -->
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-user"></i> Personal Information</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div class="form-group">
-                            <label><i class="fas fa-id-card"></i> Employee Number</label>
-                            <input type="text" id="editEmployeeNumber" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-user"></i> Employee Name</label>
-                            <input type="text" id="editEmployeeName" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-calendar"></i> Joined On</label>
-                            <input type="text" id="editJoinedOn" class="form-control" placeholder="DD-MM-YYYY" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-birthday-cake"></i> Date of Birth</label>
-                            <input type="text" id="editDob" class="form-control" placeholder="DD-MM-YYYY" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-user-tag"></i> Father's Name</label>
-                            <input type="text" id="editFatherName" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-tint"></i> Blood Group</label>
-                            <input type="text" id="editBloodGroup" class="form-control" placeholder="A+, B+, O+, etc." />
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label><i class="fas fa-address-card"></i> Aadhaar Number</label>
-                            <input type="text" id="editAadhaarNumber" class="form-control" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ======== SECTION 2: Contact Information ======== -->
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-phone"></i> Contact Information</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div class="form-group">
-                            <label><i class="fas fa-phone"></i> Personal Phone</label>
-                            <input type="text" id="editPhone" class="form-control" />
-                            <div class="hint">Current: <span id="currentPhone">-</span></div>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-building"></i> Official Mobile</label>
-                            <input type="text" id="editOfficialMobile" class="form-control" />
-                            <div class="hint">Current: <span id="currentOfficialMobile">-</span></div>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-envelope"></i> Email</label>
-                            <input type="text" id="editEmail" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-envelope"></i> Official Email</label>
-                            <input type="text" id="editOfficialEmail" class="form-control" />
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label><i class="fas fa-map-marker-alt"></i> Present Address</label>
-                            <input type="text" id="editPresentAddress" class="form-control" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ======== SECTION 3: Employment Information ======== -->
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-briefcase"></i> Employment Information</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div class="form-group">
-                            <label><i class="fas fa-user-tie"></i> Designation</label>
-                            <input type="text" id="editDesignation" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-building"></i> Department</label>
-                            <input type="text" id="editDepartment" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-map-pin"></i> Location</label>
-                            <input type="text" id="editLocation" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-building"></i> Organisation</label>
-                            <input type="text" id="editOrganisation" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-user-tie"></i> Reporting (Collections)</label>
-                            <input type="text" id="editReportingToCollections" class="form-control" />
-                            <div class="hint">Current: <span id="currentReportingToCollections">-</span></div>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-user-tie"></i> Reporting (Sales)</label>
-                            <input type="text" id="editReportingToSales" class="form-control" />
-                            <div class="hint">Current: <span id="currentReportingToSales">-</span></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ======== SECTION 4: Salary Information ======== -->
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-money-bill-wave"></i> Salary Information</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
-                        <div class="form-group">
-                            <label>Gross</label>
-                            <input type="text" id="editGross" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>TA</label>
-                            <input type="text" id="editTa" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>ER EPF</label>
-                            <input type="text" id="editErepf" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>ER ESI</label>
-                            <input type="text" id="editEresi" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>CTC</label>
-                            <input type="text" id="editCtc" class="form-control" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ======== SECTION 5: Status & Other Information ======== -->
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-info-circle"></i> Status & Other Information</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div class="form-group">
-                            <label>Status</label>
-                            <input type="text" id="editStatus" class="form-control" placeholder="ACTIVE / LEFT" />
-                        </div>
-                        <div class="form-group">
-                            <label>LWD (Last Working Day)</label>
-                            <input type="text" id="editLwd" class="form-control" placeholder="DD-MM-YYYY" />
-                        </div>
-                        <div class="form-group">
-                            <label>Tenth Memo</label>
-                            <input type="text" id="editTenthMemo" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>Inter Memo</label>
-                            <input type="text" id="editInterMemo" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>Cheque</label>
-                            <input type="text" id="editCheque" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>Bond</label>
-                            <input type="text" id="editBond" class="form-control" />
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label>Notice Period</label>
-                            <input type="text" id="editNoticePeriod" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>Date</label>
-                            <input type="text" id="editDate" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                            <label>Notice Status</label>
-                            <input type="text" id="editNoticeStatus" class="form-control" />
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="saveEmployeeChanges()" id="saveBtn">
-                <i class="fas fa-save"></i> Save All Changes
-            </button>
+        <div class="table-wrapper">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Emp No</th>
+                            <th>Name</th>
+                            <th>Gender</th>
+                            <th>Joined On</th>
+                            <th>DOB</th>
+                            <th>Father's Name</th>
+                            <th>Blood Group</th>
+                            <th>Aadhaar</th>
+                            <th>Designation</th>
+                            <th>Department</th>
+                            <th>Location</th>
+                            <th>Organisation</th>
+                            <th>Phone</th>
+                            <th>Official Mobile</th>
+                            <th>Email</th>
+                            <th>Official Email</th>
+                            <th>Address</th>
+                            <th>Reporting (Collections)</th>
+                            <th>Reporting (Sales)</th>
+                            <th>Gross</th>
+                            <th>TA</th>
+                            <th>ER EPF</th>
+                            <th>ER ESI</th>
+                            <th>CTC</th>
+                            <th>Status</th>
+                            <th>LWD</th>
+                            <th>Tenth Memo</th>
+                            <th>Inter Memo</th>
+                            <th>Cheque</th>
+                            <th>Bond</th>
+                            <th>Notice Period</th>
+                            <th>Date</th>
+                            <th>Notice Status</th>
+                            <th style="text-align: center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employeeTableBody">
+                        <tr>
+                            <td colspan="35" class="loading">
+                                <i class="fas fa-spinner"></i>
+                                <div style="margin-top: 10px;">Loading employees...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
-</div>
+
+    <!-- Edit Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2><i class="fas fa-edit"></i> Edit Employee Details</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm" onsubmit="event.preventDefault(); saveEmployeeChanges();">
+                    <input type="hidden" id="editEmployeeId">
+
+                    <!-- ======== SECTION 1: Personal Information ======== -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-user"></i> Personal Information</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label><i class="fas fa-id-card"></i> Employee Number</label>
+                                <input type="text" id="editEmployeeNumber" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-user"></i> Employee Name</label>
+                                <input type="text" id="editEmployeeName" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-venus-mars"></i> Gender</label>
+                                <select id="editGender" class="form-control">
+                                    <option value="">Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Joined On</label>
+                                <input type="text" id="editJoinedOn" class="form-control" placeholder="DD-MM-YYYY" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-birthday-cake"></i> Date of Birth</label>
+                                <input type="text" id="editDob" class="form-control" placeholder="DD-MM-YYYY" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-user-tag"></i> Father's Name</label>
+                                <input type="text" id="editFatherName" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-tint"></i> Blood Group</label>
+                                <input type="text" id="editBloodGroup" class="form-control" placeholder="A+, B+, O+, etc." />
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label><i class="fas fa-address-card"></i> Aadhaar Number</label>
+                                <input type="text" id="editAadhaarNumber" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ======== SECTION 2: Contact Information ======== -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-phone"></i> Contact Information</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label><i class="fas fa-phone"></i> Personal Phone</label>
+                                <input type="text" id="editPhone" class="form-control" />
+                                <div class="hint">Current: <span id="currentPhone">-</span></div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-building"></i> Official Mobile</label>
+                                <input type="text" id="editOfficialMobile" class="form-control" />
+                                <div class="hint">Current: <span id="currentOfficialMobile">-</span></div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-envelope"></i> Email</label>
+                                <input type="text" id="editEmail" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-envelope"></i> Official Email</label>
+                                <input type="text" id="editOfficialEmail" class="form-control" />
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label><i class="fas fa-map-marker-alt"></i> Present Address</label>
+                                <input type="text" id="editPresentAddress" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ======== SECTION 3: Employment Information ======== -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-briefcase"></i> Employment Information</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label><i class="fas fa-user-tie"></i> Designation</label>
+                                <input type="text" id="editDesignation" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-building"></i> Department</label>
+                                <input type="text" id="editDepartment" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-map-pin"></i> Location</label>
+                                <input type="text" id="editLocation" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-building"></i> Organisation</label>
+                                <input type="text" id="editOrganisation" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-user-tie"></i> Reporting (Collections)</label>
+                                <input type="text" id="editReportingToCollections" class="form-control" />
+                                <div class="hint">Current: <span id="currentReportingToCollections">-</span></div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-user-tie"></i> Reporting (Sales)</label>
+                                <input type="text" id="editReportingToSales" class="form-control" />
+                                <div class="hint">Current: <span id="currentReportingToSales">-</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ======== SECTION 4: Salary Information ======== -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-money-bill-wave"></i> Salary Information</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label>Gross</label>
+                                <input type="text" id="editGross" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>TA</label>
+                                <input type="text" id="editTa" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>ER EPF</label>
+                                <input type="text" id="editErepf" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>ER ESI</label>
+                                <input type="text" id="editEresi" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>CTC</label>
+                                <input type="text" id="editCtc" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ======== SECTION 5: Status & Other Information ======== -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-info-circle"></i> Status & Other Information</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label>Status</label>
+                                <input type="text" id="editStatus" class="form-control" placeholder="ACTIVE / LEFT" />
+                            </div>
+                            <div class="form-group">
+                                <label>LWD (Last Working Day)</label>
+                                <input type="text" id="editLwd" class="form-control" placeholder="DD-MM-YYYY" />
+                            </div>
+                            <div class="form-group">
+                                <label>Tenth Memo</label>
+                                <input type="text" id="editTenthMemo" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>Inter Memo</label>
+                                <input type="text" id="editInterMemo" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>Cheque</label>
+                                <input type="text" id="editCheque" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>Bond</label>
+                                <input type="text" id="editBond" class="form-control" />
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label>Notice Period</label>
+                                <input type="text" id="editNoticePeriod" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>Date</label>
+                                <input type="text" id="editDate" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>Notice Status</label>
+                                <input type="text" id="editNoticeStatus" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveEmployeeChanges()" id="saveBtn">
+                    <i class="fas fa-save"></i> Save All Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
@@ -858,487 +934,501 @@
 
     <!-- JavaScript -->
     <script>
-    // Global variables
-    let currentEmployeeId = null;
+        // Global variables
+        let currentEmployeeId = null;
 
-    // Helper function to safely display values
-    function safeDisplay(value, defaultValue = '-') {
-        // Check for null, undefined, or empty string
-        if (value === null || value === undefined || value === 'null' || value === 'undefined' || value === '') {
-            return defaultValue;
+        // Helper function to safely display values
+        function safeDisplay(value, defaultValue = '-') {
+            if (value === null || value === undefined || value === 'null' || value === 'undefined' || value === '') {
+                return defaultValue;
+            }
+            if (typeof value === 'number' && isNaN(value)) {
+                return defaultValue;
+            }
+            if (typeof value === 'string' && value.toLowerCase() === 'nan') {
+                return defaultValue;
+            }
+            return value;
         }
-        // Check for NaN
-        if (typeof value === 'number' && isNaN(value)) {
-            return defaultValue;
-        }
-        // Check for string 'nan' (case insensitive)
-        if (typeof value === 'string' && value.toLowerCase() === 'nan') {
-            return defaultValue;
-        }
-        return value;
-    }
 
-    // Load employees on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        searchEmployees();
-    });
+        // Helper to get gender badge class
+        function getGenderBadgeClass(gender) {
+            if (!gender) return '';
+            const g = gender.toLowerCase();
+            if (g === 'male') return 'male';
+            if (g === 'female') return 'female';
+            return 'other';
+        }
 
-    // Enter key for search
-    document.getElementById('searchInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
+        // Load employees on page load
+        document.addEventListener('DOMContentLoaded', function() {
             searchEmployees();
+        });
+
+        // Enter key for search
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchEmployees();
+            }
+        });
+
+        function searchEmployees() {
+            const query = document.getElementById('searchInput').value.trim();
+            const tbody = document.getElementById('employeeTableBody');
+            
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="35" class="loading">
+                        <i class="fas fa-spinner"></i>
+                        <div style="margin-top: 10px;">Searching...</div>
+                    </td>
+                </tr>
+            `;
+
+            const url = `/financehub/api/employees/search/?q=${encodeURIComponent(query)}`;
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    if (data.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="35" class="no-results">
+                                    <div class="no-results">
+                                        <i class="fas fa-search"></i>
+                                        <h3>No employees found</h3>
+                                        <p style="color: #adb5bd;">Try adjusting your search terms</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        renderEmployees(data);
+                    }
+                    
+                    // Update stats
+                    const active = data.filter(emp => (emp.status || 'ACTIVE').toUpperCase() === 'ACTIVE').length;
+                    const inactive = data.length - active;
+                    document.getElementById('totalCount').textContent = data.length;
+                    document.getElementById('activeCount').textContent = active;
+                    document.getElementById('inactiveCount').textContent = inactive;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="35" style="text-align: center; padding: 40px; color: #dc3545;">
+                                <i class="fas fa-exclamation-circle" style="font-size: 30px;"></i>
+                                <div style="margin-top: 10px;">Error loading employees. Please try again.</div>
+                                <div style="margin-top: 5px; font-size: 12px; color: #6c757d;">${error.message}</div>
+                            </td>
+                        </tr>
+                    `;
+                });
         }
-    });
 
-   function searchEmployees() {
-    const query = document.getElementById('searchInput').value.trim();
-    const tbody = document.getElementById('employeeTableBody');
-    
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="34" class="loading">   <!-- ✅ Changed from 10 to 34 -->
-                <i class="fas fa-spinner"></i>
-                <div style="margin-top: 10px;">Searching...</div>
-            </td>
-        </tr>
-    `;
+        function renderEmployees(employees) {
+            const tbody = document.getElementById('employeeTableBody');
+            let html = '';
 
-    const url = `/financehub/api/employees/search/?q=${encodeURIComponent(query)}`;
+            employees.forEach(emp => {
+                const status = safeDisplay(emp.status, 'ACTIVE');
+                const statusClass = status.toUpperCase() === 'ACTIVE' ? 'active' : 'inactive';
+                const statusDisplay = status.toUpperCase() === 'ACTIVE' ? 'Active' : 'Inactive';
 
-    fetch(url)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            if (data.length === 0) {
-                tbody.innerHTML = `
+                const gender = safeDisplay(emp.gender, '');
+                const genderBadgeClass = getGenderBadgeClass(gender);
+                const genderDisplay = gender || '-';
+
+                html += `
                     <tr>
-                        <td colspan="34" class="no-results">   <!-- ✅ Changed to 34 -->
-                            <div class="no-results">
-                                <i class="fas fa-search"></i>
-                                <h3>No employees found</h3>
-                                <p style="color: #adb5bd;">Try adjusting your search terms</p>
+                        <td>${safeDisplay(emp.id)}</td>
+                        <td><span class="employee-id">${safeDisplay(emp.employee_number)}</span></td>
+                        <td class="employee-name">${safeDisplay(emp.employee_name)}</td>
+                        <td><span class="gender-badge ${genderBadgeClass}">${genderDisplay}</span></td>
+                        <td>${safeDisplay(emp.joined_on)}</td>
+                        <td>${safeDisplay(emp.dob)}</td>
+                        <td>${safeDisplay(emp.father_name)}</td>
+                        <td>${safeDisplay(emp.blood_group)}</td>
+                        <td>${safeDisplay(emp.aadhaar_number)}</td>
+                        <td><span class="designation-badge">${safeDisplay(emp.curr_designation, 'Not specified')}</span></td>
+                        <td>${safeDisplay(emp.curr_department)}</td>
+                        <td>${safeDisplay(emp.curr_location)}</td>
+                        <td>${safeDisplay(emp.curr_organisation)}</td>
+                        <td><span class="phone-number">${safeDisplay(emp.phone)}</span></td>
+                        <td><span class="phone-number">${safeDisplay(emp.official_mobile_nos)}</span></td>
+                        <td>${safeDisplay(emp.email)}</td>
+                        <td>${safeDisplay(emp.official_email_ids)}</td>
+                        <td style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${safeDisplay(emp.present_address)}">
+                            ${safeDisplay(emp.present_address)}
+                        </td>
+                        <td>${safeDisplay(emp.reporting_to_collections)}</td>
+                        <td>${safeDisplay(emp.reporting_to_sales)}</td>
+                        <td>${safeDisplay(emp.gross)}</td>
+                        <td>${safeDisplay(emp.ta)}</td>
+                        <td>${safeDisplay(emp.erepf)}</td>
+                        <td>${safeDisplay(emp.eresi)}</td>
+                        <td>${safeDisplay(emp.ctc)}</td>
+                        <td><span class="status-badge ${statusClass}">${statusDisplay}</span></td>
+                        <td>${safeDisplay(emp.lwd)}</td>
+                        <td>${safeDisplay(emp.tenth_memo)}</td>
+                        <td>${safeDisplay(emp.inter_memo)}</td>
+                        <td>${safeDisplay(emp.cheque)}</td>
+                        <td>${safeDisplay(emp.bond)}</td>
+                        <td>${safeDisplay(emp.notice_period)}</td>
+                        <td>${safeDisplay(emp.date)}</td>
+                        <td>${safeDisplay(emp.notice_status)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="edit-btn" onclick="openEditModal(${emp.id})" title="Edit All Details">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="status-btn ${statusClass}" 
+                                        onclick="toggleStatus(${emp.id})" 
+                                        id="statusBtn_${emp.id}"
+                                        title="Toggle Status">
+                                    ${statusDisplay}
+                                </button>
                             </div>
                         </td>
                     </tr>
                 `;
-            } else {
-                renderEmployees(data);
-            }
-            
-            // Update stats
-            const active = data.filter(emp => (emp.status || 'ACTIVE').toUpperCase() === 'ACTIVE').length;
-            const inactive = data.length - active;
-            document.getElementById('totalCount').textContent = data.length;
-            document.getElementById('activeCount').textContent = active;
-            document.getElementById('inactiveCount').textContent = inactive;
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="34" style="text-align: center; padding: 40px; color: #dc3545;">
-                        <i class="fas fa-exclamation-circle" style="font-size: 30px;"></i>
-                        <div style="margin-top: 10px;">Error loading employees. Please try again.</div>
-                        <div style="margin-top: 5px; font-size: 12px; color: #6c757d;">${error.message}</div>
-                    </td>
-                </tr>
-            `;
-        });
-}
+            });
 
-function renderEmployees(employees) {
-    const tbody = document.getElementById('employeeTableBody');
-    let html = '';
-
-    employees.forEach(emp => {
-        const status = safeDisplay(emp.status, 'ACTIVE');
-        const statusClass = status.toUpperCase() === 'ACTIVE' ? 'active' : 'inactive';
-        const statusDisplay = status.toUpperCase() === 'ACTIVE' ? 'Active' : 'Inactive';
-
-        html += `
-            <tr>
-                <td>${safeDisplay(emp.id)}</td>
-                <td><span class="employee-id">${safeDisplay(emp.employee_number)}</span></td>
-                <td class="employee-name">${safeDisplay(emp.employee_name)}</td>
-                <td>${safeDisplay(emp.joined_on)}</td>
-                <td>${safeDisplay(emp.dob)}</td>
-                <td>${safeDisplay(emp.father_name)}</td>
-                <td>${safeDisplay(emp.blood_group)}</td>
-                <td>${safeDisplay(emp.aadhaar_number)}</td>
-                <td><span class="designation-badge">${safeDisplay(emp.curr_designation, 'Not specified')}</span></td>
-                <td>${safeDisplay(emp.curr_department)}</td>
-                <td>${safeDisplay(emp.curr_location)}</td>
-                <td>${safeDisplay(emp.curr_organisation)}</td>
-                <td><span class="phone-number">${safeDisplay(emp.phone)}</span></td>
-                <td><span class="phone-number">${safeDisplay(emp.official_mobile_nos)}</span></td>
-                <td>${safeDisplay(emp.email)}</td>
-                <td>${safeDisplay(emp.official_email_ids)}</td>
-                <td style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${safeDisplay(emp.present_address)}">
-                    ${safeDisplay(emp.present_address)}
-                </td>
-                <td>${safeDisplay(emp.reporting_to_collections)}</td>
-                <td>${safeDisplay(emp.reporting_to_sales)}</td>
-                <td>${safeDisplay(emp.gross)}</td>
-                <td>${safeDisplay(emp.ta)}</td>
-                <td>${safeDisplay(emp.erepf)}</td>
-                <td>${safeDisplay(emp.eresi)}</td>
-                <td>${safeDisplay(emp.ctc)}</td>
-                <td><span class="status-badge ${statusClass}">${statusDisplay}</span></td>
-                <td>${safeDisplay(emp.lwd)}</td>
-                <td>${safeDisplay(emp.tenth_memo)}</td>
-                <td>${safeDisplay(emp.inter_memo)}</td>
-                <td>${safeDisplay(emp.cheque)}</td>
-                <td>${safeDisplay(emp.bond)}</td>
-                <td>${safeDisplay(emp.notice_period)}</td>
-                <td>${safeDisplay(emp.date)}</td>
-                <td>${safeDisplay(emp.notice_status)}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="edit-btn" onclick="openEditModal(${emp.id})" title="Edit All Details">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="status-btn ${statusClass}" 
-                                onclick="toggleStatus(${emp.id})" 
-                                id="statusBtn_${emp.id}"
-                                title="Toggle Status">
-                            ${statusDisplay}
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
-    });
-
-    tbody.innerHTML = html;
-}
-
-    function toggleStatus(employeeId) {
-        console.log('Toggling status for employee:', employeeId);
-        
-        const btn = document.getElementById(`statusBtn_${employeeId}`);
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            tbody.innerHTML = html;
         }
 
-        const data = { id: employeeId };
-
-        fetch('/financehub/api/employees/toggle-status/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => {
-                    throw new Error(err.error || `HTTP error! status: ${response.status}`);
-                });
+        function toggleStatus(employeeId) {
+            console.log('Toggling status for employee:', employeeId);
+            
+            const btn = document.getElementById(`statusBtn_${employeeId}`);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                showToast(data.message, 'success');
-                searchEmployees(); // Refresh table
-            } else {
-                showToast(data.error || 'Failed to toggle status', 'error');
+
+            const data = { id: employeeId };
+
+            fetch('/financehub/api/employees/toggle-status/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || `HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    searchEmployees();
+                } else {
+                    showToast(data.error || 'Failed to toggle status', 'error');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = 'Toggle';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling status:', error);
+                showToast('Failed to toggle status: ' + error.message, 'error');
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = 'Toggle';
                 }
-            }
-        })
-        .catch(error => {
-            console.error('Error toggling status:', error);
-            showToast('Failed to toggle status: ' + error.message, 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = 'Toggle';
-            }
-        });
-    }
+            });
+        }
 
-    function openEditModal(employeeId) {
-    console.log('Opening edit modal for employee ID:', employeeId);
-    currentEmployeeId = employeeId;
-    
-    document.getElementById('editModal').classList.add('active');
-    
-    // Reset ALL fields
-    const fieldIds = [
-        'editEmployeeNumber', 'editEmployeeName', 'editJoinedOn', 'editDob',
-        'editFatherName', 'editBloodGroup', 'editAadhaarNumber',
-        'editPhone', 'editOfficialMobile', 'editEmail', 'editOfficialEmail',
-        'editPresentAddress', 'editDesignation', 'editDepartment',
-        'editLocation', 'editOrganisation', 'editReportingToCollections',
-        'editReportingToSales', 'editGross', 'editTa', 'editErepf',
-        'editEresi', 'editCtc', 'editStatus', 'editLwd', 'editTenthMemo',
-        'editInterMemo', 'editCheque', 'editBond', 'editNoticePeriod',
-        'editDate', 'editNoticeStatus'
-    ];
-    fieldIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    
-    // Show loading in current value hints
-    document.getElementById('currentPhone').textContent = 'Loading...';
-    document.getElementById('currentOfficialMobile').textContent = 'Loading...';
-    document.getElementById('currentReportingToCollections').textContent = 'Loading...';
-    document.getElementById('currentReportingToSales').textContent = 'Loading...';
-    
-    const saveBtn = document.getElementById('saveBtn');
-    saveBtn.disabled = false;
-    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save All Changes';
-
-    const url = `/financehub/api/employees/search/?q=${employeeId}`;
-
-    fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            console.log('Employee data received:', data);
-            const emp = data.find(e => e.id === employeeId);
+        function openEditModal(employeeId) {
+            console.log('Opening edit modal for employee ID:', employeeId);
+            currentEmployeeId = employeeId;
             
-            if (emp) {
-                document.getElementById('editEmployeeId').value = emp.id;
-                document.getElementById('editEmployeeNumber').value = safeDisplay(emp.employee_number);
-                document.getElementById('editEmployeeName').value = safeDisplay(emp.employee_name);
-                document.getElementById('editJoinedOn').value = safeDisplay(emp.joined_on);
-                document.getElementById('editDob').value = safeDisplay(emp.dob);
-                document.getElementById('editFatherName').value = safeDisplay(emp.father_name);
-                document.getElementById('editBloodGroup').value = safeDisplay(emp.blood_group);
-                document.getElementById('editAadhaarNumber').value = safeDisplay(emp.aadhaar_number);
-                document.getElementById('editPhone').value = safeDisplay(emp.phone);
-                document.getElementById('editOfficialMobile').value = safeDisplay(emp.official_mobile_nos);
-                document.getElementById('editEmail').value = safeDisplay(emp.email);
-                document.getElementById('editOfficialEmail').value = safeDisplay(emp.official_email_ids);
-                document.getElementById('editPresentAddress').value = safeDisplay(emp.present_address);
-                document.getElementById('editDesignation').value = safeDisplay(emp.curr_designation);
-                document.getElementById('editDepartment').value = safeDisplay(emp.curr_department);
-                document.getElementById('editLocation').value = safeDisplay(emp.curr_location);
-                document.getElementById('editOrganisation').value = safeDisplay(emp.curr_organisation);
-                document.getElementById('editReportingToCollections').value = safeDisplay(emp.reporting_to_collections);
-                document.getElementById('editReportingToSales').value = safeDisplay(emp.reporting_to_sales);
-                document.getElementById('editGross').value = safeDisplay(emp.gross);
-                document.getElementById('editTa').value = safeDisplay(emp.ta);
-                document.getElementById('editErepf').value = safeDisplay(emp.erepf);
-                document.getElementById('editEresi').value = safeDisplay(emp.eresi);
-                document.getElementById('editCtc').value = safeDisplay(emp.ctc);
-                document.getElementById('editStatus').value = safeDisplay(emp.status, 'ACTIVE');
-                document.getElementById('editLwd').value = safeDisplay(emp.lwd);
-                document.getElementById('editTenthMemo').value = safeDisplay(emp.tenth_memo);
-                document.getElementById('editInterMemo').value = safeDisplay(emp.inter_memo);
-                document.getElementById('editCheque').value = safeDisplay(emp.cheque);
-                document.getElementById('editBond').value = safeDisplay(emp.bond);
-                document.getElementById('editNoticePeriod').value = safeDisplay(emp.notice_period);
-                document.getElementById('editDate').value = safeDisplay(emp.date);
-                document.getElementById('editNoticeStatus').value = safeDisplay(emp.notice_status);
-                
-                // Update current value hints
-                document.getElementById('currentPhone').textContent = safeDisplay(emp.phone, 'Not set');
-                document.getElementById('currentOfficialMobile').textContent = safeDisplay(emp.official_mobile_nos, 'Not set');
-                document.getElementById('currentReportingToCollections').textContent = safeDisplay(emp.reporting_to_collections, 'Not set');
-                document.getElementById('currentReportingToSales').textContent = safeDisplay(emp.reporting_to_sales, 'Not set');
-            } else {
-                showToast('Employee not found', 'error');
-                closeModal();
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Failed to load employee data', 'error');
-            closeModal();
-        });
-}
-    function closeModal() {
-        document.getElementById('editModal').classList.remove('active');
-        currentEmployeeId = null;
-        // Reset save button
-        const saveBtn = document.getElementById('saveBtn');
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
-    }
-function saveEmployeeChanges() {
-    const employeeId = document.getElementById('editEmployeeId').value;
-    const saveBtn = document.getElementById('saveBtn');
+            document.getElementById('editModal').classList.add('active');
+            
+            // Reset ALL fields
+            const fieldIds = [
+                'editEmployeeNumber', 'editEmployeeName', 'editJoinedOn', 'editDob',
+                'editFatherName', 'editBloodGroup', 'editAadhaarNumber',
+                'editPhone', 'editOfficialMobile', 'editEmail', 'editOfficialEmail',
+                'editPresentAddress', 'editDesignation', 'editDepartment',
+                'editLocation', 'editOrganisation', 'editReportingToCollections',
+                'editReportingToSales', 'editGross', 'editTa', 'editErepf',
+                'editEresi', 'editCtc', 'editStatus', 'editLwd', 'editTenthMemo',
+                'editInterMemo', 'editCheque', 'editBond', 'editNoticePeriod',
+                'editDate', 'editNoticeStatus'
+            ];
+            fieldIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            // Reset gender dropdown
+            const genderSelect = document.getElementById('editGender');
+            if (genderSelect) genderSelect.value = '';
+            
+            // Show loading in current value hints
+            document.getElementById('currentPhone').textContent = 'Loading...';
+            document.getElementById('currentOfficialMobile').textContent = 'Loading...';
+            document.getElementById('currentReportingToCollections').textContent = 'Loading...';
+            document.getElementById('currentReportingToSales').textContent = 'Loading...';
+            
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Save All Changes';
 
-    if (!employeeId) {
-        showToast('Invalid employee ID', 'error');
-        return;
-    }
+            const url = `/financehub/api/employees/search/?q=${employeeId}`;
 
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Employee data received:', data);
+                    const emp = data.find(e => e.id === employeeId);
+                    
+                    if (emp) {
+                        document.getElementById('editEmployeeId').value = emp.id;
+                        document.getElementById('editEmployeeNumber').value = safeDisplay(emp.employee_number);
+                        document.getElementById('editEmployeeName').value = safeDisplay(emp.employee_name);
+                        // Set gender dropdown
+                        if (emp.gender) {
+                            document.getElementById('editGender').value = emp.gender;
+                        }
+                        document.getElementById('editJoinedOn').value = safeDisplay(emp.joined_on);
+                        document.getElementById('editDob').value = safeDisplay(emp.dob);
+                        document.getElementById('editFatherName').value = safeDisplay(emp.father_name);
+                        document.getElementById('editBloodGroup').value = safeDisplay(emp.blood_group);
+                        document.getElementById('editAadhaarNumber').value = safeDisplay(emp.aadhaar_number);
+                        document.getElementById('editPhone').value = safeDisplay(emp.phone);
+                        document.getElementById('editOfficialMobile').value = safeDisplay(emp.official_mobile_nos);
+                        document.getElementById('editEmail').value = safeDisplay(emp.email);
+                        document.getElementById('editOfficialEmail').value = safeDisplay(emp.official_email_ids);
+                        document.getElementById('editPresentAddress').value = safeDisplay(emp.present_address);
+                        document.getElementById('editDesignation').value = safeDisplay(emp.curr_designation);
+                        document.getElementById('editDepartment').value = safeDisplay(emp.curr_department);
+                        document.getElementById('editLocation').value = safeDisplay(emp.curr_location);
+                        document.getElementById('editOrganisation').value = safeDisplay(emp.curr_organisation);
+                        document.getElementById('editReportingToCollections').value = safeDisplay(emp.reporting_to_collections);
+                        document.getElementById('editReportingToSales').value = safeDisplay(emp.reporting_to_sales);
+                        document.getElementById('editGross').value = safeDisplay(emp.gross);
+                        document.getElementById('editTa').value = safeDisplay(emp.ta);
+                        document.getElementById('editErepf').value = safeDisplay(emp.erepf);
+                        document.getElementById('editEresi').value = safeDisplay(emp.eresi);
+                        document.getElementById('editCtc').value = safeDisplay(emp.ctc);
+                        document.getElementById('editStatus').value = safeDisplay(emp.status, 'ACTIVE');
+                        document.getElementById('editLwd').value = safeDisplay(emp.lwd);
+                        document.getElementById('editTenthMemo').value = safeDisplay(emp.tenth_memo);
+                        document.getElementById('editInterMemo').value = safeDisplay(emp.inter_memo);
+                        document.getElementById('editCheque').value = safeDisplay(emp.cheque);
+                        document.getElementById('editBond').value = safeDisplay(emp.bond);
+                        document.getElementById('editNoticePeriod').value = safeDisplay(emp.notice_period);
+                        document.getElementById('editDate').value = safeDisplay(emp.date);
+                        document.getElementById('editNoticeStatus').value = safeDisplay(emp.notice_status);
+                        
+                        // Update current value hints
+                        document.getElementById('currentPhone').textContent = safeDisplay(emp.phone, 'Not set');
+                        document.getElementById('currentOfficialMobile').textContent = safeDisplay(emp.official_mobile_nos, 'Not set');
+                        document.getElementById('currentReportingToCollections').textContent = safeDisplay(emp.reporting_to_collections, 'Not set');
+                        document.getElementById('currentReportingToSales').textContent = safeDisplay(emp.reporting_to_sales, 'Not set');
+                    } else {
+                        showToast('Employee not found', 'error');
+                        closeModal();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Failed to load employee data', 'error');
+                    closeModal();
+                });
+        }
 
-    const data = {
-        id: parseInt(employeeId),
-        employee_number: document.getElementById('editEmployeeNumber').value.trim(),
-        employee_name: document.getElementById('editEmployeeName').value.trim(),
-        joined_on: document.getElementById('editJoinedOn').value.trim(),
-        dob: document.getElementById('editDob').value.trim(),
-        father_name: document.getElementById('editFatherName').value.trim(),
-        blood_group: document.getElementById('editBloodGroup').value.trim(),
-        aadhaar_number: document.getElementById('editAadhaarNumber').value.trim(),
-        phone: document.getElementById('editPhone').value.trim(),
-        official_mobile_nos: document.getElementById('editOfficialMobile').value.trim(),
-        email: document.getElementById('editEmail').value.trim(),
-        official_email_ids: document.getElementById('editOfficialEmail').value.trim(),
-        present_address: document.getElementById('editPresentAddress').value.trim(),
-        curr_designation: document.getElementById('editDesignation').value.trim(),
-        curr_department: document.getElementById('editDepartment').value.trim(),
-        curr_location: document.getElementById('editLocation').value.trim(),
-        curr_organisation: document.getElementById('editOrganisation').value.trim(),
-        reporting_to_collections: document.getElementById('editReportingToCollections').value.trim(),
-        reporting_to_sales: document.getElementById('editReportingToSales').value.trim(),
-        gross: document.getElementById('editGross').value.trim(),
-        ta: document.getElementById('editTa').value.trim(),
-        erepf: document.getElementById('editErepf').value.trim(),
-        eresi: document.getElementById('editEresi').value.trim(),
-        ctc: document.getElementById('editCtc').value.trim(),
-        status: document.getElementById('editStatus').value.trim() || 'ACTIVE',
-        lwd: document.getElementById('editLwd').value.trim(),
-        tenth_memo: document.getElementById('editTenthMemo').value.trim(),
-        inter_memo: document.getElementById('editInterMemo').value.trim(),
-        cheque: document.getElementById('editCheque').value.trim(),
-        bond: document.getElementById('editBond').value.trim(),
-        notice_period: document.getElementById('editNoticePeriod').value.trim(),
-        date: document.getElementById('editDate').value.trim(),
-        notice_status: document.getElementById('editNoticeStatus').value.trim()
-    };
-
-    console.log('Saving all fields:', data);
-
-    fetch('/financehub/api/employees/edit-phone/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(responseData => {
-        if (responseData.success) {
-            showToast('Employee details updated successfully!', 'success');
-            closeModal();
-            searchEmployees();
-        } else {
-            showToast(responseData.error || 'Failed to update', 'error');
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('active');
+            currentEmployeeId = null;
+            const saveBtn = document.getElementById('saveBtn');
             saveBtn.disabled = false;
             saveBtn.innerHTML = '<i class="fas fa-save"></i> Save All Changes';
         }
-    })
-    .catch(error => {
-        console.error('Save error:', error);
-        showToast('Error: ' + error.message, 'error');
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save All Changes';
-    });
-}
 
-function deleteAllEmployees() {
-    // Simple confirm dialog
-    if (!confirm('⚠️ Are you sure you want to delete ALL employees?\n\nThis action cannot be undone!')) {
-        return;
-    }
-    
-    // Show loading on button
-    const btn = document.querySelector('.btn-danger');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-    
-    fetch('/financehub/api/employees/delete-all/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
+        function saveEmployeeChanges() {
+            const employeeId = document.getElementById('editEmployeeId').value;
+            const saveBtn = document.getElementById('saveBtn');
+
+            if (!employeeId) {
+                showToast('Invalid employee ID', 'error');
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            const data = {
+                id: parseInt(employeeId),
+                employee_number: document.getElementById('editEmployeeNumber').value.trim(),
+                employee_name: document.getElementById('editEmployeeName').value.trim(),
+                gender: document.getElementById('editGender').value,
+                joined_on: document.getElementById('editJoinedOn').value.trim(),
+                dob: document.getElementById('editDob').value.trim(),
+                father_name: document.getElementById('editFatherName').value.trim(),
+                blood_group: document.getElementById('editBloodGroup').value.trim(),
+                aadhaar_number: document.getElementById('editAadhaarNumber').value.trim(),
+                phone: document.getElementById('editPhone').value.trim(),
+                official_mobile_nos: document.getElementById('editOfficialMobile').value.trim(),
+                email: document.getElementById('editEmail').value.trim(),
+                official_email_ids: document.getElementById('editOfficialEmail').value.trim(),
+                present_address: document.getElementById('editPresentAddress').value.trim(),
+                curr_designation: document.getElementById('editDesignation').value.trim(),
+                curr_department: document.getElementById('editDepartment').value.trim(),
+                curr_location: document.getElementById('editLocation').value.trim(),
+                curr_organisation: document.getElementById('editOrganisation').value.trim(),
+                reporting_to_collections: document.getElementById('editReportingToCollections').value.trim(),
+                reporting_to_sales: document.getElementById('editReportingToSales').value.trim(),
+                gross: document.getElementById('editGross').value.trim(),
+                ta: document.getElementById('editTa').value.trim(),
+                erepf: document.getElementById('editErepf').value.trim(),
+                eresi: document.getElementById('editEresi').value.trim(),
+                ctc: document.getElementById('editCtc').value.trim(),
+                status: document.getElementById('editStatus').value.trim() || 'ACTIVE',
+                lwd: document.getElementById('editLwd').value.trim(),
+                tenth_memo: document.getElementById('editTenthMemo').value.trim(),
+                inter_memo: document.getElementById('editInterMemo').value.trim(),
+                cheque: document.getElementById('editCheque').value.trim(),
+                bond: document.getElementById('editBond').value.trim(),
+                notice_period: document.getElementById('editNoticePeriod').value.trim(),
+                date: document.getElementById('editDate').value.trim(),
+                notice_status: document.getElementById('editNoticeStatus').value.trim()
+            };
+
+            console.log('Saving all fields:', data);
+
+            fetch('/financehub/api/employees/edit-phone/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(responseData => {
+                if (responseData.success) {
+                    showToast('Employee details updated successfully!', 'success');
+                    closeModal();
+                    searchEmployees();
+                } else {
+                    showToast(responseData.error || 'Failed to update', 'error');
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save All Changes';
+                }
+            })
+            .catch(error => {
+                console.error('Save error:', error);
+                showToast('Error: ' + error.message, 'error');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> Save All Changes';
+            });
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showToast(data.message, 'success');
-            searchEmployees(); // Refresh table
-        } else {
-            showToast(data.error || 'Failed to delete', 'error');
+
+        function deleteAllEmployees() {
+            if (!confirm('⚠️ Are you sure you want to delete ALL employees?\n\nThis action cannot be undone!')) {
+                return;
+            }
+            
+            const btn = document.querySelector('.btn-danger');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+            
+            fetch('/financehub/api/employees/delete-all/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    searchEmployees();
+                } else {
+                    showToast(data.error || 'Failed to delete', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error: ' + error.message, 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash"></i> Delete All';
+            });
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showToast('Error: ' + error.message, 'error');
-    })
-    .finally(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-trash"></i> Delete All';
-    });
-}
 
-
-    function showToast(message, type = 'success') {
-        const toast = document.getElementById('toast');
-        const toastMessage = document.getElementById('toastMessage');
-        
-        toast.className = 'toast';
-        toast.classList.add(type);
-        toastMessage.textContent = message;
-        
-        const icon = toast.querySelector('i');
-        if (type === 'success') {
-            icon.className = 'fas fa-check-circle';
-        } else {
-            icon.className = 'fas fa-exclamation-circle';
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            toast.className = 'toast';
+            toast.classList.add(type);
+            toastMessage.textContent = message;
+            
+            const icon = toast.querySelector('i');
+            if (type === 'success') {
+                icon.className = 'fas fa-check-circle';
+            } else {
+                icon.className = 'fas fa-exclamation-circle';
+            }
+            
+            toast.classList.add('show');
+            
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
         }
-        
-        toast.classList.add('show');
-        
-        clearTimeout(toast._timeout);
-        toast._timeout = setTimeout(() => {
-            toast.classList.remove('show');
-        }, 3000);
-    }
 
-    // CSRF Token helper
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
                 }
             }
+            return cookieValue;
         }
-        return cookieValue;
-    }
 
-    // Close modal on overlay click
-    document.getElementById('editModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            closeModal();
-        }
-    });
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
 
-    // Close modal on Escape key
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closeModal();
-        }
-    });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
 
-    console.log('Employee management page loaded successfully');
-    console.log('Base URL: /financehub/');
-</script>
+        console.log('Employee management page loaded successfully');
+        console.log('Base URL: /financehub/');
+    </script>
 </body>
 </html>

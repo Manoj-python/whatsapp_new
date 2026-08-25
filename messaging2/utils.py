@@ -17,8 +17,8 @@ PAYMENT_LINK2 = "https://smsquare.info/"
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-    "3", "5", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47",
-    "52", "53", "54", "55", "56", "57", "58", "59"
+   "1", "3", "5", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47",
+    "52", "54", "56", "58",
 ]
 
 def needs_api_check(template_id):
@@ -831,7 +831,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
     templates = {
         "1": ("emi_reminder", "en", [
             {"type": "text", "text": str(row.get("customer_name", ""))},
-            {"type": "text", "text": str(row.get("total_dues", ""))},
+            {"type": "text", "text": str(row.get("due_amount", ""))},
             {"type": "text", "text": str(row.get("loan_number", ""))},
             {"type": "text", "text": format_whatsapp_date2(row.get("installment_date", ""))},
             {"type": "text", "text": PAYMENT_LINK2},
@@ -1523,6 +1523,21 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                 }
             ],
         ),
+
+            
+        "60": ("emi_reminder_smf", "en", [
+            {"type": "text", "text": str(row.get("customer_name", ""))},
+            {"type": "text", "text": str(row.get("due_amount", ""))},
+            {"type": "text", "text": str(row.get("loan_number", ""))},
+            {"type": "text", "text": format_whatsapp_date2(row.get("installment_date", ""))},
+            {"type": "text", "text": PAYMENT_LINK2},
+        ]),
+
+
+            
+
+
+
 
     }
 

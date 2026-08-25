@@ -327,7 +327,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
         if check_api:
             try:
                 # ✅ Bucket templates (44-47) → INCLUDE current month
-                if template_choice in ["44", "45", "46", "47"]:
+                if template_choice in ["44", "45", "46", "47","1"]:
                     status = get_total_overdue_from_schedule(mobile, loan_number, include_upcoming=True)
                     print(f"📊 Using SCHEDULE API for template {template_choice} (INCLUDING upcoming)")
                 else:

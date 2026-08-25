@@ -13,6 +13,8 @@ class Lcc(models.Model):
     loan_date = models.CharField(max_length=100, blank=True, null=True)  # keep raw
     customer_name = models.CharField(max_length=255, blank=True, null=True)
     cust_mobile = models.CharField(max_length=50, blank=True, null=True)
+    alternate_mobile_number = models.CharField(max_length=50, blank=True, null=True)
+
     guarantor = models.CharField(max_length=255, blank=True, null=True)
     guarantor_mobile = models.CharField(max_length=50, blank=True, null=True)
     vehicle_type = models.CharField(max_length=255, blank=True, null=True)
@@ -41,6 +43,8 @@ class Lcc(models.Model):
     latest_status = models.CharField(max_length=255, blank=True, null=True)
     suitcase=models.CharField(max_length=50,null=True,blank=True)
     coborrower_name=models.CharField(max_length=50,null=True,blank=True)
+    coborrower_address=models.CharField(max_length=225,null=True,blank=True)
+    guarantor_address=models.CharField(max_length=225,null=True,blank=True)
     coborrower_mobile=models.CharField(max_length=50,null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     chassis_number=models.CharField(max_length=100,null=True,blank=True)
@@ -564,6 +568,7 @@ class EmployeeMaster(models.Model):
 
     phone = models.CharField(max_length=50, null=True, blank=True)
     email = models.CharField(max_length=255, null=True, blank=True)
+    gender = models.CharField(max_length=50,choices=[('male','male'),('female','female')],null=True,blank=True)
 
     present_address = models.TextField(null=True, blank=True)
 

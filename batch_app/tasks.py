@@ -29,78 +29,78 @@ logger = logging.getLogger(__name__)
 def get_dynamic_template_id(target_app, job_template_id, emi_due_count):
     """
     Decide the actual WhatsApp template for this customer.
-    
+
     The Batch Job template remains the user's manually selected
     base template. We only change the template actually sent
     when the selected job is a bucket campaign.
-    
+
     Rules:
     - emi_due_count < 0.2 → Skip (No message)
     - emi_due_count < 2   → Bucket 1 (Template 44/52/53)
     - emi_due_count < 3   → Bucket 2 (Template 45/54/55)
     - emi_due_count >= 3  → Bucket 3 (Template 46/56/57)
     """
-    
+
     target_app = str(target_app)
     job_template_id = str(job_template_id)
-    
+
     # ============================================================
     # APP 1: messaging (SMSquare)
     # ============================================================
     if target_app == "messaging":
-        
+
         # Customer bucket campaigns
         if job_template_id in {"44", "45", "46"}:
-            
+
             if emi_due_count < 0.2:
                 return None  # Skip
-            
+
             if emi_due_count < 2:
                 return "44"  # One Bucket Customer
             elif emi_due_count < 3:
                 return "45"  # Two Buckets Customer
             else:
                 return "46"  # Three+ Buckets Customer
-        
+
         # Guarantor bucket - always send as is
         if job_template_id == "47":
             return "47"
-    
+
     # ============================================================
     # APP 2: messaging2 (Padma Sai)
     # ============================================================
     elif target_app == "messaging2":
-        
+
         # PSF customer bucket campaigns
         if job_template_id in {"52", "54", "56"}:
-            
+
             if emi_due_count < 0.2:
                 return None  # Skip
-            
+
             if emi_due_count < 2:
                 return "52"  # One Bucket PSF Customer
             elif emi_due_count < 3:
                 return "54"  # Two Buckets PSF Customer
             else:
                 return "56"  # Three+ PSF Customer
-        
+
         # SMF customer bucket campaigns
         if job_template_id in {"53", "55", "57"}:
-            
+
             if emi_due_count < 0.2:
                 return None  # Skip
-            
+
             if emi_due_count < 2:
                 return "53"  # One Bucket SMF Customer
             elif emi_due_count < 3:
                 return "55"  # Two Buckets SMF Customer
             else:
                 return "57"  # Three+ SMF Customer
-        
+
         # Guarantor bucket templates - always send as is
         if job_template_id in {"58", "59"}:
             return job_template_id
-    
+
     # ============================================================
     # Non-bucket jobs (keep original template)
     # ============================================================
@@ -139,7 +139,7 @@ def get_app_schedule_function(app_name):
     """
     try:
         utils = get_app_utils(app_name)
-        
+
         if 'get_total_overdue_from_schedule' in utils:
             return utils['get_total_overdue_from_schedule']
         elif 'get_total_overdue_from_schedule2' in utils:
@@ -166,7 +166,7 @@ def get_app_needs_api_check_function(app_name):
     """
     try:
         utils = get_app_utils(app_name)
-        
+
         if 'needs_api_check' in utils:
             return utils['needs_api_check']
         elif 'needs_api_check2' in utils:
@@ -194,7 +194,7 @@ def check_payment_status_for_app(app_name, mobile, loan_number=None):
     try:
         # Try to get the function from app's utils
         utils = get_app_utils(app_name)
-        
+
         if 'check_smsquare_payment_status' in utils:
             result = utils['check_smsquare_payment_status'](mobile, loan_number)
         elif 'check_payment_status' in utils:
@@ -215,7 +215,7 @@ def check_payment_status_for_app(app_name, mobile, loan_number=None):
                     'customer_name': '',
                     'status': 'no_check'
                 }
-        
+
         # Ensure consistent format
         return {
             'is_paid': result.get('is_paid', False),
@@ -223,7 +223,7 @@ def check_payment_status_for_app(app_name, mobile, loan_number=None):
             'customer_name': result.get('customer_name', ''),
             'status': result.get('status', 'success')
         }
-        
+
     except Exception as e:
         logger.warning(f"⚠️ API check failed for {app_name}/{mobile}: {e}")
         # On error, assume UNPAID (send reminder)
@@ -242,7 +242,7 @@ def get_app_seize_check_function(app_name):
     """
     try:
         utils = get_app_utils(app_name)
-        
+
         if 'check_smsquare_payment_status' in utils:
             return utils['check_smsquare_payment_status']
         elif 'check_smsquare_payment_status2' in utils:
@@ -515,7 +515,8 @@ def execute_batch(self, job_id, execution_id):
                 customer_name = row.get('CustomerName') or row.get('customer_name') or ''
                 loan_number = row.get('loan_number') or row.get('LoanNumber') or row.get('agreement_no') or row.get('AgreementNo')
                 excel_amount = row.get('due_amount') or row.get('DueAmount') or '0'
-
+                vehicle_number = row.get('vehicle_number') or row.get('VehicleNumber') or row.get('VehicleNo') or row.get('vehicle_no') or ''  # ✅ NEW
+                actual_template_id = job.template_id
                 if not mobile:
                     failed += 1
                     continue
@@ -528,11 +529,11 @@ def execute_batch(self, job_id, execution_id):
                     try:
                         seize_result = seize_check_func(mobile, loan_number)
                         seize_date = seize_result.get('seize_date')
-                        
+
                         if seize_date:
                             logger.info(f"⛔ {mobile} - Vehicle seized on {seize_date}, skipping")
                             seized_count += 1
-                            
+
                             LogModel.objects.create(
                                 job_id=job,
                                 customer_name=customer_name,
@@ -590,22 +591,24 @@ def execute_batch(self, job_id, execution_id):
                             job.template_id,
                             emi_due_count,
                         )
-        
+
                         logger.info(
                             f"🎯 {mobile} | "
                             f"App={job.target_app} | "
                             f"Job Template={job.template_id} | "
                             f"EMI Count={emi_due_count} | "
                             f"Actual Template={actual_template_id} | "
+                            f"Excel Due=₹{excel_amount} | "
+
                             f"Current Due=₹{real_time_due}"
                         )
-                      
+
 
                         # Skip if no applicable bucket
                         if actual_template_id is None:
                             logger.info(f"⏭️ {mobile} - Skipping (EMI count {emi_due_count} < 0.2)")
                             skipped += 1
-                            
+
                             LogModel.objects.create(
                                 job_id=job,
                                 customer_name=customer_name,
@@ -660,8 +663,8 @@ def execute_batch(self, job_id, execution_id):
                             logger.info(f"🔄 {mobile} - UNPAID (Excel: ₹{excel_amount} → Actual: ₹{real_time_due})")
 
                             # Update customer name if available
-                            if schedule_data.get('customer_name'):
-                                row['customer_name'] = schedule_data.get('customer_name')
+                            # if schedule_data.get('customer_name'):
+                            #     row['customer_name'] = schedule_data.get('customer_name')
 
                     except Exception as api_error:
                         logger.warning(f"⚠️ API Error for {mobile}: {api_error} - Using Excel data")
@@ -703,11 +706,14 @@ def execute_batch(self, job_id, execution_id):
                         content_type="text",
                         error_message=(
                             f"Job Template: {job.template_id} | "
-                            f"Actual Template: {actual_template_id} | "
-                            f"EMI Count: {emi_due_count} | "
-                            f"Actual Due: ₹{real_time_due}"
-                        ),
-                    )
+                                f"Actual Template: {actual_template_id} | "
+                                f"EMI Count: {emi_due_count} | "
+                                f"Excel Due: ₹{excel_amount} | "  # ✅ NEW
+                                f"API Due: ₹{real_time_due} | "   # ✅ NEW
+                                f"Loan: {loan_number} | "         # ✅ NEW
+                                f"Vehicle: {vehicle_number}"
+                                                    ),
+                                                )
 
                     if ContactModel:
                         ContactModel.objects.update_or_create(

@@ -47,7 +47,7 @@ SMART_HEADER_MAP = {
     "loannumber": "loan_number",
     "coborrower_name":"coborrower_name",
     "coborrower_mobile":"coborrower_mobile",
-
+    "alternate_mobile_number":"alternate_mobile_number",
     # -------------------------------------------------------
     # ESEBUZZ - Uses customer_name (with underscores)
     # -------------------------------------------------------

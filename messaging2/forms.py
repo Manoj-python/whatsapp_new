@@ -64,7 +64,7 @@ TEMPLATE_CHOICES = [
     ("57", "Three Buckets and Above SMF Customer (English)-[57]"),
     ("58", "Three Buckets and Above PSF Guarantor (English)-[58]"),
     ("59", "Three Buckets and Above SMF Guarantor (English)-[59]"),
- 
+    ("60", "EMI Reminder SMF (English)-[60]"), 
   
 
 ]
