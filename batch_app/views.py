@@ -23,7 +23,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from django.db import models
 import traceback
-
+from django.db.models import Sum
 from .models import BatchJob, BatchLog, BatchExecution
 import logging
 logger = logging.getLogger(__name__)
@@ -137,9 +137,35 @@ def format_time_display(time_str):
 
 
 def get_job_data(job):
-    """Get job data with 12-hour format IST times"""
+    """Get job data with accurate execution counts and IST 12-hour formatting."""
     try:
-        # ✅ Convert all datetimes to IST
+        # ============================================================
+        # 📊 ALWAYS GET AUTHORITATIVE COUNTS FROM BATCH EXECUTIONS
+        # ============================================================
+        # Do NOT depend on job.sent_count / failed_count / skipped_count
+        # because these can be reset/updated during recurring schedules.
+        stats = BatchExecution.objects.filter(job=job).aggregate(
+            total_sent=Sum('sent_count'),
+            total_skipped=Sum('skipped_count'),
+            total_failed=Sum('failed_count'),
+        )
+
+        sent_count = stats['total_sent'] or 0
+        skipped_count = stats['total_skipped'] or 0
+        failed_count = stats['total_failed'] or 0
+
+        # If there are no executions yet, use the job values.
+        # This is mainly useful immediately after job creation.
+        executions_exist = BatchExecution.objects.filter(job=job).exists()
+
+        if not executions_exist:
+            sent_count = job.sent_count or 0
+            skipped_count = job.skipped_count or 0
+            failed_count = job.failed_count or 0
+
+        # ============================================================
+        # 🕒 CONVERT ALL DATETIMES TO IST
+        # ============================================================
         created_ist = format_ist_datetime(job.created_at)
         started_ist = format_ist_datetime(job.started_at)
         completed_ist = format_ist_datetime(job.completed_at)
@@ -147,18 +173,84 @@ def get_job_data(job):
         next_run_ist = format_ist_datetime(job.next_run_time)
         end_date_ist = format_ist_datetime(job.end_date)
 
-        # ✅ Format schedule time in 12-hour format
-        schedule_time_str = schedule_ist.strftime('%I:%M %p') if schedule_ist else 'Not set'
+        # ============================================================
+        # 🕒 12-HOUR IST FORMATTING
+        # ============================================================
+        schedule_time_str = (
+            schedule_ist.strftime('%I:%M %p')
+            if schedule_ist
+            else 'Not set'
+        )
 
-        # Get execution stats
-        total_executions = BatchExecution.objects.filter(job=job).count()
-        completed_executions = BatchExecution.objects.filter(job=job, status='completed').count()
-        failed_executions = BatchExecution.objects.filter(job=job, status='failed').count()
-        running_executions = BatchExecution.objects.filter(job=job, status='running').count()
-        pending_executions = BatchExecution.objects.filter(job=job, status='pending').count()
+        next_run_display = 'Not scheduled'
 
+        if next_run_ist:
+            next_run_display = next_run_ist.strftime(
+                '%Y-%m-%d %I:%M:%S %p'
+            )
+
+        # ============================================================
+        # 📦 EXECUTION COUNTS
+        # ============================================================
+        total_executions = BatchExecution.objects.filter(
+            job=job
+        ).count()
+
+        completed_executions = BatchExecution.objects.filter(
+            job=job,
+            status='completed'
+        ).count()
+
+        failed_executions = BatchExecution.objects.filter(
+            job=job,
+            status='failed'
+        ).count()
+
+        running_executions = BatchExecution.objects.filter(
+            job=job,
+            status='running'
+        ).count()
+
+        pending_executions = BatchExecution.objects.filter(
+            job=job,
+            status='pending'
+        ).count()
+
+        # ============================================================
+        # 📊 CURRENT RUN / CURRENT BATCH COUNTS
+        # ============================================================
+        current_execution = (
+            BatchExecution.objects
+            .filter(job=job)
+            .order_by('-created_at', '-id')
+            .first()
+        )
+
+        current_sent_count = 0
+        current_skipped_count = 0
+        current_failed_count = 0
+
+        if current_execution:
+            current_sent_count = current_execution.sent_count or 0
+            current_skipped_count = current_execution.skipped_count or 0
+            current_failed_count = current_execution.failed_count or 0
+
+        # ============================================================
+        # 📈 TOTAL PROCESSED
+        # ============================================================
+        total_processed = (
+            sent_count +
+            skipped_count +
+            failed_count
+        )
+
+        # ============================================================
+        # 📋 RETURN DATA
+        # ============================================================
         return {
+            # --------------------------------------------------------
             # Basic Info
+            # --------------------------------------------------------
             'job_id': job.job_id,
             'job_name': job.job_name,
             'target_app': job.target_app,
@@ -167,72 +259,178 @@ def get_job_data(job):
             'template_language': job.template_language,
             'excel_path': job.excel_path,
 
+            # --------------------------------------------------------
             # Batch Settings
+            # --------------------------------------------------------
             'batch_size': job.batch_size,
             'batch_size_type': job.batch_size_type,
 
+            # --------------------------------------------------------
             # Schedule Settings
+            # --------------------------------------------------------
             'schedule_type': job.schedule_type,
             'schedule_times': job.schedule_times,
             'weekly_day': job.weekly_day,
             'interval_days': job.interval_days,
             'schedule_info': job.get_schedule_info(),
 
+            # --------------------------------------------------------
             # Status & Progress
+            # --------------------------------------------------------
             'status': job.status,
             'total_customers': job.total_customers,
             'total_batches': job.total_batches,
             'completed_batches': job.completed_batches,
             'current_batch': job.current_batch,
 
-            # Stats
-            'sent_count': job.sent_count,
-            'failed_count': job.failed_count,
-            'skipped_count': job.skipped_count,
+            # --------------------------------------------------------
+            # 📊 TOTAL COUNTS
+            # --------------------------------------------------------
+            'sent_count': sent_count,
+            'skipped_count': skipped_count,
+            'failed_count': failed_count,
+
+            # Total processed
+            'total_processed': total_processed,
+
+            # --------------------------------------------------------
+            # 📊 CURRENT/LATEST BATCH COUNTS
+            # --------------------------------------------------------
+            'current_sent_count': current_sent_count,
+            'current_skipped_count': current_skipped_count,
+            'current_failed_count': current_failed_count,
+
+            # --------------------------------------------------------
+            # Run Information
+            # --------------------------------------------------------
             'total_runs': job.total_runs,
             'completed_runs': job.completed_runs,
 
+            # --------------------------------------------------------
             # Metadata
+            # --------------------------------------------------------
             'created_by': job.created_by,
             'error_message': job.error_message,
             'report_file': job.report_file,
 
-            # ✅ 12-hour format with AM/PM (IST)
-            'created_at': created_ist.strftime('%Y-%m-%d %I:%M:%S %p') if created_ist else '-',
-            'started_at': started_ist.strftime('%Y-%m-%d %I:%M:%S %p') if started_ist else '-',
-            'completed_at': completed_ist.strftime('%Y-%m-%d %I:%M:%S %p') if completed_ist else '-',
-            'schedule_datetime': schedule_ist.strftime('%Y-%m-%d %I:%M:%S %p') if schedule_ist else '-',
-            'next_run_time': next_run_ist.strftime('%Y-%m-%d %I:%M:%S %p') if next_run_ist else 'Not scheduled',
-            'end_date': end_date_ist.strftime('%Y-%m-%d %I:%M:%S %p') if end_date_ist else 'No end date',
+            # --------------------------------------------------------
+            # 🕒 IST 12-HOUR FORMAT
+            # --------------------------------------------------------
+            'created_at': (
+                created_ist.strftime('%Y-%m-%d %I:%M:%S %p')
+                if created_ist
+                else '-'
+            ),
 
-            # ✅ Only time in 12-hour format
+            'started_at': (
+                started_ist.strftime('%Y-%m-%d %I:%M:%S %p')
+                if started_ist
+                else '-'
+            ),
+
+            'completed_at': (
+                completed_ist.strftime('%Y-%m-%d %I:%M:%S %p')
+                if completed_ist
+                else '-'
+            ),
+
+            'schedule_datetime': (
+                schedule_ist.strftime('%Y-%m-%d %I:%M:%S %p')
+                if schedule_ist
+                else '-'
+            ),
+
+            'next_run_time': next_run_display,
+
+            'end_date': (
+                end_date_ist.strftime('%Y-%m-%d %I:%M:%S %p')
+                if end_date_ist
+                else 'No end date'
+            ),
+
+            # --------------------------------------------------------
+            # Only time
+            # --------------------------------------------------------
             'schedule_time': schedule_time_str,
 
-            # ✅ Only date
-            'created_date': created_ist.strftime('%Y-%m-%d') if created_ist else '-',
+            # --------------------------------------------------------
+            # Only date
+            # --------------------------------------------------------
+            'created_date': (
+                created_ist.strftime('%Y-%m-%d')
+                if created_ist
+                else '-'
+            ),
 
-            # ✅ Raw objects for calculations
+            # --------------------------------------------------------
+            # Raw datetime objects
+            # --------------------------------------------------------
             'schedule_datetime_obj': job.schedule_datetime,
             'next_run_time_obj': job.next_run_time,
             'end_date_obj': job.end_date,
 
-            # ✅ Execution stats (NEW)
+            # --------------------------------------------------------
+            # Execution Stats
+            # --------------------------------------------------------
             'execution_stats': {
                 'total': total_executions,
                 'completed': completed_executions,
                 'failed': failed_executions,
                 'running': running_executions,
                 'pending': pending_executions,
-            }
+            },
+
+            # --------------------------------------------------------
+            # Current/latest execution
+            # --------------------------------------------------------
+            'current_execution': {
+                'id': current_execution.id
+                if current_execution else None,
+
+                'batch_number': current_execution.batch_number
+                if current_execution else None,
+
+                'status': current_execution.status
+                if current_execution else None,
+
+                'total_customers': current_execution.total_customers
+                if current_execution else 0,
+
+                'sent_count': current_sent_count,
+                'skipped_count': current_skipped_count,
+                'failed_count': current_failed_count,
+
+                'started_at': (
+                    format_ist_datetime(current_execution.started_at)
+                    if current_execution and current_execution.started_at
+                    else None
+                ),
+
+                'completed_at': (
+                    format_ist_datetime(current_execution.completed_at)
+                    if current_execution and current_execution.completed_at
+                    else None
+                ),
+            },
         }
+
     except Exception as e:
+        logger.exception(
+            f"❌ Error getting job data for {job.job_id}: {e}"
+        )
+
         return {
             'error': str(e),
             'job_id': job.job_id,
             'job_name': job.job_name,
+            'sent_count': 0,
+            'skipped_count': 0,
+            'failed_count': 0,
+            'total_processed': 0,
+            'current_sent_count': 0,
+            'current_skipped_count': 0,
+            'current_failed_count': 0,
         }
-
-
 # ============================================================
 # VIEWS
 # ============================================================
@@ -317,6 +515,36 @@ def batch_job_list(request):
 # BATCH JOB CREATE - PERFECT TIME HANDLING (FULLY FIXED)
 # ============================================================
 
+
+def batch_job_list(request):
+    try:
+        jobs = BatchJob.objects.all().order_by('-created_at')
+        status_filter = request.GET.get('status', '')
+        if status_filter:
+            jobs = jobs.filter(status=status_filter)
+
+        paginator = Paginator(jobs, 20)
+        page = request.GET.get('page', 1)
+        jobs_page = paginator.get_page(page)
+
+        apps = get_all_messaging_apps()
+
+        return render(request, 'batch_app/jobs.html', {
+            'jobs': jobs_page,
+            'status_filter': status_filter,
+            'status_choices': BatchJob.STATUS_CHOICES,
+            'apps': dict(apps),
+            'current_time': format_datetime_12hr(timezone.now()),
+        })
+    except Exception as e:
+        messages.error(request, f'❌ Error loading jobs: {str(e)}')
+        return render(request, 'batch_app/jobs.html', {'jobs': []})
+
+
+# ============================================================
+# BATCH JOB CREATE - PERFECT TIME HANDLING (FULLY FIXED)
+# ============================================================
+
 def batch_job_create(request):
     """Create new batch job with error handling"""
     if request.method == 'POST':
@@ -330,6 +558,8 @@ def batch_job_create(request):
             target_app = request.POST.get('target_app', 'messaging')
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
+            # notification_type_id = request.POST.get("notification_type")
+    
 
             if not excel_path:
                 messages.error(request, '❌ Excel file path is required')
@@ -540,6 +770,7 @@ def batch_job_create(request):
             job = BatchJob.objects.create(
                 job_id=job_id,
                 job_name=job_name,
+                # notification_type_id=notification_type_id,
                 target_app=target_app,
                 template_id=template_id,
                 template_name=template_info['name'],
@@ -562,13 +793,21 @@ def batch_job_create(request):
             # ✅ Schedule the job using the new scheduler
             try:
                 from batch_app import tasks
-                job.next_run_time = job.schedule_datetime
+                from dateutil.relativedelta import relativedelta
+                now = timezone.now()
+                
+                if schedule_type == 'monthly':
+                    next_run = schedule_datetime_obj
+                    while next_run <= now:
+                        next_run = next_run + relativedelta(months=1)
+                else:
+                    next_run = schedule_datetime_obj
+                
+                job.next_run_time = next_run
                 job.save(update_fields=["next_run_time"])
-                # Use the new scheduler
                 tasks.schedule_batch_job.delay(job.job_id)
             except Exception as e:
                 messages.warning(request, f'⚠️ Job created but scheduling failed: {str(e)}')
-
             # Build success message
             schedule_desc = job.get_schedule_info()
             batch_desc = "FULL (all customers)" if batch_size_type == 'full' else f"{batch_size:,} per batch"
@@ -596,11 +835,15 @@ def batch_job_create(request):
         app_choices = get_all_messaging_apps()
         today = timezone.now().strftime('%Y-%m-%d')
         current_time = timezone.now().strftime('%H:%M')
+        # notification_types = NotificationType.objects.filter(
+        # is_active=True).order_by("name")
+
 
         return render(request, 'batch_app/job_form.html', {
             'app_choices': app_choices,
             'default_batch_size': 1000,
             'today': today,
+            # "notification_types": notification_types,
             'current_time': current_time,
         })
     except Exception as e:
@@ -612,61 +855,179 @@ def batch_job_create(request):
 # BATCH JOB DETAIL
 # ============================================================
 
+# ============================================================
+# BATCH JOB DETAIL
+# ============================================================
 def batch_job_detail(request, job_id):
     try:
-        job = get_object_or_404(BatchJob, job_id=job_id)
-        logs = BatchLog.objects.filter(job=job).order_by('-sent_at')[:50]
-        
-        # Get executions for this job
-        executions = BatchExecution.objects.filter(job=job).order_by('batch_number')
-        
-        templates = get_templates_from_app(job.target_app)
-        template_label = next((t['label'] for t in templates if t['id'] == job.template_name), job.template_name)
+        job = get_object_or_404(
+            BatchJob,
+            job_id=job_id
+        )
 
+        # ========================================================
+        # IMPORTANT:
+        # Customer send logs are stored in the target app's
+        # LogModel, not necessarily in BatchLog.
+        # ========================================================
+        LogModel = get_app_log_model(job.target_app)
+
+        if LogModel:
+            logs = (
+                LogModel.objects
+                .filter(job_id=job)
+                .order_by("-sent_at")[:50]
+            )
+        else:
+            # Fallback only if target app has no dynamic LogModel.
+            logs = (
+                BatchLog.objects
+                .filter(job=job)
+                .order_by("-sent_at")[:50]
+            )
+
+        # ========================================================
+        # GET EXECUTIONS
+        # ========================================================
+        executions = (
+            BatchExecution.objects
+            .filter(job=job)
+            .order_by("batch_number")
+        )
+
+        # ========================================================
+        # TEMPLATE INFORMATION
+        # ========================================================
+        templates = get_templates_from_app(
+            job.target_app
+        )
+
+        template_label = next(
+            (
+                t["label"]
+                for t in templates
+                if t["id"] == job.template_name
+            ),
+            job.template_name
+        )
+
+        # ========================================================
+        # JOB DATA / COUNTS
+        # ========================================================
         job_data = get_job_data(job)
 
+        # ========================================================
+        # MONTHLY NEXT RUN DISPLAY
+        # ========================================================
+        from dateutil.relativedelta import relativedelta
+
+        next_monthly_run = None
+
+        if (
+            job.schedule_type == "monthly"
+            and job.schedule_datetime
+        ):
+            next_monthly_run = (
+                job.schedule_datetime
+                + relativedelta(months=1)
+            )
+
+        # ========================================================
+        # FORMAT LOGS
+        # ========================================================
         formatted_logs = []
+
         for log in logs:
+
             formatted_logs.append({
-                'mobile': log.mobile,
-                'customer_name': log.customer_name,
-                'status': log.status,
-                'message_id': log.message_id,
-                'error_message': log.error_message,
-                'sent_at': format_datetime_12hr(log.sent_at, show_seconds=True),
-                'sent_at_raw': log.sent_at,
+                "mobile": log.mobile,
+                "customer_name": log.customer_name,
+                "status": log.status,
+                "message_id": log.message_id,
+                "error_message": log.error_message,
+                "sent_at": (
+                    format_datetime_12hr(
+                        log.sent_at,
+                        show_seconds=True
+                    )
+                    if log.sent_at
+                    else "-"
+                ),
+                "sent_at_raw": log.sent_at,
             })
 
-        # Format executions for display
+        # ========================================================
+        # FORMAT EXECUTIONS
+        # ========================================================
         formatted_executions = []
-        for exec in executions:
+
+        for execution in executions:
+
             formatted_executions.append({
-                'batch_number': exec.batch_number,
-                'total_customers': exec.total_customers,
-                'sent_count': exec.sent_count,
-                'failed_count': exec.failed_count,
-                'skipped_count': exec.skipped_count,
-                'status': exec.status,
-                'error_message': exec.error_message,
-                'started_at': format_datetime_12hr(exec.started_at, show_seconds=True) if exec.started_at else '-',
-                'completed_at': format_datetime_12hr(exec.completed_at, show_seconds=True) if exec.completed_at else '-',
+                "batch_number": execution.batch_number,
+                "total_customers": execution.total_customers,
+                "sent_count": execution.sent_count,
+                "failed_count": execution.failed_count,
+                "skipped_count": execution.skipped_count,
+                "status": execution.status,
+                "error_message": execution.error_message,
+
+                "started_at": (
+                    format_datetime_12hr(
+                        execution.started_at,
+                        show_seconds=True
+                    )
+                    if execution.started_at
+                    else "-"
+                ),
+
+                "completed_at": (
+                    format_datetime_12hr(
+                        execution.completed_at,
+                        show_seconds=True
+                    )
+                    if execution.completed_at
+                    else "-"
+                ),
             })
 
-        return render(request, 'batch_app/job_detail.html', {
-            'job': job,
-            'job_data': job_data,
-            'logs': formatted_logs,
-            'executions': formatted_executions,
-            'progress': job.progress_percentage(),
-            'template_label': template_label,
-            'current_time': format_datetime_12hr(timezone.now()),
-            'timezone': 'Asia/Kolkata (IST)',
-            'format_type': '12-hour (AM/PM)',
-        })
-    except Exception as e:
-        messages.error(request, f'❌ Error loading job details: {str(e)}')
-        return redirect('batch_job_list')
+        # ========================================================
+        # RENDER
+        # ========================================================
+        return render(
+            request,
+            "batch_app/job_detail.html",
+            {
+                "job": job,
+                "job_data": job_data,
+                "logs": formatted_logs,
+                "executions": formatted_executions,
+                "progress": job.progress_percentage(),
+                "template_label": template_label,
+                "current_time": format_datetime_12hr(
+                    timezone.now()
+                ),
+                "timezone": "Asia/Kolkata (IST)",
+                "format_type": "12-hour (AM/PM)",
+                "next_monthly_run": next_monthly_run,
+            }
+        )
 
+    except Exception as e:
+
+        logger.exception(
+            f"❌ Error loading batch job detail "
+            f"{job_id}: {e}"
+        )
+
+        messages.error(
+            request,
+            f"❌ Error loading job details: {str(e)}"
+        )
+
+        return redirect(
+            "batch_job_list"
+        )
 
 # ============================================================
 # BATCH JOB EDIT
@@ -691,6 +1052,8 @@ def batch_job_edit(request, job_id):
             target_app = request.POST.get('target_app', 'messaging')
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
+            # notification_type_id = request.POST.get('notification_type')
+
 
             if not excel_path:
                 messages.error(request, '❌ Excel file path is required')
@@ -810,6 +1173,7 @@ def batch_job_edit(request, job_id):
             job.job_name = job_name
             job.target_app = target_app
             job.template_id = template_id
+            # job.notification_type_id = notification_type_id
             job.excel_path = excel_path
             job.schedule_datetime = schedule_datetime_obj
             job.batch_size_type = batch_size_type
@@ -866,6 +1230,14 @@ def batch_job_edit(request, job_id):
                 next_run = job._get_next_multiple_time(now)
                 job.next_run_time = next_run if next_run else schedule_datetime_obj
 
+            elif schedule_type == 'monthly':
+                from dateutil.relativedelta import relativedelta
+                next_run = schedule_datetime_obj
+                while next_run <= now:
+                    next_run = next_run + relativedelta(months=1)
+                job.next_run_time = next_run
+
+
             job.save()
 
             # ✅ Reschedule the job using the new scheduler
@@ -890,6 +1262,9 @@ def batch_job_edit(request, job_id):
     try:
         app_choices = get_all_messaging_apps()
         templates = get_templates_from_app(job.target_app)
+#         notification_types = NotificationType.objects.filter(
+#     is_active=True
+# ).order_by('name')
 
         # Format times for display
         schedule_date = job.schedule_datetime.strftime('%Y-%m-%d') if job.schedule_datetime else ''
@@ -905,6 +1280,7 @@ def batch_job_edit(request, job_id):
             'templates': templates,
             'schedule_date': schedule_date,
             'schedule_time': schedule_time,
+            # 'notification_types': notification_types,
             'multiple_schedule_date': multiple_schedule_date,
             'end_date': end_date,
             'has_end_date': bool(job.end_date),
@@ -915,6 +1291,7 @@ def batch_job_edit(request, job_id):
     except Exception as e:
         messages.error(request, f'❌ Error loading edit form: {str(e)}')
         return redirect('batch_job_detail', job_id=job.job_id)
+
 # ============================================================
 # BATCH JOB ACTIONS
 # ============================================================
@@ -1007,6 +1384,13 @@ def batch_job_action(request, job_id, action):
             elif job.schedule_type == 'multiple_daily':
                 next_run = job._get_next_multiple_time(now)
                 job.next_run_time = next_run if next_run else job.schedule_datetime
+
+            elif job.schedule_type == 'monthly':
+                from dateutil.relativedelta import relativedelta
+                next_run = job.schedule_datetime
+                while next_run <= now:
+                    next_run = next_run + relativedelta(months=1)
+                job.next_run_time = next_run
             
             job.save()
             tasks.schedule_batch_job.delay(job.job_id)
@@ -1181,6 +1565,8 @@ def batch_job_report(request, job_id):
             'Mobile': getattr(log, 'mobile', ''),
             'Customer Name': getattr(log, 'customer_name', ''),
             'Status': getattr(log, 'status', ''),
+            'Actual Template': getattr(log, 'template_name', ''),
+
             'Message ID': getattr(log, 'message_id', ''),
             'Error': getattr(log, 'error_message', ''),
             'Sent At': format_datetime_12hr(log.sent_at, show_seconds=True) if hasattr(log, 'sent_at') else '',

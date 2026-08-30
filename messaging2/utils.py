@@ -1534,7 +1534,15 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
         ]),
 
 
-            
+         "61": (
+                "guarantor_link",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("guarantor_name", ""))},     # {{1}}
+
+                ],
+            ),
+
 
 
 

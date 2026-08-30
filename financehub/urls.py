@@ -18,6 +18,7 @@ urlpatterns = [
     path("repo-delete/", views.repo_delete, name="repo_delete"),
     path("closed-delete/", views.closed_delete, name="closed_delete"),
     path("paid-delete/", views.paid_delete, name="paid_delete"),
+    path("openrepo-delete/", views.open_repo, name="openrepo_delete"),
 
     # ---------------- FEEDBACK ----------------
     path("feedback/", views.feedback_list, name="feedback_list"),

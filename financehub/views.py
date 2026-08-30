@@ -2235,6 +2235,11 @@ def lcc_delete(request):
     lcc.delete()
     return render(request,'financehub/upload.html')
 
+@financehub_required
+def open_repo(request):
+    closed = OpenRepo.objects.all()
+    closed.delete()
+    return render(request,'financehub/upload.html')
 
 
 @financehub_required

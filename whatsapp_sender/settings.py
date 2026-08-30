@@ -13,7 +13,7 @@ load_dotenv(BASE_DIR / ".env")
 # -------------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = [
     "padmasai.info",
@@ -245,6 +245,13 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Kolkata"
 
+# Reliable task delivery for long-running batch jobs.
+# The per-execution Redis lock and occurrence/customer claims make redelivery safe.
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_TRACK_STARTED = True
+
 CELERY_TASK_ROUTES = {
     "messaging2.tasks.send_ticket_open_message": {"queue": "ticket_messages"},
     "messaging2.tasks.send_ticket_close_message": {"queue": "ticket_messages"},
@@ -255,12 +262,32 @@ CELERY_TASK_ROUTES = {
     "special_cases.tasks.*": {"queue": "special_cases"},
     "notices.tasks.*": {"queue": "notices"},
 
-    # Batch Processing
+    # Batch Processing / execution
     "batch_app.tasks.process_batch_job": {"queue": "batch_app"},
+    "batch_app.tasks.execute_batch": {"queue": "batch_app"},
 
     # Batch Scheduler
     "batch_app.tasks.check_pending_batch_jobs": {"queue": "batch_scheduler"},
     "batch_app.tasks.cancel_daily_schedule": {"queue": "batch_scheduler"},
+    "batch_app.tasks.cleanup_stuck_executions": {"queue": "batch_scheduler"},
+    "batch_app.tasks.process_batch_scheduler": {"queue": "batch_scheduler"},
+}
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    # Auto-cleanup stuck executions every 5 minutes
+    'cleanup-stuck-executions': {
+        'task': 'batch_app.tasks.cleanup_stuck_executions',
+        'schedule': crontab(minute='*/5'),  # Every 5 minutes
+        'options': {'queue': 'batch_scheduler'}
+    },
+   'check-pending-batch-jobs': {
+    'task': 'batch_app.tasks.check_pending_batch_jobs',
+    'schedule': 10.0,
+    'options': {'queue': 'batch_scheduler'}
+},
+
 }
 
 # -------------------------------------------------------
@@ -360,12 +387,4 @@ MEGHAAI_CONFIG = {
     # Your Whisper API key (OpenAI API key for Whisper)
     'WHISPER_API_KEY': os.environ.get('WHISPER_API_KEY', ''),
 
-}
-
-
-CELERY_BEAT_SCHEDULE = {
-    "batch-job-checker": {
-        "task": "batch_app.tasks.check_pending_batch_jobs",
-        "schedule": 60.0,
-    }
 }

@@ -12,6 +12,9 @@ from django.core.files.uploadedfile import UploadedFile
 from messaging.models import SmsWhatsAppLog
 
 PAYMENT_LINK = "https://smsquare.info/"
+
+
+
 from financehub.models import Lcc
 
 # ============================================================
@@ -1325,6 +1328,16 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     "en",
                     []
                 ), 
+                
+                "49": (
+                "guarantor_payment",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("guarantor_name", ""))},     # {{1}}
+                    
+                ],
+            ),
+
 
     }
 

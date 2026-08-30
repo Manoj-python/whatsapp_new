@@ -1,4 +1,7 @@
 <!-- batch_app/templates/batch_app/job_detail.html - WITH DARK/LIGHT MODE SUPPORT -->
+<!-- ✅ FIXED: Counts display correctly using job_data -->
+<!-- ✅ FIXED: Next run time displays correctly -->
+<!-- ✅ FIXED: Success rate calculation -->
 
 {% extends 'batch_app/base.html' %}
 
@@ -36,7 +39,7 @@
                     </div>
                 </div>
                 <div class="progress-custom mt-3">
-                    <div class="progress-bar-custom {% if progress == 100 %}success{% elif progress > 50 %}warning{% else %}danger{% endif %}" 
+                    <div class="progress-bar-custom {% if progress == 100 %}success{% elif progress > 50 %}warning{% else %}danger{% endif %}"
                          style="width: {{ progress }}%"></div>
                 </div>
             </div>
@@ -61,13 +64,13 @@
                 </div>
             </div>
         </div>
-        <!-- ===== SENT STAT ===== -->
+        <!-- ===== SENT STAT - FIXED ===== -->
         <div class="col-md-2">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
                         <div class="stat-label">Sent</div>
-                        <div class="stat-number text-success">{{ job.sent_count }}</div>
+                        <div class="stat-number text-success">{{ job_data.sent_count|default:0 }}</div>
                     </div>
                     <div class="stat-icon bg-success bg-opacity-10 text-success">
                         <i class="fas fa-check-circle"></i>
@@ -75,14 +78,14 @@
                 </div>
             </div>
         </div>
-        
-        <!-- ===== SKIPPED STAT ===== -->
+
+        <!-- ===== SKIPPED STAT - FIXED ===== -->
         <div class="col-md-2">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
                         <div class="stat-label">Skipped</div>
-                        <div class="stat-number text-warning">{{ job.skipped_count }}</div>
+                        <div class="stat-number text-warning">{{ job_data.skipped_count|default:0 }}</div>
                     </div>
                     <div class="stat-icon bg-warning bg-opacity-10 text-warning">
                         <i class="fas fa-forward"></i>
@@ -90,14 +93,14 @@
                 </div>
             </div>
         </div>
-        
-        <!-- ===== FAILED STAT ===== -->
+
+        <!-- ===== FAILED STAT - FIXED ===== -->
         <div class="col-md-2">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
                         <div class="stat-label">Failed</div>
-                        <div class="stat-number text-danger">{{ job.failed_count }}</div>
+                        <div class="stat-number text-danger">{{ job_data.failed_count|default:0 }}</div>
                     </div>
                     <div class="stat-icon bg-danger bg-opacity-10 text-danger">
                         <i class="fas fa-times-circle"></i>
@@ -206,10 +209,10 @@
                     <div class="detail-section mb-4">
                         <h6 class="text-muted mb-3">
                             <i class="fas fa-calendar-alt me-2"></i>
-                            Schedule Information 
+                            Schedule Information
                             <span class="badge bg-success ms-2">IST (12-hour)</span>
                         </h6>
-                        
+
                         <div class="mb-3">
                             <span class="badge bg-primary fs-6">
                                 <i class="fas fa-clock me-1"></i>
@@ -227,20 +230,20 @@
                             </span>
                             <span class="badge bg-info ms-2">{{ job.get_schedule_info }}</span>
                         </div>
-                        
+
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <span class="detail-label">First Run</span>
                                     <span class="detail-value">
                                         <i class="fas fa-calendar-check text-success me-1"></i>
-                                        {{ job.schedule_datetime|date:"Y-m-d" }} 
+                                        {{ job.schedule_datetime|date:"Y-m-d" }}
                                         <strong>{{ job.schedule_datetime|date:"h:i A" }}</strong>
                                         <small class="text-muted d-block">IST</small>
                                     </span>
                                 </div>
                             </div>
-                            
+
                             <!-- ===== SCHEDULE TYPE SPECIFIC DISPLAY ===== -->
                             {% if job.schedule_type == 'daily' %}
                             <div class="col-md-6">
@@ -253,7 +256,7 @@
                                     </span>
                                 </div>
                             </div>
-                            
+
                             {% elif job.schedule_type == 'multiple_daily' %}
                             <div class="col-md-6">
                                 <div class="detail-item">
@@ -280,14 +283,14 @@
                                     </span>
                                 </div>
                             </div>
-                            
+
                             {% elif job.schedule_type == 'weekly' %}
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <span class="detail-label">Schedule</span>
                                     <span class="detail-value">
                                         <i class="fas fa-calendar-week text-info me-1"></i>
-                                        Every 
+                                        Every
                                         {% if job.weekly_day == 0 %}Monday
                                         {% elif job.weekly_day == 1 %}Tuesday
                                         {% elif job.weekly_day == 2 %}Wednesday
@@ -302,7 +305,7 @@
                                     </span>
                                 </div>
                             </div>
-                            
+
                             {% elif job.schedule_type == 'custom_interval' %}
                             <div class="col-md-6">
                                 <div class="detail-item">
@@ -316,16 +319,15 @@
                                 </div>
                             </div>
                             {% endif %}
-                            
-                            <!-- ===== NEXT RUN ===== -->
+
+                            <!-- ===== NEXT RUN - FIXED ===== -->
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <span class="detail-label">Next Run</span>
                                     <span class="detail-value">
-                                        {% if job.next_run_time %}
+                                        {% if job_data.next_run_time and job_data.next_run_time != 'Not scheduled' %}
                                             <i class="fas fa-hourglass-half text-warning me-1"></i>
-                                            {{ job.next_run_time|date:"Y-m-d" }} 
-                                            <strong>{{ job.next_run_time|date:"h:i A" }}</strong>
+                                            {{ job_data.next_run_time }}
                                             <small class="text-muted d-block">IST</small>
                                         {% else %}
                                             <span class="text-muted">Not scheduled</span>
@@ -333,7 +335,24 @@
                                     </span>
                                 </div>
                             </div>
-                            
+
+                            <!-- ===== NEXT MONTHLY RUN ===== -->
+                            {% if job.schedule_type == 'monthly' %}
+                            <div class="col-md-6">
+                                <div class="detail-item">
+                                    <span class="detail-label">Next Monthly Run</span>
+                                    <span class="detail-value">
+                                        <i class="fas fa-calendar-plus text-success me-1"></i>
+                                        {{ next_monthly_run|date:"Y-m-d" }}
+                                        <strong>{{ next_monthly_run|date:"h:i A" }}</strong>
+                                        <small class="text-muted d-block">
+                                            IST • Recurring monthly
+                                        </small>
+                                    </span>
+                                </div>
+                            </div>
+                            {% endif %}
+
                             <!-- ===== STATUS ===== -->
                             <div class="col-md-6">
                                 <div class="detail-item">
@@ -346,11 +365,11 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="mt-3 p-2 bg-light rounded">
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
-                                All times are displayed in <strong>Indian Standard Time (IST - UTC+5:30)</strong> 
+                                All times are displayed in <strong>Indian Standard Time (IST - UTC+5:30)</strong>
                                 with <strong>12-hour format (AM/PM)</strong>.
                             </small>
                         </div>
@@ -370,7 +389,7 @@
                                     <span class="detail-label">Created At</span>
                                     <span class="detail-value">
                                         <i class="fas fa-clock text-muted me-1"></i>
-                                        {{ job.created_at|date:"Y-m-d" }} 
+                                        {{ job.created_at|date:"Y-m-d" }}
                                         <strong>{{ job.created_at|date:"h:i A" }}</strong>
                                         <small class="text-muted d-block">IST</small>
                                     </span>
@@ -391,7 +410,7 @@
                                     <span class="detail-label">Started At</span>
                                     <span class="detail-value">
                                         <i class="fas fa-play text-success me-1"></i>
-                                        {{ job.started_at|date:"Y-m-d" }} 
+                                        {{ job.started_at|date:"Y-m-d" }}
                                         <strong>{{ job.started_at|date:"h:i A" }}</strong>
                                         <small class="text-muted d-block">IST</small>
                                     </span>
@@ -404,7 +423,7 @@
                                     <span class="detail-label">Completed At</span>
                                     <span class="detail-value">
                                         <i class="fas fa-check-circle text-success me-1"></i>
-                                        {{ job.completed_at|date:"Y-m-d" }} 
+                                        {{ job.completed_at|date:"Y-m-d" }}
                                         <strong>{{ job.completed_at|date:"h:i A" }}</strong>
                                         <small class="text-muted d-block">IST</small>
                                     </span>
@@ -433,11 +452,11 @@
                 <div class="card-body">
                     <div class="d-grid gap-2">
                         {% csrf_token %}
-                        
+
                         <button class="btn btn-warning" onclick="confirmAction('{{ job.job_id }}', 'force_run', this)">
                             <i class="fas fa-play me-2"></i> Force Run Now
                         </button>
-                        
+
                         {% if job.status == 'running' or job.status == 'scheduled' %}
                         <button class="btn btn-secondary" onclick="performAction('{{ job.job_id }}', 'pause', this)">
                             <i class="fas fa-pause me-2"></i> Pause
@@ -447,20 +466,20 @@
                             <i class="fas fa-play me-2"></i> Resume
                         </button>
                         {% endif %}
-                        
+
                         <button class="btn btn-info" onclick="confirmAction('{{ job.job_id }}', 'restart', this)">
                             <i class="fas fa-redo me-2"></i> Restart
                         </button>
-                        
+
                         <button class="btn btn-danger" onclick="confirmAction('{{ job.job_id }}', 'cancel', this)">
                             <i class="fas fa-stop me-2"></i> Cancel
                         </button>
-                        
+
                         <hr>
-                        
+
                         <!-- ===== SEPARATE REPORT DOWNLOAD BUTTONS ===== -->
                         <label class="fw-semibold small text-muted mb-1">📊 Download Reports</label>
-                        
+
                         <div class="d-flex gap-2 flex-wrap">
                             <a href="{% url 'batch_job_report' job.job_id %}?status=success" class="btn btn-success btn-sm flex-grow-1">
                                 <i class="fas fa-check-circle me-1"></i> Success
@@ -472,17 +491,17 @@
                                 <i class="fas fa-times-circle me-1"></i> Failed
                             </a>
                         </div>
-                        
+
                         <a href="{% url 'batch_job_report' job.job_id %}" class="btn btn-outline-primary">
                             <i class="fas fa-file-download me-2"></i> Full Report
                         </a>
-                        
+
                         <hr>
-                        
+
                         <a href="{% url 'batch_job_edit' job.job_id %}" class="btn btn-outline-warning">
                             <i class="fas fa-edit me-2"></i> Edit Job
                         </a>
-                        
+
                         <button class="btn btn-outline-danger" onclick="confirmDelete('{{ job.job_id }}', this)">
                             <i class="fas fa-trash me-2"></i> Delete Job
                         </button>
@@ -490,7 +509,7 @@
                 </div>
             </div>
 
-            <!-- ===== QUICK STATS ===== -->
+            <!-- ===== QUICK STATS - FIXED ===== -->
             <div class="card mt-3">
                 <div class="card-header">
                     <i class="fas fa-chart-simple me-2"></i>Quick Stats
@@ -500,19 +519,19 @@
                         <div class="col-6">
                             <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Sent</div>
-                                <div class="fw-bold text-success">{{ job.sent_count }}</div>
+                                <div class="fw-bold text-success">{{ job_data.sent_count|default:0 }}</div>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Skipped</div>
-                                <div class="fw-bold text-warning">{{ job.skipped_count }}</div>
+                                <div class="fw-bold text-warning">{{ job_data.skipped_count|default:0 }}</div>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Failed</div>
-                                <div class="fw-bold text-danger">{{ job.failed_count }}</div>
+                                <div class="fw-bold text-danger">{{ job_data.failed_count|default:0 }}</div>
                             </div>
                         </div>
                         <div class="col-6">
@@ -526,14 +545,14 @@
                                     {% endif %}
                                 </div>
                             </div>
-                        </div>                      
+                        </div>
                         <div class="col-12">
                             <div class="p-2 bg-light rounded text-center">
                                 <div class="text-muted small">Success Rate</div>
                                 <div class="fw-bold">
-                                    {% with total=job.sent_count|add:job.failed_count|add:job.skipped_count %}
+                                    {% with total=job_data.sent_count|add:job_data.failed_count|add:job_data.skipped_count %}
                                         {% if total > 0 %}
-                                            {% widthratio job.sent_count total 100 %}%
+                                            {% widthratio job_data.sent_count total 100 %}%
                                         {% else %}
                                             0%
                                         {% endif %}
@@ -561,66 +580,66 @@
     [data-bs-theme="dark"] .detail-item {
         border-bottom: 1px solid #334155;
     }
-    
+
     [data-bs-theme="dark"] .detail-label {
         color: #94A3B8;
     }
-    
+
     [data-bs-theme="dark"] .detail-value {
         color: #F1F5F9;
     }
-    
+
     [data-bs-theme="dark"] .detail-value code {
         background: #2D3748;
         color: #E2E8F0;
     }
-    
+
     [data-bs-theme="dark"] .stat-card {
         background: #1E293B;
         border: 1px solid #334155;
     }
-    
+
     [data-bs-theme="dark"] .stat-card .stat-number {
         color: #F1F5F9;
     }
-    
+
     [data-bs-theme="dark"] .stat-card .stat-label {
         color: #94A3B8;
     }
-    
+
     [data-bs-theme="dark"] .progress-custom {
         background: #334155;
     }
-    
+
     [data-bs-theme="dark"] .bg-light {
         background-color: #1E293B !important;
     }
-    
+
     [data-bs-theme="dark"] .badge.bg-success {
         background-color: #064E3B !important;
         color: #6EE7B7 !important;
     }
-    
+
     [data-bs-theme="dark"] .badge.bg-info {
         background-color: #1E3A5F !important;
         color: #93C5FD !important;
     }
-    
+
     [data-bs-theme="dark"] .badge.bg-primary {
         background-color: #1E3A5F !important;
         color: #93C5FD !important;
     }
-    
+
     [data-bs-theme="dark"] .badge.bg-warning {
         background-color: #78350F !important;
         color: #FCD34D !important;
     }
-    
+
     [data-bs-theme="dark"] .badge.bg-danger {
         background-color: #7F1D1D !important;
         color: #FCA5A5 !important;
     }
-    
+
     [data-bs-theme="dark"] .badge-status.badge-scheduled {
         background: #1E3A5F;
         color: #93C5FD;
@@ -649,7 +668,7 @@
         background: #374151;
         color: #9CA3AF;
     }
-    
+
     [data-bs-theme="dark"] .badge-success {
         background: #064E3B !important;
         color: #6EE7B7 !important;
@@ -662,33 +681,33 @@
         background: #7F1D1D !important;
         color: #FCA5A5 !important;
     }
-    
+
     [data-bs-theme="dark"] .alert-info {
         background: #1E3A5F;
         color: #93C5FD;
     }
-    
+
     [data-bs-theme="dark"] .alert-danger {
         background: #7F1D1D;
         color: #FCA5A5;
     }
-    
+
     [data-bs-theme="dark"] .text-muted {
         color: #94A3B8 !important;
     }
-    
+
     [data-bs-theme="dark"] .text-success {
         color: #6EE7B7 !important;
     }
-    
+
     [data-bs-theme="dark"] .text-warning {
         color: #FCD34D !important;
     }
-    
+
     [data-bs-theme="dark"] .text-danger {
         color: #FCA5A5 !important;
     }
-    
+
     [data-bs-theme="dark"] .text-primary {
         color: #818CF8 !important;
     }
@@ -697,7 +716,7 @@
     .detail-section {
         padding: 4px 0;
     }
-    
+
     .detail-item {
         display: flex;
         justify-content: space-between;
@@ -705,31 +724,31 @@
         padding: 8px 0;
         border-bottom: 1px solid #f1f5f9;
     }
-    
+
     .detail-item:last-child {
         border-bottom: none;
     }
-    
+
     .detail-label {
         color: #64748b;
         font-size: 13px;
         font-weight: 500;
     }
-    
+
     .detail-value {
         color: #0f172a;
         font-size: 13px;
         text-align: right;
         max-width: 60%;
     }
-    
+
     .detail-value code {
         background: #f1f5f9;
         padding: 2px 8px;
         border-radius: 4px;
         font-size: 12px;
     }
-    
+
     .stat-card {
         padding: 20px 24px;
         border-radius: 16px;
@@ -737,12 +756,12 @@
         border: 1px solid #f1f5f9;
         transition: all 0.3s ease;
     }
-    
+
     .stat-card:hover {
         transform: translateY(-4px);
         box-shadow: 0 10px 40px rgba(0,0,0,0.12);
     }
-    
+
     .stat-card .stat-icon {
         width: 48px;
         height: 48px;
@@ -752,46 +771,46 @@
         justify-content: center;
         font-size: 20px;
     }
-    
+
     .stat-card .stat-number {
         font-size: 28px;
         font-weight: 700;
         color: #0f172a;
         line-height: 1.2;
     }
-    
+
     .stat-card .stat-label {
         color: #64748b;
         font-size: 14px;
         font-weight: 500;
     }
-    
+
     .progress-custom {
         height: 6px;
         border-radius: 10px;
         background: #f1f5f9;
         overflow: hidden;
     }
-    
+
     .progress-custom .progress-bar-custom {
         height: 100%;
         border-radius: 10px;
         transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         background: linear-gradient(90deg, #4f46e5, #7c3aed);
     }
-    
+
     .progress-custom .progress-bar-custom.success {
         background: linear-gradient(90deg, #10b981, #059669);
     }
-    
+
     .progress-custom .progress-bar-custom.warning {
         background: linear-gradient(90deg, #f59e0b, #d97706);
     }
-    
+
     .progress-custom .progress-bar-custom.danger {
         background: linear-gradient(90deg, #ef4444, #dc2626);
     }
-    
+
     .badge-status {
         padding: 4px 12px;
         border-radius: 20px;
@@ -800,7 +819,7 @@
         text-transform: uppercase;
         letter-spacing: 0.3px;
     }
-    
+
     .badge-pending { background: #fef3c7; color: #d97706; }
     .badge-scheduled { background: #dbeafe; color: #2563eb; }
     .badge-running { background: #d1fae5; color: #059669; }
@@ -808,11 +827,11 @@
     .badge-paused { background: #fde68a; color: #b45309; }
     .badge-failed { background: #fee2e2; color: #dc2626; }
     .badge-cancelled { background: #e5e7eb; color: #6b7280; }
-    
+
     .badge-success { background: #d1fae5; color: #065f46; }
     .badge-warning { background: #fef3c7; color: #d97706; }
     .badge-danger { background: #fee2e2; color: #dc2626; }
-    
+
     .badge-success { background: #d1fae5 !important; color: #065f46 !important; }
     .badge-warning { background: #fef3c7 !important; color: #d97706 !important; }
     .badge-danger { background: #fee2e2 !important; color: #dc2626 !important; }

@@ -94,6 +94,10 @@
         {% csrf_token %}
         <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-closed">Closed DELETE</button></a>
     </form>
+<form action="{% url 'openrepo_delete' %}" method="post">
+        {% csrf_token %}
+        <a href="{% url 'executive_visit_schedule_list' %}"><button type="submit" class="btn btn-openrepo">OpenRepo DELETE</button></a>
+    </form>
 
     <form action="{% url 'ca_delete' %}" method="post">
         {% csrf_token %}
@@ -126,6 +130,8 @@
     .btn-repo { background-color: rgb(211, 157, 40); }
     .btn-closed { background-color: red; }
     .btn-ca { background-color: blue; }
+    .btn-openrepo { background-color: rgb(51, 8, 8); }
+
 </style>
 
 <div class="container mt-4">

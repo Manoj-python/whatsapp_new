@@ -64,6 +64,23 @@
                             <div id="templateError" style="display:none;" class="text-danger small mt-1"></div>
                         </div>
                         
+                        <!-- Notification Type -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-bell me-1"></i>
+                                Notification Type <span class="text-danger">*</span>
+                            </label>
+                            <select name="notification_type" id="notificationType" class="form-select" required>
+                                <option value="">-- Select Notification Type --</option>
+                                {% for notification in notification_types %}
+                                <option value="{{ notification.id }}">
+                                    {{ notification.code }} - {{ notification.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Used to identify the same notification across WhatsApp and SMS.</small>
+                        </div>
+                        
                         <!-- Excel Path -->
                         <div class="col-12">
                             <label class="form-label fw-semibold">
@@ -133,7 +150,7 @@
                                 <i class="fas fa-calendar-alt me-1"></i> Schedule Type
                             </label>
                             <div class="row g-2">
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-check">
                                         <input type="radio" name="schedule_type" id="scheduleDaily" 
                                                value="daily" class="form-check-input" checked
@@ -143,23 +160,33 @@
                                         </label>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-check">
                                         <input type="radio" name="schedule_type" id="scheduleMultiple" 
                                                value="multiple_daily" class="form-check-input"
                                                onchange="toggleSchedule()">
                                         <label class="form-check-label" for="scheduleMultiple">
-                                            <i class="fas fa-clock"></i> Multiple Daily
+                                            <i class="fas fa-clock"></i> Multiple
                                         </label>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-check">
                                         <input type="radio" name="schedule_type" id="scheduleWeekly" 
                                                value="weekly" class="form-check-input"
                                                onchange="toggleSchedule()">
                                         <label class="form-check-label" for="scheduleWeekly">
                                             <i class="fas fa-calendar-week"></i> Weekly
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" name="schedule_type" id="scheduleMonthly" 
+                                               value="monthly" class="form-check-input"
+                                               onchange="toggleSchedule()">
+                                        <label class="form-check-label" for="scheduleMonthly">
+                                            <i class="fas fa-calendar-alt"></i> Monthly
                                         </label>
                                     </div>
                                 </div>
@@ -237,8 +264,8 @@
                                 <!-- Hidden inputs for form submission -->
                                 <div id="hiddenTimesContainer"></div>
                             </div>
-                                                        
-                            <!-- In job_form.html - Weekly Schedule Section -->
+                            
+                            <!-- ===== WEEKLY SCHEDULE ===== -->
                             <div id="weeklySchedule" style="display:none;">
                                 <div class="row g-3">
                                     <div class="col-md-4">
@@ -246,7 +273,7 @@
                                             <i class="fas fa-calendar-day me-1"></i> Start Date <span class="text-danger">*</span>
                                         </label>
                                         <input type="date" name="schedule_date" id="weeklyStartDate" 
-                                            class="form-control" value="{{ today }}" required>
+                                               class="form-control" value="{{ today }}" required>
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label">
@@ -266,12 +293,11 @@
                                         <label class="form-label">
                                             <i class="fas fa-clock me-1"></i> Time <span class="text-danger">*</span>
                                         </label>
-                                        <!-- ✅ FIXED: This MUST be 'schedule_time' for the backend to receive it -->
                                         <input type="time" name="schedule_time" id="weeklyTimeInput" 
-                                            class="form-control" value="{{ current_time|default:'09:00' }}" required>
+                                               class="form-control" value="{{ current_time|default:'09:00' }}" required>
                                     </div>
                                 </div>
-                            </div>                                
+                                
                                 <!-- Weekly Schedule Summary -->
                                 <div class="mt-3" id="weeklySummaryContainer" style="display:none;">
                                     <div class="alert alert-info">
@@ -305,6 +331,71 @@
                                                     <div class="mt-1 text-muted small">
                                                         <i class="fas fa-calendar-alt me-1"></i>
                                                         <span id="summaryYearMonth">Year: - | Month: -</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ===== MONTHLY SCHEDULE ===== -->
+                            <div id="monthlySchedule" style="display:none;">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-calendar-day me-1"></i> Day of Month <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="monthly_day" id="monthlyDaySelect" class="form-select" required>
+    {% for day in ""|ljust:"31" %}
+    <option value="{{ forloop.counter }}">{{ forloop.counter }}</option>
+    {% endfor %}
+</select>
+                                        <small class="text-muted">Which day of the month to run (1-31)</small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-calendar-alt me-1"></i> Start Month
+                                        </label>
+                                        <input type="date" name="schedule_date" id="monthlyStartDate" 
+                                               class="form-control" value="{{ today }}" required>
+                                        <small class="text-muted">First run month (day will be auto-adjusted)</small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-clock me-1"></i> Time <span class="text-danger">*</span>
+                                        </label>
+                                        <input type="time" name="schedule_time" id="monthlyTimeInput" 
+                                               class="form-control" value="{{ current_time|default:'09:00' }}" required>
+                                        <small class="text-muted">Time of day for monthly run</small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Monthly Schedule Summary -->
+                                <div class="mt-3" id="monthlySummaryContainer" style="display:none;">
+                                    <div class="alert alert-info">
+                                        <div class="d-flex align-items-start">
+                                            <i class="fas fa-info-circle fa-lg me-2 mt-1"></i>
+                                            <div>
+                                                <strong>📋 Monthly Schedule Summary</strong>
+                                                <div id="monthlyScheduleSummary" class="mt-1">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">📅 Day of Month:</span> 
+                                                            <span id="summaryMonthlyDay" class="fw-semibold">-</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">⏰ Time:</span> 
+                                                            <span id="summaryMonthlyTime" class="fw-semibold">-</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">📋 First Run:</span> 
+                                                            <span id="summaryMonthlyFirstRun" class="fw-semibold">-</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">🔄 Runs:</span> 
+                                                            <span id="summaryMonthlyFrequency" class="fw-semibold">Every month on the same day</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -465,7 +556,6 @@ function updateWeeklySummary() {
     const daySelect = document.getElementById('weeklyDaySelect');
     const timeInput = document.getElementById('weeklyTimeInput');
     const container = document.getElementById('weeklySummaryContainer');
-    const summary = document.getElementById('weeklyScheduleSummary');
     
     if (!startDate || !daySelect || !timeInput) return;
     
@@ -474,7 +564,6 @@ function updateWeeklySummary() {
     const dayName = days[selectedDay];
     const time = timeInput.value || '09:00';
     
-    // Parse date
     const dateObj = new Date(startDate + 'T00:00:00');
     if (isNaN(dateObj.getTime())) {
         container.style.display = 'none';
@@ -483,66 +572,53 @@ function updateWeeklySummary() {
     
     container.style.display = 'block';
     
-    // Format date components
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                         'July', 'August', 'September', 'October', 'November', 'December'];
     const month = monthNames[dateObj.getMonth()];
     const year = dateObj.getFullYear();
     const day = dateObj.getDate();
-    const selectedDateDay = dateObj.getDay(); // 0=Sunday, 1=Monday, ...
+    const selectedDateDay = dateObj.getDay();
     
-    // Map dropdown value to JavaScript day
-    // Dropdown: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
-    // JS: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
-    // Monday: dropdown 0 → JS 1, Tuesday: 1 → 2, ..., Sunday: 6 → 0
     const targetJsDay = (selectedDay + 1) % 7;
     const isMatch = selectedDateDay === targetJsDay;
     
     const matchStatus = isMatch ? '✅ Matches!' : `⚠️ Will adjust to next ${dayName}`;
     const matchClass = isMatch ? 'bg-success' : 'bg-warning';
     
-    // ✅ FIXED: Get actual first run date
     let firstRun = new Date(dateObj);
     let daysToAdd = (targetJsDay - firstRun.getDay() + 7) % 7;
     
-    // ✅ If daysToAdd is 0, the date already matches the selected day
     if (daysToAdd === 0) {
-        // Check if time has passed TODAY ONLY
         const now = new Date();
         const [h, m] = time.split(':').map(Number);
         const firstRunWithTime = new Date(firstRun);
         firstRunWithTime.setHours(h, m, 0, 0);
         
-        // ✅ Only add 7 days if the selected date is TODAY AND time has passed
         const isToday = firstRun.getDate() === now.getDate() && 
                         firstRun.getMonth() === now.getMonth() && 
                         firstRun.getFullYear() === now.getFullYear();
         
         if (isToday && firstRunWithTime < now) {
-            daysToAdd = 7;  // Move to next week since today's time has passed
+            daysToAdd = 7;
         } else {
-            daysToAdd = 0;  // Keep the same date
+            daysToAdd = 0;
         }
     }
     
-    // Apply daysToAdd
     if (daysToAdd > 0) {
         firstRun.setDate(firstRun.getDate() + daysToAdd);
     }
     
-    // Format time for display
     const [hour, minute] = time.split(':').map(Number);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
     const timeDisplay = `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`;
     
-    // Format first run date
     const firstRunDay = firstRun.getDate();
     const firstRunMonth = monthNames[firstRun.getMonth()];
     const firstRunYear = firstRun.getFullYear();
     const firstRunDayName = days[(firstRun.getDay() + 6) % 7];
     
-    // Update summary
     document.getElementById('summaryStartDate').textContent = `${day} ${month} ${year}`;
     document.getElementById('summaryDay').textContent = dayName;
     document.getElementById('summaryTime').textContent = timeDisplay;
@@ -552,6 +628,87 @@ function updateWeeklySummary() {
     document.getElementById('summaryDayName').textContent = dayName;
     document.getElementById('summaryTimeDisplay').textContent = timeDisplay;
     document.getElementById('summaryYearMonth').textContent = `Year: ${year} | Month: ${month}`;
+}
+
+// ============================================================
+// MONTHLY SCHEDULE - SUMMARY UPDATER
+// ============================================================
+
+function updateMonthlySummary() {
+    const daySelect = document.getElementById('monthlyDaySelect');
+    const dateInput = document.getElementById('monthlyStartDate');
+    const timeInput = document.getElementById('monthlyTimeInput');
+    const container = document.getElementById('monthlySummaryContainer');
+    
+    if (!daySelect || !dateInput || !timeInput) return;
+    
+    const day = daySelect.value;
+    const dateValue = dateInput.value;
+    const time = timeInput.value || '09:00';
+    
+    if (!dateValue) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    const dateObj = new Date(dateValue + 'T00:00:00');
+    if (isNaN(dateObj.getTime())) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const [hour, minute] = time.split(':').map(Number);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    const timeDisplay = `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`;
+    
+    let firstRun = new Date(dateObj);
+    const targetDay = parseInt(day);
+    const maxDay = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate();
+    const actualDay = Math.min(targetDay, maxDay);
+    firstRun.setDate(actualDay);
+    
+    const now = new Date();
+    const firstRunWithTime = new Date(firstRun);
+    firstRunWithTime.setHours(hour, minute, 0, 0);
+    
+    const isToday = firstRun.getDate() === now.getDate() && 
+                    firstRun.getMonth() === now.getMonth() && 
+                    firstRun.getFullYear() === now.getFullYear();
+    
+    if (isToday && firstRunWithTime < now) {
+        if (firstRun.getMonth() === 11) {
+            firstRun.setFullYear(firstRun.getFullYear() + 1, 0, 1);
+        } else {
+            firstRun.setMonth(firstRun.getMonth() + 1, 1);
+        }
+        const newMaxDay = new Date(firstRun.getFullYear(), firstRun.getMonth() + 1, 0).getDate();
+        firstRun.setDate(Math.min(targetDay, newMaxDay));
+    }
+    
+    const firstRunDay = firstRun.getDate();
+    const firstRunMonth = monthNames[firstRun.getMonth()];
+    const firstRunYear = firstRun.getFullYear();
+    const firstRunDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][firstRun.getDay()];
+    
+    document.getElementById('summaryMonthlyDay').textContent = `${actualDay}${getOrdinal(actualDay)}`;
+    document.getElementById('summaryMonthlyTime').textContent = timeDisplay;
+    document.getElementById('summaryMonthlyFirstRun').textContent = `${firstRunDay} ${firstRunMonth} ${firstRunYear} (${firstRunDayName})`;
+    document.getElementById('summaryMonthlyFrequency').textContent = `Every month on the ${actualDay}${getOrdinal(actualDay)}`;
+}
+
+function getOrdinal(n) {
+    if (n >= 11 && n <= 13) return 'th';
+    const last = n % 10;
+    if (last === 1) return 'st';
+    if (last === 2) return 'nd';
+    if (last === 3) return 'rd';
+    return 'th';
 }
 
 // ============================================================
@@ -570,6 +727,7 @@ function toggleSchedule() {
         daily: document.getElementById('dailySchedule'),
         multiple_daily: document.getElementById('multipleDailySchedule'),
         weekly: document.getElementById('weeklySchedule'),
+        monthly: document.getElementById('monthlySchedule'),
         custom_interval: document.getElementById('customSchedule')
     };
 
@@ -583,12 +741,14 @@ function toggleSchedule() {
         });
     });
     
-    // Show weekly summary when weekly is selected
     if (type === 'weekly') {
         setTimeout(updateWeeklySummary, 200);
     }
     
-    // Reset times when switching away from multiple daily
+    if (type === 'monthly') {
+        setTimeout(updateMonthlySummary, 200);
+    }
+    
     if (type !== 'multiple_daily') {
         multipleTimes = [];
         renderMultipleTimes();
@@ -635,7 +795,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!el.value) el.value = today;
     });
     
-    // Set default time (NO ROUNDING - exact time)
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
@@ -647,7 +806,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // End date default (30 days)
     const endDateInput = document.querySelector('input[name="end_date"]');
     if (endDateInput) {
         const future = new Date();
@@ -670,6 +828,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (weeklyTimeInput) {
         weeklyTimeInput.addEventListener('change', updateWeeklySummary);
         weeklyTimeInput.addEventListener('input', updateWeeklySummary);
+    }
+    
+    // ===== MONTHLY SCHEDULE EVENTS =====
+    const monthlyDaySelect = document.getElementById('monthlyDaySelect');
+    const monthlyStartDate = document.getElementById('monthlyStartDate');
+    const monthlyTimeInput = document.getElementById('monthlyTimeInput');
+    
+    if (monthlyDaySelect) {
+        monthlyDaySelect.addEventListener('change', updateMonthlySummary);
+    }
+    if (monthlyStartDate) {
+        monthlyStartDate.addEventListener('change', updateMonthlySummary);
+        monthlyStartDate.addEventListener('input', updateMonthlySummary);
+    }
+    if (monthlyTimeInput) {
+        monthlyTimeInput.addEventListener('change', updateMonthlySummary);
+        monthlyTimeInput.addEventListener('input', updateMonthlySummary);
     }
     
     // ===== LOAD TEMPLATES =====
@@ -738,6 +913,7 @@ document.addEventListener('DOMContentLoaded', function() {
             templateInfo.style.display = 'none';
         }
     });
+    
     // ===== FORM VALIDATION =====
     form.addEventListener('submit', function(e) {
         const jobName = document.getElementById('jobName');
@@ -777,7 +953,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         excelPath.classList.remove('is-invalid');
         
-        // ✅ Validate Schedule
         const scheduleType = document.querySelector('input[name="schedule_type"]:checked').value;
         
         if (scheduleType === 'multiple_daily') {
@@ -797,9 +972,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('scheduleTime').value = firstTime;
         }
         
-        // ============================================================
-        // ✅ FIXED: Weekly Validation with correct day mapping
-        // ============================================================
         if (scheduleType === 'weekly') {
             const weeklyDate = document.getElementById('weeklyStartDate').value;
             const weeklyDay = document.getElementById('weeklyDaySelect').value;
@@ -811,29 +983,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
             
-            // ✅ CORRECT MAPPING:
-            // Dropdown: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
-            // JS Date: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
-            // Monday = dropdown 0 → JS 1, Tuesday = 1 → JS 2, ..., Sunday = 6 → JS 0
             const dateObj = new Date(weeklyDate + 'T00:00:00');
             const selectedDay = parseInt(weeklyDay);
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-            
-            // ✅ Convert dropdown value to JS day
-            // Formula: jsDay = (dropdownValue + 1) % 7
             const targetJsDay = (selectedDay + 1) % 7;
-            const actualJsDay = dateObj.getDay();
             
-            // ✅ Compare correctly
-            if (actualJsDay !== targetJsDay) {
+            if (dateObj.getDay() !== targetJsDay) {
                 e.preventDefault();
-                showToast('⚠️ Date Mismatch', `The selected date is not a ${days[selectedDay]}. Please select a ${days[selectedDay]} or adjust the date.`, 'warning');
+                showToast('⚠️ Date Mismatch', `The selected date is not a ${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][selectedDay]}. Please select the correct day.`, 'warning');
                 return false;
             }
             
-            // ✅ Set schedule_date and schedule_time for the backend
             document.getElementById('scheduleDate').value = weeklyDate;
             document.getElementById('scheduleTime').value = weeklyTime;
+        }
+        
+        // ===== MONTHLY VALIDATION =====
+        if (scheduleType === 'monthly') {
+            const monthlyDay = document.getElementById('monthlyDaySelect').value;
+            const monthlyDate = document.getElementById('monthlyStartDate').value;
+            const monthlyTime = document.getElementById('monthlyTimeInput').value;
+            
+            if (!monthlyDay || !monthlyDate || !monthlyTime) {
+                e.preventDefault();
+                showToast('❌ Validation Error', 'Please select day, date, and time for monthly schedule', 'error');
+                return false;
+            }
+            
+            document.getElementById('scheduleDate').value = monthlyDate;
+            document.getElementById('scheduleTime').value = monthlyTime;
         }
         
         // Show loading state
@@ -849,12 +1026,16 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleBatchSize();
     toggleSchedule();
 
-    // Update weekly summary if weekly is default
     if (document.querySelector('input[name="schedule_type"][value="weekly"]:checked')) {
         setTimeout(updateWeeklySummary, 300);
     }
+    
+    if (document.querySelector('input[name="schedule_type"][value="monthly"]:checked')) {
+        setTimeout(updateMonthlySummary, 300);
+    }
 
-    console.log('🚀 Job Form Loaded with Weekly Date Selection');});
+    console.log('🚀 Job Form Loaded with Weekly and Monthly Support');
+});
 </script>
 
 <style>
@@ -872,6 +1053,10 @@ document.addEventListener('DOMContentLoaded', function() {
     min-height: 40px;
 }
 #weeklySummaryContainer .alert {
+    background: #e8f4fd;
+    border-left: 4px solid #0d6efd;
+}
+#monthlySummaryContainer .alert {
     background: #e8f4fd;
     border-left: 4px solid #0d6efd;
 }

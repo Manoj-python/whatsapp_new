@@ -83,7 +83,24 @@
                             </div>
                             <div id="templateError" style="display:none;" class="text-danger small mt-1"></div>
                         </div>
-                        
+
+                        <!-- Notification Type -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-bell me-1"></i>
+                                Notification Type
+                                <span class="text-danger">*</span>
+                            </label>
+                            <select name="notification_type" class="form-select" required>
+                                <option value="">-- Select Notification Type --</option>
+                                {% for notification in notification_types %}
+                                <option value="{{ notification.id }}" {% if job.notification_type_id == notification.id %}selected{% endif %}>
+                                    {{ notification.code }} - {{ notification.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
                         <!-- Excel Path -->
                         <div class="col-12">
                             <label class="form-label fw-semibold">
@@ -134,7 +151,7 @@
                             <div id="customBatchSize" class="mt-2" style="{% if job.batch_size_type == 'full' %}display:none;{% endif %}">
                                 <div class="input-group">
                                     <input type="number" name="batch_size" id="batchSize" 
-                                           class="form-control" value="{{ job.batch_size|default:default_batch_size }}" min="1">
+                                           class="form-control" value="{{ job.batch_size|default:1000 }}" min="1">
                                     <span class="input-group-text">customers per batch</span>
                                 </div>
                                 <div class="mt-2 d-flex flex-wrap gap-1">
@@ -155,7 +172,7 @@
                                 <i class="fas fa-calendar-alt me-1"></i> Schedule Type
                             </label>
                             <div class="row g-2">
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-check">
                                         <input type="radio" name="schedule_type" id="scheduleDaily" 
                                                value="daily" class="form-check-input"
@@ -166,18 +183,18 @@
                                         </label>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-check">
                                         <input type="radio" name="schedule_type" id="scheduleMultiple" 
                                                value="multiple_daily" class="form-check-input"
                                                {% if job.schedule_type == 'multiple_daily' %}checked{% endif %}
                                                onchange="toggleSchedule()">
                                         <label class="form-check-label" for="scheduleMultiple">
-                                            <i class="fas fa-clock"></i> Multiple Daily
+                                            <i class="fas fa-clock"></i> Multiple
                                         </label>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="form-check">
                                         <input type="radio" name="schedule_type" id="scheduleWeekly" 
                                                value="weekly" class="form-check-input"
@@ -185,6 +202,17 @@
                                                onchange="toggleSchedule()">
                                         <label class="form-check-label" for="scheduleWeekly">
                                             <i class="fas fa-calendar-week"></i> Weekly
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" name="schedule_type" id="scheduleMonthly" 
+                                               value="monthly" class="form-check-input"
+                                               {% if job.schedule_type == 'monthly' %}checked{% endif %}
+                                               onchange="toggleSchedule()">
+                                        <label class="form-check-label" for="scheduleMonthly">
+                                            <i class="fas fa-calendar-alt"></i> Monthly
                                         </label>
                                     </div>
                                 </div>
@@ -299,6 +327,71 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- ===== MONTHLY SCHEDULE ===== -->
+                            <div id="monthlySchedule" style="{% if job.schedule_type != 'monthly' %}display:none;{% endif %}">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-calendar-day me-1"></i> Day of Month <span class="text-danger">*</span>
+                                        </label>
+                                                                            <select name="monthly_day" id="monthlyDaySelect" class="form-select" required>
+    {% for day in ""|ljust:"31" %}
+    <option value="{{ forloop.counter }}">{{ forloop.counter }}</option>
+    {% endfor %}
+</select>
+                                        <small class="text-muted">Which day of the month to run (1-31)</small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-calendar-alt me-1"></i> Start Month
+                                        </label>
+                                        <input type="date" name="schedule_date" id="monthlyStartDate" 
+                                               class="form-control" value="{{ schedule_date|default:today }}" required>
+                                        <small class="text-muted">First run month (day will be auto-adjusted)</small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-clock me-1"></i> Time <span class="text-danger">*</span>
+                                        </label>
+                                        <input type="time" name="schedule_time" id="monthlyTimeInput" 
+                                               class="form-control" value="{{ schedule_time|default:'09:00' }}" required>
+                                        <small class="text-muted">Time of day for monthly run</small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Monthly Schedule Summary -->
+                                <div class="mt-3" id="monthlySummaryContainer" style="display:none;">
+                                    <div class="alert alert-info">
+                                        <div class="d-flex align-items-start">
+                                            <i class="fas fa-info-circle fa-lg me-2 mt-1"></i>
+                                            <div>
+                                                <strong>📋 Monthly Schedule Summary</strong>
+                                                <div id="monthlyScheduleSummary" class="mt-1">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">📅 Day of Month:</span> 
+                                                            <span id="summaryMonthlyDay" class="fw-semibold">-</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">⏰ Time:</span> 
+                                                            <span id="summaryMonthlyTime" class="fw-semibold">-</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">📋 First Run:</span> 
+                                                            <span id="summaryMonthlyFirstRun" class="fw-semibold">-</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <span class="text-muted">🔄 Runs:</span> 
+                                                            <span id="summaryMonthlyFrequency" class="fw-semibold">Every month on the same day</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <!-- ===== CUSTOM INTERVAL ===== -->
                             <div id="customSchedule" style="{% if job.schedule_type != 'custom_interval' %}display:none;{% endif %}">
@@ -375,6 +468,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     renderMultipleTimes();
     updateHiddenTimes();
+    
+    // Initialize monthly summary if monthly is selected
+    if (document.querySelector('input[name="schedule_type"][value="monthly"]:checked')) {
+        setTimeout(updateMonthlySummary, 300);
+    }
 });
 
 function addMultipleTime() {
@@ -480,6 +578,7 @@ function toggleSchedule() {
         daily: document.getElementById('dailySchedule'),
         multiple_daily: document.getElementById('multipleDailySchedule'),
         weekly: document.getElementById('weeklySchedule'),
+        monthly: document.getElementById('monthlySchedule'),
         custom_interval: document.getElementById('customSchedule')
     };
 
@@ -495,6 +594,10 @@ function toggleSchedule() {
 
     if (type === 'weekly') {
         document.getElementById('scheduleDate').disabled = false;
+    }
+    
+    if (type === 'monthly') {
+        setTimeout(updateMonthlySummary, 200);
     }
     
     if (type !== 'multiple_daily') {
@@ -529,6 +632,93 @@ function validateExcelPath() {
         validation.innerHTML = '<div class="alert alert-danger py-1 mb-0">✗ Invalid path. Must end with .xlsx or .xls</div>';
         input.classList.add('is-invalid');
     }
+}
+
+// ============================================================
+// MONTHLY SCHEDULE - SUMMARY UPDATER
+// ============================================================
+
+function updateMonthlySummary() {
+    const daySelect = document.getElementById('monthlyDaySelect');
+    const dateInput = document.getElementById('monthlyStartDate');
+    const timeInput = document.getElementById('monthlyTimeInput');
+    const container = document.getElementById('monthlySummaryContainer');
+    
+    if (!daySelect || !dateInput || !timeInput) return;
+    
+    const day = daySelect.value;
+    const dateValue = dateInput.value;
+    const time = timeInput.value || '09:00';
+    
+    if (!dateValue) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    // Parse date
+    const dateObj = new Date(dateValue + 'T00:00:00');
+    if (isNaN(dateObj.getTime())) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    // Format time
+    const [hour, minute] = time.split(':').map(Number);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    const timeDisplay = `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`;
+    
+    // Calculate first run
+    let firstRun = new Date(dateObj);
+    const targetDay = parseInt(day);
+    const maxDay = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate();
+    const actualDay = Math.min(targetDay, maxDay);
+    firstRun.setDate(actualDay);
+    
+    // If the date is today and time has passed, move to next month
+    const now = new Date();
+    const firstRunWithTime = new Date(firstRun);
+    firstRunWithTime.setHours(hour, minute, 0, 0);
+    
+    const isToday = firstRun.getDate() === now.getDate() && 
+                    firstRun.getMonth() === now.getMonth() && 
+                    firstRun.getFullYear() === now.getFullYear();
+    
+    if (isToday && firstRunWithTime < now) {
+        if (firstRun.getMonth() === 11) {
+            firstRun.setFullYear(firstRun.getFullYear() + 1, 0, 1);
+        } else {
+            firstRun.setMonth(firstRun.getMonth() + 1, 1);
+        }
+        const newMaxDay = new Date(firstRun.getFullYear(), firstRun.getMonth() + 1, 0).getDate();
+        firstRun.setDate(Math.min(targetDay, newMaxDay));
+    }
+    
+    // Format first run date
+    const firstRunDay = firstRun.getDate();
+    const firstRunMonth = monthNames[firstRun.getMonth()];
+    const firstRunYear = firstRun.getFullYear();
+    const firstRunDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][firstRun.getDay()];
+    
+    // Update summary
+    document.getElementById('summaryMonthlyDay').textContent = `${actualDay}${getOrdinal(actualDay)}`;
+    document.getElementById('summaryMonthlyTime').textContent = timeDisplay;
+    document.getElementById('summaryMonthlyFirstRun').textContent = `${firstRunDay} ${firstRunMonth} ${firstRunYear} (${firstRunDayName})`;
+    document.getElementById('summaryMonthlyFrequency').textContent = `Every month on the ${actualDay}${getOrdinal(actualDay)}`;
+}
+
+function getOrdinal(n) {
+    if (n >= 11 && n <= 13) return 'th';
+    const last = n % 10;
+    if (last === 1) return 'st';
+    if (last === 2) return 'nd';
+    if (last === 3) return 'rd';
+    return 'th';
 }
 
 // ============================================================
@@ -620,6 +810,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // ===== MONTHLY SCHEDULE EVENTS =====
+    const monthlyDaySelect = document.getElementById('monthlyDaySelect');
+    const monthlyStartDate = document.getElementById('monthlyStartDate');
+    const monthlyTimeInput = document.getElementById('monthlyTimeInput');
+    
+    if (monthlyDaySelect) {
+        monthlyDaySelect.addEventListener('change', updateMonthlySummary);
+    }
+    if (monthlyStartDate) {
+        monthlyStartDate.addEventListener('change', updateMonthlySummary);
+        monthlyStartDate.addEventListener('input', updateMonthlySummary);
+    }
+    if (monthlyTimeInput) {
+        monthlyTimeInput.addEventListener('change', updateMonthlySummary);
+        monthlyTimeInput.addEventListener('input', updateMonthlySummary);
+    }
+    
     // Form validation
     form.addEventListener('submit', function(e) {
         const jobName = document.getElementById('jobName');
@@ -659,7 +866,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         excelPath.classList.remove('is-invalid');
         
-        // Validate Multiple Daily
+        // Validate Schedule
         const scheduleType = document.querySelector('input[name="schedule_type"]:checked').value;
         
         if (scheduleType === 'multiple_daily') {
@@ -676,10 +883,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
             
-            // Set the schedule_date and schedule_time from multiple daily
             const firstTime = multipleTimes[0];
             document.getElementById('scheduleDate').value = selectedDate;
             document.getElementById('scheduleTime').value = firstTime;
+        }
+        
+        // ===== MONTHLY VALIDATION =====
+        if (scheduleType === 'monthly') {
+            const monthlyDay = document.getElementById('monthlyDaySelect').value;
+            const monthlyDate = document.getElementById('monthlyStartDate').value;
+            const monthlyTime = document.getElementById('monthlyTimeInput').value;
+            
+            if (!monthlyDay || !monthlyDate || !monthlyTime) {
+                e.preventDefault();
+                showToast('❌ Validation Error', 'Please select day, date, and time for monthly schedule', 'error');
+                return false;
+            }
+            
+            document.getElementById('scheduleDate').value = monthlyDate;
+            document.getElementById('scheduleTime').value = monthlyTime;
         }
         
         // Show loading state
@@ -696,7 +918,7 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleSchedule();
     toggleEndDate();
     
-    console.log('🚀 Edit Job Form Loaded');
+    console.log('🚀 Edit Job Form Loaded with Monthly Support');
 });
 </script>
 

@@ -1,20 +1,30 @@
-# batch_app/tasks.py - COMPLETE PRODUCTION READY VERSION WITH API CHECK
-# ✅ API CHECK INTEGRATED FOR PAID/UNPAID CUSTOMERS
-# ✅ DYNAMIC APP FUNCTION DISCOVERY
-# ✅ CLEAN AND ORGANIZED
+# batch_app/tasks.py - COMPLETE PRODUCTION READY VERSION
+# ✅ DUPLICATE PREVENTION WITH REDIS CLAIMS
+# ✅ JOB INDEPENDENCE WITH PER-JOB LOCKS
+# ✅ IST TIMEZONE (12-HOUR FORMAT)
+# ✅ PARALLEL PROCESSING (FAST)
+# ✅ NO STUCK JOBS - PROPER CLEANUP
+# ✅ MONTHLY SCHEDULE SUPPORT
+# ✅ ACCURATE COUNTS & REPORTS
 
 import time
 import logging
 import re
+import threading
+import calendar
 from datetime import datetime, timedelta
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
-from django.db import close_old_connections, DatabaseError
+from django.db import close_old_connections, DatabaseError, transaction
 from django.db.models import Sum
+from django.core.cache import cache
 import requests
-import importlib
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from dateutil.relativedelta import relativedelta
 
 from .models import BatchJob, BatchLog, BatchExecution
 from .utils import format_mobile, get_batch_from_s3, read_excel_from_s3
@@ -23,97 +33,430 @@ from .app_discovery import get_app_by_name, get_app_log_model, get_app_contact_m
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# 🎯 DYNAMIC TEMPLATE SELECTION
+# ⚙️ PRODUCTION CONFIGURATION
 # ============================================================
+MAX_WORKERS = 10                      # Parallel workers per batch
+MAX_API_CALLS_PER_SECOND = 8          # WhatsApp API rate limit
+API_TIMEOUT_CONNECT = 5               # Connection timeout
+API_TIMEOUT_READ = 20                 # Read timeout
+HEARTBEAT_INTERVAL = 25               # Progress update every 25 customers
+EXECUTION_HEARTBEAT_TTL = 15 * 60       # Redis heartbeat TTL; refreshed while task is alive
+STUCK_EXECUTION_AFTER = 60 * 60         # Only auto-fail if no heartbeat for 1 hour
+JOB_LOCK_TIMEOUT = 60 * 60 * 24       # 24 hours per job
+CUSTOMER_CLAIM_TIMEOUT = 60 * 60 * 24 * 730 # 2 years; supports long monthly/custom campaigns
 
+
+# ============================================================
+# 🕒 IST TIMEZONE HELPERS
+# ============================================================
+def get_ist_time():
+    """Get current time in IST"""
+    return timezone.localtime(timezone.now())
+
+def format_ist_datetime(dt):
+    """Format datetime in IST 12-hour format"""
+    if not dt:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt)
+
+def format_ist_12hr(dt):
+    """Format datetime in 12-hour IST format"""
+    ist_dt = format_ist_datetime(dt)
+    if not ist_dt:
+        return '-'
+    return ist_dt.strftime('%Y-%m-%d %I:%M:%S %p')
+
+
+# ============================================================
+# 🔒 REDIS LOCKS FOR DUPLICATE PREVENTION
+# ============================================================
+def acquire_job_lock(job_id, timeout=JOB_LOCK_TIMEOUT):
+    """Atomic Redis lock per job - prevents overlapping scheduler runs."""
+    key = f"batch_job_lock:{job_id}"
+    try:
+        return bool(cache.add(key, "1", timeout))
+    except Exception as e:
+        logger.error(f"❌ Job lock failed for {job_id}: {e}")
+        return False
+
+
+def release_job_lock(job_id):
+    """Release scheduler lock for a job."""
+    try:
+        cache.delete(f"batch_job_lock:{job_id}")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not release lock for {job_id}: {e}")
+
+
+def is_job_locked(job_id):
+    """Check whether a job scheduler lock exists."""
+    try:
+        return cache.get(f"batch_job_lock:{job_id}") is not None
+    except Exception:
+        # Fail closed: never dispatch when duplicate protection is unavailable.
+        return True
+
+
+def get_occurrence_token(job):
+    """
+    Stable token for one scheduled occurrence.
+
+    IMPORTANT:
+    This intentionally does NOT use execution_id.
+    If an execution is retried/recreated after a worker crash, the same
+    occurrence must still be blocked from sending the same customer twice.
+
+    total_runs is incremented only after the complete occurrence finishes,
+    so all batches belonging to one occurrence share the same token.
+    """
+    return str(int(job.total_runs or 0))
+
+
+def get_customer_claim_key(job_id, occurrence_token, mobile):
+    safe_mobile = re.sub(r"[^0-9A-Za-z_.-]", "_", str(mobile))
+    return f"wa_send_claim:{job_id}:{occurrence_token}:{safe_mobile}"
+
+
+def claim_customer_send(job_id, occurrence_token, mobile):
+    """
+    Atomically claim a customer for ONE job occurrence.
+
+    The claim is execution-independent. Therefore:
+      - duplicate rows in the same batch are blocked;
+      - duplicate rows across batches in the same occurrence are blocked;
+      - a retry/new execution of the same occurrence is blocked;
+      - the next scheduled occurrence is allowed because total_runs changes.
+    """
+    key = get_customer_claim_key(job_id, occurrence_token, mobile)
+    try:
+        return bool(cache.add(key, "claimed", CUSTOMER_CLAIM_TIMEOUT))
+    except Exception as e:
+        logger.error(
+            f"❌ Customer claim unavailable for job={job_id}, "
+            f"occurrence={occurrence_token}, mobile={mobile}: {e}"
+        )
+        # Fail closed. A Redis outage must never turn into duplicate sends.
+        return False
+
+
+def release_customer_send_claim(job_id, occurrence_token, mobile):
+    """Release a claim only when the WhatsApp request definitely was NOT sent."""
+    try:
+        cache.delete(get_customer_claim_key(job_id, occurrence_token, mobile))
+    except Exception:
+        pass
+
+
+def set_execution_heartbeat(execution_id):
+    """Refresh DB + Redis liveness for a long-running execution."""
+    heartbeat_now = timezone.now()
+
+    # DB heartbeat is the authoritative fallback. This means cleanup can still
+    # identify a dead worker even if the Redis heartbeat key disappears.
+    try:
+        BatchExecution.objects.filter(id=execution_id).update(
+            last_heartbeat=heartbeat_now
+        )
+    except Exception as e:
+        logger.warning(f"⚠️ DB heartbeat failed for execution {execution_id}: {e}")
+
+    try:
+        cache.set(
+            f"batch_execution_heartbeat:{execution_id}",
+            "alive",
+            EXECUTION_HEARTBEAT_TTL,
+        )
+        # Prevent the execution lock from expiring on unusually large batches.
+        cache.set(
+            f"batch_execution_lock:{execution_id}",
+            "1",
+            JOB_LOCK_TIMEOUT,
+        )
+    except Exception as e:
+        logger.warning(
+            f"⚠️ Redis heartbeat/lock refresh failed for execution "
+            f"{execution_id}: {e}"
+        )
+
+
+def clear_execution_heartbeat(execution_id):
+    try:
+        cache.delete(f"batch_execution_heartbeat:{execution_id}")
+    except Exception:
+        pass
+
+
+def execution_has_heartbeat(execution_id):
+    """Return True if the execution has a recent DB or Redis heartbeat."""
+    try:
+        db_value = BatchExecution.objects.filter(
+            id=execution_id,
+            last_heartbeat__gte=timezone.now() - timedelta(seconds=STUCK_EXECUTION_AFTER),
+        ).exists()
+        if db_value:
+            return True
+    except Exception as e:
+        logger.warning(f"⚠️ DB heartbeat check failed for execution {execution_id}: {e}")
+
+    try:
+        return cache.get(f"batch_execution_heartbeat:{execution_id}") is not None
+    except Exception:
+        # If both checks are unavailable, fail closed: never auto-fail a job
+        # merely because Redis/DB connectivity is temporarily unavailable.
+        return True
+
+
+# ============================================================
+# 🚦 API RATE LIMITER
+# ============================================================
+class RateLimiter:
+    def __init__(self, max_calls_per_second=MAX_API_CALLS_PER_SECOND):
+        self.max_calls = max_calls_per_second
+        self.calls = []
+        self.lock = threading.Lock()
+
+    def wait(self):
+        while True:
+            with self.lock:
+                now = time.monotonic()
+                self.calls = [t for t in self.calls if now - t < 1.0]
+                if len(self.calls) < self.max_calls:
+                    self.calls.append(now)
+                    return
+                sleep_time = max(0.01, 1.0 - (now - self.calls[0]) + 0.01)
+            time.sleep(sleep_time)
+
+_rate_limiters = {}
+_rate_limiters_lock = threading.Lock()
+
+def get_rate_limiter(app_name):
+    """One limiter per WhatsApp app so unrelated apps do not throttle each other."""
+    key = str(app_name or "default")
+    with _rate_limiters_lock:
+        limiter = _rate_limiters.get(key)
+        if limiter is None:
+            limiter = RateLimiter()
+            _rate_limiters[key] = limiter
+        return limiter
+
+
+# ============================================================
+# 🌐 HTTP SESSION WITH CONNECTION POOLING
+# ============================================================
+_thread_local = threading.local()
+
+def get_session():
+    """Thread-local HTTP session with connection pooling"""
+    if not hasattr(_thread_local, "session"):
+        session = requests.Session()
+        adapter = HTTPAdapter(
+            pool_connections=MAX_WORKERS,
+            pool_maxsize=MAX_WORKERS,
+            max_retries=Retry(
+                total=2,
+                backoff_factor=0.5,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["GET"],
+                raise_on_status=False,
+            ),
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _thread_local.session = session
+    return _thread_local.session
+
+
+# ============================================================
+# 🕒 SCHEDULE CALCULATOR - CORRECT NEXT RUN TIME
+# ============================================================
+def get_multiple_daily_times(job):
+    """Get multiple daily times from job"""
+    times = getattr(job, "schedule_times", [])
+    if isinstance(times, str):
+        try:
+            import json
+            times = json.loads(times)
+        except Exception:
+            times = [t.strip() for t in times.split(",") if t.strip()]
+    if not times:
+        return []
+    return sorted(str(t) for t in times)
+
+def calculate_next_run_time(job, from_time=None):
+    """
+    Calculate the next scheduled run time for a job.
+    Supports: one_time, daily, weekly, custom_interval, monthly, multiple_daily
+    """
+    if not from_time:
+        from_time = timezone.now()
+    
+    now = from_time
+    if timezone.is_naive(now):
+        now = timezone.make_aware(now, timezone.get_current_timezone())
+    
+    base = job.schedule_datetime
+    if timezone.is_naive(base):
+        base = timezone.make_aware(base, timezone.get_current_timezone())
+    
+    now_local = timezone.localtime(now)
+    base_local = timezone.localtime(base)
+    
+    # ONE TIME
+    if job.schedule_type == "one_time":
+        if base > now:
+            return base
+        return None
+    
+    # DAILY
+    if job.schedule_type == "daily":
+        candidate = timezone.make_aware(
+            datetime.combine(now_local.date(), base_local.time()),
+            timezone.get_current_timezone()
+        )
+        if candidate <= now_local:
+            candidate += timedelta(days=1)
+        return candidate
+    
+    # WEEKLY
+    if job.schedule_type == "weekly":
+        target_weekday = (
+            job.weekly_day
+            if job.weekly_day is not None
+            else base_local.weekday()
+        )
+        days_ahead = (target_weekday - now_local.weekday()) % 7
+        candidate = timezone.make_aware(
+            datetime.combine(
+                now_local.date() + timedelta(days=days_ahead),
+                base_local.time(),
+            ),
+            timezone.get_current_timezone(),
+        )
+        if candidate <= now_local:
+            candidate += timedelta(days=7)
+        return candidate
+    
+    # CUSTOM INTERVAL - anchored to the original schedule_datetime
+    if job.schedule_type == "custom_interval":
+        interval = max(int(job.interval_days or 1), 1)
+        candidate = base
+        while candidate <= now:
+            candidate += timedelta(days=interval)
+        return candidate
+    
+    # MONTHLY
+    if job.schedule_type == "monthly":
+        target_day = base_local.day
+        year, month = now_local.year, now_local.month
+        day = min(target_day, calendar.monthrange(year, month)[1])
+        candidate = timezone.make_aware(
+            datetime(year, month, day, base_local.hour, base_local.minute, base_local.second),
+            timezone.get_current_timezone()
+        )
+        if candidate <= now_local:
+            if month == 12:
+                year, month = year + 1, 1
+            else:
+                month += 1
+            day = min(target_day, calendar.monthrange(year, month)[1])
+            candidate = timezone.make_aware(
+                datetime(year, month, day, base_local.hour, base_local.minute, base_local.second),
+                timezone.get_current_timezone()
+            )
+        return candidate
+    
+    # MULTIPLE DAILY
+    if job.schedule_type == "multiple_daily":
+        times = get_multiple_daily_times(job)
+        if times:
+            for time_str in times:
+                try:
+                    hour, minute = map(int, time_str.split(":")[:2])
+                    candidate = timezone.make_aware(
+                        datetime.combine(now_local.date(), datetime.min.time().replace(hour=hour, minute=minute)),
+                        timezone.get_current_timezone()
+                    )
+                    if candidate > now_local:
+                        return candidate
+                except Exception:
+                    continue
+            # All times passed, use tomorrow's first time
+            first = times[0]
+            hour, minute = map(int, first.split(":")[:2])
+            tomorrow = now_local.date() + timedelta(days=1)
+            return timezone.make_aware(
+                datetime.combine(tomorrow, datetime.min.time().replace(hour=hour, minute=minute)),
+                timezone.get_current_timezone()
+            )
+    
+    # Fallback: daily at base time
+    candidate = timezone.make_aware(
+        datetime.combine(now_local.date(), base_local.time()),
+        timezone.get_current_timezone()
+    )
+    if candidate <= now_local:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+# ============================================================
+# 🎯 DYNAMIC TEMPLATE SELECTION (SAME AS YOUR OLD CODE)
+# ============================================================
 def get_dynamic_template_id(target_app, job_template_id, emi_due_count):
-    """
-    Decide the actual WhatsApp template for this customer.
-
-    The Batch Job template remains the user's manually selected
-    base template. We only change the template actually sent
-    when the selected job is a bucket campaign.
-
-    Rules:
-    - emi_due_count < 0.2 → Skip (No message)
-    - emi_due_count < 2   → Bucket 1 (Template 44/52/53)
-    - emi_due_count < 3   → Bucket 2 (Template 45/54/55)
-    - emi_due_count >= 3  → Bucket 3 (Template 46/56/57)
-    """
-
+    """Dynamic template selection based on EMI count"""
     target_app = str(target_app)
     job_template_id = str(job_template_id)
-
-    # ============================================================
+    
     # APP 1: messaging (SMSquare)
-    # ============================================================
     if target_app == "messaging":
-
-        # Customer bucket campaigns
         if job_template_id in {"44", "45", "46"}:
-
             if emi_due_count < 0.2:
-                return None  # Skip
-
+                return None
             if emi_due_count < 2:
-                return "44"  # One Bucket Customer
+                return "44"
             elif emi_due_count < 3:
-                return "45"  # Two Buckets Customer
+                return "45"
             else:
-                return "46"  # Three+ Buckets Customer
-
-        # Guarantor bucket - always send as is
+                return "46"
         if job_template_id == "47":
             return "47"
-
-    # ============================================================
+    
     # APP 2: messaging2 (Padma Sai)
-    # ============================================================
     elif target_app == "messaging2":
-
-        # PSF customer bucket campaigns
         if job_template_id in {"52", "54", "56"}:
-
             if emi_due_count < 0.2:
-                return None  # Skip
-
+                return None
             if emi_due_count < 2:
-                return "52"  # One Bucket PSF Customer
+                return "52"
             elif emi_due_count < 3:
-                return "54"  # Two Buckets PSF Customer
+                return "54"
             else:
-                return "56"  # Three+ PSF Customer
-
-        # SMF customer bucket campaigns
+                return "56"
         if job_template_id in {"53", "55", "57"}:
-
             if emi_due_count < 0.2:
-                return None  # Skip
-
+                return None
             if emi_due_count < 2:
-                return "53"  # One Bucket SMF Customer
+                return "53"
             elif emi_due_count < 3:
-                return "55"  # Two Buckets SMF Customer
+                return "55"
             else:
-                return "57"  # Three+ SMF Customer
-
-        # Guarantor bucket templates - always send as is
+                return "57"
         if job_template_id in {"58", "59"}:
             return job_template_id
-
-    # ============================================================
-    # Non-bucket jobs (keep original template)
-    # ============================================================
+    
+    # Non-bucket jobs
     return job_template_id
-# ============================================================
-# 🔥 HELPER FUNCTIONS FOR DYNAMIC APP DISCOVERY
-# ============================================================
 
+
+# ============================================================
+# 🔥 HELPER FUNCTIONS FOR APP DISCOVERY
+# ============================================================
 def get_build_payload_function(app_name):
-    """Dynamically import the build_payload function from the target app's utils"""
+    """Get build_payload function from app"""
     try:
         utils = get_app_utils(app_name)
-
         if 'build_payload' in utils:
             return utils['build_payload']
         elif 'build_payload2' in utils:
@@ -125,124 +468,52 @@ def get_build_payload_function(app_name):
             elif app_name == 'messaging2':
                 from messaging2.utils import build_payload2
                 return build_payload2
-            else:
-                return None
     except Exception as e:
         logger.error(f"❌ Failed to import build_payload for {app_name}: {e}")
-        return None
-
+    return None
 
 def get_app_schedule_function(app_name):
-    """
-    Get the schedule function from the app's utils
-    Returns: function or None
-    """
+    """Get schedule function from app"""
     try:
         utils = get_app_utils(app_name)
-
         if 'get_total_overdue_from_schedule' in utils:
             return utils['get_total_overdue_from_schedule']
         elif 'get_total_overdue_from_schedule2' in utils:
             return utils['get_total_overdue_from_schedule2']
         else:
-            # Direct import for known apps
             if app_name == 'messaging':
                 from messaging.utils import get_total_overdue_from_schedule
                 return get_total_overdue_from_schedule
             elif app_name == 'messaging2':
                 from messaging2.utils import get_total_overdue_from_schedule2
                 return get_total_overdue_from_schedule2
-            else:
-                return None
     except Exception as e:
         logger.error(f"❌ Failed to import schedule function for {app_name}: {e}")
-        return None
-
+    return None
 
 def get_app_needs_api_check_function(app_name):
-    """
-    Get the needs_api_check function from the app's utils
-    Returns: function or None
-    """
+    """Get needs_api_check function from app"""
     try:
         utils = get_app_utils(app_name)
-
         if 'needs_api_check' in utils:
             return utils['needs_api_check']
         elif 'needs_api_check2' in utils:
             return utils['needs_api_check2']
         else:
-            # Direct import for known apps
             if app_name == 'messaging':
                 from messaging.utils import needs_api_check
                 return needs_api_check
             elif app_name == 'messaging2':
                 from messaging2.utils import needs_api_check
                 return needs_api_check
-            else:
-                return None
     except Exception as e:
         logger.error(f"❌ Failed to import needs_api_check for {app_name}: {e}")
-        return None
-
-
-def check_payment_status_for_app(app_name, mobile, loan_number=None):
-    """
-    Check payment status using the app's check_smsquare_payment_status function
-    Returns: {'is_paid': True/False, 'total_due': amount, 'customer_name': str}
-    """
-    try:
-        # Try to get the function from app's utils
-        utils = get_app_utils(app_name)
-
-        if 'check_smsquare_payment_status' in utils:
-            result = utils['check_smsquare_payment_status'](mobile, loan_number)
-        elif 'check_payment_status' in utils:
-            result = utils['check_payment_status'](mobile, loan_number)
-        else:
-            # Direct import for known apps
-            if app_name == 'messaging':
-                from messaging.utils import check_smsquare_payment_status
-                result = check_smsquare_payment_status(mobile, loan_number)
-            elif app_name == 'messaging2':
-                from messaging2.utils import check_smsquare_payment_status
-                result = check_smsquare_payment_status(mobile, loan_number)
-            else:
-                # No check function - assume UNPAID (send)
-                return {
-                    'is_paid': False,
-                    'total_due': 0,
-                    'customer_name': '',
-                    'status': 'no_check'
-                }
-
-        # Ensure consistent format
-        return {
-            'is_paid': result.get('is_paid', False),
-            'total_due': result.get('total_due', 0),
-            'customer_name': result.get('customer_name', ''),
-            'status': result.get('status', 'success')
-        }
-
-    except Exception as e:
-        logger.warning(f"⚠️ API check failed for {app_name}/{mobile}: {e}")
-        # On error, assume UNPAID (send reminder)
-        return {
-            'is_paid': False,
-            'total_due': 0,
-            'customer_name': '',
-            'status': 'api_error'
-        }
-
+    return None
 
 def get_app_seize_check_function(app_name):
-    """
-    Get the SeizeDate check function from the app's utils
-    Returns: function or None
-    """
+    """Get seize check function from app"""
     try:
         utils = get_app_utils(app_name)
-
         if 'check_smsquare_payment_status' in utils:
             return utils['check_smsquare_payment_status']
         elif 'check_smsquare_payment_status2' in utils:
@@ -250,729 +521,1545 @@ def get_app_seize_check_function(app_name):
         elif 'check_payment_status' in utils:
             return utils['check_payment_status']
         else:
-            # Direct import for known apps
             if app_name == 'messaging':
                 from messaging.utils import check_smsquare_payment_status
                 return check_smsquare_payment_status
             elif app_name == 'messaging2':
                 from messaging2.utils import check_smsquare_payment_status2
                 return check_smsquare_payment_status2
-            else:
-                return None
     except Exception as e:
         logger.error(f"❌ Failed to import seize check function for {app_name}: {e}")
-        return None
+    return None
+
+def get_actual_template_name(target_app, template_id):
+    """Get template name from template ID"""
+    if template_id is None:
+        return ""
+    try:
+        from .app_discovery import get_template_name_for_id
+        return get_template_name_for_id(target_app, template_id) or str(template_id)
+    except Exception:
+        return str(template_id)
+
 
 # ============================================================
-# 🚀 SCHEDULER TASK - Creates ONE batch at a time
+# 👤 SINGLE CUSTOMER PROCESSOR - WITH DUPLICATE PREVENTION
+# ============================================================
+# ============================================================
+# 👤 SINGLE CUSTOMER PROCESSOR - WITH DUPLICATE PREVENTION
+# ============================================================
+def process_single_customer(
+    row, job, execution_id, LogModel, ContactModel, url, headers,
+    build_payload, needs_api_check_func, schedule_func, seize_check_func
+):
+    """
+    Process ONE customer.
+
+    IMPORTANT:
+    - Existing business/template logic is preserved.
+    - Template 36 with needs_api_check=False will NOT enter
+      EMI / PAID / due_amount logic.
+    - Duplicate prevention is preserved.
+    - Every duplicate skip is now written to LogModel.
+    - Every send/API failure remains FAILED.
+    """
+
+    result = {
+        "sent": 0,
+        "failed": 0,
+        "skipped": 0,
+        "mobile": "",
+        "error": None,
+    }
+
+    mobile = ""
+    claim_owned = False
+    send_attempted = False
+    actual_template_id = job.template_id
+    occurrence_token = get_occurrence_token(job)
+
+    customer_name = ""
+    loan_number = ""
+    excel_amount = "0"
+    vehicle_number = ""
+    actual_template_name = ""
+
+    try:
+        # ========================================================
+        # 1. EXTRACT CUSTOMER DATA
+        # ========================================================
+        mobile = format_mobile(
+            row.get("CustMobile")
+            or row.get("cust_mobile")
+            or ""
+        )
+
+        customer_name = (
+            row.get("CustomerName")
+            or row.get("customer_name")
+            or ""
+        )
+
+        loan_number = (
+            row.get("loan_number")
+            or row.get("LoanNumber")
+            or row.get("agreement_no")
+            or row.get("AgreementNo")
+            or ""
+        )
+
+        excel_amount = (
+            row.get("due_amount")
+            or row.get("DueAmount")
+            or "0"
+        )
+
+        vehicle_number = (
+            row.get("vehicle_number")
+            or row.get("VehicleNumber")
+            or row.get("VehicleNo")
+            or row.get("vehicle_no")
+            or ""
+        )
+
+        result["mobile"] = mobile
+
+        # ========================================================
+        # 2. INVALID MOBILE
+        # ========================================================
+        if not mobile:
+            result["failed"] = 1
+            result["error"] = "Invalid mobile number"
+
+            try:
+                LogModel.objects.create(
+                    job_id=job,
+                    customer_name=customer_name,
+                    mobile="",
+                    template_name=job.template_name or str(job.template_id or ""),
+                    sent_text_message="",
+                    status="Failed",
+                    message_type="Sent",
+                    error_message="Invalid mobile number",
+                    sent_at=timezone.now(),
+                )
+            except Exception:
+                logger.exception(
+                    f"❌ Failed to save invalid-mobile report "
+                    f"for job={job.job_id}"
+                )
+
+            return result
+
+        # ========================================================
+        # 3. SEIZE DATE CHECK
+        # ========================================================
+        if seize_check_func:
+            try:
+                seize_result = seize_check_func(
+                    mobile,
+                    loan_number
+                ) or {}
+
+                seize_date = seize_result.get("seize_date")
+
+                if seize_date:
+                    result["skipped"] = 1
+
+                    try:
+                        LogModel.objects.create(
+                            job_id=job,
+                            customer_name=customer_name,
+                            mobile=mobile,
+                            template_name="SEIZED",
+                            sent_text_message="Vehicle seized",
+                            status="SEIZED",
+                            message_type="Skipped",
+                            error_message=(
+                                f"Vehicle seized on {seize_date}"
+                            ),
+                            sent_at=timezone.now(),
+                        )
+                    except Exception:
+                        logger.exception(
+                            f"❌ Failed to save seized report "
+                            f"for {mobile}"
+                        )
+
+                    logger.info(
+                        f"⛔ {mobile} - Vehicle seized on {seize_date}"
+                    )
+
+                    return result
+
+            except Exception as e:
+                # IMPORTANT:
+                # Seize API failure must NOT automatically skip customer.
+                logger.warning(
+                    f"⚠️ Seize check failed for {mobile}: {e}"
+                )
+
+        # ========================================================
+        # 4. API CHECK / DYNAMIC TEMPLATE
+        # ========================================================
+        actual_template_id = job.template_id
+        real_time_due = None
+        emi_due_count = 0
+        is_paid = False
+
+        needs_check = False
+
+        if needs_api_check_func:
+            try:
+                needs_check = bool(
+                    needs_api_check_func(job.template_id)
+                )
+            except Exception as e:
+                logger.warning(
+                    f"⚠️ needs_api_check failed for "
+                    f"{job.target_app}/{job.template_id}: {e}"
+                )
+
+        logger.info(
+            f"📋 Job={job.job_id} | "
+            f"Template={job.template_id} | "
+            f"API Check={'YES' if needs_check else 'NO'} | "
+            f"Mobile={mobile}"
+        )
+
+        # IMPORTANT:
+        # Template 36 -> needs_check=False
+        # Therefore EMI / PAID / due_amount logic is skipped.
+        if needs_check and schedule_func:
+            try:
+                get_rate_limiter(job.target_app).wait()
+
+                schedule_data = schedule_func(
+                    mobile,
+                    loan_number,
+                    include_upcoming=True
+                ) or {}
+
+                real_time_due = schedule_data.get(
+                    "total_due",
+                    0
+                )
+
+                is_paid = schedule_data.get(
+                    "is_paid",
+                    False
+                )
+
+                emi_due_count = schedule_data.get(
+                    "emi_due_count",
+                    0
+                )
+
+                actual_template_id = get_dynamic_template_id(
+                    job.target_app,
+                    job.template_id,
+                    emi_due_count,
+                )
+
+                logger.info(
+                    f"🎯 {mobile} | "
+                    f"JobTemplate={job.template_id} | "
+                    f"EMI={emi_due_count} | "
+                    f"ActualTemplate={actual_template_id} | "
+                    f"Due=₹{real_time_due}"
+                )
+
+                # ====================================================
+                # NO APPLICABLE BUCKET / EMI < 0.2
+                # ====================================================
+                if (
+                    actual_template_id is None
+                    or emi_due_count < 0.2
+                ):
+                    result["skipped"] = 1
+
+                    try:
+                        LogModel.objects.create(
+                            job_id=job,
+                            customer_name=customer_name,
+                            mobile=mobile,
+                            template_name="SKIPPED",
+                            sent_text_message=(
+                                f"SKIPPED: EMI count "
+                                f"{emi_due_count}"
+                            ),
+                            status="SKIPPED",
+                            message_type="Skipped",
+                            error_message=(
+                                "No applicable bucket / "
+                                f"EMI count={emi_due_count}"
+                            ),
+                            sent_at=timezone.now(),
+                        )
+                    except Exception:
+                        logger.exception(
+                            f"❌ Failed to save EMI skip report "
+                            f"for {mobile}"
+                        )
+
+                    return result
+
+                # ====================================================
+                # PAID
+                # ====================================================
+                if is_paid:
+                    result["skipped"] = 1
+
+                    try:
+                        LogModel.objects.create(
+                            job_id=job,
+                            customer_name=customer_name,
+                            mobile=mobile,
+                            template_name="PAID",
+                            sent_text_message=(
+                                f"PAID: ₹{real_time_due}"
+                            ),
+                            status="PAID",
+                            message_type="Skipped",
+                            error_message=(
+                                "Customer is PAID "
+                                f"(Total Due: ₹{real_time_due})"
+                            ),
+                            sent_at=timezone.now(),
+                        )
+                    except Exception:
+                        logger.exception(
+                            f"❌ Failed to save PAID report "
+                            f"for {mobile}"
+                        )
+
+                    return result
+
+                # ====================================================
+                # REAL-TIME AMOUNT
+                # ====================================================
+                if (
+                    real_time_due is not None
+                    and real_time_due > 0
+                ):
+                    row["due_amount"] = str(real_time_due)
+
+            except Exception as e:
+                # IMPORTANT:
+                # API error must NOT become SKIPPED.
+                # Preserve old fallback -> continue using Excel data.
+                logger.warning(
+                    f"⚠️ API check error for {mobile}: {e}"
+                )
+
+        # ========================================================
+        # 5. DUPLICATE PREVENTION
+        # ========================================================
+        if not claim_customer_send(
+            job.job_id,
+            occurrence_token,
+            mobile
+        ):
+            result["skipped"] = 1
+            result["error"] = (
+                "Duplicate customer prevented "
+                "for this scheduled occurrence"
+            )
+
+            # IMPORTANT FIX:
+            # Previously duplicate was counted as skipped but
+            # NO customer-level report was created.
+            try:
+                duplicate_template_name = (
+                    get_actual_template_name(
+                        job.target_app,
+                        actual_template_id
+                    )
+                    or str(
+                        actual_template_id
+                        or job.template_id
+                        or ""
+                    )
+                )
+
+                LogModel.objects.create(
+                    job_id=job,
+                    customer_name=customer_name,
+                    mobile=mobile,
+                    template_name=duplicate_template_name,
+                    sent_text_message=(
+                        "SKIPPED - Duplicate customer prevented"
+                    ),
+                    status="SKIPPED",
+                    message_type="Skipped",
+                    error_message=(
+                        "Duplicate prevented: customer already "
+                        "claimed for this scheduled occurrence"
+                    ),
+                    sent_at=timezone.now(),
+                )
+
+            except Exception:
+                logger.exception(
+                    f"❌ Failed to save duplicate-skip report "
+                    f"for {mobile}"
+                )
+
+            logger.warning(
+                f"⏭️ DUPLICATE PREVENTED: "
+                f"job={job.job_id}, "
+                f"occurrence={occurrence_token}, "
+                f"mobile={mobile}"
+            )
+
+            return result
+
+        claim_owned = True
+
+        # ========================================================
+        # 6. GET ACTUAL TEMPLATE NAME
+        # ========================================================
+        actual_template_name = get_actual_template_name(
+            job.target_app,
+            actual_template_id
+        )
+
+        # ========================================================
+        # 7. BUILD PAYLOAD
+        # ========================================================
+        payload, rendered_text = build_payload(
+            actual_template_id,
+            row,
+            None
+        )
+
+        payload["to"] = mobile
+
+        # ========================================================
+        # 8. RATE LIMIT + HTTP SEND
+        # ========================================================
+        get_rate_limiter(job.target_app).wait()
+
+        session = get_session()
+
+        # IMPORTANT:
+        # From this point claim is never released automatically.
+        # Timeout can mean WhatsApp accepted the message.
+        send_attempted = True
+
+        try:
+            resp = session.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=(
+                    API_TIMEOUT_CONNECT,
+                    API_TIMEOUT_READ,
+                ),
+            )
+
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+        ) as e:
+
+            result["failed"] = 1
+            result["error"] = str(e)[:500]
+
+            try:
+                LogModel.objects.create(
+                    job_id=job,
+                    customer_name=customer_name,
+                    mobile=mobile,
+                    template_name=(
+                        actual_template_name
+                        or str(actual_template_id)
+                    ),
+                    sent_text_message="",
+                    status="Failed",
+                    message_type="Sent",
+                    error_message=(
+                        f"AMBIGUOUS SEND: {str(e)[:450]}"
+                    ),
+                    sent_at=timezone.now(),
+                )
+            except Exception:
+                logger.exception(
+                    f"❌ Failed to save timeout/connection "
+                    f"failure report for {mobile}"
+                )
+
+            logger.error(
+                f"⚠️ Ambiguous API failure for {mobile}; "
+                f"claim retained to prevent duplicate retry: {e}"
+            )
+
+            return result
+
+        # ========================================================
+        # 9. SUCCESS
+        # ========================================================
+        if resp.ok:
+
+            try:
+                body = resp.json()
+                msg_id = (
+                    body.get("messages", [{}])[0]
+                    .get("id", "")
+                )
+            except Exception:
+                msg_id = ""
+
+            log_text = rendered_text
+
+            if real_time_due:
+                log_text = (
+                    f"{rendered_text}\n\n"
+                    f"Excel: ₹{excel_amount} | "
+                    f"Actual: ₹{real_time_due}"
+                )
+
+            # Report persistence must never cause WhatsApp retry.
+            try:
+                LogModel.objects.create(
+                    job_id=job,
+                    customer_name=customer_name,
+                    mobile=mobile,
+                    template_name=(
+                        actual_template_name
+                        or str(actual_template_id)
+                    ),
+                    sent_text_message=(
+                        log_text
+                        or f"📨 Batch: {job.template_name}"
+                    ),
+                    status="Sent",
+                    message_id=msg_id,
+                    message_type="Sent",
+                    content_type="text",
+                    error_message=(
+                        f"Job Template: {job.template_id} | "
+                        f"Actual Template: {actual_template_id} | "
+                        f"EMI Count: {emi_due_count} | "
+                        f"Excel Due: ₹{excel_amount} | "
+                        f"API Due: ₹{real_time_due} | "
+                        f"Loan: {loan_number} | "
+                        f"Vehicle: {vehicle_number}"
+                    ),
+                    sent_at=timezone.now(),
+                )
+
+            except Exception as e:
+                logger.exception(
+                    f"⚠️ WhatsApp sent to {mobile}, "
+                    f"but success report save failed: {e}"
+                )
+
+            # ====================================================
+            # CONTACT UPDATE
+            # ====================================================
+            if ContactModel:
+                try:
+                    ContactModel.objects.update_or_create(
+                        mobile=mobile,
+                        defaults={
+                            "last_msg": (
+                                log_text
+                                or f"📨 Batch: {job.template_name}"
+                            ),
+                            "last_time": timezone.now(),
+                            "last_type": "Sent",
+                            "last_status": "Sent",
+                            "unread": 0,
+                        }
+                    )
+
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Contact update failed after "
+                        f"successful send to {mobile}: {e}"
+                    )
+
+            result["sent"] = 1
+
+            logger.info(
+                f"✅ [{job.target_app}] Sent to {mobile} | "
+                f"job={job.job_id} | "
+                f"occurrence={occurrence_token}"
+            )
+
+            return result
+
+        # ========================================================
+        # 10. HTTP FAILURE
+        # ========================================================
+        definite_rejection = (
+            400 <= resp.status_code < 500
+            and resp.status_code not in (408, 429)
+        )
+
+        if definite_rejection:
+            release_customer_send_claim(
+                job.job_id,
+                occurrence_token,
+                mobile
+            )
+            claim_owned = False
+
+        else:
+            # 408 / 429 / 5xx are ambiguous.
+            # Keep claim to prevent duplicate sends.
+            logger.error(
+                f"⚠️ Ambiguous HTTP {resp.status_code} "
+                f"for {mobile}; claim retained"
+            )
+
+        result["failed"] = 1
+
+        error_msg = (
+            resp.text
+            or f"HTTP {resp.status_code}"
+        )[:500]
+
+        try:
+            LogModel.objects.create(
+                job_id=job,
+                customer_name=customer_name,
+                mobile=mobile,
+                template_name=(
+                    actual_template_name
+                    or str(actual_template_id)
+                ),
+                sent_text_message="",
+                status="Failed",
+                message_type="Sent",
+                error_message=error_msg,
+                sent_at=timezone.now(),
+            )
+
+        except Exception:
+            logger.exception(
+                f"❌ Failed to save HTTP failure report "
+                f"for {mobile}"
+            )
+
+        logger.error(
+            f"❌ [{job.target_app}] Failed to send "
+            f"{mobile}: {resp.status_code}"
+        )
+
+        return result
+
+    # ============================================================
+    # 11. UNEXPECTED CUSTOMER ERROR
+    # ============================================================
+    except Exception as e:
+
+        # Release only when HTTP request was NOT started.
+        if (
+            claim_owned
+            and mobile
+            and not send_attempted
+        ):
+            try:
+                release_customer_send_claim(
+                    job.job_id,
+                    occurrence_token,
+                    mobile
+                )
+            except Exception:
+                logger.exception(
+                    f"❌ Failed to release claim for {mobile}"
+                )
+
+        result["failed"] = 1
+        result["error"] = str(e)[:500]
+
+        logger.error(
+            f"❌ Error for {mobile or 'Unknown'}: {e}"
+        )
+        logger.error(traceback.format_exc())
+
+        # IMPORTANT:
+        # Unexpected error must also appear in Failed report.
+        try:
+            unexpected_template_name = ""
+
+            try:
+                if actual_template_id is not None:
+                    unexpected_template_name = (
+                        get_actual_template_name(
+                            job.target_app,
+                            actual_template_id
+                        )
+                        or str(actual_template_id)
+                    )
+            except Exception:
+                unexpected_template_name = (
+                    str(actual_template_id or "")
+                )
+
+            LogModel.objects.create(
+                job_id=job,
+                customer_name=customer_name,
+                mobile=mobile,
+                template_name=unexpected_template_name,
+                sent_text_message="",
+                status="Failed",
+                message_type="Sent",
+                error_message=str(e)[:500],
+                sent_at=timezone.now(),
+            )
+
+        except Exception:
+            logger.exception(
+                f"❌ Could not save unexpected FAILED "
+                f"report for {mobile or 'Unknown'}"
+            )
+
+        return result
+
+# ============================================================
+# 🚀 SCHEDULER TASK - CREATE EXACTLY ONE SCHEDULED BATCH
 # ============================================================
 @shared_task(queue="batch_scheduler")
 def process_batch_scheduler(job_id):
     """
-    SCHEDULER TASK - Creates only ONE batch execution per run
+    Create exactly ONE BatchExecution for the current due schedule.
+
+    IMPORTANT BUSINESS RULE:
+    - CUSTOM SIZE = batch_size customers per scheduled occurrence.
+      Example: 10,000 customers + 1,000/day => 1,000 today, next 1,000
+      tomorrow, and so on until all 10,000 are completed.
+    - FULL = all customers in one batch for each scheduled occurrence.
+      Therefore FULL + Daily can repeat the complete customer list daily.
+    - Never start the next CUSTOM batch immediately after the previous one.
+      The next batch waits for next_run_time.
     """
-    logger.info(f"🚀 process_batch_scheduler STARTED for {job_id}")
+    logger.info(f"🚀 process_batch_scheduler STARTED: {job_id}")
+
+    if not acquire_job_lock(job_id):
+        logger.info(f"⏳ {job_id}: scheduler lock already held")
+        return None
 
     try:
-        job = BatchJob.objects.get(job_id=job_id)
-        logger.info(f"📊 Job found: {job.job_id}, status: {job.status}, schedule_type: {job.schedule_type}")
+        with transaction.atomic():
+            job = BatchJob.objects.select_for_update().get(job_id=job_id)
+            now = timezone.now()
+
+            if job.status in ["cancelled", "completed"]:
+                return None
+
+            # Never create two active executions for the same job.
+            if BatchExecution.objects.filter(
+                job=job,
+                status__in=["pending", "running"],
+            ).exists():
+                logger.info(f"⏭️ {job_id}: active execution already exists")
+                return None
+
+            # If a due time has not been established yet, establish the first
+            # schedule from the user's selected schedule_datetime.
+            if job.next_run_time is None:
+                if job.schedule_datetime and job.schedule_datetime > now:
+                    job.next_run_time = job.schedule_datetime
+                elif job.schedule_type == "one_time":
+                    job.next_run_time = job.schedule_datetime
+                else:
+                    job.next_run_time = calculate_next_run_time(job, now)
+                job.status = "scheduled"
+                job.save(update_fields=["next_run_time", "status"])
+
+            # This task is only allowed to create a batch when its schedule is due.
+            if job.next_run_time and job.next_run_time > now:
+                return None
+
+            total_customers = int(job.total_customers or 0)
+            if total_customers <= 0:
+                job.status = "completed"
+                job.next_run_time = None
+                job.completed_at = now
+                job.save(update_fields=["status", "next_run_time", "completed_at"])
+                return None
+
+            if job.batch_size_type == "full":
+                batch_size = total_customers
+            else:
+                batch_size = max(int(job.batch_size or 1), 1)
+
+            total_batches = max(
+                1,
+                (total_customers + batch_size - 1) // batch_size,
+            )
+
+            # One occurrence token covers all CUSTOM batches belonging to the
+            # same campaign run. For FULL, one execution is one occurrence.
+            occurrence_token = get_occurrence_token(job)
+
+            current_occurrence = BatchExecution.objects.filter(
+                job=job,
+                occurrence_token=occurrence_token,
+            )
+
+            completed_numbers = set(
+                current_occurrence.filter(status="completed")
+                .values_list("batch_number", flat=True)
+            )
+
+            next_batch = next(
+                (n for n in range(1, total_batches + 1) if n not in completed_numbers),
+                None,
+            )
+
+            # CUSTOM SIZE campaign is finished once all customer ranges have
+            # been delivered. It must NOT restart from customer #1.
+            if next_batch is None and job.batch_size_type != "full":
+                job.status = "completed"
+                job.next_run_time = None
+                job.completed_at = job.completed_at or now
+                job.completed_batches = total_batches
+                job.save(update_fields=[
+                    "status", "next_run_time", "completed_at", "completed_batches"
+                ])
+                logger.info(f"✅ {job_id}: all custom batches already completed")
+                return None
+
+            # FULL has exactly one batch per occurrence. If its old occurrence
+            # is complete, the next scheduled occurrence uses a new token.
+            if next_batch is None:
+                next_batch = 1
+                # This is only reachable if an old FULL execution used the same
+                # token. Move to the next occurrence before creating a new one.
+                job.total_runs = int(job.total_runs or 0) + 1
+                occurrence_token = get_occurrence_token(job)
+                completed_numbers = set()
+
+            start_row = (next_batch - 1) * batch_size
+            end_row = min(start_row + batch_size, total_customers)
+
+            job.status = "running"
+            job.started_at = now
+            job.total_batches = total_batches
+            job.current_batch = next_batch
+            job.completed_batches = len(completed_numbers)
+            job.save(update_fields=[
+                "status", "started_at", "total_batches",
+                "current_batch", "completed_batches", "total_runs"
+            ])
+
+            execution = BatchExecution.objects.create(
+                job=job,
+                occurrence_token=occurrence_token,
+                batch_number=next_batch,
+                start_row=start_row,
+                end_row=end_row,
+                total_customers=end_row - start_row,
+                status="pending",
+            )
+
+            queue_name = "messaging" if job.target_app == "messaging" else "messaging2"
+
+            logger.info(
+                f"📦 {job_id}: {job.batch_size_type.upper()} "
+                f"batch {next_batch}/{total_batches}, "
+                f"rows {start_row}:{end_row}, occurrence={occurrence_token}, "
+                f"scheduled={format_ist_12hr(job.next_run_time)}, queue={queue_name}"
+            )
+
+        # Publish only after the DB transaction commits.
+        try:
+            async_result = execute_batch.apply_async(
+                args=(job_id, execution.id),
+                queue=queue_name,
+                countdown=0,
+            )
+            BatchExecution.objects.filter(id=execution.id).update(
+                task_id=async_result.id
+            )
+        except Exception as dispatch_error:
+            logger.exception(
+                f"❌ Celery dispatch failed for job={job_id}, execution={execution.id}"
+            )
+            with transaction.atomic():
+                failed_execution = BatchExecution.objects.select_for_update().get(
+                    id=execution.id
+                )
+                failed_execution.status = "failed"
+                failed_execution.error_message = (
+                    f"Celery dispatch failed: {str(dispatch_error)[:450]}"
+                )
+                failed_execution.completed_at = timezone.now()
+                failed_execution.save(update_fields=[
+                    "status", "error_message", "completed_at"
+                ])
+
+                failed_job = BatchJob.objects.select_for_update().get(job_id=job_id)
+                if failed_job.status == "running":
+                    failed_job.status = "scheduled"
+                    failed_job.next_run_time = timezone.now() + timedelta(seconds=30)
+                    failed_job.save(update_fields=["status", "next_run_time"])
+            return None
+
+        return execution.id
+
     except BatchJob.DoesNotExist:
-        logger.error(f"❌ Job {job_id} not found")
-        return
-
-    # Skip if cancelled
-    if job.status == 'cancelled':
-        logger.info(f"ℹ️ Job {job_id} is cancelled, skipping")
-        return
-
-    # Skip if already running
-    if job.status == 'running':
-        logger.info(f"ℹ️ Job {job_id} is already running, skipping")
-        return
-
-    # Check for pending or running executions
-    pending_running = BatchExecution.objects.filter(
-        job=job,
-        status__in=['pending', 'running']
-    ).count()
-
-    if pending_running > 0:
-        logger.info(f"ℹ️ Job {job_id} has {pending_running} pending/running executions, skipping")
-        return
-
-    # ============================================================
-    # 📊 CALCULATE BATCH INFORMATION
-    # ============================================================
-
-    total_customers = job.total_customers
-
-    if total_customers == 0:
-        logger.warning(f"⚠️ Job {job_id} has 0 customers")
-        job.status = 'completed'
-        job.save(update_fields=['status'])
-        return
-
-    # Calculate batch size
-    if job.batch_size_type == 'full':
-        batch_size = total_customers
-        logger.info(f"📊 FULL BATCH: {batch_size} customers per run")
-    else:
-        batch_size = job.batch_size
-        logger.info(f"📊 CUSTOM BATCH: {batch_size} customers per run")
-
-    # Calculate total batches
-    total_batches = (total_customers + batch_size - 1) // batch_size if total_customers > 0 else 1
-    logger.info(f"📊 Total customers: {total_customers}, Batch size: {batch_size}, Total batches: {total_batches}")
-
-    # ============================================================
-    # 🔥 FIND THE NEXT BATCH TO PROCESS
-    # ============================================================
-
-    # Get all completed batch numbers
-    completed_batch_numbers = BatchExecution.objects.filter(
-        job=job,
-        status='completed'
-    ).values_list('batch_number', flat=True)
-
-    completed_batch_numbers = set(completed_batch_numbers)
-    logger.info(f"📊 Completed batches: {sorted(completed_batch_numbers)}")
-
-    # Find the next batch number (smallest missing number)
-    next_batch_number = None
-    for i in range(1, total_batches + 1):
-        if i not in completed_batch_numbers:
-            next_batch_number = i
-            break
-
-    # Check if all batches are completed
-    if next_batch_number is None:
-        logger.info(f"✅ ALL BATCHES COMPLETED for {job_id}")
-
-        # For FULL BATCH: Keep running (restart)
-        if job.batch_size_type == 'full':
-            logger.info(f"🔄 FULL BATCH: Restarting from batch 1 for next schedule")
-            BatchExecution.objects.filter(job=job).delete()
-            job.status = 'scheduled'
-            job.completed_batches = 0
-            job.sent_count = 0
-            job.failed_count = 0
-            job.skipped_count = 0
-            job.save(update_fields=['status', 'completed_batches', 'sent_count', 'failed_count', 'skipped_count'])
-            return process_batch_scheduler(job_id)
-
-        # For CUSTOM BATCH: Job is done
-        job.status = 'completed'
-        job.completed_at = timezone.now()
-        job.next_run_time = None
-        job.save(update_fields=['status', 'completed_at', 'next_run_time'])
-        logger.info(f"✅ ALL BATCHES COMPLETED for {job.job_id}")
-        return
-
-    logger.info(f"📊 Next batch to process: {next_batch_number}/{total_batches}")
-
-    # ============================================================
-    # 🚀 CREATE THE NEXT BATCH EXECUTION
-    # ============================================================
-
-    start_row = (next_batch_number - 1) * batch_size
-    end_row = min(start_row + batch_size, total_customers)
-
-    job.status = 'running'
-    job.started_at = timezone.now()
-    job.completed_batches = len(completed_batch_numbers)
-    job.save(update_fields=['status', 'started_at', 'completed_batches'])
-
-    logger.info(f"✅ Job {job_id} marked as running")
-    logger.info(f"📊 Creating batch {next_batch_number}: rows {start_row} to {end_row}")
-
-    execution = BatchExecution.objects.create(
-        job=job,
-        batch_number=next_batch_number,
-        start_row=start_row,
-        end_row=end_row,
-        total_customers=end_row - start_row,
-        status='pending'
-    )
-    logger.info(f"✅ Created execution {execution.id} for batch {next_batch_number}")
-
-    job.total_batches = total_batches
-    job.save(update_fields=['total_batches'])
-
-    queue_name = 'messaging' if job.target_app == 'messaging' else 'messaging2'
-    logger.info(f"📊 Using queue: {queue_name}")
-
-    execute_batch.apply_async(
-        args=(job_id, execution.id),
-        queue=queue_name
-    )
-    logger.info(f"✅ Dispatched batch {next_batch_number} to {queue_name} queue")
-
-    return 1
+        logger.warning(f"⚠️ Job {job_id} not found")
+        return None
+    except Exception as e:
+        logger.exception(f"❌ Scheduler failed for {job_id}: {e}")
+        return None
+    finally:
+        release_job_lock(job_id)
 
 
 # ============================================================
-# 🚀 BATCH EXECUTION TASK - One task per batch (WITH API CHECK & SEIZE DATE)
+# 🚀 BATCH EXECUTION TASK - PARALLEL PROCESSING
 # ============================================================
-@shared_task(bind=True, queue="batch_app", max_retries=2)
+@shared_task(bind=True, queue="batch_app")
 def execute_batch(self, job_id, execution_id):
     """
-    EXECUTION TASK - Does the actual message sending for ONE batch
-    ✅ FIXED: Dynamic API check using app's utility functions
-    ✅ SKIPS PAID customers
-    ✅ SKIPS SEIZED vehicles
-    ✅ APPLIES 0.2 tolerance
-    ✅ OVERRIDES Excel amount with real-time amount
+    Execute exactly one BatchExecution.
+
+    - Per-execution Redis lock prevents duplicate task delivery.
+    - Redis heartbeat proves the worker is alive even for 100k-customer jobs.
+    - Customer claims are occurrence-based, so crash/retry cannot resend.
+    - Every customer is processed independently; one customer failure does
+      not stop the whole batch.
     """
     close_old_connections()
+    heartbeat_stop = None
+    heartbeat_thread = None
+
+    execution_lock_key = f"batch_execution_lock:{execution_id}"
+    acquired_execution_lock = False
 
     try:
-        execution = BatchExecution.objects.get(id=execution_id)
+        if not cache.add(execution_lock_key, "1", JOB_LOCK_TIMEOUT):
+            logger.info(
+                f"⏭️ Execution {execution_id} already running/claimed"
+            )
+            return
+        acquired_execution_lock = True
+    except Exception as e:
+        logger.error(
+            f"❌ Execution lock unavailable for {execution_id}: {e}"
+        )
+        return
+
+    try:
+        execution = (
+            BatchExecution.objects.select_related("job")
+            .get(id=execution_id)
+        )
         job = execution.job
-    except (BatchExecution.DoesNotExist, BatchJob.DoesNotExist) as e:
-        logger.error(f"❌ Execution {execution_id} or Job {job_id} not found: {e}")
-        return
 
-    if job.status == 'cancelled':
-        execution.status = 'cancelled'
-        execution.save(update_fields=['status'])
-        logger.info(f"⛔ Job {job_id} cancelled, skipping execution {execution_id}")
-        return
+        if job.status == "cancelled":
+            execution.status = "cancelled"
+            execution.completed_at = timezone.now()
+            execution.save(update_fields=["status", "completed_at"])
+            return
 
-    if execution.status in ['completed', 'running']:
-        logger.info(f"ℹ️ Execution {execution_id} already {execution.status}, skipping")
-        return
+        if execution.status == "completed":
+            logger.info(f"⏭️ Execution {execution_id} already completed")
+            return
 
-    execution.status = 'running'
-    execution.started_at = timezone.now()
-    execution.save(update_fields=['status', 'started_at'])
+        execution.status = "running"
+        execution.started_at = execution.started_at or timezone.now()
+        execution.save(update_fields=["status", "started_at"])
 
-    logger.info(f"🚀 Starting batch {execution.batch_number} for job {job_id}")
+        set_execution_heartbeat(execution_id)
 
-    try:
-        # ============================================================
-        # 1. GET BATCH OF CUSTOMERS FROM S3
-        # ============================================================
+        logger.info(
+            f"🚀 Starting job={job.job_id}, "
+            f"batch={execution.batch_number}, execution={execution_id}, "
+            f"occurrence={get_occurrence_token(job)}"
+        )
+
         batch_customers, batch_count = job.get_batch_from_s3(execution.start_row)
 
         if not batch_customers or batch_count == 0:
-            execution.status = 'completed'
+            execution.status = "completed"
             execution.completed_at = timezone.now()
-            execution.save(update_fields=['status', 'completed_at'])
-
-            job.status = 'scheduled'
-            job.save(update_fields=['status'])
-
-            logger.info(f"✅ Batch {execution.batch_number}: No customers, completed")
+            execution.sent_count = 0
+            execution.failed_count = 0
+            execution.skipped_count = 0
+            execution.save(
+                update_fields=[
+                    "status", "completed_at",
+                    "sent_count", "failed_count", "skipped_count",
+                ]
+            )
+            _finish_or_schedule_job(job)
+            logger.info(f"✅ Batch {execution.batch_number}: No customers")
             return
 
-        # ============================================================
-        # 2. GET APP INFO AND CREDENTIALS
-        # ============================================================
         app = get_app_by_name(job.target_app)
         if not app:
-            raise Exception(f"App {job.target_app} not found")
+            raise RuntimeError(f"App {job.target_app} not found")
 
         LogModel = get_app_log_model(job.target_app)
         ContactModel = get_app_contact_model(job.target_app)
-
         if not LogModel:
-            raise Exception(f"No log model found for app {job.target_app}")
+            raise RuntimeError(f"No log model found for {job.target_app}")
 
-        creds = app.get('credentials', {})
-        if not creds or 'access_token' not in creds or 'phone_number_id' not in creds:
-            raise Exception(f"No credentials found for app {job.target_app}")
+        creds = app.get("credentials", {})
+        if (
+            not creds
+            or "access_token" not in creds
+            or "phone_number_id" not in creds
+        ):
+            raise RuntimeError(f"No credentials found for {job.target_app}")
 
         build_payload = get_build_payload_function(job.target_app)
         if not build_payload:
-            raise Exception(f"No build_payload function found for app {job.target_app}")
+            raise RuntimeError(
+                f"No build_payload function for {job.target_app}"
+            )
 
-        # ============================================================
-        # 🔥 GET APP FUNCTIONS FOR API CHECK
-        # ============================================================
-        needs_api_check_func = get_app_needs_api_check_function(job.target_app)
+        needs_api_check_func = get_app_needs_api_check_function(
+            job.target_app
+        )
         schedule_func = get_app_schedule_function(job.target_app)
         seize_check_func = get_app_seize_check_function(job.target_app)
 
-        # ============================================================
-        # 3. SEND MESSAGES VIA WHATSAPP API
-        # ============================================================
-        url = f"https://graph.facebook.com/v22.0/{creds['phone_number_id']}/messages"
+        url = (
+            f"https://graph.facebook.com/v22.0/"
+            f"{creds['phone_number_id']}/messages"
+        )
         headers = {
             "Authorization": f"Bearer {creds['access_token']}",
             "Content-Type": "application/json",
         }
 
-        sent = 0
-        failed = 0
-        skipped = 0
-        seized_count = 0
+        total_customers = len(batch_customers)
+        sent = failed = skipped = 0
+        start_time = time.monotonic()
 
-        logger.info(f"📦 Batch {execution.batch_number}: Processing {batch_count} customers")
+        # Keep liveness independent of customer completion.
+        heartbeat_stop = threading.Event()
 
-        for idx, row in enumerate(batch_customers):
-            try:
-                mobile = format_mobile(row.get('CustMobile') or row.get('cust_mobile') or '')
-                customer_name = row.get('CustomerName') or row.get('customer_name') or ''
-                loan_number = row.get('loan_number') or row.get('LoanNumber') or row.get('agreement_no') or row.get('AgreementNo')
-                excel_amount = row.get('due_amount') or row.get('DueAmount') or '0'
-                vehicle_number = row.get('vehicle_number') or row.get('VehicleNumber') or row.get('VehicleNo') or row.get('vehicle_no') or ''  # ✅ NEW
-                actual_template_id = job.template_id
-                if not mobile:
-                    failed += 1
-                    continue
+        def _heartbeat_loop():
+            while not heartbeat_stop.wait(30):
+                set_execution_heartbeat(execution_id)
 
-                # ============================================================
-                # 🔍 SEIZE DATE CHECK - Skip seized vehicles (BEFORE API check)
-                # ============================================================
-                
-                if seize_check_func:
-                    try:
-                        seize_result = seize_check_func(mobile, loan_number)
-                        seize_date = seize_result.get('seize_date')
+        heartbeat_thread = threading.Thread(
+            target=_heartbeat_loop,
+            name=f"batch-heartbeat-{execution_id}",
+            daemon=True,
+        )
+        set_execution_heartbeat(execution_id)
+        heartbeat_thread.start()
 
-                        if seize_date:
-                            logger.info(f"⛔ {mobile} - Vehicle seized on {seize_date}, skipping")
-                            seized_count += 1
+        iterator = iter(batch_customers)
+        pending = {}
 
-                            LogModel.objects.create(
-                                job_id=job,
-                                customer_name=customer_name,
-                                mobile=mobile,
-                                template_name=job.template_name,
-                                sent_text_message=f"SEIZED - Vehicle seized on {seize_date}",
-                                status='SEIZED',
-                                message_type='Skipped',
-                                error_message=f"Vehicle seized on {seize_date}",
-                            )
-                            continue
-                    except Exception as e:
-                        logger.warning(f"⚠️ SeizeDate check failed for {mobile}: {e}")
-                        # Continue with normal flow
+        with ThreadPoolExecutor(
+            max_workers=MAX_WORKERS,
+            thread_name_prefix=f"batch-{execution_id}",
+        ) as executor:
+            # Keep a bounded number of futures in memory.
+            for _ in range(min(MAX_WORKERS, total_customers)):
+                try:
+                    row = next(iterator)
+                except StopIteration:
+                    break
 
-                # ============================================================
-                # 🔍 API CHECK - Using app's utility functions
-                # ============================================================
-                real_time_due = None
-                is_paid = False
-                emi_due_count = 0
-                should_skip = False
+                future = executor.submit(
+                    process_single_customer,
+                    row, job, execution_id, LogModel, ContactModel,
+                    url, headers, build_payload, needs_api_check_func,
+                    schedule_func, seize_check_func,
+                )
+                pending[future] = True
 
-                # ✅ Check if template needs API check
-                needs_check = False
-                if needs_api_check_func:
-                    try:
-                        needs_check = needs_api_check_func(job.template_id)
-                    except Exception as e:
-                        logger.warning(f"⚠️ Error checking needs_api_check: {e}")
+            completed_count = 0
 
-                logger.info(f"📋 Template {job.template_id} - API Check: {'YES' if needs_check else 'NO'}")
-
-                if needs_check and schedule_func:
-                    try:
-                        # ✅ Call with include_upcoming=True for bucket templates
-                        # For bucket templates (44-47 in messaging, 52-59 in messaging2)
-                        # we want to INCLUDE current month
-                        schedule_data = schedule_func(mobile, loan_number, include_upcoming=True)
-
-                        real_time_due = schedule_data.get('total_due', 0)
-                        is_paid = schedule_data.get('is_paid', False)
-                        emi_due_count = schedule_data.get('emi_due_count', 0)
-
-                        logger.info(f"📊 EMI Due Count: {emi_due_count}")
-                        logger.info(f"📊 Total Due: ₹{real_time_due}")
-                        logger.info(f"📊 Is Paid: {is_paid}")
-
-                        # ============================================================
-                        # 🎯 DETERMINE ACTUAL TEMPLATE FOR THIS CUSTOMER
-                        # ============================================================
-
-                        actual_template_id = get_dynamic_template_id(
-                            job.target_app,
-                            job.template_id,
-                            emi_due_count,
-                        )
-
-                        logger.info(
-                            f"🎯 {mobile} | "
-                            f"App={job.target_app} | "
-                            f"Job Template={job.template_id} | "
-                            f"EMI Count={emi_due_count} | "
-                            f"Actual Template={actual_template_id} | "
-                            f"Excel Due=₹{excel_amount} | "
-
-                            f"Current Due=₹{real_time_due}"
-                        )
-
-
-                        # Skip if no applicable bucket
-                        if actual_template_id is None:
-                            logger.info(f"⏭️ {mobile} - Skipping (EMI count {emi_due_count} < 0.2)")
-                            skipped += 1
-
-                            LogModel.objects.create(
-                                job_id=job,
-                                customer_name=customer_name,
-                                mobile=mobile,
-                                template_name=job.template_name,
-                                sent_text_message=f"SKIPPED - EMI Due Count: {emi_due_count}",
-                                status="SKIPPED",
-                                message_type="Skipped",
-                                error_message=f"No applicable bucket. EMI Due Count={emi_due_count}",
-                            )
-                            continue
-
-                        # ✅ Step 1: Apply 0.2 tolerance
-                        if emi_due_count < 0.2:
-                            logger.info(f"✅ {mobile} - Skipping (only {emi_due_count} EMI overdue)")
-                            should_skip = True
-                            skipped += 1
-
-                            LogModel.objects.create(
-                                job_id=job,
-                                customer_name=customer_name,
-                                mobile=mobile,
-                                template_name=job.template_name,
-                                sent_text_message=f"SKIPPED - Only {emi_due_count} EMI overdue",
-                                status='SKIPPED',
-                                message_type='Skipped',
-                                error_message=f"Only {emi_due_count} EMI overdue - skipped",
-                            )
-                            continue
-
-                        # ✅ Step 2: Check if PAID
-                        if is_paid:
-                            logger.info(f"✅ {mobile} - PAID (₹{real_time_due}), skipping")
-                            should_skip = True
-                            skipped += 1
-
-                            LogModel.objects.create(
-                                job_id=job,
-                                customer_name=customer_name,
-                                mobile=mobile,
-                                template_name=job.template_name,
-                                sent_text_message=f"PAID - No message sent (Total Due: ₹{real_time_due})",
-                                status='PAID',
-                                message_type='Skipped',
-                                error_message=f"Customer is PAID (Excel: ₹{excel_amount} | Actual: ₹{real_time_due})",
-                            )
-                            continue
-
-                        # ✅ Step 3: Override Excel amount with real-time amount
-                        if real_time_due is not None and real_time_due > 0:
-                            row['due_amount'] = str(real_time_due)
-                            logger.info(f"🔄 {mobile} - UNPAID (Excel: ₹{excel_amount} → Actual: ₹{real_time_due})")
-
-                            # Update customer name if available
-                            # if schedule_data.get('customer_name'):
-                            #     row['customer_name'] = schedule_data.get('customer_name')
-
-                    except Exception as api_error:
-                        logger.warning(f"⚠️ API Error for {mobile}: {api_error} - Using Excel data")
-                        # Continue with Excel data
-
-                if should_skip:
-                    continue
-
-                # ============================================================
-                # 📤 SEND MESSAGE (With updated real-time amount)
-                # ============================================================
-                payload, rendered_text = build_payload(actual_template_id, row, None)
-                payload['to'] = mobile
-
-                resp = requests.post(url, headers=headers, json=payload, timeout=30)
-
-                if resp.ok:
-                    msg_id = resp.json()['messages'][0]['id']
-                    sent += 1
-
-                    # Log with real-time amount if available
-                    log_text = rendered_text
-                    if real_time_due:
-                        log_text = f"{rendered_text}\n\n📊 Excel: ₹{excel_amount} | Actual: ₹{real_time_due}"
-
-                    # Get actual template name for logging
-                    from .app_discovery import get_template_name_for_id
-                    actual_template_name = get_template_name_for_id(job.target_app, actual_template_id)
-
-                    LogModel.objects.create(
-                        job_id=job,
-                        customer_name=customer_name,
-                        mobile=mobile,
-                        template_name=actual_template_name or str(actual_template_id),  # ✅ NEW - Log actual template
-                        sent_text_message=log_text or f"📨 Batch: {job.template_name}",
-                        status="Sent",
-                        message_id=msg_id,
-                        message_type="Sent",
-                        content_type="text",
-                        error_message=(
-                            f"Job Template: {job.template_id} | "
-                                f"Actual Template: {actual_template_id} | "
-                                f"EMI Count: {emi_due_count} | "
-                                f"Excel Due: ₹{excel_amount} | "  # ✅ NEW
-                                f"API Due: ₹{real_time_due} | "   # ✅ NEW
-                                f"Loan: {loan_number} | "         # ✅ NEW
-                                f"Vehicle: {vehicle_number}"
-                                                    ),
-                                                )
-
-                    if ContactModel:
-                        ContactModel.objects.update_or_create(
-                            mobile=mobile,
-                            defaults={
-                                "last_msg": log_text or f"📨 Batch: {job.template_name}",
-                                "last_time": timezone.now(),
-                                "last_type": "Sent",
-                                "last_status": "Sent",
-                                "unread": 0
-                            }
-                        )
-
-                    logger.info(f"✅ [{job.target_app}] Sent to {mobile} - Amount: ₹{row.get('due_amount', 0)}")
-                    print(f"===================================================================")
-                else:
-                    failed += 1
-                    error_msg = resp.text[:500]
-
-                    LogModel.objects.create(
-                        job_id=job,
-                        customer_name=customer_name,
-                        mobile=mobile,
-                        template_name=job.template_name,
-                        sent_text_message="",
-                        status="Failed",
-                        message_type="Sent",
-                        error_message=error_msg,
-                    )
-                    logger.error(f"❌ [{job.target_app}] Failed to send to {mobile}")
-
-            except Exception as e:
-                failed += 1
-                error_msg = str(e)
-                logger.error(f"❌ Error for {mobile if 'mobile' in locals() else 'Unknown'}: {error_msg}")
+            while pending:
+                done = next(as_completed(list(pending)))
+                pending.pop(done, None)
 
                 try:
-                    LogModel.objects.create(
-                        job_id=job,
-                        customer_name=customer_name if 'customer_name' in locals() else '',
-                        mobile=mobile if 'mobile' in locals() else '',
-                        template_name=job.template_name,
-                        sent_text_message="",
-                        status="Failed",
-                        message_type="Sent",
-                        error_message=error_msg[:500],
+                    result = done.result()
+                    sent += result.get("sent", 0)
+                    failed += result.get("failed", 0)
+                    skipped += result.get("skipped", 0)
+                except Exception as e:
+                    failed += 1
+                    logger.error(
+                        f"❌ Customer worker error in execution "
+                        f"{execution_id}: {e}"
                     )
-                except Exception as log_error:
-                    logger.error(f"❌ Failed to create log: {log_error}")
+                    logger.error(traceback.format_exc())
 
-        # ============================================================
-        # 4. UPDATE EXECUTION STATISTICS
-        # ============================================================
+                completed_count += 1
+
+                try:
+                    row = next(iterator)
+                    future = executor.submit(
+                        process_single_customer,
+                        row, job, execution_id, LogModel, ContactModel,
+                        url, headers, build_payload, needs_api_check_func,
+                        schedule_func, seize_check_func,
+                    )
+                    pending[future] = True
+                except StopIteration:
+                    pass
+
+                if (
+                    completed_count % HEARTBEAT_INTERVAL == 0
+                    or completed_count == total_customers
+                ):
+                    execution.sent_count = sent
+                    execution.failed_count = failed
+                    execution.skipped_count = skipped
+                    execution.save(
+                        update_fields=[
+                            "sent_count",
+                            "failed_count",
+                            "skipped_count",
+                        ]
+                    )
+                    set_execution_heartbeat(execution_id)
+
+                    self.update_state(
+                        state="PROGRESS",
+                        meta={
+                            "current": completed_count,
+                            "total": total_customers,
+                            "sent": sent,
+                            "failed": failed,
+                            "skipped": skipped,
+                            "elapsed": int(time.monotonic() - start_time),
+                        },
+                    )
+
+        if heartbeat_stop is not None:
+            heartbeat_stop.set()
+        if heartbeat_thread is not None:
+            heartbeat_thread.join(timeout=2)
+
+        # Final stats are authoritative.
         execution.sent_count = sent
         execution.failed_count = failed
-        execution.skipped_count = skipped + seized_count
-        execution.status = 'completed'
+        execution.skipped_count = skipped
+        execution.status = "completed"
         execution.completed_at = timezone.now()
-        execution.save(update_fields=['sent_count', 'failed_count', 'skipped_count', 'status', 'completed_at'])
-
-        logger.info(f"✅ Batch {execution.batch_number} completed: Sent={sent}, Skipped={skipped + seized_count}, Seized={seized_count}, Failed={failed}")
-
-        # ============================================================
-        # 5. UPDATE JOB PROGRESS
-        # ============================================================
-        completed_batches = BatchExecution.objects.filter(job=job, status='completed').count()
-
-        aggregate_stats = BatchExecution.objects.filter(job=job).aggregate(
-            total_sent=Sum('sent_count'),
-            total_failed=Sum('failed_count'),
-            total_skipped=Sum('skipped_count')
+        execution.save(
+            update_fields=[
+                "sent_count",
+                "failed_count",
+                "skipped_count",
+                "status",
+                "completed_at",
+            ]
         )
 
-        job.total_runs += 1
-        job.completed_batches = completed_batches
-        job.sent_count = aggregate_stats['total_sent'] or 0
-        job.failed_count = aggregate_stats['total_failed'] or 0
-        job.skipped_count = aggregate_stats['total_skipped'] or 0
+        logger.info(
+            f"✅ Batch {execution.batch_number} completed: "
+            f"Sent={sent}, Skipped={skipped}, Failed={failed}"
+        )
 
-        # ============================================================
-        # 6. CHECK IF ALL BATCHES ARE COMPLETED
-        # ============================================================
-        if job.batch_size_type == 'full':
-            total_batches = 1
-        else:
-            total_batches = (job.total_customers + job.batch_size - 1) // job.batch_size
+        # If scheduling the next occurrence fails, _finish_or_schedule_job
+        # itself repairs the job state so it cannot remain 'running' forever.
+        _finish_or_schedule_job(job)
 
-        existing_executions = BatchExecution.objects.filter(job=job).count()
-        total_batches = max(total_batches, existing_executions)
-
-        logger.info(f"📊 Total batches: {total_batches}, Completed: {completed_batches}, Total Runs: {job.total_runs}")
-
-        if completed_batches >= total_batches:
-            job.completed_at = timezone.now()
-
-            if job.schedule_type in ['daily', 'weekly', 'custom_interval', 'multiple_daily']:
-                if job.batch_size_type == 'full':
-                    logger.info(f"🔄 FULL BATCH: Completed run #{job.total_runs}, scheduling next run")
-
-                    if job.schedule_type == 'daily':
-                        next_run = job.schedule_datetime + timedelta(days=1)
-                    elif job.schedule_type == 'weekly':
-                        next_run = job.schedule_datetime + timedelta(days=7)
-                    elif job.schedule_type == 'custom_interval':
-                        next_run = job.schedule_datetime + timedelta(days=job.interval_days or 1)
-                    else:
-                        next_run = job.schedule_datetime + timedelta(days=1)
-
-                    job.status = 'scheduled'
-                    job.next_run_time = next_run
-                    job.save(update_fields=[
-                        'completed_batches', 'sent_count', 'failed_count',
-                        'skipped_count', 'status', 'completed_at', 'next_run_time', 'total_runs'
-                    ])
-
-                    BatchExecution.objects.filter(job=job).delete()
-                    job.completed_batches = 0
-                    job.save(update_fields=['completed_batches'])
-
-                    schedule_batch_job.delay(job.job_id)
-                    logger.info(f"📅 Next run #{job.total_runs + 1} scheduled for {next_run}")
-                    return
-                else:
-                    if job.end_date and timezone.now() >= job.end_date:
-                        job.status = 'completed'
-                        job.next_run_time = None
-                        job.save(update_fields=['completed_batches', 'sent_count', 'failed_count',
-                                               'skipped_count', 'status', 'completed_at', 'next_run_time', 'total_runs'])
-                        logger.info(f"✅ Job ended (end_date reached) after {job.total_runs} runs")
-                    else:
-                        logger.info(f"🔄 CUSTOM BATCH: Resetting for next schedule")
-
-                        BatchExecution.objects.filter(job=job).delete()
-
-                        job.status = 'scheduled'
-                        job.completed_batches = 0
-                        job.sent_count = 0
-                        job.failed_count = 0
-                        job.skipped_count = 0
-
-                        if job.schedule_type == 'daily':
-                            next_run = job.schedule_datetime + timedelta(days=1)
-                        elif job.schedule_type == 'weekly':
-                            next_run = job.schedule_datetime + timedelta(days=7)
-                        elif job.schedule_type == 'custom_interval':
-                            next_run = job.schedule_datetime + timedelta(days=job.interval_days or 1)
-                        else:
-                            next_run = job.schedule_datetime + timedelta(days=1)
-
-                        job.next_run_time = next_run
-                        job.save(update_fields=['completed_batches', 'sent_count', 'failed_count',
-                                               'skipped_count', 'status', 'completed_at', 'next_run_time', 'total_runs'])
-
-                        schedule_batch_job.delay(job.job_id)
-                        logger.info(f"📅 Next run #{job.total_runs + 1} scheduled for {next_run}")
-                    return
-            else:
-                job.status = 'completed'
-                job.next_run_time = None
-                job.save(update_fields=['completed_batches', 'sent_count', 'failed_count',
-                                       'skipped_count', 'status', 'completed_at', 'next_run_time', 'total_runs'])
-                logger.info(f"✅ ALL BATCHES COMPLETED for {job.job_id} after {job.total_runs} runs")
-        else:
-            job.status = 'scheduled'
-
-            if job.schedule_type == 'daily':
-                now = timezone.now()
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=1)
-                job.next_run_time = next_run
-            elif job.schedule_type == 'weekly':
-                now = timezone.now()
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=7)
-                job.next_run_time = next_run
-            elif job.schedule_type == 'custom_interval':
-                now = timezone.now()
-                interval = job.interval_days or 1
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=interval)
-                job.next_run_time = next_run
-            elif job.schedule_type == 'multiple_daily':
-                pass
-
-            job.save(update_fields=['completed_batches', 'sent_count', 'failed_count',
-                                   'skipped_count', 'status', 'next_run_time', 'total_runs'])
-
-            logger.info(f"📊 Progress: {completed_batches}/{total_batches} batches completed")
-            logger.info(f"📊 Run #{job.total_runs} stats - Sent: {job.sent_count}, Skipped: {job.skipped_count}, Failed: {job.failed_count}")
+    except BatchExecution.DoesNotExist:
+        logger.error(f"❌ Execution {execution_id} not found")
+        return
 
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"❌ Batch {execution.batch_number} failed: {error_msg}")
+        error_msg = str(e)[:500]
+        logger.error(
+            f"❌ Batch execution failed job={job_id}, "
+            f"execution={execution_id}: {error_msg}"
+        )
         logger.error(traceback.format_exc())
 
-        execution.status = 'failed'
-        execution.error_message = error_msg[:500]
-        execution.save(update_fields=['status', 'error_message'])
-
         try:
-            job.status = 'scheduled'
-            job.save(update_fields=['status'])
-        except Exception as save_error:
-            logger.error(f"❌ Failed to update job status: {save_error}")
+            execution.status = "failed"
+            execution.error_message = error_msg
+            execution.completed_at = timezone.now()
+            execution.save(
+                update_fields=[
+                    "status", "error_message", "completed_at"
+                ]
+            )
 
+            # Make the job immediately eligible for scheduler recovery.
+            job.status = "scheduled"
+            job.next_run_time = timezone.now()
+            job.save(update_fields=["status", "next_run_time"])
+
+        except Exception:
+            logger.exception("Failed saving failed execution")
+
+    finally:
+        if heartbeat_stop is not None:
+            heartbeat_stop.set()
+        if heartbeat_thread is not None and heartbeat_thread.is_alive():
+            heartbeat_thread.join(timeout=2)
+        clear_execution_heartbeat(execution_id)
+        if acquired_execution_lock:
+            try:
+                cache.delete(execution_lock_key)
+            except Exception:
+                pass
+        close_old_connections()
+
+
+# ============================================================
+# 🔄 FINISH CURRENT BATCH / SCHEDULE NEXT
+# ============================================================
+def _finish_or_schedule_job(job):
+    """
+    Finalize one batch and schedule the next batch according to the UI rule.
+
+    CUSTOM SIZE:
+        10K customers + 1K + Daily
+        Day 1 -> rows 0:1000
+        Day 2 -> rows 1000:2000
+        ...
+        Final day -> rows 9000:10000 -> job COMPLETED
+
+        The next batch NEVER starts immediately.
+
+    FULL:
+        All customers are one batch. If the schedule is recurring, the next
+        complete run is scheduled according to daily/weekly/monthly/etc.
+    """
+    job_id = job.job_id
+
+    try:
+        with transaction.atomic():
+            locked_job = BatchJob.objects.select_for_update().get(job_id=job_id)
+            now = timezone.now()
+            occurrence_token = get_occurrence_token(locked_job)
+
+            occurrence_qs = BatchExecution.objects.filter(
+                job=locked_job,
+                occurrence_token=occurrence_token,
+            )
+
+            if locked_job.batch_size_type == "full":
+                total_batches = 1
+            else:
+                batch_size = max(int(locked_job.batch_size or 1), 1)
+                total_batches = max(
+                    1,
+                    (int(locked_job.total_customers or 0) + batch_size - 1)
+                    // batch_size,
+                )
+
+            completed_batches = occurrence_qs.filter(status="completed").count()
+            stats = occurrence_qs.aggregate(
+                total_sent=Sum("sent_count"),
+                total_failed=Sum("failed_count"),
+                total_skipped=Sum("skipped_count"),
+            )
+
+            occurrence_sent = stats["total_sent"] or 0
+            occurrence_failed = stats["total_failed"] or 0
+            occurrence_skipped = stats["total_skipped"] or 0
+
+            locked_job.completed_batches = completed_batches
+            locked_job.current_batch = min(completed_batches + 1, total_batches)
+
+            # ========================================================
+            # CUSTOM SIZE: MORE RANGES REMAIN
+            # ========================================================
+            if locked_job.batch_size_type != "full" and completed_batches < total_batches:
+                # IMPORTANT: wait for the next scheduled occurrence.
+                next_run = calculate_next_run_time(locked_job, now)
+                if not next_run:
+                    next_run = now + timedelta(days=1)
+
+                locked_job.status = "scheduled"
+                locked_job.next_run_time = next_run
+
+                # For CUSTOM campaigns these are campaign totals, so keep them.
+                all_stats = BatchExecution.objects.filter(job=locked_job).aggregate(
+                    total_sent=Sum("sent_count"),
+                    total_failed=Sum("failed_count"),
+                    total_skipped=Sum("skipped_count"),
+                )
+                locked_job.sent_count = all_stats["total_sent"] or 0
+                locked_job.failed_count = all_stats["total_failed"] or 0
+                locked_job.skipped_count = all_stats["total_skipped"] or 0
+
+                locked_job.save(update_fields=[
+                    "completed_batches", "current_batch", "sent_count",
+                    "failed_count", "skipped_count", "status", "next_run_time"
+                ])
+
+                logger.info(
+                    f"📅 {job_id}: batch {completed_batches}/{total_batches} complete. "
+                    f"NEXT batch will wait until {format_ist_12hr(next_run)}"
+                )
+                return
+
+            # ========================================================
+            # FULL: ONE BATCH COMPLETES ONE SCHEDULED OCCURRENCE
+            # ========================================================
+            locked_job.total_runs = int(locked_job.total_runs or 0) + 1
+            locked_job.completed_at = now
+            locked_job.completed_batches = total_batches
+            locked_job.current_batch = total_batches
+            locked_job.sent_count = occurrence_sent
+            locked_job.failed_count = occurrence_failed
+            locked_job.skipped_count = occurrence_skipped
+
+            if locked_job.end_date and now >= locked_job.end_date:
+                locked_job.status = "completed"
+                locked_job.next_run_time = None
+                locked_job.save(update_fields=[
+                    "total_runs", "completed_at", "completed_batches", "current_batch",
+                    "sent_count", "failed_count", "skipped_count",
+                    "status", "next_run_time"
+                ])
+                logger.info(f"✅ {job_id}: end_date reached")
+                return
+
+            # CUSTOM SIZE reaching the final range is a completed campaign.
+            if locked_job.batch_size_type != "full":
+                locked_job.status = "completed"
+                locked_job.next_run_time = None
+                locked_job.save(update_fields=[
+                    "total_runs", "completed_at", "completed_batches", "current_batch",
+                    "sent_count", "failed_count", "skipped_count",
+                    "status", "next_run_time"
+                ])
+                logger.info(
+                    f"✅ {job_id}: ALL {locked_job.total_customers} customers completed "
+                    f"in {total_batches} scheduled batches"
+                )
+                return
+
+            # FULL recurring run: next occurrence uses the incremented token.
+            next_run = calculate_next_run_time(locked_job, now)
+            if not next_run:
+                locked_job.status = "completed"
+                locked_job.next_run_time = None
+                locked_job.save(update_fields=[
+                    "total_runs", "completed_at", "completed_batches", "current_batch",
+                    "sent_count", "failed_count", "skipped_count",
+                    "status", "next_run_time"
+                ])
+                return
+
+            locked_job.status = "scheduled"
+            locked_job.next_run_time = next_run
+            locked_job.completed_batches = 0
+            locked_job.current_batch = 0
+            # Reset visible counts for the NEXT FULL occurrence.
+            locked_job.sent_count = 0
+            locked_job.failed_count = 0
+            locked_job.skipped_count = 0
+
+            locked_job.save(update_fields=[
+                "total_runs", "completed_at", "completed_batches", "current_batch",
+                "sent_count", "failed_count", "skipped_count",
+                "status", "next_run_time"
+            ])
+
+            logger.info(
+                f"📅 {job_id}: FULL occurrence #{locked_job.total_runs} complete; "
+                f"next full run={format_ist_12hr(next_run)}"
+            )
+
+    except Exception as e:
+        logger.exception(f"❌ Finish/schedule failed for {job_id}: {e}")
+        # Do not leave the job permanently running. A retryable scheduler pass
+        # will recover the failed batch without changing the customer range.
         try:
-            self.retry(exc=e, countdown=60, max_retries=3)
-        except Exception as retry_error:
-            logger.error(f"❌ Failed to retry batch: {retry_error}")
-
-# ============================================================
-# LEGACY: process_batch_job - Kept for compatibility
-# ============================================================
-@shared_task(bind=True, queue="batch_app", max_retries=2)
-def process_batch_job(self, job_id):
-    """
-    ⚠️ LEGACY TASK - DEPRECATED
-    Use process_batch_scheduler + execute_batch instead
-    """
-    logger.warning(f"⚠️ process_batch_job is deprecated. Use process_batch_scheduler + execute_batch instead.")
-    return process_batch_scheduler(job_id)
+            BatchJob.objects.filter(
+                job_id=job_id,
+                status="running",
+            ).update(
+                status="scheduled",
+                next_run_time=timezone.now() + timedelta(seconds=30),
+                error_message=f"Finish/schedule error: {str(e)[:450]}",
+            )
+        except Exception:
+            logger.exception(f"❌ Could not repair job state for {job_id}")
 
 
 # ============================================================
-# 🔄 CHECK PENDING BATCH JOBS
+# 🔄 CHECK DUE JOBS - SINGLE SOURCE OF TRUTH
 # ============================================================
 @shared_task(queue="batch_scheduler")
 def check_pending_batch_jobs():
     """
-    Check for pending scheduled jobs and process them
+    Run from Celery Beat every 10 seconds.
+    This is the ONLY periodic dispatcher.
     """
-    from django.utils import timezone
-
     now = timezone.now()
-
+    
     jobs = BatchJob.objects.filter(
         status="scheduled",
-        next_run_time__lte=now
-    ).exclude(
-        status__in=['running', 'completed', 'cancelled']
-    )
+        next_run_time__lte=now,
+    ).order_by("next_run_time")
+    
+    due_count = jobs.count()
+    logger.info(f"🔍 Scheduler: {due_count} due jobs at {format_ist_12hr(now)}")
+    
+    for job in jobs.iterator(chunk_size=100):
+        try:
+            # Check end date
+            if job.end_date and now >= job.end_date:
+                BatchJob.objects.filter(
+                    job_id=job.job_id,
+                    status="scheduled"
+                ).update(
+                    status="completed",
+                    next_run_time=None,
+                )
+                logger.info(f"⏹️ {job.job_id}: end_date reached")
+                continue
+            
+            # Fast duplicate checks
+            if is_job_locked(job.job_id):
+                continue
+            
+            if BatchExecution.objects.filter(
+                job=job,
+                status__in=["pending", "running"],
+            ).exists():
+                continue
+            
+            # Dispatch the job
+            process_batch_scheduler.delay(job.job_id)
+            logger.info(
+                f"🚀 Triggered due job={job.job_id} "
+                f"scheduled={format_ist_12hr(job.next_run_time)}"
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Failed dispatching {job.job_id}: {e}")
+            release_job_lock(job.job_id)
 
-    logger.info(f"🔍 Found {jobs.count()} pending batch jobs")
 
-    for job in jobs:
-        pending_running = BatchExecution.objects.filter(
-            job=job,
-            status__in=['pending', 'running']
-        ).count()
+# ============================================================
+# 🧹 CLEANUP STUCK EXECUTIONS
+# ============================================================
+@shared_task(queue="batch_scheduler")
+def cleanup_stuck_executions():
+    """
+    Recover genuinely dead executions without killing healthy large jobs.
 
-        if pending_running > 0:
-            logger.info(f"ℹ️ Job {job.job_id} has {pending_running} pending/running executions, skipping")
-            continue
+    A 100k-customer batch can legitimately take several hours. Therefore
+    started_at alone is NOT used as proof of a stuck job. The worker refreshes
+    a Redis heartbeat while processing; cleanup only fails a running execution
+    when its heartbeat is gone and it is older than STUCK_EXECUTION_AFTER.
 
-        logger.info(f"🚀 Processing pending job: {job.job_id}")
-        schedule_batch_job.delay(job.job_id)
+    Pending executions are also recovered if they were orphaned before Celery
+    could start them.
+    """
+    now = timezone.now()
+    pending_threshold = now - timedelta(minutes=30)
+    running_threshold = now - timedelta(seconds=STUCK_EXECUTION_AFTER)
+    updated = 0
+
+    # Orphaned pending executions: dispatch/startup never happened.
+    pending_executions = BatchExecution.objects.filter(
+        status="pending",
+        created_at__lte=pending_threshold,
+    ).select_related("job")
+
+    for execution in pending_executions.iterator(chunk_size=100):
+        try:
+            with transaction.atomic():
+                locked = BatchExecution.objects.select_for_update().get(
+                    id=execution.id
+                )
+
+                if locked.status != "pending":
+                    continue
+
+                locked.status = "failed"
+                locked.error_message = (
+                    "Auto-recovered: pending execution orphaned for > 30 minutes"
+                )
+                locked.completed_at = now
+                locked.save(
+                    update_fields=[
+                        "status", "error_message", "completed_at"
+                    ]
+                )
+
+                job = locked.job
+                if job.status in ["running", "scheduled"]:
+                    job.status = "scheduled"
+                    job.next_run_time = now
+                    job.save(update_fields=["status", "next_run_time"])
+
+                updated += 1
+                logger.warning(
+                    f"🧹 Recovered orphaned pending execution "
+                    f"{locked.id} for job {job.job_id}"
+                )
+
+        except Exception:
+            logger.exception(
+                f"❌ Failed to cleanup pending execution {execution.id}"
+            )
+
+    # Dead running executions.
+    running_executions = BatchExecution.objects.filter(
+        status="running",
+        started_at__lte=running_threshold,
+    ).select_related("job")
+
+    for execution in running_executions.iterator(chunk_size=100):
+        try:
+            # Healthy workers refresh this marker every HEARTBEAT_INTERVAL.
+            if execution_has_heartbeat(execution.id):
+                continue
+
+            with transaction.atomic():
+                locked = BatchExecution.objects.select_for_update().get(
+                    id=execution.id
+                )
+
+                if locked.status != "running":
+                    continue
+
+                # Re-check after locking to avoid racing with a live worker.
+                if execution_has_heartbeat(locked.id):
+                    continue
+
+                locked.status = "failed"
+                locked.error_message = (
+                    "Auto-failed: no worker heartbeat for > "
+                    f"{STUCK_EXECUTION_AFTER / 60:.0f} minutes"
+                )
+                locked.completed_at = now
+                locked.save(
+                    update_fields=[
+                        "status", "error_message", "completed_at"
+                    ]
+                )
+
+                job = locked.job
+                if job.status == "running":
+                    job.status = "scheduled"
+                    job.next_run_time = now
+                    job.save(update_fields=["status", "next_run_time"])
+
+                updated += 1
+                logger.warning(
+                    f"🧹 Cleaned dead execution {locked.id} "
+                    f"for job {job.job_id}"
+                )
+
+        except Exception:
+            logger.exception(
+                f"❌ Failed to cleanup execution {execution.id}"
+            )
+
+    if updated:
+        logger.info(f"🧹 Cleaned/recovered {updated} stuck executions")
+
+    return updated
 
 
 # ============================================================
@@ -980,297 +2067,77 @@ def check_pending_batch_jobs():
 # ============================================================
 @shared_task(queue="batch_scheduler")
 def cancel_daily_schedule(job_id):
-    """Cancel all future schedules for a job with error handling"""
+    """Cancel all future schedules for a job"""
     try:
-        job = BatchJob.objects.get(job_id=job_id)
+        with transaction.atomic():
+            job = BatchJob.objects.select_for_update().get(job_id=job_id)
+            if job.status in ["cancelled", "completed"]:
+                return
+            
+            # Cancel pending executions
+            BatchExecution.objects.filter(
+                job=job,
+                status="pending"
+            ).update(status="cancelled")
+            
+            # Update job
+            job.status = "cancelled"
+            job.next_run_time = None
+            job.save(update_fields=["status", "next_run_time"])
+        
+        release_job_lock(job_id)
+        logger.info(f"⛔ Schedule cancelled for {job_id}")
+        
     except BatchJob.DoesNotExist:
         logger.warning(f"⚠️ Job {job_id} not found for cancellation")
-        return
-
-    try:
-        if job.status in ['cancelled', 'completed']:
-            logger.info(f"ℹ️ Job {job_id} already {job.status}, no action needed")
-            return
-
-        BatchExecution.objects.filter(job=job, status='pending').update(status='cancelled')
-
-        job.status = 'cancelled'
-        job.next_run_time = None
-        job.save(update_fields=['status', 'next_run_time'])
-        logger.info(f"⛔ Schedule cancelled for {job_id}")
-
-    except DatabaseError as e:
-        logger.error(f"❌ Database error cancelling schedule for {job_id}: {e}")
-        try:
-            job.status = 'cancelled'
-            job.next_run_time = None
-            job.save()
-            logger.info(f"⛔ Schedule cancelled for {job_id} (full save)")
-        except Exception as save_error:
-            logger.error(f"❌ Failed to cancel schedule: {save_error}")
-
     except Exception as e:
-        logger.error(f"❌ Failed to cancel schedule for {job_id}: {e}")
+        logger.error(f"❌ Failed to cancel {job_id}: {e}")
         logger.error(traceback.format_exc())
+        release_job_lock(job_id)
 
 
 # ============================================================
-# 📅 SCHEDULER - PERFECT TIME HANDLING
+# 📅 LEGACY COMPATIBILITY TASK
 # ============================================================
-@shared_task(queue="batch_scheduler", max_retries=2)
+@shared_task(queue="batch_scheduler")
 def schedule_batch_job(job_id):
     """
-    Schedule the job based on its schedule type
+    Compatibility entry point for old code/admin actions.
+    Updates next_run_time without creating countdown chains.
     """
     try:
-        job = BatchJob.objects.get(job_id=job_id)
+        with transaction.atomic():
+            job = BatchJob.objects.select_for_update().get(job_id=job_id)
+            
+            if job.status in ["cancelled", "completed"]:
+                return
+            
+            now = timezone.now()
+            if not job.next_run_time or job.next_run_time <= now:
+                job.next_run_time = calculate_next_run_time(job, now)
+                job.status = "scheduled"
+                job.save(update_fields=["next_run_time", "status"])
+        
+        logger.info(
+            f"📅 Compatibility schedule updated: {job_id} -> "
+            f"{format_ist_12hr(job.next_run_time)}"
+        )
+        return job.next_run_time
+        
     except BatchJob.DoesNotExist:
-        logger.error(f"❌ Job {job_id} not found")
-        return
-
-    if job.status == 'cancelled':
-        logger.info(f"ℹ️ Job {job_id} is cancelled, skipping scheduling")
-        return
-
-    if job.schedule_type == 'one_time' and job.status == 'completed':
-        logger.info(f"ℹ️ One-time job {job_id} is completed, skipping scheduling")
-        return
-
-    if job.status == 'completed' and job.schedule_type != 'one_time':
-        logger.info(f"🔄 Recurring job {job_id} was marked completed, resetting to scheduled")
-        job.status = 'scheduled'
-        job.save(update_fields=['status'])
-
-    try:
-        if job.end_date and timezone.now() >= job.end_date:
-            job.status = 'completed'
-            job.next_run_time = None
-            job.save(update_fields=['status', 'next_run_time'])
-            logger.info(f"📅 Job {job_id} ended (end_date reached)")
-            return
-
-        now = timezone.now()
-
-        # ===== MULTIPLE DAILY SCHEDULE =====
-        if job.schedule_type == 'multiple_daily':
-            pending_running = BatchExecution.objects.filter(
-                job=job,
-                status__in=['pending', 'running']
-            ).count()
-
-            if pending_running > 0:
-                logger.info(f"ℹ️ Job {job_id} has {pending_running} pending/running executions, skipping scheduling")
-                schedule_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=3600,
-                    queue="batch_scheduler"
-                )
-                return
-
-            if job.next_run_time and job.next_run_time > now:
-                next_run = job.next_run_time
-            else:
-                if hasattr(job, '_get_next_multiple_time'):
-                    next_run = job._get_next_multiple_time(now)
-                else:
-                    next_run = now + timedelta(days=1)
-
-                if not next_run:
-                    job.status = 'failed'
-                    job.error_message = "No times could be scheduled"
-                    job.save(update_fields=['status', 'error_message'])
-                    return
-
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-
-            seconds_until = int((next_run - now).total_seconds())
-            logger.info(f"📅 Multiple daily: Next run at {next_run.strftime('%Y-%m-%d %I:%M %p')} (in {seconds_until}s)")
-
-            process_batch_scheduler.apply_async(
-                args=(job_id,),
-                countdown=seconds_until,
-                queue="batch_scheduler"
-            )
-            return
-
-        # ===== DAILY SCHEDULE =====
-        if job.schedule_type == 'daily':
-            pending_running = BatchExecution.objects.filter(
-                job=job,
-                status__in=['pending', 'running']
-            ).count()
-
-            if pending_running > 0:
-                logger.info(f"ℹ️ Job {job_id} has {pending_running} pending/running executions, skipping scheduling")
-                schedule_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=3600,
-                    queue="batch_scheduler"
-                )
-                return
-
-            if job.batch_size_type != 'full':
-                total_batches = (job.total_customers + job.batch_size - 1) // job.batch_size
-                completed_batches = BatchExecution.objects.filter(job=job, status='completed').count()
-
-                if completed_batches >= total_batches and completed_batches > 0:
-                    logger.info(f"🔄 All {total_batches} batches completed, resetting for next day")
-                    BatchExecution.objects.filter(job=job).delete()
-                    job.completed_batches = 0
-                    job.sent_count = 0
-                    job.failed_count = 0
-                    job.skipped_count = 0
-                    job.save(update_fields=['completed_batches', 'sent_count', 'failed_count', 'skipped_count'])
-
-            if job.next_run_time and job.next_run_time > now:
-                next_run = job.next_run_time
-            else:
-                if job.schedule_datetime > now:
-                    next_run = job.schedule_datetime
-                else:
-                    next_run = job.schedule_datetime
-                    while next_run <= now:
-                        next_run += timedelta(days=1)
-
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-
-            seconds_until = int((next_run - now).total_seconds())
-            logger.info(f"📅 Daily job: Next run at {next_run.strftime('%Y-%m-%d %I:%M %p')}")
-
-            process_batch_scheduler.apply_async(
-                args=(job_id,),
-                countdown=seconds_until,
-                queue="batch_scheduler"
-            )
-            return
-
-        # ===== WEEKLY SCHEDULE =====
-        if job.schedule_type == 'weekly':
-            pending_running = BatchExecution.objects.filter(
-                job=job,
-                status__in=['pending', 'running']
-            ).count()
-
-            if pending_running > 0:
-                logger.info(f"ℹ️ Job {job_id} has {pending_running} pending/running executions, skipping scheduling")
-                schedule_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=3600,
-                    queue="batch_scheduler"
-                )
-                return
-
-            if job.batch_size_type != 'full':
-                total_batches = (job.total_customers + job.batch_size - 1) // job.batch_size
-                completed_batches = BatchExecution.objects.filter(job=job, status='completed').count()
-
-                if completed_batches >= total_batches and completed_batches > 0:
-                    logger.info(f"🔄 All {total_batches} batches completed, resetting for next week")
-                    BatchExecution.objects.filter(job=job).delete()
-                    job.completed_batches = 0
-                    job.sent_count = 0
-                    job.failed_count = 0
-                    job.skipped_count = 0
-                    job.save(update_fields=['completed_batches', 'sent_count', 'failed_count', 'skipped_count'])
-
-            if job.next_run_time and job.next_run_time > now:
-                next_run = job.next_run_time
-            else:
-                if job.schedule_datetime > now:
-                    next_run = job.schedule_datetime
-                else:
-                    next_run = job.schedule_datetime
-                    while next_run <= now:
-                        next_run += timedelta(days=7)
-
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-
-            seconds_until = int((next_run - now).total_seconds())
-            logger.info(f"📅 Weekly job: Next run at {next_run.strftime('%Y-%m-%d %I:%M %p')}")
-
-            process_batch_scheduler.apply_async(
-                args=(job_id,),
-                countdown=seconds_until,
-                queue="batch_scheduler"
-            )
-            return
-
-        # ===== CUSTOM INTERVAL =====
-        if job.schedule_type == 'custom_interval':
-            if not job.interval_days:
-                job.status = 'failed'
-                job.error_message = "Interval days not configured"
-                job.save(update_fields=['status', 'error_message'])
-                return
-
-            pending_running = BatchExecution.objects.filter(
-                job=job,
-                status__in=['pending', 'running']
-            ).count()
-
-            if pending_running > 0:
-                logger.info(f"ℹ️ Job {job_id} has {pending_running} pending/running executions, skipping scheduling")
-                schedule_batch_job.apply_async(
-                    args=(job_id,),
-                    countdown=3600,
-                    queue="batch_scheduler"
-                )
-                return
-
-            if job.batch_size_type != 'full':
-                total_batches = (job.total_customers + job.batch_size - 1) // job.batch_size
-                completed_batches = BatchExecution.objects.filter(job=job, status='completed').count()
-
-                if completed_batches >= total_batches and completed_batches > 0:
-                    logger.info(f"🔄 All {total_batches} batches completed, resetting for next interval")
-                    BatchExecution.objects.filter(job=job).delete()
-                    job.completed_batches = 0
-                    job.sent_count = 0
-                    job.failed_count = 0
-                    job.skipped_count = 0
-                    job.save(update_fields=['completed_batches', 'sent_count', 'failed_count', 'skipped_count'])
-
-            interval = job.interval_days
-
-            if job.next_run_time and job.next_run_time > now:
-                next_run = job.next_run_time
-            else:
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=interval)
-
-                job.next_run_time = next_run
-                job.status = 'scheduled'
-                job.save(update_fields=['next_run_time', 'status'])
-
-            seconds_until = int((next_run - now).total_seconds())
-            logger.info(f"📅 Custom job: Next run at {next_run.strftime('%Y-%m-%d %I:%M %p')}")
-
-            process_batch_scheduler.apply_async(
-                args=(job_id,),
-                countdown=seconds_until,
-                queue="batch_scheduler"
-            )
-            return
-
-        logger.warning(f"⚠️ Unknown schedule type for {job_id}: {job.schedule_type}")
-        job.status = 'failed'
-        job.error_message = f"Unknown schedule type: {job.schedule_type}"
-        job.save(update_fields=['status', 'error_message'])
-
+        logger.warning(f"⚠️ Job {job_id} not found")
+        return None
     except Exception as e:
-        logger.error(f"❌ Failed to schedule job {job_id}: {e}")
+        logger.error(f"❌ schedule_batch_job failed for {job_id}: {e}")
         logger.error(traceback.format_exc())
+        return None
 
-        try:
-            job.status = 'failed'
-            job.error_message = f"Scheduling failed: {str(e)[:500]}"
-            job.save(update_fields=['status', 'error_message'])
-        except Exception as save_error:
-            logger.error(f"❌ Failed to update job status: {save_error}")
+
+# ============================================================
+# LEGACY PROCESS BATCH JOB (Deprecated)
+# ============================================================
+@shared_task(queue="batch_app")
+def process_batch_job(job_id):
+    """Deprecated: use check_pending_batch_jobs instead"""
+    logger.warning("⚠️ process_batch_job is deprecated; use check_pending_batch_jobs")
+    return process_batch_scheduler(job_id)
