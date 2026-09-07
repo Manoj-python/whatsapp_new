@@ -394,7 +394,9 @@ def create_case_from_chat_api2(request):
             mobile=mobile,
             defaults={'current_level': case.current_level}
         )
-        send_ticket_open_message.delay(app_key, case.id)
+        if case.created_by != "MeghaAI":
+            send_ticket_open_message.delay(app_key, case.id)
+        
 
         return JsonResponse({
             'success': True,

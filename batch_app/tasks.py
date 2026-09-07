@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # ⚙️ PRODUCTION CONFIGURATION
 # ============================================================
 MAX_WORKERS = 10                      # Parallel workers per batch
-MAX_API_CALLS_PER_SECOND = 8          # WhatsApp API rate limit
+MAX_API_CALLS_PER_SECOND = 3         # WhatsApp API rate limit
 API_TIMEOUT_CONNECT = 5               # Connection timeout
 API_TIMEOUT_READ = 20                 # Read timeout
 HEARTBEAT_INTERVAL = 25               # Progress update every 25 customers
@@ -291,24 +291,24 @@ def calculate_next_run_time(job, from_time=None):
     """
     if not from_time:
         from_time = timezone.now()
-    
+
     now = from_time
     if timezone.is_naive(now):
         now = timezone.make_aware(now, timezone.get_current_timezone())
-    
+
     base = job.schedule_datetime
     if timezone.is_naive(base):
         base = timezone.make_aware(base, timezone.get_current_timezone())
-    
+
     now_local = timezone.localtime(now)
     base_local = timezone.localtime(base)
-    
+
     # ONE TIME
     if job.schedule_type == "one_time":
         if base > now:
             return base
         return None
-    
+
     # DAILY
     if job.schedule_type == "daily":
         candidate = timezone.make_aware(
@@ -318,7 +318,7 @@ def calculate_next_run_time(job, from_time=None):
         if candidate <= now_local:
             candidate += timedelta(days=1)
         return candidate
-    
+
     # WEEKLY
     if job.schedule_type == "weekly":
         target_weekday = (
@@ -337,7 +337,7 @@ def calculate_next_run_time(job, from_time=None):
         if candidate <= now_local:
             candidate += timedelta(days=7)
         return candidate
-    
+
     # CUSTOM INTERVAL - anchored to the original schedule_datetime
     if job.schedule_type == "custom_interval":
         interval = max(int(job.interval_days or 1), 1)
@@ -345,7 +345,7 @@ def calculate_next_run_time(job, from_time=None):
         while candidate <= now:
             candidate += timedelta(days=interval)
         return candidate
-    
+
     # MONTHLY
     if job.schedule_type == "monthly":
         target_day = base_local.day
@@ -366,7 +366,7 @@ def calculate_next_run_time(job, from_time=None):
                 timezone.get_current_timezone()
             )
         return candidate
-    
+
     # MULTIPLE DAILY
     if job.schedule_type == "multiple_daily":
         times = get_multiple_daily_times(job)
@@ -390,7 +390,7 @@ def calculate_next_run_time(job, from_time=None):
                 datetime.combine(tomorrow, datetime.min.time().replace(hour=hour, minute=minute)),
                 timezone.get_current_timezone()
             )
-    
+
     # Fallback: daily at base time
     candidate = timezone.make_aware(
         datetime.combine(now_local.date(), base_local.time()),
@@ -408,7 +408,7 @@ def get_dynamic_template_id(target_app, job_template_id, emi_due_count):
     """Dynamic template selection based on EMI count"""
     target_app = str(target_app)
     job_template_id = str(job_template_id)
-    
+
     # APP 1: messaging (SMSquare)
     if target_app == "messaging":
         if job_template_id in {"44", "45", "46"}:
@@ -422,7 +422,7 @@ def get_dynamic_template_id(target_app, job_template_id, emi_due_count):
                 return "46"
         if job_template_id == "47":
             return "47"
-    
+
     # APP 2: messaging2 (Padma Sai)
     elif target_app == "messaging2":
         if job_template_id in {"52", "54", "56"}:
@@ -445,7 +445,7 @@ def get_dynamic_template_id(target_app, job_template_id, emi_due_count):
                 return "57"
         if job_template_id in {"58", "59"}:
             return job_template_id
-    
+
     # Non-bucket jobs
     return job_template_id
 
@@ -547,7 +547,17 @@ def get_actual_template_name(target_app, template_id):
 # ============================================================
 # ============================================================
 # 👤 SINGLE CUSTOMER PROCESSOR - WITH DUPLICATE PREVENTION
+
 # ============================================================
+
+# ============================================================
+# 👤 SINGLE CUSTOMER PROCESSOR
+# ============================================================
+
+# ============================================================
+# 👤 SINGLE CUSTOMER PROCESSOR - WITH DYNAMIC EXCEL FIELDS
+# ============================================================
+
 def process_single_customer(
     row, job, execution_id, LogModel, ContactModel, url, headers,
     build_payload, needs_api_check_func, schedule_func, seize_check_func
@@ -634,6 +644,7 @@ def process_single_customer(
             try:
                 LogModel.objects.create(
                     job_id=job,
+                    execution_id=execution_id,
                     customer_name=customer_name,
                     mobile="",
                     template_name=job.template_name or str(job.template_id or ""),
@@ -669,6 +680,7 @@ def process_single_customer(
                     try:
                         LogModel.objects.create(
                             job_id=job,
+                            execution_id=execution_id,
                             customer_name=customer_name,
                             mobile=mobile,
                             template_name="SEIZED",
@@ -781,6 +793,7 @@ def process_single_customer(
                     try:
                         LogModel.objects.create(
                             job_id=job,
+                            execution_id=execution_id,
                             customer_name=customer_name,
                             mobile=mobile,
                             template_name="SKIPPED",
@@ -813,6 +826,7 @@ def process_single_customer(
                     try:
                         LogModel.objects.create(
                             job_id=job,
+                            execution_id=execution_id,
                             customer_name=customer_name,
                             mobile=mobile,
                             template_name="PAID",
@@ -884,6 +898,7 @@ def process_single_customer(
 
                 LogModel.objects.create(
                     job_id=job,
+                    execution_id=execution_id,
                     customer_name=customer_name,
                     mobile=mobile,
                     template_name=duplicate_template_name,
@@ -969,6 +984,7 @@ def process_single_customer(
             try:
                 LogModel.objects.create(
                     job_id=job,
+                    execution_id=execution_id,
                     customer_name=customer_name,
                     mobile=mobile,
                     template_name=(
@@ -1023,6 +1039,7 @@ def process_single_customer(
             try:
                 LogModel.objects.create(
                     job_id=job,
+                    execution_id=execution_id,
                     customer_name=customer_name,
                     mobile=mobile,
                     template_name=(
@@ -1124,6 +1141,7 @@ def process_single_customer(
         try:
             LogModel.objects.create(
                 job_id=job,
+                execution_id=execution_id,
                 customer_name=customer_name,
                 mobile=mobile,
                 template_name=(
@@ -1201,6 +1219,7 @@ def process_single_customer(
 
             LogModel.objects.create(
                 job_id=job,
+                execution_id=execution_id,
                 customer_name=customer_name,
                 mobile=mobile,
                 template_name=unexpected_template_name,
@@ -1218,6 +1237,8 @@ def process_single_customer(
             )
 
         return result
+
+
 
 # ============================================================
 # 🚀 SCHEDULER TASK - CREATE EXACTLY ONE SCHEDULED BATCH
@@ -1893,15 +1914,15 @@ def check_pending_batch_jobs():
     This is the ONLY periodic dispatcher.
     """
     now = timezone.now()
-    
+
     jobs = BatchJob.objects.filter(
         status="scheduled",
         next_run_time__lte=now,
     ).order_by("next_run_time")
-    
+
     due_count = jobs.count()
     logger.info(f"🔍 Scheduler: {due_count} due jobs at {format_ist_12hr(now)}")
-    
+
     for job in jobs.iterator(chunk_size=100):
         try:
             # Check end date
@@ -1915,24 +1936,24 @@ def check_pending_batch_jobs():
                 )
                 logger.info(f"⏹️ {job.job_id}: end_date reached")
                 continue
-            
+
             # Fast duplicate checks
             if is_job_locked(job.job_id):
                 continue
-            
+
             if BatchExecution.objects.filter(
                 job=job,
                 status__in=["pending", "running"],
             ).exists():
                 continue
-            
+
             # Dispatch the job
             process_batch_scheduler.delay(job.job_id)
             logger.info(
                 f"🚀 Triggered due job={job.job_id} "
                 f"scheduled={format_ist_12hr(job.next_run_time)}"
             )
-            
+
         except Exception as e:
             logger.error(f"❌ Failed dispatching {job.job_id}: {e}")
             release_job_lock(job.job_id)
@@ -2073,21 +2094,21 @@ def cancel_daily_schedule(job_id):
             job = BatchJob.objects.select_for_update().get(job_id=job_id)
             if job.status in ["cancelled", "completed"]:
                 return
-            
+
             # Cancel pending executions
             BatchExecution.objects.filter(
                 job=job,
                 status="pending"
             ).update(status="cancelled")
-            
+
             # Update job
             job.status = "cancelled"
             job.next_run_time = None
             job.save(update_fields=["status", "next_run_time"])
-        
+
         release_job_lock(job_id)
         logger.info(f"⛔ Schedule cancelled for {job_id}")
-        
+
     except BatchJob.DoesNotExist:
         logger.warning(f"⚠️ Job {job_id} not found for cancellation")
     except Exception as e:
@@ -2108,22 +2129,22 @@ def schedule_batch_job(job_id):
     try:
         with transaction.atomic():
             job = BatchJob.objects.select_for_update().get(job_id=job_id)
-            
+
             if job.status in ["cancelled", "completed"]:
                 return
-            
+
             now = timezone.now()
             if not job.next_run_time or job.next_run_time <= now:
                 job.next_run_time = calculate_next_run_time(job, now)
                 job.status = "scheduled"
                 job.save(update_fields=["next_run_time", "status"])
-        
+
         logger.info(
             f"📅 Compatibility schedule updated: {job_id} -> "
             f"{format_ist_12hr(job.next_run_time)}"
         )
         return job.next_run_time
-        
+
     except BatchJob.DoesNotExist:
         logger.warning(f"⚠️ Job {job_id} not found")
         return None

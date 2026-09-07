@@ -136,6 +136,9 @@ def format_time_display(time_str):
         return time_str
 
 
+
+# views.py - get_job_data() function - REPLACE with this
+
 def get_job_data(job):
     """Get job data with accurate execution counts and IST 12-hour formatting."""
     try:
@@ -431,6 +434,7 @@ def get_job_data(job):
             'current_skipped_count': 0,
             'current_failed_count': 0,
         }
+
 # ============================================================
 # VIEWS
 # ============================================================
@@ -1527,10 +1531,10 @@ def batch_job_report(request, job_id):
         (no param)       - All logs
     """
     job = get_object_or_404(BatchJob, job_id=job_id)
-    
+
     # 🔥 FIX: Get the correct LogModel for this app
     LogModel = get_app_log_model(job.target_app)
-    
+
     if not LogModel:
         # Fallback to BatchLog if no app-specific model
         logs = BatchLog.objects.filter(job=job)
@@ -1539,10 +1543,10 @@ def batch_job_report(request, job_id):
         # Get logs from the app-specific model
         logs = LogModel.objects.filter(job_id=job)
         logger.info(f"✅ Found {logs.count()} logs from {job.target_app}")
-    
+
     # Apply status filter
     status_filter = request.GET.get('status', 'all')
-    
+
     if status_filter == 'success':
         # Success: Sent, Delivered, Read statuses
         logs = logs.filter(status__in=['Sent', 'Delivered', 'Read'])
@@ -1553,11 +1557,33 @@ def batch_job_report(request, job_id):
         filename_suffix = "skipped"
     elif status_filter == 'failed':
         # Failed: Failed status
-        logs = logs.filter(status='Failed')
+        failed_statuses = [
+        'Failed',
+        'NOT_ON_WHATSAPP',      # 131026
+        'Failed_131049',
+        'USER_IN_EXPERIMENT',        # 131049
+        'Failed_130472',        # 130472
+        'Failed_131047',        # 24H_WINDOW_EXPIRED
+        'Failed_131051',        # UNSUPPORTED_MESSAGE_TYPE
+        'Failed_131011',        # BLOCKED_BY_USER
+        'Failed_130403',        # BLOCKED_BY_BUSINESS
+        'Failed_131050',        # OPTED_OUT
+        'Failed_190',           # TOKEN_ERROR
+        'Failed_131009',        # INVALID_PARAMETER
+        'Failed_131000',        # UNKNOWN_ERROR
+        'Failed_131045',        # REGISTRATION_ERROR
+        'Failed_132000',        # TEMPLATE_PARAM_ERROR
+        'Failed_132001',        # TEMPLATE_NOT_FOUND
+        'Failed_132015',        # TEMPLATE_PAUSED
+        'Failed_132016',        # TEMPLATE_DISABLED
+        'Failed_130429',        # RATE_LIMIT
+        'Failed_131056',        # TOO_MANY_MESSAGES
+    ]
+        logs = logs.filter(status__in=failed_statuses)
         filename_suffix = "failed"
     else:
         filename_suffix = "full"
-    
+
     # Convert to DataFrame
     data = []
     for log in logs:
@@ -1571,14 +1597,14 @@ def batch_job_report(request, job_id):
             'Error': getattr(log, 'error_message', ''),
             'Sent At': format_datetime_12hr(log.sent_at, show_seconds=True) if hasattr(log, 'sent_at') else '',
         })
-    
+
     df = pd.DataFrame(data)
     buffer = io.BytesIO()
-    
+
     # Use ExcelWriter with proper formatting
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Report')
-        
+
         # Auto-adjust column widths
         worksheet = writer.sheets['Report']
         for column in worksheet.columns:
@@ -1592,15 +1618,16 @@ def batch_job_report(request, job_id):
                     pass
             adjusted_width = min(max_length + 2, 50)
             worksheet.column_dimensions[column_letter].width = adjusted_width
-    
+
     buffer.seek(0)
-    
+
     response = HttpResponse(
         buffer.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     response['Content-Disposition'] = f'attachment; filename="batch_{job.job_id}_{filename_suffix}_report.xlsx"'
     return response
+
 
 # ============================================================
 # NEW: BATCH EXECUTIONS API

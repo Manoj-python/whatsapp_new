@@ -22,7 +22,7 @@ from financehub.models import Lcc
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-   "1", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+    "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
 ]
 
 def needs_api_check(template_id):
@@ -1337,7 +1337,15 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     
                 ],
             ),
+               
+              "50": (
+                "fraud_executive",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("executive", ""))},     # {{1}}
 
+                ],
+            ),
 
     }
 

@@ -23,7 +23,19 @@ class SmsWhatsAppLog(models.Model):
     error_reason = models.TextField(blank=True, help_text="Detailed error reason")
     button_response = models.TextField(blank=True, default='', help_text="Store button click data as JSON")
     vehicle_number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
-    
+    loan_number = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    due_amount = models.CharField(max_length=50, blank=True, null=True)
+    emi_count = models.CharField(max_length=50, blank=True, null=True)
+    execution = models.ForeignKey(
+    'batch_app.BatchExecution',
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name='whatsapp_logs',
+    db_index=True,
+    )    
+    # ✅ JSON field for ALL Excel data
+    excel_data = models.JSONField(default=dict, blank=True, null=True)    
     class Meta:
         ordering = ['-sent_at']
         indexes = [
@@ -32,6 +44,7 @@ class SmsWhatsAppLog(models.Model):
             models.Index(fields=['message_type', 'status']),
             models.Index(fields=['job_id']),
             models.Index(fields=['message_id']),
+            models.Index(fields=['loan_number']),
         ]
     
     def __str__(self):

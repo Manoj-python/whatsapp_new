@@ -62,6 +62,7 @@ from .utils import *
 from .tasks import *
 from .forms import UploadForm2
 from .consumers import *
+from batch_app.models import BatchJob,BatchExecution
 
 import pytz
 import os
@@ -758,6 +759,7 @@ def send_reply_api2(request):
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE FIXED VERSION
 # =============================================
+from batch_app.models import BatchJob,BatchExecution
 @csrf_exempt
 def whatsapp_webhook2(request):
     # print("🔥 WEBHOOK HIT")
@@ -818,7 +820,7 @@ def whatsapp_webhook2(request):
 
                             if text_body in quick_reply_values:
                                 content_type = "interactive"
-                                
+
                                 context_id = None
                                 if msg.get("context"):
                                     context_id = msg.get("context", {}).get("id")
@@ -862,13 +864,13 @@ def whatsapp_webhook2(request):
 
                             text_body = f"[Button Click] {button_text}"
                             mark_button_clicked(mobile)
- 
+
                             print(
                                 f"🔘 Template Button Clicked: "
                                 f"text={button_text}, payload={button_payload}"
                             )
 
-                            
+
 
 
                             # print(f"📝 Text from {mobile}: {text_body[:50]}")
@@ -894,7 +896,7 @@ def whatsapp_webhook2(request):
                                     "source": "interactive_button_reply",
                                     "timestamp": timezone.now().isoformat()
                                 })
-                                
+
 
                                 text_body = f"[Button Click] {button_title}"
                                 mark_button_clicked(mobile)
@@ -950,7 +952,7 @@ def whatsapp_webhook2(request):
                                     f"⚠️ Unknown interactive type: "
                                     f"{interactive_type}"
                                 )
-                        
+
 
                         elif msg_type in ("image", "video", "audio", "document"):
                             media_id = msg[msg_type].get("id")
@@ -1004,7 +1006,7 @@ def whatsapp_webhook2(request):
                                 log.media_file.save(filename, ContentFile(content))
                                 log.save()
                                 # print(f"💾 Saved media: {filename}")
-                        
+
                         # ======================================
                         # AUTO LEAD CREATION FROM INTERESTED BUTTON
                         # ======================================
@@ -1170,8 +1172,8 @@ def whatsapp_webhook2(request):
                         if send_welcome:
                             if was_button_clicked_recently(mobile):
                                 clear_button_clicked(mobile)   # skip because button clicked
-                            else:
-                                send_welcome_message.delay('psf', mobile, customer_name)
+                            #else:
+                                #send_welcome_message.delay('psf', mobile, customer_name)
                         # WebSocket broadcast
                         gm = ws_group2(mobile)
                         if gm and not interested_clicked:
@@ -1270,19 +1272,146 @@ def whatsapp_webhook2(request):
                                     131000: "UNKNOWN_ERROR", 131045: "REGISTRATION_ERROR",
                                     132000: "TEMPLATE_PARAM_ERROR", 132001: "TEMPLATE_NOT_FOUND",
                                     132015: "TEMPLATE_PAUSED", 132016: "TEMPLATE_DISABLED",
-                                    130429: "RATE_LIMIT", 131056: "TOO_MANY_MESSAGES",
+                                    130429: "RATE_LIMIT", 131056: "TOO_MANY_MESSAGES",130472: "USER_IN_EXPERIMENT",
                                 }
                                 norm = error_map.get(code, f"Failed_{code}")
 
-                                
+
                         else:
                             continue
 
                         # 🔥 FIXED: Update database with ALL error fields (error_code + error_reason)
-                        
-                        SmsWhatsAppLog2.objects.filter(message_id=msg_id).update(status=norm, error_message=json.dumps(errors) if errors else "")
+
+                        # SmsWhatsAppLog2.objects.filter(message_id=msg_id).update(status=norm, error_message=json.dumps(errors) if errors else "")
 
                         ChatContact2.objects.filter(mobile=mobile).update(last_status=norm)
+            # ============================================================
+                                    # STATUS UPDATE + FAILURE COUNT SYNC
+                                    # ============================================================
+                        try:
+                            with transaction.atomic():
+        
+                                obj = (
+                                    SmsWhatsAppLog2.objects
+                                            .select_for_update()
+                                            .filter(message_id=msg_id)
+                                            .first()
+                                        )
+        
+                                if not obj:
+                                    logger.warning(
+                                        f"⚠️ No SmsWhatsAppLog found for message_id={msg_id}"
+                                        )
+                                    continue
+        
+                                old_status = (obj.status or "").strip()
+        
+                                        # ============================================
+                                        # FAILED
+                                        # ============================================
+                                if status_type == "failed":
+        
+                                            # Save final status for reports
+                                    obj.status = norm
+                                    obj.error_message = (
+                                        json.dumps(errors) if errors else ""
+                                            )
+                                    obj.save(
+                                        update_fields=[
+                                            "status",
+                                            "error_message",
+                                                ]
+                                            )
+        
+                                            # ONLY Sent -> Failed
+                                    if old_status == "Sent":
+        
+                                        if obj.execution_id:
+        
+                                            execution = (
+                                                BatchExecution.objects
+                                                .select_for_update()
+                                                .filter(
+                                                    id=obj.execution_id,
+                                                        )
+                                                        .first()
+                                                    )
+        
+                                            if execution:
+        
+                                                execution.sent_count = max(
+                                                    (execution.sent_count or 0) - 1,
+                                                            0,
+                                                        )
+        
+                                                execution.failed_count = (
+                                                            execution.failed_count or 0
+                                                        ) + 1
+        
+                                                execution.save(
+                                                            update_fields=[
+                                                                "sent_count",
+                                                                "failed_count",
+                                                            ]
+                                                        )
+        
+                                                logger.info(
+                                                    f"📊 Sent → Failed | "
+                                                    f"execution={execution.id} | "
+                                                    f"batch={execution.batch_number} | "
+                                                    f"mobile={obj.mobile} | "
+                                                    f"sent={execution.sent_count} | "
+                                                    f"failed={execution.failed_count}"
+                                                        )
+        
+                                            else:
+                                                logger.error(
+                                                    f"❌ BatchExecution not found | "
+                                                    f"execution_id={obj.execution_id} | "
+                                                    f"message_id={msg_id}"
+                                                        )
+        
+                                                # ------------------------------------
+                                                # DIRECT BULK / NON-BATCH
+                                                # ------------------------------------
+                                        else:
+                                            logger.info(
+                                                        f"ℹ️ Direct bulk Sent → Failed | "
+                                                        f"message_id={msg_id} | "
+                                                        f"mobile={obj.mobile}"
+                                                    )
+        
+                                    else:
+                                        logger.info(
+                                                    f"⏭️ No counter change | "
+                                                    f"message_id={msg_id} | "
+                                                    f"old_status={old_status} | "
+                                                    f"new_status={norm}"
+                                                )
+        
+                                        # ============================================
+                                        # SENT / DELIVERED / READ
+                                        # ============================================
+                                else:
+        
+                                    obj.status = norm
+                                    obj.error_message = (
+                                                json.dumps(errors) if errors else ""
+                                            )
+        
+                                    obj.save(
+                                        update_fields=[
+                                                    "status",
+                                                    "error_message",
+                                                ]
+                                            )
+        
+                        except Exception as e:
+                            logger.exception(
+                                        f"❌ Status/count synchronization failed | "
+                                        f"message_id={msg_id} | error={e}"
+                                    )                    
+                        
 
                         # WebSocket update
                         gm = ws_group2(mobile)

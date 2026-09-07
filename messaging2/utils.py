@@ -17,7 +17,7 @@ PAYMENT_LINK2 = "https://smsquare.info/"
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-   "1", "3", "5", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47",
+    "3", "5", "7", "11", "20", "35", "37", "44", "45", "46", "47",
     "52", "54", "56", "58",
 ]
 
@@ -1542,9 +1542,30 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
 
                 ],
             ),
+         "62": (
+            "final_settlement",
+                "en",
+                    [
+                        {
+                        "type": "text",
+                        "text": str(row.get("emp_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("due_amount", ""))
+                        },
+        
+                    ],
+                ),
+          "63": ("apolize_tem", "en", []),
+          "64": (
+                "fraud_executive",
+                "en",
+                [
+                    {"type": "text", "text": str(row.get("executive", ""))},     # {{1}}
 
-
-
+                ],
+            ),
 
 
     }
@@ -2213,10 +2234,6 @@ def send_whatsapp_payment_template(app_key, to, customer_name, amount, short_cod
         if e.response:
             logger.error(e.response.text)
         raise
-
-
-
-
 
 
 

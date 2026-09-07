@@ -26,6 +26,19 @@ class SmsWhatsAppLog2(models.Model):
     sender_name = models.CharField(max_length=255, blank=True, default='')
     error_code = models.IntegerField(null=True, blank=True, help_text="WhatsApp API error code")
     error_reason = models.TextField(blank=True, help_text="Detailed error reason")
+    loan_number = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    due_amount = models.CharField(max_length=50, blank=True, null=True)
+    emi_count = models.CharField(max_length=50, blank=True, null=True)
+    execution = models.ForeignKey(
+    'batch_app.BatchExecution',
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name='whatsapp_logs2',
+    db_index=True,
+    )    
+    # ✅ JSON field for ALL Excel data
+    excel_data = models.JSONField(default=dict, blank=True, null=True)
     button_response = models.TextField(blank=True, default='', help_text="Store button click data as JSON")
     vehicle_number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
 
@@ -37,6 +50,7 @@ class SmsWhatsAppLog2(models.Model):
             models.Index(fields=['message_type', 'status']),
             models.Index(fields=['job_id']),
             models.Index(fields=['message_id']),
+            models.Index(fields=['loan_number']),
         ]
 
     def __str__(self):

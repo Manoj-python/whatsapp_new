@@ -394,7 +394,18 @@ class BatchLog(models.Model):
     message_id = models.CharField(max_length=255, blank=True)
     error_message = models.TextField(blank=True)
     sent_at = models.DateTimeField(default=timezone.now)
-
+    loan_number = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    vehicle_number = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    due_amount = models.CharField(max_length=50, blank=True, null=True)
+    emi_count = models.CharField(max_length=50, blank=True, null=True)
+    
+    # ✅ JSON field for ALL Excel data
+    excel_data = models.JSONField(
+        default=dict,
+        blank=True,
+        null=True,
+        help_text="All Excel row data as JSON - includes ALL columns dynamically"
+    )
     class Meta:
         db_table = 'batch_logs'
         ordering = ['-sent_at']

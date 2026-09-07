@@ -49,7 +49,7 @@ TEMPLATE_CHOICES = [
     ("47", "Three Buckets and Above Guarantor (English)-[47]"),
     ("48", "doc_sms_portal (English)-[48]"),
     ("49", "Guarantor Login & Payment Link (English)-[49]"),
-    
+    ("50", "Unauthorized Payment by Collection fraud_executive-[50]"),
 
  
 ]

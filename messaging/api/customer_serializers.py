@@ -33,6 +33,7 @@ def validate_file_size(file_obj):
 
 # ─── Create Ticket ─────────────────────────────────────────────
 
+
 class CustomerTicketCreateSerializer(serializers.ModelSerializer):
     attachment = serializers.FileField(write_only=True, required=False)
 
@@ -70,11 +71,8 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
         category_obj = validated_data.get('category')
         
         # ─── Auto-assign Group from Category ──────────────
-        # Category model lo already group undhi, adhe assign avvali
         if category_obj and category_obj.group:
             validated_data['group'] = category_obj.group
-            # Subgroup kuda category nunchi assign avvali (if needed)
-            # validated_data['subgroup'] = category_obj.subgroup
 
         # Auto‑generate case ID
         case_id = f"CASE-{timezone.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
@@ -83,7 +81,11 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
         validated_data['status'] = 'Open'
         validated_data['current_level'] = 'ESC2'
         validated_data['priority'] = 'Medium'
-        validated_data['created_by'] = 'Customer Portal'
+        
+        # Get created_by from context or use default
+        created_by = self.context.get('request').data.get('created_by', 'Customer Portal')
+        validated_data['created_by'] = created_by
+        
         app = self.context.get('app', 'sms')
         validated_data['source_app'] = app
 
@@ -107,9 +109,18 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
             case.issue_description += f"\n\n📎 Attachment: {attachment.name}"
             case.save(update_fields=['issue_description'])
 
-        # 🔔 Send WhatsApp open ticket message
-        from messaging2.tasks import send_ticket_open_message
-        send_ticket_open_message.delay('sms', case.id)
+        # ✅ Send open message only if NOT MeghaAI
+        skip_open = self.context.get('skip_open_message', False)
+        
+        if not skip_open and created_by != "MeghaAI":
+            from messaging2.tasks import send_ticket_open_message
+            send_ticket_open_message.delay('sms', case.id)
+            print(f"📤 Open message SENT for ticket: {case.case_id}")
+        else:
+            # Mark as sent so it won't be sent later
+            case.ticket_open_message_sent = True
+            case.save(update_fields=['ticket_open_message_sent'])
+            print(f"🔄 Open message SKIPPED for MeghaAI ticket: {case.case_id}")
 
         return case
 

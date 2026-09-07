@@ -253,7 +253,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
         if check_api:
             try:
                 # 🔥 For bucket templates (52-59), use RepaymentSchedules
-                if template_choice in ["52", "54", "56", "58","1"]:
+                if template_choice in ["52", "54", "56", "58"]:
                     # ✅ INCLUDE current month for bucket templates (reminders)
                     status = get_total_overdue_from_schedule2(mobile, loan_number, include_upcoming=True)
                     print(f"📊 Using SCHEDULE API for template {template_choice} (INCLUDING current month)")
@@ -422,7 +422,7 @@ def process_bulk_whatsapp_batch2(self, excel_s3_path, template_choice, job_id, s
 
             # ✅ Include both Excel and Actual amounts in log for bucket templates
             log_text = rendered_text
-            if check_api and not is_paid and template_choice in ["52", "54", "56", "58","1"]:
+            if check_api and not is_paid and template_choice in ["52", "54", "56", "58"]:
                 log_text = f"{rendered_text}\n\n📊 Excel: ₹{excel_amount} | Actual: ₹{real_time_due}"
 
             log = SmsWhatsAppLog2.objects.create(
@@ -831,6 +831,12 @@ def was_button_clicked_recently(mobile):
 def clear_button_clicked(mobile):
     cache.delete(f"button_clicked_{mobile}")
 
+def should_skip_auto_reply(case):
+    """Check if auto-reply messages should be skipped for this case."""
+    # Add any other conditions here if needed
+    return case.created_by == "MeghaAI"
+
+
 # ----------------------------------------------
 # MAIN TASK: Send Ticket Open Message
 # ----------------------------------------------
@@ -858,7 +864,7 @@ def send_ticket_open_message(app_key, case_id):
     final_sender_name = case.created_by
 
     case = CaseModel.objects.filter(id=case_id).first()
-    if not case or case.ticket_open_message_sent:
+    if not case or case.ticket_open_message_sent or should_skip_auto_reply(case):
         return
 
     mobile = format_mobile2(case.mobile)
@@ -1174,17 +1180,7 @@ def send_welcome_message(app_key, mobile, customer_name=""):
     customer_name = customer_name or "Customer"
 
     # ---------- 1. SEND WELCOME TEXT ----------
-    free_text = (
-        f"Dear *{customer_name}*,\n\n"
-        f"🎉 *Scratch & Win Alert!* 🎁\n\n"
-        f"Try your luck and *win up to ₹1,000!* 💰✨\n\n"
-        f"👉 Visit our *Customer Service Portal* and scratch your lucky card today.\n\n"
-        f"🔗 *Portal:* https://smsquare.info\n\n"
-        f"⏳ *Offer valid until 5th August only!* Don't miss this exciting opportunity! 🍀\n\n"
-        f"*Scratch Now • Win Instantly • Claim Your Reward!*\n\n"
-        f"Regards,\n"
-        f"*{app_name}*"
-    )
+    free_text = ""
 
     # Send text message (using existing send_whatsapp_text4)
     try:

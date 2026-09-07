@@ -34,30 +34,62 @@ def get_app_from_request(request):
 def customer_create_ticket(request):
     """
     Create a new ticket – always stored in the unified SMS case table.
+    
+    Request body (JSON):
+    {
+        "customer_name": "John Doe",
+        "mobile": "8247473417",
+        "email": "john@example.com",
+        "loan_number": "LOAN123",
+        "vehicle_number": "AP1234",
+        "issue_description": "Issue description",
+        "category": 3,  # Category ID
+        "group": 1,     # Optional: Group ID
+        "subgroup": 2,  # Optional: Subgroup ID
+        "created_by": "MeghaAI"  # Optional: If not provided, defaults to "Customer Portal"
+    }
     """
-    # Force app to 'sms' for case creation
-    app = 'sms'   # ✅ hardcoded
+    app = 'sms'   # ✅ hardcoded to SMS app
 
     # Get the contact model for this app (SMS)
     config = APP_CONFIG.get(app)
     ContactModel = config.get('contact_model') if config else None
 
     mutable_data = request.data.copy()
-    mutable_data['source_app'] = app   # explicitly set
+    mutable_data['source_app'] = app
+
+    # ✅ Check if created_by is MeghaAI
+    created_by = request.data.get('created_by', 'Customer Portal')
+    skip_open_message = (created_by == "MeghaAI")
+    
+    # If MeghaAI, mark ticket_open_message_sent as True to skip open message
+    if skip_open_message:
+        mutable_data['ticket_open_message_sent'] = True
+        print(f"🔄 MeghaAI detected - Open message will be SKIPPED for this ticket")
 
     serializer = CustomerTicketCreateSerializer(
         data=mutable_data,
-        context={'request': request, 'app': app}   # pass 'sms'
+        context={
+            'request': request, 
+            'app': app,
+            'skip_open_message': skip_open_message  # ✅ Pass to serializer
+        }
     )
+    
     if not serializer.is_valid():
-        return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {'error': serializer.errors}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-    case = serializer.save()   # uses Case from messaging.models
+    # Save the case
+    case = serializer.save()
 
     # ─── Create/Update ChatContact (SMS app's contact model) ──────────
     if ContactModel:
         mobile = case.mobile
         last_msg = f"📩 Ticket created: {case.case_id}"
+        
         contact, created = ContactModel.objects.get_or_create(
             mobile=mobile, 
             defaults={
@@ -69,6 +101,7 @@ def customer_create_ticket(request):
                 'current_level': case.current_level,
             }
         )
+        
         if not created:
             ContactModel.objects.filter(mobile=mobile).update(
                 last_msg=last_msg,
@@ -84,6 +117,7 @@ def customer_create_ticket(request):
             from asgiref.sync import async_to_sync
             channel_layer = get_channel_layer()
             channel_group = config.get('channel_group')
+            
             if channel_group:
                 async_to_sync(channel_layer.group_send)(
                     channel_group,
@@ -100,17 +134,31 @@ def customer_create_ticket(request):
                         }
                     }
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"WebSocket error: {e}")
 
-    return Response({
+    # ✅ Response with message status
+    response_data = {
         'success': True,
         'case_id': case.case_id,
         'customer_token': case.customer_token,
         'app': app,
         'message': 'Ticket created successfully! Please save your token for tracking.',
-        'tracking_url': f"/customer/tickets/{case.customer_token}/"
-    }, status=status.HTTP_201_CREATED)
+        'tracking_url': f"/customer/tickets/{case.customer_token}/",
+        'open_message_sent': not skip_open_message,
+        'open_message_skipped': skip_open_message,
+    }
+    
+    # Add info about message status
+    if skip_open_message:
+        response_data['info'] = 'Open message SKIPPED because created_by is MeghaAI'
+    else:
+        response_data['info'] = 'Open message will be sent to customer'
+
+    return Response(
+        response_data, 
+        status=status.HTTP_201_CREATED
+    )
 
 
 

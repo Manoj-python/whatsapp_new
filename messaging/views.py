@@ -990,6 +990,10 @@ from messaging2.tasks import send_welcome_message,clear_button_clicked,was_butto
 # =============================================
 # WHATSAPP WEBHOOK - COMPLETE WORKING VERSION WITH QUICK REPLY BUTTON HANDLING
 # =============================================
+
+
+from django.db.models import Max, Count, Q, F, Sum
+from batch_app.models import BatchLog,BatchExecution,BatchJob
 @csrf_exempt
 def whatsapp_webhook(request):
     from channels.layers import get_channel_layer
@@ -1433,7 +1437,7 @@ def whatsapp_webhook(request):
                                             name__icontains="Marketing"
                                         ).first()
                                     if not marketing_category:
-                                    
+
                                         marketing_category = Category.objects.get_or_create(
                                                 name="Marketing leads",
                                                 group=sales_group
@@ -1460,7 +1464,7 @@ def whatsapp_webhook(request):
                                 if "AP" in loan_number.upper():
                                     subgroup = zone1_subgroup
                                 else:
-                                    subgroup = zone2_subgroup 
+                                    subgroup = zone2_subgroup
 
                                 existing_case = Case.objects.filter(
                                     mobile=mobile,
@@ -1519,8 +1523,8 @@ def whatsapp_webhook(request):
 
                             if was_button_clicked_recently(mobile):
                                 clear_button_clicked(mobile)
-                            else:
-                                send_welcome_message.delay('sms', mobile, customer_name)
+                            #else:
+                                #send_welcome_message.delay('sms', mobile, customer_name)
 
                         # ======================================
                         # WEBSOCKET BROADCAST - CHAT GROUP
@@ -1617,16 +1621,234 @@ def whatsapp_webhook(request):
                                     131000: "UNKNOWN_ERROR", 131045: "REGISTRATION_ERROR",
                                     132000: "TEMPLATE_PARAM_ERROR", 132001: "TEMPLATE_NOT_FOUND",
                                     132015: "TEMPLATE_PAUSED", 132016: "TEMPLATE_DISABLED",
-                                    130429: "RATE_LIMIT", 131056: "TOO_MANY_MESSAGES",
+                                    130429: "RATE_LIMIT", 131056: "TOO_MANY_MESSAGES",130472: "USER_IN_EXPERIMENT",
                                 }
                                 norm = error_map.get(code, f"Failed_{code}")
                         else:
                             continue
 
-                        SmsWhatsAppLog.objects.filter(message_id=msg_id).update(
-                            status=norm, error_message=json.dumps(errors) if errors else ""
-                        )
+                        # SmsWhatsAppLog.objects.filter(message_id=msg_id).update(
+                        #     status=norm, error_message=json.dumps(errors) if errors else ""
+                        # )
                         ChatContact.objects.filter(mobile=mobile).update(last_status=norm)
+                        # ✅ ✅ ✅ FIX: Update BatchLog for BatchJob
+                        # ============================================================
+                        # STATUS UPDATE + FAILURE COUNT SYNC
+                        # ============================================================
+                        try:
+                            with transaction.atomic():
+
+                                obj = (
+                                    SmsWhatsAppLog.objects
+                                    .select_for_update()
+                                    .filter(message_id=msg_id)
+                                    .first()
+                                )
+
+                                if not obj:
+                                    logger.warning(
+                                        f"⚠️ No SmsWhatsAppLog found for message_id={msg_id}"
+                                    )
+                                    continue
+
+                                old_status = (obj.status or "").strip()
+
+                                # ============================================
+                                # FAILED
+                                # ============================================
+                                if status_type == "failed":
+
+                                    # Save final status for reports
+                                    obj.status = norm
+                                    obj.error_message = (
+                                        json.dumps(errors) if errors else ""
+                                    )
+                                    obj.save(
+                                        update_fields=[
+                                            "status",
+                                            "error_message",
+                                        ]
+                                    )
+
+                                    # ONLY Sent -> Failed
+                                    # ============================================
+                                    # COUNT FAILED WEBHOOK EXACTLY ONCE
+                                    # ============================================
+                                    # ============================================
+                                    # COUNT FAILURE WEBHOOK EXACTLY ONCE
+                                    # ============================================
+
+                                    failure_statuses = {
+                                        "Failed",
+                                        "NOT_ON_WHATSAPP",
+                                        "24H_WINDOW_EXPIRED",
+                                        "UNSUPPORTED_MESSAGE_TYPE",
+                                        "BLOCKED_BY_USER",
+                                        "BLOCKED_BY_BUSINESS",
+                                        "OPTED_OUT",
+                                        "TOKEN_ERROR",
+                                        "INVALID_PARAMETER",
+                                        "UNKNOWN_ERROR",
+                                        "REGISTRATION_ERROR",
+                                        "TEMPLATE_PARAM_ERROR",
+                                        "TEMPLATE_NOT_FOUND",
+                                        "TEMPLATE_PAUSED",
+                                        "TEMPLATE_DISABLED",
+                                        "RATE_LIMIT",
+                                        "TOO_MANY_MESSAGES",
+                                        "USER_IN_EXPERIMENT",
+                                    }
+
+                                    old_is_failure = old_status in failure_statuses
+                                    new_is_failure = norm in failure_statuses
+
+
+                                    # ------------------------------------
+                                    # NEW FAILURE
+                                    # ------------------------------------
+                                    if new_is_failure and not old_is_failure:
+
+                                        # ------------------------------------
+                                        # BATCH EXECUTION
+                                        # ------------------------------------
+                                        if obj.execution_id:
+
+                                            execution = (
+                                                BatchExecution.objects
+                                                .select_for_update()
+                                                .filter(id=obj.execution_id)
+                                                .first()
+                                            )
+
+                                            if execution:
+
+                                                execution.sent_count = max(
+                                                    (execution.sent_count or 0) - 1,
+                                                    0,
+                                                )
+
+                                                execution.failed_count = (
+                                                    execution.failed_count or 0
+                                                ) + 1
+
+                                                execution.save(
+                                                    update_fields=[
+                                                        "sent_count",
+                                                        "failed_count",
+                                                    ]
+                                                )
+
+                                                job = execution.job
+
+                                                if job.batch_size_type == "full":
+                                                    stats = BatchExecution.objects.filter(
+                                                        job=job,
+                                                        occurrence_token=execution.occurrence_token,
+                                                    ).aggregate(
+                                                        total_sent=Sum("sent_count"),
+                                                        total_failed=Sum("failed_count"),
+                                                        total_skipped=Sum("skipped_count"),
+                                                    )
+                                                else:
+                                                    stats = BatchExecution.objects.filter(
+                                                        job=job,
+                                                    ).aggregate(
+                                                        total_sent=Sum("sent_count"),
+                                                        total_failed=Sum("failed_count"),
+                                                        total_skipped=Sum("skipped_count"),
+                                                    )
+
+                                                job.sent_count = stats["total_sent"] or 0
+                                                job.failed_count = stats["total_failed"] or 0
+                                                job.skipped_count = stats["total_skipped"] or 0
+
+                                                job.save(
+                                                    update_fields=[
+                                                        "sent_count",
+                                                        "failed_count",
+                                                        "skipped_count",
+                                                    ]
+                                                )
+
+                                                logger.info(
+                                                    f"📊 WEBHOOK FAILURE COUNTED | "
+                                                    f"execution={execution.id} | "
+                                                    f"mobile={obj.mobile} | "
+                                                    f"old_status={old_status} | "
+                                                    f"new_status={norm} | "
+                                                    f"sent={execution.sent_count} | "
+                                                    f"failed={execution.failed_count}"
+                                                )
+
+                                            else:
+                                                logger.error(
+                                                    f"❌ BatchExecution not found | "
+                                                    f"execution_id={obj.execution_id} | "
+                                                    f"message_id={msg_id}"
+                                                )
+
+                                        # ------------------------------------
+                                        # DIRECT / NON-BATCH
+                                        # ------------------------------------
+                                        else:
+                                            logger.info(
+                                                f"ℹ️ Direct/non-batch webhook failure | "
+                                                f"message_id={msg_id} | "
+                                                f"mobile={obj.mobile}"
+                                            )
+
+
+                                    # ------------------------------------
+                                    # DUPLICATE FAILURE WEBHOOK
+                                    # ------------------------------------
+                                    elif new_is_failure and old_is_failure:
+
+                                        logger.info(
+                                            f"⏭️ Duplicate failure webhook ignored | "
+                                            f"message_id={msg_id} | "
+                                            f"mobile={obj.mobile} | "
+                                            f"old_status={old_status} | "
+                                            f"new_status={norm}"
+                                        )
+
+
+                                    # ------------------------------------
+                                    # OTHER STATUS
+                                    # ------------------------------------
+                                    else:
+
+                                        logger.info(
+                                            f"⏭️ Failure not counted | "
+                                            f"message_id={msg_id} | "
+                                            f"mobile={obj.mobile} | "
+                                            f"old_status={old_status} | "
+                                            f"new_status={norm}"
+                                        )
+                                # ============================================
+                                # SENT / DELIVERED / READ
+                                # ============================================
+                                else:
+
+                                    obj.status = norm
+                                    obj.error_message = (
+                                        json.dumps(errors) if errors else ""
+                                    )
+
+                                    obj.save(
+                                        update_fields=[
+                                            "status",
+                                            "error_message",
+                                        ]
+                                    )
+
+                        except Exception as e:
+                            logger.exception(
+                                f"❌ Status/count synchronization failed | "
+                                f"message_id={msg_id} | error={e}"
+                            )
+
+
+
 
                         gm = ws_group(mobile)
                         if gm:
@@ -1655,10 +1877,6 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
-
-
-
-
 
 
 

@@ -13,12 +13,9 @@ SOURCE_APP_TO_APP_KEY = {
 }
 
 def get_app_key_from_instance(instance):
-    # Try using source_app first
     source = getattr(instance, 'source_app', None)
     if source and source in SOURCE_APP_TO_APP_KEY:
         return SOURCE_APP_TO_APP_KEY[source]
-    
-    # Fallback: match by model class
     for key, cfg in APP_CONFIG.items():
         if isinstance(instance, cfg['case_model']):
             return key
@@ -26,7 +23,6 @@ def get_app_key_from_instance(instance):
 
 @receiver(pre_save)
 def store_old_status(sender, **kwargs):
-    # Only process if sender is one of the Case models
     app_key = None
     for key, cfg in APP_CONFIG.items():
         if sender == cfg['case_model']:
@@ -34,7 +30,6 @@ def store_old_status(sender, **kwargs):
             break
     if not app_key:
         return
-
     instance = kwargs.get('instance')
     if instance.pk:
         try:
@@ -46,7 +41,6 @@ def store_old_status(sender, **kwargs):
 
 @receiver(post_save)
 def handle_case_messages(sender, instance, created, **kwargs):
-    # Only process if sender is one of the Case models
     app_key = None
     for key, cfg in APP_CONFIG.items():
         if sender == cfg['case_model']:
@@ -55,20 +49,28 @@ def handle_case_messages(sender, instance, created, **kwargs):
     if not app_key:
         return
 
-    # Determine the actual app_key from the instance (using source_app)
     actual_app_key = get_app_key_from_instance(instance)
     if not actual_app_key:
-        # Fallback to the matched app_key (should not happen)
         actual_app_key = app_key
 
-    # New case → send open message
+    # ─── OPEN MESSAGE (Only for non-MeghaAI) ──────────────────────
     if created and not instance.ticket_open_message_sent:
-        if hasattr(instance, '_skip_ticket_open') and instance._skip_ticket_open:
-            return
-        send_ticket_open_message.delay(actual_app_key, instance.id)
+        # ✅ Skip open message for MeghaAI
+        if instance.created_by == "MeghaAI":
+            instance.ticket_open_message_sent = True
+            instance.save(update_fields=["ticket_open_message_sent"])
+            print(f"🔄 OPEN message SKIPPED for MeghaAI: {instance.case_id}")
+        else:
+            # Send open message for everyone else
+            if hasattr(instance, '_skip_ticket_open') and instance._skip_ticket_open:
+                return
+            send_ticket_open_message.delay(actual_app_key, instance.id)
+            print(f"📤 OPEN message SENT for: {instance.case_id}")
 
-    # Status changed to 'Closed' → send close message
+    # ─── CLOSE MESSAGE (Always send for everyone) ──────────────────
     if not created:
         old_status = getattr(instance, '_old_status', None)
-        if instance.status == 'Resolved' and old_status != 'Resolved' and not instance.ticket_close_message_sent:
-            send_ticket_close_message.delay(actual_app_key, instance.id)
+        if instance.status in ['Resolved', 'Closed'] and old_status not in ['Resolved', 'Closed']:
+            if not instance.ticket_close_message_sent:
+                print(f"📤 CLOSE message SENT for: {instance.case_id} (Created by: {instance.created_by})")
+                send_ticket_close_message.delay(actual_app_key, instance.id)
