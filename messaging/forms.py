@@ -50,7 +50,7 @@ TEMPLATE_CHOICES = [
     ("48", "doc_sms_portal (English)-[48]"),
     ("49", "Guarantor Login & Payment Link (English)-[49]"),
     ("50", "Unauthorized Payment by Collection fraud_executive-[50]"),
-
+    ("51", "vinayaka_chavithi (English)-[51]"),
  
 ]
 

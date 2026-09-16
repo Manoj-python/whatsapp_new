@@ -17,7 +17,7 @@ PAYMENT_LINK2 = "https://smsquare.info/"
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-    "3", "5", "7", "11", "20", "35", "37", "44", "45", "46", "47",
+   "1", "3", "5", "7", "11", "20", "35", "37", "44", "45", "46", "47",
     "52", "54", "56", "58",
 ]
 
@@ -43,13 +43,13 @@ def call_loan_details_api2(agreement_no):
     Fetch loan details including repayment schedule from AllCloud API (Padma Sai)
     """
     url = f"https://prod-apiv2-padmasai.allcloud.app/api/loan/GetLoanAgreementNoAsync?strAgreementNo={agreement_no}"
-    
+
     headers = {
         "Authorization": SMSQUARE2_LCC_AUTH,
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
-    
+
     try:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
@@ -131,7 +131,27 @@ def get_total_overdue_from_schedule2(mobile, agreement_no=None, include_upcoming
                 'error': 'API returned no data',
                 'status': 'unpaid'
             }
+        status_id = data.get('StatusId', '')
+        if status_id == 'Settled':
+            print(f"✅ LOAN IS SETTLED: {agreement_no} - SKIPPING (PAID)")
+            customer_name = data.get('CustomerName', '') or data.get('PrimaryCustomerName', '')
+            if not customer_name:
+                from financehub.models import Lcc
+                lcc_record = Lcc.objects.filter(loan_number=agreement_no).first()
+                if lcc_record:
+                    customer_name = lcc_record.customer_name or ''
 
+            return {
+                'total_overdue': 0,
+                'total_due': 0,
+                'customer_name': data.get('CustomerName', ''),
+                'loan_number': agreement_no,
+                'is_paid': True,
+                'vas_due': 0,
+                'lpi_due': 0,
+                'emi_due_count': 0,
+                'status': 'paid'
+            }
         # Step 3: Get Customer Name
         customer_name = data.get('CustomerName', '') or data.get('PrimaryCustomerName', '')
         if not customer_name:
@@ -338,6 +358,18 @@ def check_smsquare_payment_status2(mobile, agreement_no=None):
                     'status': 'api_error',
                     'error': 'String response not JSON'
                 }
+        status_id = data.get('StatusId', '')
+        
+        if status_id == 'Settled':
+            print(f"✅ LOAN IS SETTLED: {agreement_no} - MARKING AS PAID")
+            return {
+                'is_paid': True,
+                'total_due': 0,
+                'customer_name': data.get('CustomerName', ''),
+                'loan_number': agreement_no,
+                'seize_date': None,
+                'status': 'settled'
+            }
 
         # ✅ Step 6: Calculate total arrears
         total_dues = float(data.get('TotalDues', 0))
@@ -356,7 +388,8 @@ def check_smsquare_payment_status2(mobile, agreement_no=None):
             'total_due': total_arrears,
             'customer_name': data.get('CustomerName', ''),
             'loan_number': agreement_no,
-            'seize_date': seize_date  # ✅ ADD
+            'seize_date': seize_date, # ✅ ADD
+            'status': 'paid' if total_arrears == 0 else 'unpaid'
         }
 
     except requests.exceptions.RequestException as e:
@@ -1458,7 +1491,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
         "58": (
             "gur_psf_three_bucket",
             "en",
-            [ 
+            [
                 {
                     "type": "text",
                     "text": str(row.get("guarantor_name", ""))
@@ -1492,7 +1525,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
         "59": (
             "smf_gur_three_bucket",
             "en",
-            [ 
+            [
                 {
                     "type": "text",
                     "text": str(row.get("guarantor_name", ""))
@@ -1524,7 +1557,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             ],
         ),
 
-            
+
         "60": ("emi_reminder_smf", "en", [
             {"type": "text", "text": str(row.get("customer_name", ""))},
             {"type": "text", "text": str(row.get("due_amount", ""))},
@@ -1554,7 +1587,9 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
                             "type": "text",
                             "text": str(row.get("due_amount", ""))
                         },
-        
+                        {"type": "text", "text": format_whatsapp_date2(row.get("date", ""))},
+
+
                     ],
                 ),
           "63": ("apolize_tem", "en", []),
@@ -1858,7 +1893,7 @@ PAYMENT_CONFIG = {
             'api_key': 'uSZPjPUREaJMt8D3dtdz8jq23lFDDT3VLdTD-KvuNXerCK4c1cAkc6qlY1rnvliE',
             "financier_name":"padmasai"
         },
-      
+
 
         'whatsapp': {
             'phone_number_id': settings.WHATSAPP2_PHONE_NUMBER_ID,

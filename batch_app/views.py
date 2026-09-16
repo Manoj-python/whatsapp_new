@@ -1,3 +1,4 @@
+
 from django.shortcuts import render
 
 # Create your views here.
@@ -143,28 +144,43 @@ def get_job_data(job):
     """Get job data with accurate execution counts and IST 12-hour formatting."""
     try:
         # ============================================================
-        # 📊 ALWAYS GET AUTHORITATIVE COUNTS FROM BATCH EXECUTIONS
+        # 📊 GET AUTHORITATIVE COUNTS FROM LOGS (ACCURATE)
         # ============================================================
-        # Do NOT depend on job.sent_count / failed_count / skipped_count
-        # because these can be reset/updated during recurring schedules.
-        stats = BatchExecution.objects.filter(job=job).aggregate(
-            total_sent=Sum('sent_count'),
-            total_skipped=Sum('skipped_count'),
-            total_failed=Sum('failed_count'),
-        )
-
-        sent_count = stats['total_sent'] or 0
-        skipped_count = stats['total_skipped'] or 0
-        failed_count = stats['total_failed'] or 0
-
-        # If there are no executions yet, use the job values.
-        # This is mainly useful immediately after job creation.
-        executions_exist = BatchExecution.objects.filter(job=job).exists()
-
-        if not executions_exist:
-            sent_count = job.sent_count or 0
-            skipped_count = job.skipped_count or 0
-            failed_count = job.failed_count or 0
+        # Logs have the most accurate status information from webhooks
+        from .app_discovery import get_app_log_model
+        
+        LogModel = get_app_log_model(job.target_app)
+        
+        if LogModel:
+            logs = LogModel.objects.filter(job_id=job)
+            total_logs = logs.count()
+            
+            if total_logs > 0:
+                # Success = Sent, Delivered, Read
+                success_statuses = ['Sent', 'Delivered', 'Read']
+                sent_count = logs.filter(status__in=success_statuses).count()
+                
+                # Skipped = SKIPPED, PAID, SEIZED
+                skipped_statuses = ['SKIPPED', 'PAID', 'SEIZED']
+                skipped_count = logs.filter(status__in=skipped_statuses).count()
+                
+                # Failed = Total - Sent - Skipped (captures ALL failures)
+                failed_count = total_logs - sent_count - skipped_count
+            else:
+                # Fallback to job values if no logs
+                sent_count = job.sent_count or 0
+                skipped_count = job.skipped_count or 0
+                failed_count = job.failed_count or 0
+        else:
+            # Fallback to executions if no LogModel
+            stats = BatchExecution.objects.filter(job=job).aggregate(
+                total_sent=Sum('sent_count'),
+                total_skipped=Sum('skipped_count'),
+                total_failed=Sum('failed_count'),
+            )
+            sent_count = stats['total_sent'] or 0
+            skipped_count = stats['total_skipped'] or 0
+            failed_count = stats['total_failed'] or 0
 
         # ============================================================
         # 🕒 CONVERT ALL DATETIMES TO IST
@@ -434,21 +450,44 @@ def get_job_data(job):
             'current_skipped_count': 0,
             'current_failed_count': 0,
         }
-
 # ============================================================
 # VIEWS
 # ============================================================
 
 def dashboard(request):
     try:
+        from .app_discovery import get_app_log_model
+        
+        # ✅ Get accurate counts from logs for all jobs
+        total_sent = 0
+        total_skipped = 0
+        total_failed = 0
+        
+        success_statuses = ['Sent', 'Delivered', 'Read']
+        skipped_statuses = ['SKIPPED', 'PAID', 'SEIZED']
+        
+        for job in BatchJob.objects.all():
+            LogModel = get_app_log_model(job.target_app)
+            if LogModel:
+                logs = LogModel.objects.filter(job_id=job)
+                if logs.exists():
+                    total = logs.count()
+                    sent = logs.filter(status__in=success_statuses).count()
+                    skipped = logs.filter(status__in=skipped_statuses).count()
+                    failed = total - sent - skipped
+                    
+                    total_sent += sent
+                    total_skipped += skipped
+                    total_failed += failed
+        
         context = {
             'total_jobs': BatchJob.objects.count(),
             'running_jobs': BatchJob.objects.filter(status='running').count(),
             'completed_jobs': BatchJob.objects.filter(status='completed').count(),
             'failed_jobs': BatchJob.objects.filter(status='failed').count(),
-            'total_sent': BatchJob.objects.aggregate(total=models.Sum('sent_count'))['total'] or 0,
-            'total_skipped': BatchJob.objects.aggregate(total=models.Sum('skipped_count'))['total'] or 0,
-            'total_failed': BatchJob.objects.aggregate(total=models.Sum('failed_count'))['total'] or 0,
+            'total_sent': total_sent,
+            'total_skipped': total_skipped,
+            'total_failed': total_failed,
             'recent_jobs': BatchJob.objects.order_by('-created_at')[:10],
             'discovered_apps': get_all_messaging_apps(),
             'current_time': format_datetime_12hr(timezone.now()),
@@ -490,29 +529,7 @@ def job_count_api(request):
         return JsonResponse({'error': str(e), 'running': 0}, status=500)
 
 
-def batch_job_list(request):
-    try:
-        jobs = BatchJob.objects.all().order_by('-created_at')
-        status_filter = request.GET.get('status', '')
-        if status_filter:
-            jobs = jobs.filter(status=status_filter)
 
-        paginator = Paginator(jobs, 20)
-        page = request.GET.get('page', 1)
-        jobs_page = paginator.get_page(page)
-
-        apps = get_all_messaging_apps()
-
-        return render(request, 'batch_app/jobs.html', {
-            'jobs': jobs_page,
-            'status_filter': status_filter,
-            'status_choices': BatchJob.STATUS_CHOICES,
-            'apps': dict(apps),
-            'current_time': format_datetime_12hr(timezone.now()),
-        })
-    except Exception as e:
-        messages.error(request, f'❌ Error loading jobs: {str(e)}')
-        return render(request, 'batch_app/jobs.html', {'jobs': []})
 
 
 # ============================================================
@@ -522,10 +539,31 @@ def batch_job_list(request):
 
 def batch_job_list(request):
     try:
+        from .app_discovery import get_app_log_model
+        
         jobs = BatchJob.objects.all().order_by('-created_at')
         status_filter = request.GET.get('status', '')
         if status_filter:
             jobs = jobs.filter(status=status_filter)
+
+        # ✅ Update counts for each job from logs
+        success_statuses = ['Sent', 'Delivered', 'Read']
+        skipped_statuses = ['SKIPPED', 'PAID', 'SEIZED']
+        
+        for job in jobs:
+            LogModel = get_app_log_model(job.target_app)
+            if LogModel:
+                logs = LogModel.objects.filter(job_id=job)
+                if logs.exists():
+                    total = logs.count()
+                    sent_count = logs.filter(status__in=success_statuses).count()
+                    skipped_count = logs.filter(status__in=skipped_statuses).count()
+                    failed_count = total - sent_count - skipped_count
+                    
+                    # Update job object (not saving to DB)
+                    job.sent_count = sent_count
+                    job.skipped_count = skipped_count
+                    job.failed_count = failed_count
 
         paginator = Paginator(jobs, 20)
         page = request.GET.get('page', 1)
@@ -563,7 +601,7 @@ def batch_job_create(request):
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
             # notification_type_id = request.POST.get("notification_type")
-    
+
 
             if not excel_path:
                 messages.error(request, '❌ Excel file path is required')
@@ -799,14 +837,14 @@ def batch_job_create(request):
                 from batch_app import tasks
                 from dateutil.relativedelta import relativedelta
                 now = timezone.now()
-                
+
                 if schedule_type == 'monthly':
                     next_run = schedule_datetime_obj
                     while next_run <= now:
                         next_run = next_run + relativedelta(months=1)
                 else:
                     next_run = schedule_datetime_obj
-                
+
                 job.next_run_time = next_run
                 job.save(update_fields=["next_run_time"])
                 tasks.schedule_batch_job.delay(job.job_id)
@@ -1206,32 +1244,32 @@ def batch_job_edit(request, job_id):
 
             # ✅ Calculate correct next run time
             now = timezone.now()
-            
+
             if schedule_type == 'daily':
                 next_run = schedule_datetime_obj
                 while next_run <= now:
                     next_run += timedelta(days=1)
                 job.next_run_time = next_run
-                
+
             elif schedule_type == 'weekly':
                 next_run = schedule_datetime_obj
                 while next_run <= now:
                     next_run += timedelta(days=7)
                 job.next_run_time = next_run
-                
+
             elif schedule_type == 'custom_interval':
                 interval = int(interval_days) if interval_days else 1
                 next_run = schedule_datetime_obj
                 while next_run <= now:
                     next_run += timedelta(days=interval)
                 job.next_run_time = next_run
-                
+
             elif schedule_type == 'multiple_daily':
                 # For multiple daily, use the _get_next_multiple_time method
                 # Temporarily set the schedule_times and schedule_datetime
                 job.schedule_times = schedule_times
                 job.schedule_datetime = schedule_datetime_obj
-                next_run = job._get_next_multiple_time(now)
+                next_run = tasks.calculate_next_run_time(job,from_time=now)
                 job.next_run_time = next_run if next_run else schedule_datetime_obj
 
             elif schedule_type == 'monthly':
@@ -1248,7 +1286,7 @@ def batch_job_edit(request, job_id):
             try:
                 tasks.schedule_batch_job.delay(job.job_id)
                 messages.success(
-                    request, 
+                    request,
                     f'✅ Job "{job.job_name}" updated and rescheduled! '
                     f'Next run: {job.next_run_time.strftime("%Y-%m-%d %I:%M %p")}'
                 )
@@ -1303,7 +1341,7 @@ def batch_job_edit(request, job_id):
 def batch_job_action(request, job_id, action):
     # ✅ Define is_ajax at the START
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    
+
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
 
@@ -1363,30 +1401,30 @@ def batch_job_action(request, job_id, action):
             job.completed_runs = 0
             job.status = 'scheduled'
             job.completed_at = None
-            
+
             now = timezone.now()
-            
+
             if job.schedule_type == 'daily':
                 next_run = job.schedule_datetime
                 while next_run <= now:
                     next_run += timedelta(days=1)
                 job.next_run_time = next_run
-                
+
             elif job.schedule_type == 'weekly':
                 next_run = job.schedule_datetime
                 while next_run <= now:
                     next_run += timedelta(days=7)
                 job.next_run_time = next_run
-                
+
             elif job.schedule_type == 'custom_interval':
                 interval = job.interval_days or 1
                 next_run = job.schedule_datetime
                 while next_run <= now:
                     next_run += timedelta(days=interval)
                 job.next_run_time = next_run
-                
+
             elif job.schedule_type == 'multiple_daily':
-                next_run = job._get_next_multiple_time(now)
+                next_run = tasks.calculate_next_run_time(job,from_time=now)
                 job.next_run_time = next_run if next_run else job.schedule_datetime
 
             elif job.schedule_type == 'monthly':
@@ -1395,7 +1433,7 @@ def batch_job_action(request, job_id, action):
                 while next_run <= now:
                     next_run = next_run + relativedelta(months=1)
                 job.next_run_time = next_run
-            
+
             job.save()
             tasks.schedule_batch_job.delay(job.job_id)
             message = f'🔄 Job "{job.job_name}" restarted!'
@@ -1430,7 +1468,7 @@ def batch_job_action(request, job_id, action):
         else:
             messages.error(request, f'❌ Error: {str(e)}')
             return redirect('batch_job_detail', job_id=job_id)
-        
+
 @csrf_exempt
 def batch_job_delete(request, job_id):
     try:
@@ -1441,7 +1479,7 @@ def batch_job_delete(request, job_id):
         # ✅ Cancel any scheduled tasks and delete executions
         tasks.cancel_daily_schedule.delay(job.job_id)
         BatchExecution.objects.filter(job=job).delete()
-        
+
         # Delete the job
         job.delete()
 
@@ -1646,7 +1684,7 @@ def get_executions_api(request, job_id):
 
     try:
         executions = BatchExecution.objects.filter(job=job).order_by('batch_number')
-        
+
         data = []
         for exec in executions:
             data.append({
@@ -1661,7 +1699,7 @@ def get_executions_api(request, job_id):
                 'completed_at': format_datetime_12hr(exec.completed_at) if exec.completed_at else None,
                 'created_at': format_datetime_12hr(exec.created_at),
             })
-        
+
         stats = {
             'total': len(data),
             'completed': BatchExecution.objects.filter(job=job, status='completed').count(),

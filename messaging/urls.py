@@ -9,6 +9,8 @@ from .api.customer_views import (
     customer_tickets_by_mobile,
     customer_add_comment,
     customer_reopen_ticket,
+    customer_subgroups_list,
+    employee_data
 )
 
 urlpatterns = [
@@ -47,7 +49,10 @@ urlpatterns = [
     path('customer/tickets/<uuid:token>/track/', customer_ticket_track, name='customer_ticket_track'),
     path('customer/tickets/<uuid:token>/comments/', customer_add_comment, name='customer_add_comment'),
     path('customer/tickets/<uuid:token>/reopen/', customer_reopen_ticket, name='customer_reopen_ticket'),
-    path('customer/tickets/', customer_tickets_by_mobile, name='customer_tickets_by_mobile'),        
+    path('customer/tickets/', customer_tickets_by_mobile, name='customer_tickets_by_mobile'),
+    path('customer/subgroups/', customer_subgroups_list, name='customer-subgroups'), 
+    path('employees/', employee_data, name='employee-data'),
+        
 ]
 
 

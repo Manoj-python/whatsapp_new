@@ -349,7 +349,7 @@ def create_case_from_chat_api2(request):
                     'message': 'An active case already exists. Create new anyway?'
                 })
 
-        initial_level = 'ESC1'
+        initial_level = 'ESC2'  # chat-created tickets start at ESC2 (Dilip, 2026-09-13)
         if escalate_to and escalate_to.startswith('ESC') and escalate_to != 'ESC1':
             initial_level = escalate_to
 

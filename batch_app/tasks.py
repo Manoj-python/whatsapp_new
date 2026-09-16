@@ -207,7 +207,29 @@ def execution_has_heartbeat(execution_id):
         # merely because Redis/DB connectivity is temporarily unavailable.
         return True
 
-
+def update_counts(execution_id, result):
+    """Update counts in database - Single source of truth for all count updates"""
+    if not execution_id:
+        return
+    try:
+        from django.db import transaction
+        with transaction.atomic():
+            execution = BatchExecution.objects.select_for_update().filter(id=execution_id).first()
+            if execution:
+                execution.sent_count = (execution.sent_count or 0) + result.get("sent", 0)
+                execution.failed_count = (execution.failed_count or 0) + result.get("failed", 0)
+                execution.skipped_count = (execution.skipped_count or 0) + result.get("skipped", 0)
+                execution.save(update_fields=['sent_count', 'failed_count', 'skipped_count'])
+                
+                job_obj = execution.job
+                job_obj.sent_count = (job_obj.sent_count or 0) + result.get("sent", 0)
+                job_obj.failed_count = (job_obj.failed_count or 0) + result.get("failed", 0)
+                job_obj.skipped_count = (job_obj.skipped_count or 0) + result.get("skipped", 0)
+                job_obj.save(update_fields=['sent_count', 'failed_count', 'skipped_count'])
+                
+                logger.info(f"📊 COUNTS UPDATED | execution={execution.id} | sent={result.get('sent',0)} | failed={result.get('failed',0)} | skipped={result.get('skipped',0)}")
+    except Exception as e:
+        logger.exception(f"❌ Failed to update counts: {e}")
 # ============================================================
 # 🚦 API RATE LIMITER
 # ============================================================
@@ -659,7 +681,7 @@ def process_single_customer(
                     f"❌ Failed to save invalid-mobile report "
                     f"for job={job.job_id}"
                 )
-
+            update_counts(execution_id, result)
             return result
 
         # ========================================================
@@ -701,7 +723,7 @@ def process_single_customer(
                     logger.info(
                         f"⛔ {mobile} - Vehicle seized on {seize_date}"
                     )
-
+                    update_counts(execution_id, result)
                     return result
 
             except Exception as e:
@@ -814,7 +836,7 @@ def process_single_customer(
                             f"❌ Failed to save EMI skip report "
                             f"for {mobile}"
                         )
-
+                    update_counts(execution_id, result)
                     return result
 
                 # ====================================================
@@ -846,7 +868,7 @@ def process_single_customer(
                             f"❌ Failed to save PAID report "
                             f"for {mobile}"
                         )
-
+                    update_counts(execution_id, result)
                     return result
 
                 # ====================================================
@@ -926,6 +948,7 @@ def process_single_customer(
                 f"occurrence={occurrence_token}, "
                 f"mobile={mobile}"
             )
+            update_counts(execution_id, result)
 
             return result
 
@@ -1009,7 +1032,7 @@ def process_single_customer(
                 f"⚠️ Ambiguous API failure for {mobile}; "
                 f"claim retained to prevent duplicate retry: {e}"
             )
-
+            update_counts(execution_id, result)
             return result
 
         # ========================================================
@@ -1105,6 +1128,8 @@ def process_single_customer(
                 f"occurrence={occurrence_token}"
             )
 
+            update_counts(execution_id, result)
+
             return result
 
         # ========================================================
@@ -1122,7 +1147,7 @@ def process_single_customer(
                 mobile
             )
             claim_owned = False
-
+            logger.info(f"📊 API FAILURE | mobile={mobile} | status_code={resp.status_code}")
         else:
             # 408 / 429 / 5xx are ambiguous.
             # Keep claim to prevent duplicate sends.
@@ -1165,7 +1190,7 @@ def process_single_customer(
             f"❌ [{job.target_app}] Failed to send "
             f"{mobile}: {resp.status_code}"
         )
-
+        update_counts(execution_id, result)
         return result
 
     # ============================================================
@@ -1235,7 +1260,7 @@ def process_single_customer(
                 f"❌ Could not save unexpected FAILED "
                 f"report for {mobile or 'Unknown'}"
             )
-
+        update_counts(execution_id, result)
         return result
 
 
@@ -1602,7 +1627,7 @@ def execute_batch(self, job_id, execution_id):
                 try:
                     result = done.result()
                     sent += result.get("sent", 0)
-                    failed += result.get("failed", 0)
+                    # failed += result.get("failed", 0)
                     skipped += result.get("skipped", 0)
                 except Exception as e:
                     failed += 1
@@ -1660,16 +1685,14 @@ def execute_batch(self, job_id, execution_id):
             heartbeat_thread.join(timeout=2)
 
         # Final stats are authoritative.
-        execution.sent_count = sent
-        execution.failed_count = failed
-        execution.skipped_count = skipped
+        # execution.sent_count = sent
+        # execution.failed_count = failed
+        # execution.skipped_count = skipped
+        execution.refresh_from_db()
         execution.status = "completed"
         execution.completed_at = timezone.now()
         execution.save(
             update_fields=[
-                "sent_count",
-                "failed_count",
-                "skipped_count",
                 "status",
                 "completed_at",
             ]
@@ -1677,8 +1700,7 @@ def execute_batch(self, job_id, execution_id):
 
         logger.info(
             f"✅ Batch {execution.batch_number} completed: "
-            f"Sent={sent}, Skipped={skipped}, Failed={failed}"
-        )
+            f"Sent={execution.sent_count}, Skipped={execution.skipped_count}, Failed={execution.failed_count}"        )
 
         # If scheduling the next occurrence fails, _finish_or_schedule_job
         # itself repairs the job state so it cannot remain 'running' forever.
@@ -1786,7 +1808,134 @@ def _finish_or_schedule_job(job):
             locked_job.current_batch = min(completed_batches + 1, total_batches)
 
             # ========================================================
-            # CUSTOM SIZE: MORE RANGES REMAIN
+            # ✅ FIX: For MULTIPLE DAILY - Handle both FULL and CUSTOM
+            # ========================================================
+            if locked_job.schedule_type == "multiple_daily":
+                # Get all times for today
+                times = get_multiple_daily_times(locked_job)
+                now_local = timezone.localtime(now)
+
+                # ====================================================
+                # Check if there are more times TODAY
+                # ====================================================
+                has_next_today = False
+                next_time_today = None
+
+                if times:
+                    for time_str in times:
+                        try:
+                            hour, minute = map(int, time_str.split(":")[:2])
+                            candidate = timezone.make_aware(
+                                datetime.combine(now_local.date(), datetime.min.time().replace(hour=hour, minute=minute)),
+                                timezone.get_current_timezone()
+                            )
+                            # Check if this time is in the future TODAY
+                            if candidate > now_local:
+                                has_next_today = True
+                                next_time_today = candidate
+                                break
+                        except Exception:
+                            continue
+
+                # ====================================================
+                # CASE 1: There is another time TODAY
+                # ====================================================
+                if has_next_today and next_time_today:
+                    # Check if there's a pending/running execution
+                    if not BatchExecution.objects.filter(
+                        job=locked_job,
+                        status__in=["pending", "running"],
+                    ).exists():
+                        locked_job.status = "scheduled"
+                        locked_job.next_run_time = next_time_today
+                        locked_job.save(update_fields=["status", "next_run_time"])
+
+                        logger.info(
+                            f"📅 {job_id}: MULTIPLE DAILY - Next time today at {next_time_today.strftime('%I:%M %p')}"
+                        )
+                        return
+                    else:
+                        logger.info(f"⏳ {job_id}: Pending execution exists, waiting...")
+                        return
+
+                # ====================================================
+                # CASE 2: No more times TODAY
+                # ====================================================
+
+                # ✅ FIX: For FULL size - COMPLETE after all times today
+                if locked_job.batch_size_type == "full":
+                    # Get all executions for this job
+                    all_stats = BatchExecution.objects.filter(job=locked_job).aggregate(
+                        total_sent=Sum("sent_count"),
+                        total_failed=Sum("failed_count"),
+                        total_skipped=Sum("skipped_count"),
+                    )
+
+                    # Update all counts
+                    locked_job.sent_count = all_stats["total_sent"] or 0
+                    locked_job.failed_count = all_stats["total_failed"] or 0
+                    locked_job.skipped_count = all_stats["total_skipped"] or 0
+                    locked_job.total_runs = BatchExecution.objects.filter(job=locked_job).count()
+                    locked_job.completed_at = now
+                    locked_job.status = "completed"
+                    locked_job.next_run_time = None
+                    locked_job.save(update_fields=[
+                        "sent_count", "failed_count", "skipped_count",
+                        "total_runs", "completed_at", "status", "next_run_time"
+                    ])
+
+                    logger.info(f"✅ {job_id}: MULTIPLE DAILY - All times completed today. Job COMPLETED")
+                    return
+
+                # For CUSTOM size - check if all customers are processed
+                if locked_job.batch_size_type != "full":
+                    all_stats = BatchExecution.objects.filter(job=locked_job).aggregate(
+                        total_sent=Sum("sent_count"),
+                        total_failed=Sum("failed_count"),
+                        total_skipped=Sum("skipped_count"),
+                    )
+                    total_processed = (all_stats["total_sent"] or 0) + (all_stats["total_failed"] or 0) + (all_stats["total_skipped"] or 0)
+
+                    # If all customers processed -> COMPLETE
+                    if total_processed >= locked_job.total_customers:
+                        locked_job.status = "completed"
+                        locked_job.next_run_time = None
+                        locked_job.completed_at = now
+                        locked_job.completed_batches = total_batches
+                        locked_job.current_batch = total_batches
+                        locked_job.sent_count = all_stats["total_sent"] or 0
+                        locked_job.failed_count = all_stats["total_failed"] or 0
+                        locked_job.skipped_count = all_stats["total_skipped"] or 0
+
+                        locked_job.save(update_fields=[
+                            "status", "next_run_time", "completed_at", "completed_batches",
+                            "current_batch", "sent_count", "failed_count", "skipped_count"
+                        ])
+
+                        logger.info(f"✅ {job_id}: MULTIPLE DAILY - All customers processed. Job COMPLETED")
+                        return
+
+                    # If customers remain -> Schedule tomorrow's first time
+                    if times and total_processed < locked_job.total_customers:
+                        first_time = times[0]
+                        hour, minute = map(int, first_time.split(":")[:2])
+                        tomorrow = now_local.date() + timedelta(days=1)
+                        next_run = timezone.make_aware(
+                            datetime.combine(tomorrow, datetime.min.time().replace(hour=hour, minute=minute)),
+                            timezone.get_current_timezone()
+                        )
+
+                        locked_job.status = "scheduled"
+                        locked_job.next_run_time = next_run
+                        locked_job.save(update_fields=["status", "next_run_time"])
+
+                        logger.info(
+                            f"📅 {job_id}: MULTIPLE DAILY - Next batch tomorrow at {first_time}"
+                        )
+                        return
+
+            # ========================================================
+            # CUSTOM SIZE: MORE RANGES REMAIN (Non-Multiple Daily)
             # ========================================================
             if locked_job.batch_size_type != "full" and completed_batches < total_batches:
                 # IMPORTANT: wait for the next scheduled occurrence.
@@ -1889,8 +2038,6 @@ def _finish_or_schedule_job(job):
 
     except Exception as e:
         logger.exception(f"❌ Finish/schedule failed for {job_id}: {e}")
-        # Do not leave the job permanently running. A retryable scheduler pass
-        # will recover the failed batch without changing the customer range.
         try:
             BatchJob.objects.filter(
                 job_id=job_id,
@@ -1902,8 +2049,6 @@ def _finish_or_schedule_job(job):
             )
         except Exception:
             logger.exception(f"❌ Could not repair job state for {job_id}")
-
-
 # ============================================================
 # 🔄 CHECK DUE JOBS - SINGLE SOURCE OF TRUTH
 # ============================================================

@@ -1,4 +1,4 @@
-# messaging/utils.py - COMPLETE UPDATED VERSION WITH SEIZDATE CHECK
+
 
 import re
 import requests
@@ -22,7 +22,7 @@ from financehub.models import Lcc
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-    "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+   "1", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
 ]
 
 def needs_api_check(template_id):
@@ -43,13 +43,13 @@ def call_loan_details_api(agreement_no):
     Fetch loan details including repayment schedule from AllCloud API
     """
     url = f"https://prod-apiv2-smsquare.allcloud.app/api/loan/GetLoanAgreementNoAsync?strAgreementNo={agreement_no}"
-    
+
     headers = {
         "Authorization": SMSQUARE_LCC_AUTH,
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
-    
+
     try:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
@@ -126,6 +126,27 @@ def get_total_overdue_from_schedule(mobile, agreement_no=None, include_upcoming=
                 'error': 'API returned no data',
                 'status': 'unpaid'
             }
+        status_id = data.get('StatusId', '')
+        if status_id == 'Settled':
+            print(f"✅ LOAN IS SETTLED: {agreement_no} - SKIPPING (PAID)")
+            customer_name = data.get('CustomerName', '') or data.get('PrimaryCustomerName', '')
+            if not customer_name:
+                from financehub.models import Lcc
+                lcc_record = Lcc.objects.filter(loan_number=agreement_no).first()
+                if lcc_record:
+                    customer_name = lcc_record.customer_name or ''
+
+            return {
+                        'total_overdue': 0,
+                        'total_due': 0,
+                        'customer_name': data.get('CustomerName', ''),
+                        'loan_number': agreement_no,
+                        'is_paid': True,
+                        'vas_due': 0,
+                        'lpi_due': 0,
+                        'emi_due_count': 0,
+                        'status': 'paid'
+                    }
 
         # Step 3: Get Customer Name
         customer_name = data.get('CustomerName', '') or data.get('PrimaryCustomerName', '')
@@ -252,14 +273,14 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
     """
     Check if SMSquare customer has PAID or UNPAID
     Uses LCC API with Agreement Number
-    
+
     If agreement_no is provided → Use it directly
     If not provided → Try to get from Lcc table
-    
+
     Returns: {'is_paid': True/False, 'total_due': amount, 'seize_date': str or None}
     """
     import json
-    
+
     try:
         # Step 1: Get agreement number
         if not agreement_no:
@@ -267,11 +288,11 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
             mobile_clean = ''.join(filter(str.isdigit, mobile))
             if len(mobile_clean) > 10:
                 mobile_clean = mobile_clean[-10:]
-            
+
             lcc_record = Lcc.objects.filter(cust_mobile=mobile_clean).first()
             if not lcc_record:
                 lcc_record = Lcc.objects.filter(guarantor_mobile=mobile_clean).first()
-            
+
             if not lcc_record:
                 return {
                     'is_paid': True,
@@ -279,9 +300,9 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
                     'seize_date': None,  # ✅ ADD
                     'status': 'no_loan'
                 }
-            
+
             agreement_no = lcc_record.loan_number
-        
+
         # Step 2: Call LCC API
         headers = {
             "Authorization": SMSQUARE_LCC_AUTH,
@@ -292,9 +313,9 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
             "AgreementNo": agreement_no,
             "FinanceId": 0
         }
-        
+
         response = requests.post(SMSQUARE_LCC_URL, headers=headers, json=payload, timeout=30)
-        
+
         # ✅ Step 3: Check response status
         if response.status_code != 200:
             print(f"⚠️ LCC API HTTP {response.status_code}: {response.text[:200]}")
@@ -305,7 +326,7 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
                 'status': 'api_error',
                 'error': f"HTTP {response.status_code}"
             }
-        
+
         # ✅ Step 4: Parse JSON safely
         try:
             data = response.json()
@@ -318,7 +339,7 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
                 'status': 'api_error',
                 'error': 'Invalid JSON response'
             }
-        
+
         # ✅ Step 5: If response is a string, parse again
         if isinstance(data, str):
             try:
@@ -332,27 +353,40 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
                     'status': 'api_error',
                     'error': 'String response not JSON'
                 }
-        
+        status_id = data.get('StatusId', '')
+
+        if status_id == 'Settled':
+            print(f"✅ LOAN IS SETTLED: {agreement_no} - MARKING AS PAID")
+            return {
+                        'is_paid': True,
+                        'total_due': 0,
+                        'customer_name': data.get('CustomerName', ''),
+                        'loan_number': agreement_no,
+                        'seize_date': None,
+                        'status': 'settled'
+                    }
+
         # ✅ Step 6: Calculate total arrears
         total_dues = float(data.get('TotalDues', 0))
         lpc_due = float(data.get('LPCDue', 0))
         vas_due = float(data.get('VasDueAmount', 0))
         total_arrears = total_dues + lpc_due + vas_due
-        
+
         # ✅ Step 7: Get SeizeDate
         seize_date = data.get('SeizeDate', None)
         if seize_date and isinstance(seize_date, str):
             if 'T' in seize_date:
                 seize_date = seize_date.split('T')[0]
-        
+
         return {
             'is_paid': total_arrears == 0,  # 0 = PAID, >0 = UNPAID
             'total_due': total_arrears,
             'customer_name': data.get('CustomerName', ''),
             'loan_number': agreement_no,
-            'seize_date': seize_date  # ✅ ADD
+            'seize_date': seize_date, # ✅ ADD
+            'status': 'paid' if total_arrears == 0 else 'unpaid'
         }
-        
+
     except requests.exceptions.RequestException as e:
         print(f"⚠️ LCC API Request Error: {e}")
         return {
@@ -381,7 +415,7 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
 def get_real_time_due(mobile, agreement_no=None, use_schedule=True):
     """
     Get real-time due amount for a customer
-    
+
     If use_schedule=True: Uses RepaymentSchedules (for bucket templates)
     If use_schedule=False: Uses LCC API (for other templates)
     """
@@ -427,6 +461,7 @@ def lcc_details(mobile):
 #  format_whatsapp_date, open_legal_pdf, check_whatsapp_number,
 #  get_template_text_from_whatsapp, render_template_text,
 #  send_second_message_for_mobile, build_payload, etc.)
+
 def upload_whatsapp_media(file_obj):
     """Upload media to WhatsApp Cloud API"""
     access_token = settings.WHATSAPP_ACCESS_TOKEN
@@ -476,6 +511,37 @@ def upload_whatsapp_media(file_obj):
         if 'resp' in locals():
             print(f"Response: {resp.text}")
         raise
+
+def upload_whatsapp_image(image_filename, folder="ganesh_images"):
+    """Upload Ganesh image to WhatsApp Cloud API"""
+
+    image_bytes = open_ganesh_image(
+        image_filename,
+        folder
+    )
+
+    if not image_bytes:
+        raise ValueError(
+            f"Empty image: {image_filename}"
+        )
+
+    file_obj = BytesIO(image_bytes)
+    file_obj.name = image_filename
+
+    if image_filename.lower().endswith(".png"):
+        file_obj.content_type = "image/png"
+    else:
+        file_obj.content_type = "image/jpeg"
+
+    print(
+        f"🖼️ Uploading Ganesh image: "
+        f"{image_filename} ({file_obj.content_type})"
+    )
+
+    result = upload_whatsapp_media(file_obj)
+
+    return result
+
 
 
 def send_whatsapp_media(to_number, media_id, media_type, caption="", filename=None):
@@ -610,27 +676,27 @@ def format_whatsapp_date(value) -> str:
 def open_legal_pdf(filename, folder):
     """Open PDF from S3 or local"""
     filename = Path(str(filename)).name.strip()
-    
+
     import boto3
     from botocore.exceptions import ClientError
-    
+
     s3 = boto3.client(
         "s3",
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
         region_name=settings.AWS_S3_REGION_NAME,
     )
-    
+
     key = f"{folder}/{filename}"
     print("DEBUG S3 KEY:", key)
-    
+
     try:
         obj = s3.get_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key)
         print("✅ Loaded from S3")
         return obj["Body"].read()
     except ClientError as e:
         print("⚠️ S3 fetch failed:", e)
-    
+
     if settings.DEBUG:
         if folder == "welcome_pdfs":
             base_dir = Path(settings.WELCOME_PDF_DIR)
@@ -640,19 +706,69 @@ def open_legal_pdf(filename, folder):
             base_dir = Path(settings.NOC_PDF_DIR)
         else:
             raise ValueError(f"Unknown folder: {folder}")
-        
+
         file_path = base_dir / filename
         print("DEBUG LOCAL PATH:", file_path)
-        
+
         if file_path.exists():
             print("✅ Loaded from LOCAL")
             with open(file_path, "rb") as f:
                 return f.read()
-        
+
         raise FileNotFoundError(f"PDF not found in S3 AND locally: {key} | {file_path}")
-    
+
     raise FileNotFoundError(f"PDF not found in S3: {key}")
 
+
+
+def open_ganesh_image(filename, folder="ganesh_images"):
+    """Open Ganesh image from S3 or local storage"""
+    filename = Path(str(filename)).name.strip()
+
+    import boto3
+    from botocore.exceptions import ClientError
+
+    s3 = boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.AWS_S3_REGION_NAME,
+    )
+
+    key = f"{folder}/{filename}"
+    print("DEBUG S3 IMAGE KEY:", key)
+
+    try:
+        obj = s3.get_object(
+            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+            Key=key
+        )
+
+        print("✅ Ganesh image loaded from S3")
+        return obj["Body"].read()
+
+    except ClientError as e:
+        print("⚠️ S3 image fetch failed:", e)
+
+    if settings.DEBUG:
+        base_dir = Path(settings.BASE_DIR) / folder
+        file_path = base_dir / filename
+
+        print("DEBUG LOCAL IMAGE PATH:", file_path)
+
+        if file_path.exists():
+            print("✅ Ganesh image loaded from LOCAL")
+
+            with open(file_path, "rb") as f:
+                return f.read()
+
+        raise FileNotFoundError(
+            f"Ganesh image not found in S3 AND locally: {key} | {file_path}"
+        )
+
+    raise FileNotFoundError(
+        f"Ganesh image not found in S3: {key}"
+    )
 
 def check_whatsapp_number(mobile: str) -> Dict[str, Any]:
     """Check if number is on WhatsApp"""
@@ -1320,24 +1436,24 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                             "text": str(row.get("legal_number", ""))
                         }
 
-                    ],  
+                    ],
                 ),
 
                "48": (
                     "doc_sms_portal",
                     "en",
                     []
-                ), 
-                
+                ),
+
                 "49": (
                 "guarantor_payment",
                 "en",
                 [
                     {"type": "text", "text": str(row.get("guarantor_name", ""))},     # {{1}}
-                    
+
                 ],
             ),
-               
+
               "50": (
                 "fraud_executive",
                 "en",
@@ -1347,8 +1463,18 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 ],
             ),
 
-    }
+            "51": (
+                "vinayaka_chavithi",
+                "te",
+                [
+                    {"type": "text", "text": str(row.get("cust_name", ""))},     # {{1}}
 
+                ],
+            ),
+
+
+    }
+    
     template_name, lang, parameters = templates.get(choice, templates["8"])
 
     mobile = format_mobile(
@@ -1358,15 +1484,70 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
     if not mobile:
         raise ValueError("Mobile number missing")
 
-    # --------------------------------------------------
+    # ============================================================
+    # TEMPLATE 51 - VINAYAKA CHAVITHI - IMAGE HEADER
+    # ============================================================
+    if choice == "51":
+
+        if not media_id:
+            raise ValueError(
+                "media_id is required for Vinayaka Chavithi image template"
+            )
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": mobile,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {
+                    "policy": "deterministic",
+                    "code": lang
+                },
+                "components": [
+                    {
+                        "type": "header",
+                        "parameters": [
+                            {
+                                "type": "image",
+                                "image": {
+                                    "id": media_id
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "body",
+                        "parameters": parameters
+                    }
+                ]
+            }
+        }
+
+    # ============================================================
     # TEMPLATES WITH DOCUMENT HEADER
-    # --------------------------------------------------
-    if choice in ("19", "20", "21", "25", "30", "31", "32", "33", "35", "37","41","48"):
+    # ============================================================
+    elif choice in (
+        "19",
+        "20",
+        "21",
+        "25",
+        "30",
+        "31",
+        "32",
+        "33",
+        "35",
+        "37",
+        "41",
+        "48"
+    ):
 
         if not media_id:
             raise ValueError("media_id is required for document template")
 
-        # Determine correct filename based on template
+        # --------------------------------------------------------
+        # Determine correct PDF filename based on template
+        # --------------------------------------------------------
         if choice == "21":
             pdf_source = row.get("welcome_pdf")
 
@@ -1393,8 +1574,10 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
         elif choice == "37":
             pdf_source = row.get("presale_notices_borrower_pdf")
+
         elif choice == "41":
             pdf_source = row.get("hpt_pending_pdf")
+
         elif choice == "48":
             pdf_source = row.get("doc_sms_portal_pdf")
 
@@ -2002,14 +2185,14 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 #     """
 #     Check if SMSquare customer has PAID or UNPAID
 #     Uses LCC API with Agreement Number
-    
+
 #     If agreement_no is provided → Use it directly
 #     If not provided → Try to get from Lcc table
-    
+
 #     Returns: {'is_paid': True/False, 'total_due': amount}
 #     """
 #     import json  # ✅ Add this import
-    
+
 #     try:
 #         # Step 1: Get agreement number
 #         if not agreement_no:
@@ -2017,20 +2200,20 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 #             mobile_clean = ''.join(filter(str.isdigit, mobile))
 #             if len(mobile_clean) > 10:
 #                 mobile_clean = mobile_clean[-10:]
-            
+
 #             lcc_record = Lcc.objects.filter(cust_mobile=mobile_clean).first()
 #             if not lcc_record:
 #                 lcc_record = Lcc.objects.filter(guarantor_mobile=mobile_clean).first()
-            
+
 #             if not lcc_record:
 #                 return {
 #                     'is_paid': True,
 #                     'total_due': 0,
 #                     'status': 'no_loan'
 #                 }
-            
+
 #             agreement_no = lcc_record.loan_number
-        
+
 #         # Step 2: Call LCC API
 #         headers = {
 #             "Authorization": SMSQUARE_LCC_AUTH,
@@ -2041,9 +2224,9 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 #             "AgreementNo": agreement_no,
 #             "FinanceId": 0
 #         }
-        
+
 #         response = requests.post(SMSQUARE_LCC_URL, headers=headers, json=payload, timeout=30)
-        
+
 #         # ✅ Step 3: Check response status
 #         if response.status_code != 200:
 #             print(f"⚠️ LCC API HTTP {response.status_code}: {response.text[:200]}")
@@ -2053,7 +2236,7 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 #                 'status': 'api_error',
 #                 'error': f"HTTP {response.status_code}"
 #             }
-        
+
 #         # ✅ Step 4: Parse JSON safely
 #         try:
 #             data = response.json()
@@ -2065,7 +2248,7 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 #                 'status': 'api_error',
 #                 'error': 'Invalid JSON response'
 #             }
-        
+
 #         # ✅ Step 5: If response is a string, parse again
 #         if isinstance(data, str):
 #             try:
@@ -2078,20 +2261,20 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 #                     'status': 'api_error',
 #                     'error': 'String response not JSON'
 #                 }
-        
+
 #         # ✅ Step 6: Calculate total arrears
 #         total_dues = float(data.get('TotalDues', 0))
 #         lpc_due = float(data.get('LPCDue', 0))
 #         vas_due = float(data.get('VasDueAmount', 0))
 #         total_arrears = total_dues + lpc_due + vas_due
-        
+
 #         return {
 #             'is_paid': total_arrears == 0,  # 0 = PAID, >0 = UNPAID
 #             'total_due': total_arrears,
 #             'customer_name': data.get('CustomerName', ''),
 #             'loan_number': agreement_no
 #         }
-        
+
 #     except requests.exceptions.RequestException as e:
 #         print(f"⚠️ LCC API Request Error: {e}")
 #         return {
@@ -2109,3 +2292,5 @@ def verify_url(doc_type: str, agreement_no: str, amount: float, doc_date: str) -
 #             'status': 'api_error',
 #             'error': str(e)
 #         }
+
+

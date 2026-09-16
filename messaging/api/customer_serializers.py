@@ -248,3 +248,11 @@ class CustomerTicketListSerializer(serializers.ModelSerializer):
             'ESC4': '📊', 'ESC5': '🔒', 'RESOLVED': '✅', 'CLOSED': '🔒'
         }
         return f"{icons.get(level, '')} {level}"
+
+
+
+from financehub.models import EmployeeMaster
+class EmployeeMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=EmployeeMaster
+        fields=['employee_number','employee_name']

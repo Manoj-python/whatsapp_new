@@ -1708,11 +1708,7 @@ def whatsapp_webhook(request):
                                     # ------------------------------------
                                     if new_is_failure and not old_is_failure:
 
-                                        # ------------------------------------
-                                        # BATCH EXECUTION
-                                        # ------------------------------------
                                         if obj.execution_id:
-
                                             execution = (
                                                 BatchExecution.objects
                                                 .select_for_update()
@@ -1721,16 +1717,16 @@ def whatsapp_webhook(request):
                                             )
 
                                             if execution:
-
-                                                execution.sent_count = max(
-                                                    (execution.sent_count or 0) - 1,
-                                                    0,
-                                                )
-
+                                                # ✅ Decrease sent only if > 0
+                                                if execution.sent_count and execution.sent_count > 0:
+                                                    execution.sent_count = max(
+                                                        (execution.sent_count or 0) - 1,
+                                                        0,
+                                                    )
+                                                
                                                 execution.failed_count = (
                                                     execution.failed_count or 0
                                                 ) + 1
-
                                                 execution.save(
                                                     update_fields=[
                                                         "sent_count",
@@ -1738,30 +1734,17 @@ def whatsapp_webhook(request):
                                                     ]
                                                 )
 
+                                                # ✅ Update job totals from ALL executions
                                                 job = execution.job
-
-                                                if job.batch_size_type == "full":
-                                                    stats = BatchExecution.objects.filter(
-                                                        job=job,
-                                                        occurrence_token=execution.occurrence_token,
-                                                    ).aggregate(
-                                                        total_sent=Sum("sent_count"),
-                                                        total_failed=Sum("failed_count"),
-                                                        total_skipped=Sum("skipped_count"),
-                                                    )
-                                                else:
-                                                    stats = BatchExecution.objects.filter(
-                                                        job=job,
-                                                    ).aggregate(
-                                                        total_sent=Sum("sent_count"),
-                                                        total_failed=Sum("failed_count"),
-                                                        total_skipped=Sum("skipped_count"),
-                                                    )
-
-                                                job.sent_count = stats["total_sent"] or 0
-                                                job.failed_count = stats["total_failed"] or 0
-                                                job.skipped_count = stats["total_skipped"] or 0
-
+                                                all_stats = BatchExecution.objects.filter(job=job).aggregate(
+                                                    total_sent=Sum("sent_count"),
+                                                    total_failed=Sum("failed_count"),
+                                                    total_skipped=Sum("skipped_count"),
+                                                )
+                                                
+                                                job.sent_count = all_stats["total_sent"] or 0
+                                                job.failed_count = all_stats["total_failed"] or 0
+                                                job.skipped_count = all_stats["total_skipped"] or 0
                                                 job.save(
                                                     update_fields=[
                                                         "sent_count",
@@ -1780,16 +1763,6 @@ def whatsapp_webhook(request):
                                                     f"failed={execution.failed_count}"
                                                 )
 
-                                            else:
-                                                logger.error(
-                                                    f"❌ BatchExecution not found | "
-                                                    f"execution_id={obj.execution_id} | "
-                                                    f"message_id={msg_id}"
-                                                )
-
-                                        # ------------------------------------
-                                        # DIRECT / NON-BATCH
-                                        # ------------------------------------
                                         else:
                                             logger.info(
                                                 f"ℹ️ Direct/non-batch webhook failure | "
@@ -1797,12 +1770,10 @@ def whatsapp_webhook(request):
                                                 f"mobile={obj.mobile}"
                                             )
 
-
                                     # ------------------------------------
                                     # DUPLICATE FAILURE WEBHOOK
                                     # ------------------------------------
                                     elif new_is_failure and old_is_failure:
-
                                         logger.info(
                                             f"⏭️ Duplicate failure webhook ignored | "
                                             f"message_id={msg_id} | "
@@ -1811,12 +1782,10 @@ def whatsapp_webhook(request):
                                             f"new_status={norm}"
                                         )
 
-
                                     # ------------------------------------
                                     # OTHER STATUS
                                     # ------------------------------------
                                     else:
-
                                         logger.info(
                                             f"⏭️ Failure not counted | "
                                             f"message_id={msg_id} | "
@@ -1824,6 +1793,7 @@ def whatsapp_webhook(request):
                                             f"old_status={old_status} | "
                                             f"new_status={norm}"
                                         )
+
                                 # ============================================
                                 # SENT / DELIVERED / READ
                                 # ============================================

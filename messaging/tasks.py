@@ -284,7 +284,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
         name = row.get("customer_name") or row.get("CustomerName") or ""
         mobile = format_mobile(row.get("cust_mobile") or row.get("CustMobile") or "")
         loan_number = row.get("loan_number") or row.get("LoanNumber") or ""
-        
+
         # 🔥 Store Excel amount for logging
         excel_amount = row.get("due_amount") or row.get("DueAmount") or "0"
 
@@ -298,7 +298,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
         try:
             lcc_status = check_smsquare_payment_status(mobile, loan_number)
             seize_date = lcc_status.get('seize_date')
-            
+
             if seize_date:
                 print(f"⛔ {mobile} - Vehicle seized on {seize_date}, skipping")
                 local_skipped += 1
@@ -327,14 +327,14 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
         if check_api:
             try:
                 # ✅ Bucket templates (44-47) → INCLUDE current month
-                if template_choice in ["44", "45", "46", "47"]:
+                if template_choice in ["1","44", "45", "46", "47"]:
                     status = get_total_overdue_from_schedule(mobile, loan_number, include_upcoming=True)
                     print(f"📊 Using SCHEDULE API for template {template_choice} (INCLUDING upcoming)")
                 else:
                     # ✅ Other templates (legal, etc.) → EXCLUDE current month
                     status = get_total_overdue_from_schedule(mobile, loan_number, include_upcoming=False)
                     print(f"📊 Using SCHEDULE API for template {template_choice} (EXCLUDING upcoming)")
-                
+
                 real_time_due = status.get('total_due', 0)
                 is_paid = status.get('is_paid', False)
                 emi_due_count = status.get('emi_due_count', 0)
@@ -362,7 +362,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     # ✅ PAID → Skip (no message)
                     print(f"✅ {mobile} - PAID (₹{real_time_due}), skipping")
                     local_skipped += 1
-                    
+
                     # ✅ CREATE A LOG ENTRY FOR SKIPPED CUSTOMER
                     SmsWhatsAppLog.objects.create(
                         job_id=job_id,
@@ -383,18 +383,18 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                         # 🔥 CRITICAL: Override Excel amount with REAL-TIME amount
                         row['due_amount'] = str(real_time_due)
                         print(f"🔄 {mobile} - UNPAID (Excel: ₹{excel_amount} → Actual: ₹{real_time_due})")
-                        
+
                         # ✅ Update customer name if available
                         if status.get('customer_name'):
                             row['customer_name'] = status.get('customer_name')
-                            
+
             except Exception as api_error:
                 # If API fails, use Excel data (fallback)
                 print(f"⚠️ API Error for {mobile}: {api_error}")
                 print(f"📱 {mobile} - Using Excel data (₹{excel_amount})")
         else:
             # ❌ No API check → Send with Excel data
-            print(f"📱 {mobile} - No API check, using Excel data (₹{excel_amount})")   
+            print(f"📱 {mobile} - No API check, using Excel data (₹{excel_amount})")
 
              # ============================================================
         # 📤 SEND MESSAGE (With updated real-time amount)
@@ -403,6 +403,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             media_id = None
             folder = None
             pdf_filename = None
+            image_filename = None
+
 
             # ==================================================
             # 📁 SELECT PDF + FOLDER
@@ -444,31 +446,87 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             elif template_choice == "41":
                 pdf_filename = row.get("hpt_pending_pdf")
                 folder = "noc_pdfs"
-            
+
             elif template_choice == "48":
                 pdf_filename = row.get("doc_sms_portal_pdf")
-                folder = "noc_pdfs"                
+                folder = "noc_pdfs"
+            elif template_choice == "51":
+                image_filename = row.get("ganesh_image")
+                folder = "ganesh_images"
             elif template_choice == "19":
                 pdf_filename = (
                     row.get("borrower_pdf_file")
                     or row.get("customer_pdf_file")
                 )
                 folder = "legal_pdfs"
+            # ==================================================
+            # 📤 UPLOAD MEDIA TO WHATSAPP
+            # ==================================================
 
-            # ==================================================
-            # 📤 UPLOAD TO WHATSAPP (ONLY IF PDF EXISTS)
-            # ==================================================
-            if pdf_filename:
+            # --------------------------------------------------
+            # 🖼️ TEMPLATE 51 - IMAGE (Vinayaka Chavithi)
+            # --------------------------------------------------
+            if template_choice == "51":
+
+                if not image_filename:
+                    raise ValueError(
+                        "ganesh_image column is missing in Excel row"
+                    )
+
                 if not folder:
-                    raise ValueError(f"Folder not set for template {template_choice}")
+                    raise ValueError(
+                        f"Folder not set for template {template_choice}"
+                    )
 
-                print(f"📄 Template: {template_choice}, Folder: {folder}, File: {pdf_filename}")
+                print(
+                    f"🖼️ Template: {template_choice}, "
+                    f"Folder: {folder}, "
+                    f"Image: {image_filename}"
+                )
 
-                if pdf_filename not in media_cache:
-                    upload_response = upload_legal_pdf_to_whatsapp(pdf_filename, folder)
+                if image_filename not in media_cache:
+
+                    upload_response = upload_whatsapp_image(
+                        image_filename,
+                        folder
+                    )
 
                     if not upload_response or "id" not in upload_response:
-                        raise ValueError(f"Media upload failed: {upload_response}")
+                        raise ValueError(
+                            f"Image upload failed: {upload_response}"
+                        )
+
+                    media_cache[image_filename] = upload_response.get("id")
+
+                media_id = media_cache[image_filename]
+
+            # --------------------------------------------------
+            # 📄 ALL OTHER PDF/DOCUMENT TEMPLATES
+            # --------------------------------------------------
+            elif pdf_filename:
+
+                if not folder:
+                    raise ValueError(
+                        f"Folder not set for template {template_choice}"
+                    )
+
+                print(
+                    f"📄 Template: {template_choice}, "
+                    f"Folder: {folder}, "
+                    f"File: {pdf_filename}"
+                )
+
+                if pdf_filename not in media_cache:
+
+                    upload_response = upload_legal_pdf_to_whatsapp(
+                        pdf_filename,
+                        folder
+                    )
+
+                    if not upload_response or "id" not in upload_response:
+                        raise ValueError(
+                            f"Media upload failed: {upload_response}"
+                        )
 
                     media_cache[pdf_filename] = upload_response.get("id")
 
@@ -493,11 +551,16 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             # ==================================================
             # 📝 CREATE LOG WITH REAL-TIME AMOUNT
             # ==================================================
-            log_content_type = "document" if pdf_filename else "text"
+            if template_choice == "51":
+                log_content_type = "image"
+            elif pdf_filename:
+                log_content_type = "document"
+            else:
+                log_content_type = "text"
 
             # ✅ Include both Excel and Actual amounts in log for bucket templates
             log_text = rendered_text
-            if check_api and not is_paid and template_choice in ["44", "45", "46", "47"]:
+            if check_api and not is_paid and template_choice in ["1","44", "45", "46", "47"]:
                 log_text = f"{rendered_text}\n\n📊 Excel: ₹{excel_amount} | Actual: ₹{real_time_due}"
 
             log = SmsWhatsAppLog.objects.create(
@@ -512,7 +575,7 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 message_type="Sent",
                 content_type=log_content_type,
                 # 🆕 Store both amounts for debugging
-                error_message=f"Excel: ₹{excel_amount} | Actual: ₹{real_time_due}" if check_api and template_choice in ["44", "45", "46", "47"] else "",
+                error_message=f"Excel: ₹{excel_amount} | Actual: ₹{real_time_due}" if check_api and template_choice in ["1","44", "45", "46", "47"] else "",
             )
 
             # ==================================================
@@ -551,6 +614,42 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     import traceback
                     traceback.print_exc()
 
+            # ==================================================
+            # 💾 SAVE IMAGE TO DASHBOARD (TEMPLATE 51 ONLY)
+            # ==================================================
+            if template_choice == "51" and image_filename:
+                try:
+                    print(f"💾 Saving image: {image_filename} from {folder}")
+
+                    image_bytes = open_ganesh_image(image_filename, folder)
+
+                    if not image_bytes:
+                        raise ValueError("Empty image")
+
+                    if not isinstance(image_bytes, bytes):
+                        image_bytes = bytes(image_bytes)
+
+                    print(f"✅ Image bytes received, size: {len(image_bytes)} bytes")
+
+                    from pathlib import Path
+                    original_filename = Path(image_filename).name
+
+                    saved_path = default_storage.save(
+                        f"chat_media/{original_filename}",
+                        ContentFile(image_bytes)
+                    )
+
+                    SmsWhatsAppLog.objects.filter(id=log.id).update(
+                        media_file=saved_path,
+                        content_type="image"
+                    )
+                    log.refresh_from_db()
+                    print("✅ IMAGE SAVED:", original_filename)
+
+                except Exception as e:
+                    print(f"❌ IMAGE SAVE FAILED: {e}")
+                    import traceback
+                    traceback.print_exc()
             # ==================================================
             # 📝 UPDATE CONTACT
             # ==================================================
@@ -723,7 +822,7 @@ def finalize_bulk_job(self, job_id):
     # ✅ SUCCESS REPORT - Only Sent, Delivered, Read
     # ============================================================
     success_qs = SmsWhatsAppLog.objects.filter(
-        job_id=job_id, 
+        job_id=job_id,
         status__in=["Sent", "Delivered", "Read"]
     )
 
@@ -833,7 +932,7 @@ def finalize_bulk_job(self, job_id):
 def process_pending_webhook_updates():
     """Process any status updates that arrived before the message was saved"""
     from django.core.cache import cache
-   
+
     from datetime import timedelta
 
     keys = cache.keys("pending_wa_status_*")
@@ -869,3 +968,5 @@ def process_pending_webhook_updates():
                 from dateutil import parser
                 if parser.parse(timestamp) < timezone.now() - timedelta(seconds=60):
                     cache.delete(key)
+
+

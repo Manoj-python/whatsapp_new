@@ -367,3 +367,37 @@ def customer_reopen_ticket(request, token):
         'status': case.status,
         'current_level': case.current_level
     })
+
+
+from messaging.models import Subgroup
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def customer_subgroups_list(request):
+    """Fetch ALL subgroups."""
+    subgroups = Subgroup.objects.all().order_by('name')
+    return Response({
+        'subgroups': [
+            {
+                'id': sg.id,
+                'name': sg.name,
+                'group_id': sg.group_id,
+                'group_name': sg.group.name if sg.group else None,
+            }
+            for sg in subgroups
+        ],
+        'count': subgroups.count()
+    })
+
+from financehub.models import EmployeeMaster
+from .customer_serializers import EmployeeMasterSerializer
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])   # or IsAuthenticated
+def employee_data(request):
+    """Fetch all employees."""
+    employees = EmployeeMaster.objects.all().order_by('employee_name')
+    serializer = EmployeeMasterSerializer(employees, many=True)
+    return Response({
+        'employees': serializer.data,
+        'count': employees.count()
+    })
