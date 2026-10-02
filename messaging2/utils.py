@@ -17,7 +17,7 @@ PAYMENT_LINK2 = "https://smsquare.info/"
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-   "1", "3", "5", "7", "11", "20", "35", "37", "44", "45", "46", "47",
+   "1", "3", "7", "11", "20", "35", "37", "44", "45", "46", "47",
     "52", "54", "56", "58",
 ]
 
@@ -132,7 +132,7 @@ def get_total_overdue_from_schedule2(mobile, agreement_no=None, include_upcoming
                 'status': 'unpaid'
             }
         status_id = data.get('StatusId', '')
-        if status_id == 'Settled':
+        if status_id in ('Settled', 'Completed', 'Closed'):
             print(f"✅ LOAN IS SETTLED: {agreement_no} - SKIPPING (PAID)")
             customer_name = data.get('CustomerName', '') or data.get('PrimaryCustomerName', '')
             if not customer_name:
@@ -360,7 +360,7 @@ def check_smsquare_payment_status2(mobile, agreement_no=None):
                 }
         status_id = data.get('StatusId', '')
         
-        if status_id == 'Settled':
+        if status_id in ('Settled', 'Completed', 'Closed'):
             print(f"✅ LOAN IS SETTLED: {agreement_no} - MARKING AS PAID")
             return {
                 'is_paid': True,
@@ -1601,6 +1601,23 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
 
                 ],
             ),
+          "65": (
+                "te_final_settlement",
+                "te",
+                    [
+                        {
+                        "type": "text",
+                        "text": str(row.get("emp_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("due_amount", ""))
+                        },
+                        {"type": "text", "text": format_whatsapp_date2(row.get("date", ""))},
+
+
+                    ],
+                ),
 
 
     }

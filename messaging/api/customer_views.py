@@ -274,6 +274,7 @@ def customer_tickets_by_mobile(request):
                 'subgroup_name': case.subgroup.name if case.subgroup else None,
                 'category_name': case.category.name if case.category else None,
                 'status_display': case.status,
+                'employee_number': case.employee_number, 
             })
     
     return Response({

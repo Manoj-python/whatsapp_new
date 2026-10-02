@@ -373,7 +373,7 @@ class Case(models.Model):
     # Reopen tracking
     reopen_count = models.IntegerField(default=0)
     reopen_reason = models.TextField(blank=True, null=True)
-    
+    employee_number=models.CharField(max_length=50,null=True,blank=True)    
     # Metadata
     source = models.CharField(max_length=100,choices=[('Call','Call'),('email','email'),('Whatsapp','Whatsapp'),('socialmedia','socialmedia'),('Physicalvisit','Physicalvisit'),('Notice','Notice')],default='WhatsApp', blank=True, null=True)
 

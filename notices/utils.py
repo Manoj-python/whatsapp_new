@@ -825,7 +825,6 @@ def generate_due_notice_sms(excel_path, template_path, output_dir, progress_call
             "vehicle_no": safe(row.get("vehicle_no")),
             "dues": format_indian_number(row.get("dues")),
             "vas": format_indian_number(row.get("vas")),
-            "over_dues": format_indian_number(row.get("over_dues")),
             "amount": format_indian_number(row.get("amount")),
         }
 

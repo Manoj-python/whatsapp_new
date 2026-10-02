@@ -263,7 +263,7 @@ class Case(models.Model):
         editable=False,
         db_index=True
     )
-
+    employee_number=models.CharField(max_length=50,null=True,blank=True)
     # 📱 Alternative contact number
     alt_contact = models.CharField(max_length=20, blank=True, null=True)
 

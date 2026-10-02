@@ -43,7 +43,7 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
             'customer_name', 'mobile', 'email',
             'loan_number', 'vehicle_number',
             'issue_description', 'attachment',
-            'group', 'subgroup', 'category'
+            'group', 'subgroup', 'category','employee_number'
         ]
         extra_kwargs = {
             'group': {'required': False, 'allow_null': True},
@@ -52,6 +52,11 @@ class CustomerTicketCreateSerializer(serializers.ModelSerializer):
             'issue_description': {'required': True},
             'loan_number': {'required': False, 'allow_null': True, 'allow_blank': True},
             'vehicle_number': {'required': False, 'allow_null': True, 'allow_blank': True},
+            'employee_number': {
+                'required': False,
+                'allow_null': True,
+                'allow_blank': True,
+            },   
         }
 
     def validate(self, data):
@@ -225,7 +230,8 @@ class CustomerTicketListSerializer(serializers.ModelSerializer):
             'customer_token',
             'group_name',   
             'last_escalation_reason',             # ✅ department name
-            'subgroup_name'            # ✅ subgroup name
+            'subgroup_name',
+            'employee_number'            # ✅ subgroup name
         ]
     def get_last_escalation_reason(self, obj):
         last_log = obj.escalation_logs.order_by('-created_at').first()

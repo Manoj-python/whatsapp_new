@@ -22,7 +22,7 @@ from financehub.models import Lcc
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-   "1", "3", "5", "6", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+   "1", "3", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
 ]
 
 def needs_api_check(template_id):
@@ -127,7 +127,7 @@ def get_total_overdue_from_schedule(mobile, agreement_no=None, include_upcoming=
                 'status': 'unpaid'
             }
         status_id = data.get('StatusId', '')
-        if status_id == 'Settled':
+        if status_id in ('Settled', 'Completed', 'Closed'):
             print(f"✅ LOAN IS SETTLED: {agreement_no} - SKIPPING (PAID)")
             customer_name = data.get('CustomerName', '') or data.get('PrimaryCustomerName', '')
             if not customer_name:
@@ -355,7 +355,7 @@ def check_smsquare_payment_status(mobile, agreement_no=None):
                 }
         status_id = data.get('StatusId', '')
 
-        if status_id == 'Settled':
+        if status_id in ('Settled', 'Completed', 'Closed'):
             print(f"✅ LOAN IS SETTLED: {agreement_no} - MARKING AS PAID")
             return {
                         'is_paid': True,
@@ -1468,6 +1468,26 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 "te",
                 [
                     {"type": "text", "text": str(row.get("cust_name", ""))},     # {{1}}
+
+                ],
+            ),
+             "52": (
+                "noc_intimation",
+                "en",
+                [
+                    {
+                        "type": "text",
+                        "text": str(row.get("customer_name", ""))
+                    },
+                   
+                    {
+                        "type": "text",
+                        "text": str(row.get("vehicle_number", ""))
+                    },
+                    {
+                        "type": "text",
+                        "text": str(row.get("loan_number", ""))
+                    }
 
                 ],
             ),

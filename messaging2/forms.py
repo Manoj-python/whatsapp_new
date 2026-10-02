@@ -69,6 +69,7 @@ TEMPLATE_CHOICES = [
     ("62", "Final settlement (English)-[62]"),
     ("63", "Apolize (English)-[63]"),
     ("64", "Unauthorized Payment by Collection fraud_executive-[64]"),
+    ("65", "Final settlement (Telugu)-[65]"),
 
 
    

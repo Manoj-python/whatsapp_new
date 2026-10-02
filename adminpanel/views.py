@@ -1120,6 +1120,7 @@ def get_filtered_cases_api(request):
         'priority': c.priority,
         'current_level': c.current_level,
         'status': c.status,
+        'employee_number': c.employee_number,
         'created_at': c.created_at.isoformat(),
     } for c in cases]
 
@@ -1151,6 +1152,7 @@ def search_cases_api(request):
         'created_at': c.created_at.isoformat(),
         'current_level': c.current_level,
         'group_name': c.group.name if c.group else None,
+        'employee_number': c.employee_number,
         'subgroup_name': c.subgroup.name if c.subgroup else None,
         'category_name': c.category.name if c.category else None,
     } for c in cases]
@@ -1321,7 +1323,8 @@ def get_case_detail_api(request, case_id):
             'group_id': case.group.id if case.group else None,
             'subgroup_name': case.subgroup.name if case.subgroup else None,
             'subgroup_id': case.subgroup.id if case.subgroup else None,
-            'category_name': case.category.name if case.category else None,   # NEW
+            'category_name': case.category.name if case.category else None,
+            'employee_number': case.employee_number,     # NEW
             'category_id': case.category.id if case.category else None,       # NEW
         }
     })
@@ -1329,55 +1332,122 @@ def get_case_detail_api(request, case_id):
 # adminpanel/views.py
 
 from messaging2.tasks import send_ticket_close_message 
+import json
+import logging
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
+logger = logging.getLogger(__name__)
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def close_case_api(request, case_id):
-    agent = get_agent_from_user(request.user)
-    if not agent.has_close_permission():
-        return JsonResponse(
+    try:
+        # ---------- STEP 1: Agent lookup ----------
+        agent = get_agent_from_user(request.user)
+        if agent is None:
+            logger.error(f"close_case_api: no Agent found for user {request.user}")
+            return JsonResponse(
+                {'error': 'No agent profile found for this user'},
+                status=403
+            )
+
+        # ---------- STEP 2: Permission check ----------
+        try:
+            has_perm = agent.has_close_permission()
+        except Exception as e:
+            logger.exception(f"close_case_api: has_close_permission failed: {e}")
+            return JsonResponse(
+                {'error': f'Permission check failed: {e}'},
+                status=500
+            )
+
+        if not has_perm:
+            return JsonResponse(
                 {'error': 'You do not have permission to close cases'},
                 status=403
             )
 
-    # if agent.role not in ['ADMIN', 'MANAGER']:
-    #     return JsonResponse({'error': 'Only Admin and Manager can close cases'}, status=403)
+        # ---------- STEP 3: App config ----------
+        app_key = get_app_from_request(request)
+        if app_key not in APP_CONFIG:
+            return JsonResponse({'error': f'Invalid app: {app_key}'}, status=400)
 
-    app_key = get_app_from_request(request)
-    cfg = APP_CONFIG[app_key]
-    CaseModel = cfg['case_model']
-    ContactModel = cfg['contact_model']
-    channel_group = cfg['channel_group']
+        cfg = APP_CONFIG[app_key]
+        CaseModel = cfg['case_model']
+        ContactModel = cfg['contact_model']
+        channel_group = cfg.get('channel_group')
 
-    case = get_object_or_404(CaseModel, case_id=case_id)
-    data = json.loads(request.body)
+        # ---------- STEP 4: Get case ----------
+        case = get_object_or_404(CaseModel, case_id=case_id)
 
-    # This will call the model's close() method – you already allow MANAGER
-    case.close(agent, data.get('close_reason', ''))
-    # send_ticket_close_message.delay(app_key, case.id)
-    # ✅ Update contact model
-    ContactModel.objects.filter(mobile=case.mobile).update(
-        current_level='CLOSED',
-        last_status='Closed'
-    )
+        # ---------- STEP 5: Parse body ----------
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON body'}, status=400)
 
-    # ✅ Broadcast WebSocket update
-    channel_layer = get_channel_layer()
-    async_to_sync(channel_layer.group_send)(
-        channel_group,
-        {
-            "type": "contact.update",
-            "contact": {
-                "mobile": case.mobile,
-                "current_level": 'CLOSED',
-                "last_status": 'Closed',
-                "last_msg": f"✅ Ticket closed: {case.case_id}",
-                "last_time": timezone.now().isoformat(),
-            }
-        }
-    )
+        close_reason = data.get('close_reason', '') or data.get('reason', '')
 
-    return JsonResponse({'success': True, 'message': 'Case closed successfully'})
+        # ---------- STEP 6: Call model .close() ----------
+        try:
+            case.close(agent, close_reason)
+        except Exception as e:
+            logger.exception(f"close_case_api: case.close() failed for {case_id}: {e}")
+            return JsonResponse(
+                {'error': f'Case close failed: {type(e).__name__}: {e}'},
+                status=500
+            )
+
+        # ---------- STEP 7: Update contact ----------
+        try:
+            ContactModel.objects.filter(mobile=case.mobile).update(
+                current_level='CLOSED',
+                last_status='Closed'
+            )
+        except Exception as e:
+            logger.exception(f"close_case_api: contact update failed: {e}")
+            # Don't fail the whole request — just log it
+
+        # ---------- STEP 8: WebSocket broadcast (non-critical) ----------
+        try:
+            if channel_group:
+                channel_layer = get_channel_layer()
+                if channel_layer is not None:
+                    async_to_sync(channel_layer.group_send)(
+                        channel_group,
+                        {
+                            "type": "contact.update",
+                            "contact": {
+                                "mobile": case.mobile,
+                                "current_level": 'CLOSED',
+                                "last_status": 'Closed',
+                                "last_msg": f"✅ Ticket closed: {case.case_id}",
+                                "last_time": timezone.now().isoformat(),
+                            }
+                        }
+                    )
+        except Exception as e:
+            logger.exception(f"close_case_api: websocket broadcast failed: {e}")
+            # Don't fail the request either
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Case closed successfully'
+        })
+
+    except Exception as e:
+        logger.exception(f"close_case_api: UNHANDLED error for case {case_id}: {e}")
+        return JsonResponse(
+            {'error': f'Unexpected error: {type(e).__name__}: {e}'},
+            status=500
+        )
 
 @csrf_exempt
 @require_http_methods(["POST"])

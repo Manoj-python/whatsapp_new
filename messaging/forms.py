@@ -51,6 +51,7 @@ TEMPLATE_CHOICES = [
     ("49", "Guarantor Login & Payment Link (English)-[49]"),
     ("50", "Unauthorized Payment by Collection fraud_executive-[50]"),
     ("51", "vinayaka_chavithi (English)-[51]"),
+    ("52", "Noc available Message (English)-[52]"),
  
 ]
 

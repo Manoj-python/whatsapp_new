@@ -1,3 +1,4 @@
+
 {% extends "adminpanel/base.html" %}
 {% load static %}
 
@@ -16,7 +17,7 @@
         --dark: #1a1a2e;
         --light: #f8f9fa;
     }
-    
+
     .stat-card {
         background: white;
         border-radius: 20px;
@@ -54,7 +55,7 @@
     .stat-icon i { font-size: 24px; color: var(--primary); }
     .stat-number { font-size: 32px; font-weight: 800; color: var(--dark); line-height: 1; }
     .stat-label { color: #6c757d; font-size: 13px; margin-top: 8px; }
-    
+
     .level-badge {
         display: inline-flex;
         align-items: center;
@@ -71,7 +72,7 @@
     .level-ESC5 { background: #f44336; color: white; }
     .level-RESOLVED { background: #4caf50; color: white; }
     .level-CLOSED { background: #6c757d; color: white; }
-    
+
     .section-card {
         background: white;
         border-radius: 20px;
@@ -92,7 +93,7 @@
         flex-wrap: wrap;
         gap: 10px;
     }
-    
+
     .filter-card {
         background: white;
         border-radius: 15px;
@@ -112,7 +113,7 @@
     }
     .filter-card h4 { margin: 0; font-size: 24px; font-weight: 700; }
     .filter-card p { margin: 0; color: #6c757d; font-size: 12px; }
-    
+
     .modern-table {
         width: 100%;
         border-collapse: collapse;
@@ -130,7 +131,7 @@
     }
     .modern-table tbody tr:hover { background: #f8f9fa; }
     .modern-table td { padding: 12px 15px; vertical-align: middle; }
-    
+
     .status-badge {
         display: inline-block;
         padding: 4px 12px;
@@ -143,7 +144,7 @@
     .status-resolved { background: #4caf50; color: white; }
     .status-closed { background: #6c757d; color: white; }
     .status-reopened { background: #f44336; color: white; }
-    
+
     .loading-spinner {
         display: inline-block;
         width: 20px;
@@ -154,16 +155,16 @@
         animation: spin 1s linear infinite;
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    
+
     .chart-container { position: relative; height: 250px; margin: 20px 0; }
     .action-btn { padding: 5px 10px; margin: 2px; border-radius: 8px; font-size: 12px; transition: all 0.2s; }
     .action-btn:hover { transform: translateY(-1px); }
-    
+
     .app-switcher { display: flex; gap: 8px; margin-right: 20px; }
     .app-btn { padding: 6px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; border: 1px solid #ddd; background: white; transition: all 0.2s; }
     .app-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
     .app-btn:hover:not(.active) { background: #f0f2f5; }
-    
+
     .tab-btn.active {
         background: var(--primary);
         color: white;
@@ -177,7 +178,7 @@
     .tab-btn:hover:not(.active) {
         background: #f0f2f5;
     }
-    
+
     .dept-summary-badge {
         background: #e9ecef;
         color: var(--dark);
@@ -194,7 +195,7 @@
         margin-left: 4px;
         font-size: 12px;
     }
-    
+
     @media (max-width: 768px) {
         .stat-number { font-size: 24px; }
         .filter-card h4 { font-size: 18px; }
@@ -220,7 +221,7 @@
 </a>
         </div>
     </div>
-    
+
     <!-- Summary Stats (Global) -->
     <div class="row mb-4" id="globalStats">
         <div class="col-md-2 col-sm-4 mb-3">
@@ -280,7 +281,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Level-wise Filter Cards -->
     <div class="section-card">
         <div class="section-title">
@@ -320,7 +321,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Department-wise Filter Cards -->
     <div class="section-card">
         <div class="section-title">
@@ -391,12 +392,12 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Cases Table with Tabs + Search + Department Summary -->
     <div class="section-card">
         <div class="section-title">
             <span>
-                <i class="fas fa-tasks"></i> Cases 
+                <i class="fas fa-tasks"></i> Cases
                 <span id="activeFilterBadge" class="badge bg-primary ms-2">Tab: Active</span>
             </span>
             <div class="d-flex flex-wrap align-items-center gap-2">
@@ -418,12 +419,12 @@
                 </button>
             </div>
         </div>
-        
+
         <!-- Department Summary (for current filtered view) -->
         <div id="deptSummary" class="d-flex flex-wrap gap-2 mb-3">
             <span class="text-muted">Loading departments...</span>
         </div>
-        
+
         <div id="casesTableContainer">
             <div class="text-center py-4"><div class="loading-spinner"></div><p>Loading cases...</p></div>
         </div>
@@ -720,7 +721,7 @@
 
     function updateFilterBadge() {
         const deptLabel = currentDepartment === 'all' ? 'All Departments' : currentDepartment;
-        const subgroupLabel = currentSubgroup === 'all' ? 'All Subgroups' : 
+        const subgroupLabel = currentSubgroup === 'all' ? 'All Subgroups' :
             document.querySelector(`#subgroupFilter option[value="${currentSubgroup}"]`)?.textContent || 'All Subgroups';
         const categoryLabel = currentCategory === 'all' ? 'All Categories' :
             document.querySelector(`#categoryFilter option[value="${currentCategory}"]`)?.textContent || 'All Categories';
@@ -810,7 +811,7 @@
                     <thead>
                         <tr>
                             <th>Case ID</th><th>Customer</th><th>Mobile</th><th>Loan Number</th>
-                            <th>Department</th><th>Subgroup</th><th>Category</th><th>Level</th><th>Status</th><th>Created</th><th>Actions</th>
+                            <th>Department</th><th>Subgroup</th><th>Category</th><th>Assigned ID</th><th>Level</th><th>Status</th><th>Created</th><th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -820,7 +821,7 @@
                                 c.status === 'In Progress' ? 'status-in-progress' :
                                 c.status === 'Resolved' ? 'status-resolved' :
                                 c.status === 'Closed' ? 'status-closed' : 'status-open';
-            
+
             html += `
                 <tr>
                     <td><strong>${escapeHtml(c.case_id)}</strong></td>
@@ -830,6 +831,7 @@
                     <td><span class="badge bg-secondary">${escapeHtml(c.group_name || '-')}</span></td>
                     <td><span class="badge bg-info">${escapeHtml(c.subgroup_name || '-')}</span></td>
                     <td><span class="badge bg-secondary">${escapeHtml(c.category_name || '-')}</span></td>
+                    <td>${c.employee_number ? `<span class="badge bg-primary">${escapeHtml(c.employee_number)}</span>` : '<span class="text-muted">-</span>'}</td>
                     <td><span class="badge bg-${c.current_level === 'ESC1' ? 'success' : c.current_level === 'ESC2' ? 'info' : c.current_level === 'ESC3' ? 'warning' : c.current_level === 'ESC4' ? 'danger' : 'dark'}">${c.current_level}</span></td>
                     <td><span class="status-badge ${statusClass}">${c.status || 'Open'}</span></td>
                     <td><small>${new Date(c.created_at).toLocaleString()}</small></td>
@@ -979,7 +981,8 @@
                         <tr><th>Customer:</th><td>${escapeHtml(caseData.customer_name || 'N/A')}</td>
                         <tr><th>Mobile:</th><td>${caseData.mobile}</td>
                         <tr><th>Loan No:</th><td>${caseData.loan_number || ''}</td>
-                             <tr><th>Loan No:</th><td>${caseData.vehicle_number || ''}</td>
+                        <tr><th>Loan No:</th><td>${caseData.vehicle_number || ''}</td>
+                        
                         <tr><th>Group (Dept):</th><td>${escapeHtml(caseData.group_name || 'Not assigned')}</td>
                         <tr><th>Category:</th><td>${escapeHtml(caseData.category_name || 'None')}</td>
                         <tr><th>Current Level:</th><td>${caseData.current_level}</td>
@@ -989,7 +992,7 @@
                 <div class="col-md-6">
                     <h6><i class="fas fa-users"></i> Assignment</h6>
                     <table class="table table-sm">
-                        <tr><th>Assigned To:</th><td>${caseData.assigned_to_name || 'Unassigned'}</td>
+                        <tr><th>Assigned To:</th><td>${caseData.employee_number || 'Unassigned'}</td>
                         <tr><th>Created By:</th><td>${caseData.created_by || 'System'}</td>
                         <tr><th>Created At:</th><td>${new Date(caseData.created_at).toLocaleString()}</td>
                         ${caseData.resolved_at ? `<tr><th>Resolved At:</th><td>${new Date(caseData.resolved_at).toLocaleString()}<br><small>By: ${caseData.resolved_by} (${caseData.resolved_by_role}) at ${caseData.resolved_at_level}</small></td>` : ''}
