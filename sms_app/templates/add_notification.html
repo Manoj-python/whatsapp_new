@@ -1,0 +1,829 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Notify{% endblock %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+    /* ═══════════════ BASE ═══════════════ */
+    :root {
+        --primary: #4361ee;
+        --primary-dark: #3a56d4;
+        --primary-light: #eef2ff;
+        --success: #06d6a0;
+        --warning: #ffd166;
+        --danger: #ef476f;
+        --dark: #1e293b;
+        --gray: #64748b;
+        --light-gray: #f1f5f9;
+        --border: #e2e8f0;
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08);
+        --radius: 12px;
+        --radius-sm: 8px;
+    }
+
+    /* Scope everything to this page so Bootstrap isn't disturbed */
+    .notify-page {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: var(--dark);
+    }
+
+    /* ═══════════════ PAGE HEADER ═══════════════ */
+    .notify-page .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 32px;
+        padding: 24px 0;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .notify-page .page-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .notify-page .page-title-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+
+    .notify-page .page-title h1 {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--dark);
+        margin: 0;
+        line-height: 1.2;
+    }
+
+    .notify-page .page-title p {
+        font-size: 14px;
+        color: var(--gray);
+        margin: 2px 0 0 0;
+    }
+
+    /* ═══════════════ CARDS ═══════════════ */
+    .notify-page .card {
+        background: white;
+        border-radius: var(--radius);
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+    }
+
+    .notify-page .card h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--dark);
+        margin: 0 0 20px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* ═══════════════ FORM ═══════════════ */
+    .notify-page .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+    }
+
+    .notify-page .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .notify-page .form-group.full { grid-column: span 2; }
+
+    .notify-page label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--dark);
+        margin-bottom: 6px;
+    }
+
+    .notify-page label .required { color: var(--danger); }
+
+    .notify-page input[type="text"],
+    .notify-page textarea {
+        width: 100%;
+        padding: 11px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-family: inherit;
+        outline: none;
+        transition: border 0.2s, box-shadow 0.2s;
+        background: white;
+        color: var(--dark);
+    }
+
+    .notify-page input[type="text"]:focus,
+    .notify-page textarea:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    .notify-page textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .notify-page .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: border 0.2s;
+    }
+
+    .notify-page .checkbox-group:hover { border-color: var(--primary); }
+
+    .notify-page .checkbox-group input {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--primary);
+    }
+
+    .notify-page .checkbox-group label {
+        margin: 0;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    /* ═══════════════ BUTTONS ═══════════════ */
+    .notify-page .btn-custom {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 20px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .notify-page .btn-primary-custom {
+        background: var(--primary);
+        color: white;
+    }
+
+    .notify-page .btn-primary-custom:hover {
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+    }
+
+    .notify-page .btn-edit {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .notify-page .btn-edit:hover {
+        background: var(--warning);
+        color: #78350f;
+    }
+
+    .notify-page .btn-delete {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .notify-page .btn-delete:hover {
+        background: var(--danger);
+        color: white;
+    }
+
+    .notify-page .btn-cancel {
+        background: white;
+        color: var(--dark);
+        border: 1px solid var(--border);
+        display: none;
+    }
+
+    .notify-page .btn-cancel:hover { background: var(--light-gray); }
+
+    .notify-page .actions {
+        margin-top: 24px;
+        display: flex;
+        gap: 10px;
+    }
+
+    /* ═══════════════ TABLE ═══════════════ */
+    .notify-page .table-responsive { overflow-x: auto; }
+
+    .notify-page table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .notify-page thead { background: var(--light-gray); }
+
+    .notify-page th {
+        padding: 14px 20px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--gray);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+
+    .notify-page td {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+        color: var(--dark);
+        vertical-align: middle;
+    }
+
+    .notify-page tbody tr { transition: background 0.15s; }
+    .notify-page tbody tr:hover { background: #fafbfc; }
+    .notify-page tbody tr:last-child td { border-bottom: none; }
+
+    .notify-page .status-active,
+    .notify-page .status-inactive {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .notify-page .status-active {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .notify-page .status-inactive {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .notify-page .table-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .notify-page .table-actions button {
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: 6px;
+    }
+
+    /* ═══════════════ MESSAGE ═══════════════ */
+    .notify-page .message {
+        display: none;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .notify-page .success {
+        background: #d1fae5;
+        color: #065f46;
+        border-left: 4px solid var(--success);
+    }
+
+    .notify-page .error {
+        background: #fee2e2;
+        color: #991b1b;
+        border-left: 4px solid var(--danger);
+    }
+
+    .notify-page .empty {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--gray);
+        font-size: 14px;
+    }
+
+    /* ═══════════════ PAGINATION ═══════════════ */
+    .notify-page .pagination-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+    }
+
+    .notify-page .pagination-info {
+        font-size: 14px;
+        color: var(--gray);
+    }
+
+    .notify-page .pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .notify-page .pagination-controls button {
+        min-width: 38px;
+        height: 38px;
+        padding: 0 10px;
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--dark);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+    }
+
+    .notify-page .pagination-controls button:hover:not(:disabled):not(.active) {
+        background: var(--primary-light);
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .notify-page .pagination-controls button.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        cursor: default;
+    }
+
+    .notify-page .pagination-controls button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .notify-page .page-size-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--gray);
+    }
+
+    .notify-page .page-size-selector select {
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        outline: none;
+        background: white;
+        color: var(--dark);
+        cursor: pointer;
+    }
+
+    .notify-page .page-size-selector select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    /* ═══════════════ RESPONSIVE ═══════════════ */
+    @media (max-width: 768px) {
+        .notify-page .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .notify-page .form-grid { grid-template-columns: 1fr; }
+        .notify-page .form-group.full { grid-column: span 1; }
+
+        .notify-page .table-actions { flex-direction: column; }
+
+        .notify-page .pagination-container {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+        }
+
+        .notify-page .pagination-controls {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .notify-page .page-size-selector { justify-content: center; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- No extra .container here — base.html <main class="container mt-4"> already provides one -->
+<div class="notify-page">
+
+    <!-- ═══════════════ PAGE HEADER ═══════════════ -->
+    <div class="page-header">
+        <div class="page-title">
+            <div class="page-title-icon">
+                <i class="bi bi-bell"></i>
+            </div>
+            <div>
+                <h1>Notification Types</h1>
+                <p>Manage notification types used across WhatsApp and SMS templates</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <!-- ═══════════════ FORM CARD ═══════════════ -->
+    <div class="card">
+        <h3 id="formTitle">
+            <i class="bi bi-plus-circle" style="color: var(--primary);"></i>
+            Add Notification Type
+        </h3>
+
+        <form id="notificationForm">
+            <input type="hidden" id="notificationId">
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="code">Code <span class="required">*</span></label>
+                    <input type="text" id="code" placeholder="Example: PAYMENT_DUE" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="name">Name <span class="required">*</span></label>
+                    <input type="text" id="name" placeholder="Example: Payment Due" required>
+                </div>
+
+                <div class="form-group full">
+                    <label for="description">Description</label>
+                    <textarea id="description" placeholder="Enter notification description"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="isActive" checked>
+                        <label for="isActive">Active</label>
+                    </label>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn-custom btn-primary-custom" id="saveButton">
+                    <i class="bi bi-check-lg"></i>
+                    Save Notification
+                </button>
+                <button type="button" class="btn-custom btn-cancel" id="cancelButton" onclick="resetForm()">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ═══════════════ TABLE CARD ═══════════════ -->
+    <div class="card">
+        <h3>
+            <i class="bi bi-list-ul" style="color: var(--primary);"></i>
+            Notification Type List
+        </h3>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="notificationTable">
+                    <tr>
+                        <td colspan="6" class="empty">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination-container" id="paginationContainer">
+            <div class="pagination-info" id="paginationInfo"></div>
+            <div class="pagination-controls" id="paginationControls"></div>
+            <div class="page-size-selector">
+                <label for="pageSizeSelect">Items per page:</label>
+                <select id="pageSizeSelect">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const API_URL = "/sms/api/notificationtype/";
+
+    let notifications = [];
+    let currentPage = 1;
+    let pageSize = 10;
+    let totalCount = 0;
+    let nextPageUrl = null;
+    let previousPageUrl = null;
+
+    function getTotalPages() {
+        if (!totalCount || !pageSize) return 1;
+        return Math.ceil(totalCount / pageSize);
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const pageSizeSelect = document.getElementById("pageSizeSelect");
+        pageSize = parseInt(pageSizeSelect.value, 10);
+
+        pageSizeSelect.addEventListener("change", function () {
+            pageSize = parseInt(this.value, 10);
+            currentPage = 1;
+            loadNotifications();
+        });
+
+        loadNotifications();
+    });
+
+    async function loadNotifications() {
+        try {
+            const url = new URL(API_URL, window.location.origin);
+            url.searchParams.set("page", currentPage);
+            url.searchParams.set("page_size", pageSize);
+
+            const response = await fetch(url.toString());
+            if (!response.ok) throw new Error("Failed to load notification types");
+
+            const data = await response.json();
+
+            if (data.results !== undefined) {
+                notifications = data.results;
+                totalCount = data.count || 0;
+                nextPageUrl = data.next || null;
+                previousPageUrl = data.previous || null;
+            } else {
+                notifications = data;
+                totalCount = data.length;
+                nextPageUrl = null;
+                previousPageUrl = null;
+            }
+
+            renderTable();
+            renderPagination();
+        } catch (error) {
+            showMessage(error.message, "error");
+        }
+    }
+
+    function renderTable() {
+        const table = document.getElementById("notificationTable");
+        table.innerHTML = "";
+
+        if (!notifications.length) {
+            table.innerHTML = `
+                <tr>
+                    <td colspan="6" class="empty">
+                        No notification types found.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        notifications.forEach(notification => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${notification.id}</td>
+                <td>${escapeHtml(notification.code || "")}</td>
+                <td>${escapeHtml(notification.name || "")}</td>
+                <td>${escapeHtml(notification.description || "")}</td>
+                <td>
+                    ${
+                        notification.is_active
+                        ? '<span class="status-active">Active</span>'
+                        : '<span class="status-inactive">Inactive</span>'
+                    }
+                </td>
+                <td>
+                    <div class="table-actions">
+                        <button class="btn-edit" onclick="editNotification(${notification.id})">Edit</button>
+                        <button class="btn-delete" onclick="deleteNotification(${notification.id})">Delete</button>
+                    </div>
+                </td>
+            `;
+            table.appendChild(row);
+        });
+    }
+
+    function renderPagination() {
+        const infoEl = document.getElementById("paginationInfo");
+        const controlsEl = document.getElementById("paginationControls");
+        const totalPages = getTotalPages();
+
+        if (totalCount === 0) {
+            infoEl.textContent = "No items";
+        } else {
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalCount);
+            infoEl.textContent = `Showing ${start}–${end} of ${totalCount} items`;
+        }
+
+        controlsEl.innerHTML = "";
+
+        if (totalCount === 0 || totalPages <= 1) {
+            controlsEl.style.display = "none";
+            return;
+        }
+        controlsEl.style.display = "flex";
+
+        function createPageButton(label, page, disabled = false, isActive = false) {
+            const btn = document.createElement("button");
+            btn.textContent = label;
+            if (isActive) {
+                btn.classList.add("active");
+                btn.disabled = true;
+            }
+            if (disabled) btn.disabled = true;
+            btn.addEventListener("click", function () {
+                if (!disabled && !isActive) {
+                    currentPage = page;
+                    loadNotifications();
+                }
+            });
+            return btn;
+        }
+
+        const prevDisabled = currentPage <= 1;
+        controlsEl.appendChild(createPageButton("«", currentPage - 1, prevDisabled));
+
+        const maxVisible = 7;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+        if (endPage - startPage + 1 < maxVisible) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+
+        if (startPage > 1) {
+            controlsEl.appendChild(createPageButton("1", 1));
+            if (startPage > 2) {
+                const ellipsis = document.createElement("span");
+                ellipsis.textContent = "…";
+                ellipsis.style.padding = "0 4px";
+                ellipsis.style.color = "#777";
+                controlsEl.appendChild(ellipsis);
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            controlsEl.appendChild(createPageButton(i, i, false, i === currentPage));
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsis = document.createElement("span");
+                ellipsis.textContent = "…";
+                ellipsis.style.padding = "0 4px";
+                ellipsis.style.color = "#777";
+                controlsEl.appendChild(ellipsis);
+            }
+            controlsEl.appendChild(createPageButton(totalPages, totalPages));
+        }
+
+        const nextDisabled = currentPage >= totalPages;
+        controlsEl.appendChild(createPageButton("»", currentPage + 1, nextDisabled));
+    }
+
+    document.getElementById("notificationForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        const id = document.getElementById("notificationId").value;
+        const payload = {
+            code: document.getElementById("code").value.trim(),
+            name: document.getElementById("name").value.trim(),
+            description: document.getElementById("description").value.trim(),
+            is_active: document.getElementById("isActive").checked
+        };
+
+        try {
+            let url = API_URL;
+            let method = "POST";
+
+            if (id) {
+                url = `${API_URL}${id}/`;
+                method = "PUT";
+            }
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(JSON.stringify(errorData));
+            }
+
+            showMessage(
+                id ? "Notification type updated successfully." : "Notification type created successfully.",
+                "success"
+            );
+
+            resetForm();
+            loadNotifications();
+        } catch (error) {
+            showMessage(error.message, "error");
+        }
+    });
+
+    function editNotification(id) {
+        const notification = notifications.find(item => item.id === id);
+        if (!notification) return;
+
+        document.getElementById("notificationId").value = notification.id;
+        document.getElementById("code").value = notification.code || "";
+        document.getElementById("name").value = notification.name || "";
+        document.getElementById("description").value = notification.description || "";
+        document.getElementById("isActive").checked = notification.is_active;
+
+        document.getElementById("formTitle").innerText = "Edit Notification Type";
+        document.getElementById("saveButton").innerText = "Update Notification";
+        document.getElementById("cancelButton").style.display = "inline-block";
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function deleteNotification(id) {
+        if (!confirm("Are you sure you want to delete this notification type?")) return;
+
+        try {
+            const response = await fetch(`${API_URL}${id}/`, { method: "DELETE" });
+            if (!response.ok) throw new Error("Failed to delete notification type");
+
+            showMessage("Notification type deleted successfully.", "success");
+
+            const totalAfter = totalCount - 1;
+            const totalPagesAfter = Math.ceil(totalAfter / pageSize) || 1;
+            if (currentPage > totalPagesAfter) currentPage = totalPagesAfter;
+
+            loadNotifications();
+        } catch (error) {
+            showMessage(error.message, "error");
+        }
+    }
+
+    function resetForm() {
+        document.getElementById("notificationForm").reset();
+        document.getElementById("notificationId").value = "";
+        document.getElementById("isActive").checked = true;
+        document.getElementById("formTitle").innerText = "Add Notification Type";
+        document.getElementById("saveButton").innerText = "Save Notification";
+        document.getElementById("cancelButton").style.display = "none";
+    }
+
+    function showMessage(message, type) {
+        const element = document.getElementById("message");
+        element.innerText = message;
+        element.className = `message ${type}`;
+        element.style.display = "block";
+        setTimeout(() => { element.style.display = "none"; }, 4000);
+    }
+
+    function escapeHtml(value) {
+        const div = document.createElement("div");
+        div.textContent = value;
+        return div.innerHTML;
+    }
+</script>
+
+{% endblock %}

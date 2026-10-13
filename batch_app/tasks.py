@@ -29,7 +29,8 @@ from dateutil.relativedelta import relativedelta
 from .models import BatchJob, BatchLog, BatchExecution
 from .utils import format_mobile, get_batch_from_s3, read_excel_from_s3
 from .app_discovery import get_app_by_name, get_app_log_model, get_app_contact_model, get_app_utils
-
+from sms_app.models import SMSTemplate, SMSLog
+from sms_app.utils import create_sms_session, send_sms
 logger = logging.getLogger(__name__)
 
 # ============================================================
@@ -44,6 +45,16 @@ EXECUTION_HEARTBEAT_TTL = 15 * 60       # Redis heartbeat TTL; refreshed while t
 STUCK_EXECUTION_AFTER = 60 * 60         # Only auto-fail if no heartbeat for 1 hour
 JOB_LOCK_TIMEOUT = 60 * 60 * 24       # 24 hours per job
 CUSTOMER_CLAIM_TIMEOUT = 60 * 60 * 24 * 730 # 2 years; supports long monthly/custom campaigns
+
+SMS_FALLBACK_CODES = {
+    131026,  # NOT_ON_WHATSAPP s_ms
+    131047,  # 24H_WINDOW_EXPIRED
+    131011,
+    130403,
+    130472,
+    131008
+
+}
 
 
 # ============================================================
@@ -565,20 +576,191 @@ def get_actual_template_name(target_app, template_id):
 
 
 # ============================================================
-# 👤 SINGLE CUSTOMER PROCESSOR - WITH DUPLICATE PREVENTION
-# ============================================================
-# ============================================================
-# 👤 SINGLE CUSTOMER PROCESSOR - WITH DUPLICATE PREVENTION
+# 📱 AUTO SMS FALLBACK
+# ============================================================   s_ms
+def send_auto_sms_fallback(job, row, mobile):
+    """
+    Send SMS automatically when WhatsApp gets a definite rejection.
 
-# ============================================================
+    SMS template is selected using the BatchJob NotificationType.
 
-# ============================================================
-# 👤 SINGLE CUSTOMER PROCESSOR
-# ============================================================
+    The SMS template variables are read dynamically from:
+        SMSTemplate.variables
+
+    Example:
+        customer_name,due_amount,loan_number,installment_date,payment_link
+
+    The values are taken from the same Excel row.
+    """
+
+    sms_session = None
+
+    try:
+        # ========================================================
+        # 1. CHECK NOTIFICATION TYPE
+        # ========================================================
+        if not job.notification_type_id:
+            logger.warning(
+                f"⚠️ No notification_type configured for job "
+                f"{job.job_id}. Auto SMS skipped for {mobile}"
+            )
+            return
+
+        # ========================================================
+        # 2. FIND MATCHING SMS TEMPLATE
+        # ========================================================
+        sms_template = (
+            SMSTemplate.objects
+            .filter(
+                notification_type_id=job.notification_type_id,
+                is_active=True,
+            )
+            .first()
+        )
+
+        if not sms_template:
+            logger.warning(
+                f"⚠️ No active SMS template found for "
+                f"notification_type={job.notification_type_id}. "
+                f"Auto SMS skipped for {mobile}"
+            )
+            return
+
+        # ========================================================
+        # 3. GET TEMPLATE VARIABLES
+        # ========================================================
+        variables = [
+            variable.strip().lower()
+            for variable in (sms_template.variables or "").split(",")
+            if variable.strip()
+        ]
+
+        # ========================================================
+        # 4. VALIDATE PLACEHOLDERS
+        # ========================================================
+        placeholder_count = sms_template.content.count("*")
+
+        if placeholder_count != len(variables):
+            logger.error(
+                f"❌ SMS template mismatch | "
+                f"template={sms_template.name} | "
+                f"placeholders={placeholder_count} | "
+                f"variables={variables}"
+            )
+            return
+
+        # ========================================================
+        # 5. NORMALIZE EXCEL COLUMN NAMES
+        # ========================================================
+        # Example:
+        #
+        # CustomerName -> customername
+        # customer_name -> customer_name
+        #
+        # Your SMS variables should match the Excel fields.
+        #
+        normalized_row = {
+            str(key).strip().lower(): value
+            for key, value in row.items()
+        }
+        logger.warning(
+    f"🔍 SMS FALLBACK ROW | mobile={mobile} | row={normalized_row}"
+)
+
+        logger.warning(
+    f"🔍 SMS VARIABLES | variables={variables}"
+)
+
+        # ========================================================
+        # 6. BUILD SMS MESSAGE DYNAMICALLY
+        # ========================================================
+        sms_message = sms_template.content
+
+        for variable_name in variables:
+
+            value = normalized_row.get(
+                variable_name,
+                ""
+            )
+
+            if value is None:
+                value = ""
+
+            sms_message = sms_message.replace(
+                "*",
+                str(value),
+                1
+            )
+
+        # ========================================================
+        # 7. CREATE SMS SESSION
+        # ========================================================
+        sms_session = create_sms_session()
+
+        # ========================================================
+        # 8. SEND SMS
+        # ========================================================
+        sms_success, sms_response = send_sms(
+            sms_session,
+            mobile,
+            sms_message,
+            sms_template.template_id,
+        )
+
+        # ========================================================
+        # 9. SAVE SMS LOG
+        # ========================================================
+        SMSLog.objects.create(
+            campaign=None,
+            mobile=mobile,
+            notification_type_id=job.notification_type_id,  #s_ms
+            batch_job=job, #s_ms
+            message=sms_message,
+            status="sent" if sms_success else "failed",
+            response=str(sms_response),
+        )
+
+        # ========================================================
+        # 10. LOG RESULT
+        # ========================================================
+        if sms_success:
+            logger.info(
+                f"📱 AUTO SMS SENT | "
+                f"mobile={mobile} | "
+                f"template={sms_template.name} | "
+                f"notification_type={job.notification_type_id}"
+            )
+        else:
+            logger.error(
+                f"❌ AUTO SMS FAILED | "
+                f"mobile={mobile} | "
+                f"template={sms_template.name} | "
+                f"response={sms_response}"
+            )
+
+    except Exception as sms_error:
+        # SMS failure must NOT affect the existing
+        # WhatsApp/batch processing logic.
+        logger.exception(
+            f"❌ AUTO SMS FALLBACK ERROR | "
+            f"mobile={mobile} | "
+            f"error={sms_error}"
+        )
+
+    finally:
+        if sms_session is not None:
+            try:
+                sms_session.close()
+            except Exception:
+                pass
 
 # ============================================================
 # 👤 SINGLE CUSTOMER PROCESSOR - WITH DYNAMIC EXCEL FIELDS
 # ============================================================
+
+
+
+
 
 def process_single_customer(
     row, job, execution_id, LogModel, ContactModel, url, headers,
@@ -1135,26 +1317,143 @@ def process_single_customer(
         # ========================================================
         # 10. HTTP FAILURE
         # ========================================================
+        # --------------------------------------------------------
+        # Extract WhatsApp API error code
+        # --------------------------------------------------------
+        error_code = None
+        error_name = ""
+
+        try:
+            error_body = resp.json()
+
+            error_data = error_body.get("error", {})
+
+            error_code = (
+                error_data.get("code")
+                or error_body.get("code")
+            )
+
+            if error_code is not None:
+                error_code = int(error_code)
+
+        except Exception:
+            error_code = None
+
+
+        # --------------------------------------------------------
+        # Existing error map
+        # --------------------------------------------------------
+        error_map = {
+            131047: "24H_WINDOW_EXPIRED",
+            131026: "NOT_ON_WHATSAPP",
+
+            131051: "UNSUPPORTED_MESSAGE_TYPE",
+            131011: "BLOCKED_BY_USER",
+            130403: "BLOCKED_BY_BUSINESS",
+            131050: "OPTED_OUT",
+
+            190: "TOKEN_ERROR",
+            131009: "INVALID_PARAMETER",
+            131000: "UNKNOWN_ERROR",
+            131045: "REGISTRATION_ERROR",
+
+            132000: "TEMPLATE_PARAM_ERROR",
+            132001: "TEMPLATE_NOT_FOUND",
+            132015: "TEMPLATE_PAUSED",
+            132016: "TEMPLATE_DISABLED",
+
+            130429: "RATE_LIMIT",
+            131056: "TOO_MANY_MESSAGES",
+            130472: "USER_IN_EXPERIMENT",
+        }
+
+
+        if error_code is not None:
+            error_name = error_map.get(
+                error_code,
+                f"Failed_{error_code}"
+            )
+
+
+        # --------------------------------------------------------
+        # DEFINITE HTTP REJECTION
+        # --------------------------------------------------------
         definite_rejection = (
             400 <= resp.status_code < 500
             and resp.status_code not in (408, 429)
         )
 
+
         if definite_rejection:
+
+            # ----------------------------------------------------
+            # Release claim because WhatsApp definitely rejected
+            # the request.
+            # ----------------------------------------------------
             release_customer_send_claim(
                 job.job_id,
                 occurrence_token,
                 mobile
             )
+
             claim_owned = False
-            logger.info(f"📊 API FAILURE | mobile={mobile} | status_code={resp.status_code}")
+
+
+            # ----------------------------------------------------
+            # AUTO SMS FALLBACK
+            #
+            # SMS ONLY for:
+            #   131026 = NOT_ON_WHATSAPP
+            #   131047 = 24H_WINDOW_EXPIRED
+            # ----------------------------------------------------
+            if error_code in SMS_FALLBACK_CODES:
+
+                logger.info(
+                    f"📱 SMS FALLBACK TRIGGERED | "
+                    f"mobile={mobile} | "
+                    f"whatsapp_code={error_code} | "
+                    f"error={error_name}"
+                )
+
+                send_auto_sms_fallback(
+                    job,
+                    row,
+                    mobile,
+                )
+
+            else:
+
+                logger.info(
+                    f"ℹ️ NO SMS FALLBACK | "
+                    f"mobile={mobile} | "
+                    f"whatsapp_code={error_code} | "
+                    f"error={error_name}"
+                )
+
+
+            logger.info(
+                f"📊 API FAILURE | "
+                f"mobile={mobile} | "
+                f"status_code={resp.status_code} | "
+                f"error_code={error_code} | "
+                f"error={error_name}"
+            )
+
+
         else:
+
+            # ----------------------------------------------------
             # 408 / 429 / 5xx are ambiguous.
-            # Keep claim to prevent duplicate sends.
+            #
+            # Keep existing behavior:
+            # DO NOT release claim
+            # DO NOT send SMS
+            # ----------------------------------------------------
             logger.error(
                 f"⚠️ Ambiguous HTTP {resp.status_code} "
                 f"for {mobile}; claim retained"
             )
+        
 
         result["failed"] = 1
 

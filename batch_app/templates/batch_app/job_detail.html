@@ -495,6 +495,12 @@
                         <a href="{% url 'batch_job_report' job.job_id %}" class="btn btn-outline-primary">
                             <i class="fas fa-file-download me-2"></i> Full Report
                         </a>
+                          <a
+    href="{% url 'batch_sms_fallback_report' job.job_id %}"
+    class="btn btn-primary"
+>
+    📱 SMS Fallback Report
+</a>
 
                         <hr>
 

@@ -29,7 +29,8 @@ urlpatterns = [
     path('splcases_app/', include('special_cases.urls')),
     # path('sms_app/', include('sms_app.urls')),
     path('meghaai/', include('meghaai_app.urls')),    
-    path('batch/', include('batch_app.urls')), 
+    path('batch/', include('batch_app.urls')),
+    path('sms/', include('sms_app.urls')),  
 
 
 ]

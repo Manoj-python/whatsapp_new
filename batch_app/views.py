@@ -39,6 +39,7 @@ from .app_discovery import (
     get_app_log_model,
     get_app_contact_model,
 )
+from .models import NotificationType
 
 
 # ============================================================
@@ -601,7 +602,18 @@ def batch_job_create(request):
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
             # notification_type_id = request.POST.get("notification_type")
-
+            notification_type_id = request.POST.get("notification_type")   #s_ms
+            if not notification_type_id:
+                messages.error(request, '❌ Please select Notification Type')
+                return redirect('batch_job_create')
+            try:
+                notification_type = NotificationType.objects.get(
+                    id=notification_type_id,
+                    is_active=True
+                )
+            except NotificationType.DoesNotExist:
+                messages.error(request, '❌ Invalid Notification Type selected')
+                return redirect('batch_job_create')
 
             if not excel_path:
                 messages.error(request, '❌ Excel file path is required')
@@ -812,7 +824,7 @@ def batch_job_create(request):
             job = BatchJob.objects.create(
                 job_id=job_id,
                 job_name=job_name,
-                # notification_type_id=notification_type_id,
+                notification_type_id=notification_type_id,
                 target_app=target_app,
                 template_id=template_id,
                 template_name=template_info['name'],
@@ -877,15 +889,15 @@ def batch_job_create(request):
         app_choices = get_all_messaging_apps()
         today = timezone.now().strftime('%Y-%m-%d')
         current_time = timezone.now().strftime('%H:%M')
-        # notification_types = NotificationType.objects.filter(
-        # is_active=True).order_by("name")
+        notification_types = NotificationType.objects.filter(
+        is_active=True).order_by("name")
 
 
         return render(request, 'batch_app/job_form.html', {
             'app_choices': app_choices,
             'default_batch_size': 1000,
             'today': today,
-            # "notification_types": notification_types,
+            "notification_types": notification_types,
             'current_time': current_time,
         })
     except Exception as e:
@@ -1094,7 +1106,7 @@ def batch_job_edit(request, job_id):
             target_app = request.POST.get('target_app', 'messaging')
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
-            # notification_type_id = request.POST.get('notification_type')
+            notification_type_id = request.POST.get('notification_type')
 
 
             if not excel_path:
@@ -1215,7 +1227,7 @@ def batch_job_edit(request, job_id):
             job.job_name = job_name
             job.target_app = target_app
             job.template_id = template_id
-            # job.notification_type_id = notification_type_id
+            job.notification_type_id = notification_type_id
             job.excel_path = excel_path
             job.schedule_datetime = schedule_datetime_obj
             job.batch_size_type = batch_size_type
@@ -1304,9 +1316,9 @@ def batch_job_edit(request, job_id):
     try:
         app_choices = get_all_messaging_apps()
         templates = get_templates_from_app(job.target_app)
-#         notification_types = NotificationType.objects.filter(
-#     is_active=True
-# ).order_by('name')
+        notification_types = NotificationType.objects.filter(
+     is_active=True
+ ).order_by('name')
 
         # Format times for display
         schedule_date = job.schedule_datetime.strftime('%Y-%m-%d') if job.schedule_datetime else ''
@@ -1322,7 +1334,7 @@ def batch_job_edit(request, job_id):
             'templates': templates,
             'schedule_date': schedule_date,
             'schedule_time': schedule_time,
-            # 'notification_types': notification_types,
+            'notification_types': notification_types,
             'multiple_schedule_date': multiple_schedule_date,
             'end_date': end_date,
             'has_end_date': bool(job.end_date),

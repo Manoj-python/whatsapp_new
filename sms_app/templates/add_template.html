@@ -1,0 +1,1610 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}SMS Templates - Admin{% endblock %}
+
+{% block extra_css %}
+<!-- Bootstrap Icons (already in base, but keeping for safety) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+    /* ═══════════════ BASE   ═══════════════ */
+    :root {
+        --primary: #4361ee;
+        --primary-dark: #3a56d4;
+        --primary-light: #eef2ff;
+        --success: #06d6a0;
+        --warning: #ffd166;
+        --danger: #ef476f;
+        --info: #118ab2;
+        --dark: #1e293b;
+        --gray: #64748b;
+        --light-gray: #f1f5f9;
+        --border: #e2e8f0;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08);
+        --radius: 12px;
+        --radius-sm: 8px;
+    }
+
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #f8fafc;
+        color: var(--dark);
+        line-height: 1.6;
+        min-height: 100vh;
+    }
+
+    /* ═══════════════ LAYOUT ═══════════════ */
+    .app-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+
+    /* ═══════════════ HEADER ═══════════════ */
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 32px;
+        padding: 24px 0;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .page-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .page-title-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 24px;
+    }
+
+    .page-title h1 {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--dark);
+        margin: 0;
+    }
+
+    .page-title p {
+        font-size: 14px;
+        color: var(--gray);
+        margin: 2px 0 0 0;
+    }
+
+    /* ═══════════════ TOOLBAR ═══════════════ */
+    .toolbar {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .search-box {
+        flex: 1;
+        min-width: 250px;
+        position: relative;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray);
+        font-size: 16px;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 12px 16px 12px 44px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        transition: border 0.2s, box-shadow 0.2s;
+        background: white;
+    }
+
+    .search-box input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    /* ═══════════════ BUTTONS ═══════════════ */
+    .btn-custom {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 20px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .btn-primary-custom {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-primary-custom:hover {
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+    }
+
+    .btn-light-custom {
+        background: white;
+        color: var(--dark);
+        border: 1px solid var(--border);
+    }
+
+    .btn-light-custom:hover {
+        background: var(--light-gray);
+    }
+
+    /* ═══════════════ TABLE CONTAINER ═══════════════ */
+    .table-container {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+        overflow: hidden;
+    }
+
+    .table-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .table-header h2 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--dark);
+        margin: 0;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    thead {
+        background: var(--light-gray);
+    }
+
+    th {
+        padding: 14px 20px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--gray);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+
+    td {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+        color: var(--dark);
+        vertical-align: middle;
+    }
+
+    tbody tr {
+        transition: background 0.15s;
+    }
+
+    tbody tr:hover {
+        background: #fafbfc;
+    }
+
+    tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* ═══════════════ BADGES ═══════════════ */
+    .badge-custom {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .badge-success {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .badge-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .badge-info {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        font-family: 'Courier New', monospace;
+    }
+
+    .badge-notification {
+        background: #fef3c7;
+        color: #92400e;
+        font-weight: 500;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* ═══════════════ ACTION BUTTONS ═══════════════ */
+    .actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .action-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 14px;
+    }
+
+    .action-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .action-btn.view:hover {
+        background: var(--primary-light);
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .action-btn.edit:hover {
+        background: #fef3c7;
+        border-color: var(--warning);
+        color: #92400e;
+    }
+
+    .action-btn.delete:hover {
+        background: #fee2e2;
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    /* ═══════════════ EMPTY STATE ═══════════════ */
+    .empty-state {
+        padding: 60px 24px;
+        text-align: center;
+    }
+
+    .empty-state-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 20px;
+        background: var(--light-gray);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        color: var(--gray);
+    }
+
+    .empty-state h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--dark);
+        margin-bottom: 8px;
+    }
+
+    .empty-state p {
+        color: var(--gray);
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+
+    /* ═══════════════ PAGINATION ═══════════════ */
+    .pagination-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        padding: 16px 24px;
+        border-top: 1px solid var(--border);
+        background: #fafbfc;
+    }
+
+    .pagination-info {
+        font-size: 14px;
+        color: var(--gray);
+    }
+
+    .pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .pagination-controls button {
+        min-width: 38px;
+        height: 38px;
+        padding: 0 10px;
+        border: 1px solid var(--border);
+        background: white;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--dark);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+    }
+
+    .pagination-controls button:hover:not(:disabled):not(.active) {
+        background: var(--primary-light);
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .pagination-controls button.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        cursor: default;
+    }
+
+    .pagination-controls button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .pagination-ellipsis {
+        padding: 0 6px;
+        color: var(--gray);
+        font-size: 14px;
+    }
+
+    .page-size-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--gray);
+    }
+
+    .page-size-selector select {
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        outline: none;
+        background: white;
+        color: var(--dark);
+        cursor: pointer;
+    }
+
+    .page-size-selector select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    /* ═══════════════ MODAL ═══════════════ */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.5);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+        animation: fadeIn 0.2s;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: var(--radius);
+        width: 100%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: var(--shadow-lg);
+        animation: slideUp 0.3s;
+    }
+
+    .modal-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: var(--light-gray);
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+    }
+
+    .modal-close:hover {
+        background: var(--border);
+    }
+
+    .modal-body {
+        padding: 24px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--dark);
+        margin-bottom: 6px;
+    }
+
+    .form-label .required {
+        color: var(--danger);
+    }
+
+    .form-control-custom {
+        width: 100%;
+        padding: 11px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-family: inherit;
+        transition: border 0.2s, box-shadow 0.2s;
+        background: white;
+    }
+
+    .form-control-custom:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    textarea.form-control-custom {
+        resize: vertical;
+        min-height: 100px;
+        font-family: 'Courier New', monospace;
+    }
+
+    .form-hint {
+        font-size: 12px;
+        color: var(--gray);
+        margin-top: 4px;
+    }
+
+    .form-check-custom {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: border 0.2s;
+    }
+
+    .form-check-custom:hover {
+        border-color: var(--primary);
+    }
+
+    .form-check-custom input {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--primary);
+    }
+
+    .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        background: #fafbfc;
+        border-radius: 0 0 var(--radius) var(--radius);
+    }
+
+    /* ═══════════════ TOAST NOTIFICATIONS ═══════════════ */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .toast-custom {
+        background: white;
+        border-radius: var(--radius-sm);
+        padding: 14px 18px;
+        box-shadow: var(--shadow-lg);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 300px;
+        border-left: 4px solid var(--primary);
+        animation: slideIn 0.3s;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    .toast-custom.success { border-left-color: var(--success); }
+    .toast-custom.error   { border-left-color: var(--danger); }
+    .toast-custom.info    { border-left-color: var(--info); }
+
+    .toast-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+
+    .toast-custom.success .toast-icon { background: #d1fae5; color: #065f46; }
+    .toast-custom.error .toast-icon   { background: #fee2e2; color: #991b1b; }
+    .toast-custom.info .toast-icon    { background: var(--primary-light); color: var(--primary); }
+
+    .toast-content {
+        flex: 1;
+    }
+
+    .toast-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--dark);
+    }
+
+    .toast-message {
+        font-size: 13px;
+        color: var(--gray);
+        margin-top: 2px;
+    }
+
+    /* ═══════════════ LOADING SKELETON ═══════════════ */
+    .skeleton {
+        background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 4px;
+        height: 16px;
+    }
+
+    @keyframes shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* ═══════════════ RESPONSIVE ═══════════════ */
+    @media (max-width: 768px) {
+        .app-container {
+            padding: 16px;
+        }
+
+        .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .page-header .btn-custom {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .toolbar {
+            flex-direction: column;
+        }
+
+        .toolbar > * {
+            width: 100%;
+        }
+
+        .actions {
+            flex-direction: column;
+        }
+
+        table {
+            font-size: 13px;
+        }
+
+        th, td {
+            padding: 10px 12px;
+        }
+
+        /* Hide less important columns on mobile */
+        .hide-mobile {
+            display: none;
+        }
+
+        .pagination-container {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+        }
+
+        .pagination-controls {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .page-size-selector {
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="app-container">
+
+    <!-- ═══════════════ HEADER ═══════════════ -->
+    <div class="page-header">
+        <div class="page-title">
+            <div class="page-title-icon">
+                <i class="bi bi-chat-square-text"></i>
+            </div>
+            <div>
+                <h1>SMS Templates</h1>
+                <p>Manage your SMS message templates</p>
+            </div>
+        </div>
+        <button class="btn-custom btn-primary-custom" onclick="openCreateModal()">
+            <i class="bi bi-plus-lg"></i>
+            New Template
+        </button>
+    </div>
+
+    <!-- ═══════════════ TOOLBAR ═══════════════ -->
+    <div class="toolbar">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input
+                type="text"
+                id="searchInput"
+                placeholder="Search by name, template ID, or content..."
+                oninput="handleSearch()"
+            >
+        </div>
+
+        <select class="form-control-custom" style="width: auto; padding: 11px 14px;" id="statusFilter" onchange="handleFilter()">
+            <option value="">All Status</option>
+            <option value="active">Active Only</option>
+            <option value="inactive">Inactive Only</option>
+        </select>
+
+        <select class="form-control-custom" style="width: auto; padding: 11px 14px;" id="notificationFilter" onchange="handleFilter()">
+            <option value="">All Notification Types</option>
+            {% for notification in notification_types %}
+                <option value="{{ notification.id }}">{{ notification.code }} - {{ notification.name }}</option>
+            {% endfor %}
+        </select>
+
+        <button class="btn-custom btn-light-custom" onclick="loadTemplates()">
+            <i class="bi bi-arrow-clockwise"></i>
+            Refresh
+        </button>
+    </div>
+
+    <!-- ═══════════════ TABLE ═══════════════ -->
+    <div class="table-container">
+        <div class="table-header">
+            <h2>Templates</h2>
+            <span style="font-size: 13px; color: var(--gray);" id="tableCount">—</span>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">ID</th>
+                        <th>Name</th>
+                        <th>Template ID</th>
+                        <th>Notification Type</th>
+                        <th class="hide-mobile">Content Preview</th>
+                        <th class="hide-mobile">Variables</th>
+                        <th style="width: 100px;">Status</th>
+                        <th style="width: 140px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Loading skeleton -->
+                    <tr>
+                        <td colspan="8">
+                            <div style="padding: 20px;">
+                                <div class="skeleton" style="width: 60%; margin-bottom: 12px;"></div>
+                                <div class="skeleton" style="width: 80%; margin-bottom: 12px;"></div>
+                                <div class="skeleton" style="width: 40%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ═══════════════ PAGINATION ═══════════════ -->
+        <div class="pagination-container" id="paginationContainer">
+            <div class="pagination-info" id="paginationInfo"></div>
+
+            <div class="pagination-controls" id="paginationControls">
+                <!-- buttons will be injected by JS -->
+            </div>
+
+            <div class="page-size-selector">
+                <label for="pageSizeSelect">Items per page:</label>
+                <select id="pageSizeSelect">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ═══════════════ MODAL - CREATE/EDIT ═══════════════ -->
+<div class="modal-overlay" id="templateModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>
+                <i class="bi bi-pencil-square" style="color: var(--primary);"></i>
+                <span id="modalTitle">New Template</span>
+            </h3>
+            <button class="modal-close" onclick="closeModal()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <form id="templateForm" onsubmit="handleSubmit(event)">
+            <div class="modal-body">
+                <input type="hidden" id="templateId" value="">
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Name <span class="required">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        class="form-control-custom"
+                        id="name"
+                        placeholder="e.g., Welcome Message"
+                        required
+                        maxlength="100"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Template ID <span class="required">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        class="form-control-custom"
+                        id="template_id"
+                        placeholder="e.g., WELCOME001"
+                        required
+                        maxlength="50"
+                        style="text-transform: uppercase;"
+                        oninput="this.value = this.value.toUpperCase()"
+                    >
+                    <div class="form-hint">
+                        Unique identifier (uppercase, numbers, underscores only)
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Notification Type <span class="required">*</span>
+                    </label>
+
+                    <select
+                        class="form-control-custom"
+                        id="notification_type"
+                        required
+                    >
+                        <option value="">-- Select Notification Type --</option>
+
+                        {% for notification in notification_types %}
+                            <option value="{{ notification.id }}">
+                                {{ notification.code }} - {{ notification.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+
+                    <div class="form-hint">
+                        Used to identify the same notification across WhatsApp and SMS.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Content <span class="required">*</span>
+                    </label>
+                    <textarea
+                        class="form-control-custom"
+                        id="content"
+                        placeholder="Hi {name}, your order {order_id} is confirmed."
+                        required
+                        rows="5"
+                        oninput="autoDetectVariables()"
+                    ></textarea>
+                    <div class="form-hint">
+                        Use <code>{variable_name}</code> for dynamic content
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Variables</label>
+                    <input
+                        type="text"
+                        class="form-control-custom"
+                        id="variables"
+                        placeholder="e.g., name, order_id"
+                        maxlength="500"
+                    >
+                    <div class="form-hint">
+                        Comma-separated variable names (auto-detected from content)
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-check-custom">
+                        <input type="checkbox" id="is_active" checked>
+                        <div>
+                            <div style="font-weight: 500;">Active</div>
+                            <div style="font-size: 12px; color: var(--gray);">
+                                Inactive templates are hidden from the list
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-custom btn-light-custom" onclick="closeModal()">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-custom btn-primary-custom" id="submitBtn">
+                    <i class="bi bi-check-lg"></i>
+                    <span id="submitText">Create Template</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL - DELETE CONFIRM ═══════════════ -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-content" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3>
+                <i class="bi bi-exclamation-triangle" style="color: var(--danger);"></i>
+                Confirm Delete
+            </h3>
+            <button class="modal-close" onclick="closeDeleteModal()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <div class="modal-body" style="text-align: center; padding: 32px 24px;">
+            <div style="width: 64px; height: 64px; margin: 0 auto 16px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--danger);">
+                <i class="bi bi-trash"></i>
+            </div>
+            <h4 style="font-size: 16px; margin-bottom: 8px;">Delete this template?</h4>
+            <p style="color: var(--gray); font-size: 14px;" id="deleteMessage">
+                This action cannot be undone.
+            </p>
+        </div>
+
+        <div class="modal-footer" style="justify-content: center;">
+            <button type="button" class="btn-custom btn-light-custom" onclick="closeDeleteModal()">
+                Cancel
+            </button>
+            <button type="button" class="btn-custom" id="confirmDeleteBtn" onclick="confirmDelete()"
+                style="background: var(--danger); color: white;">
+                <i class="bi bi-trash"></i>
+                Delete
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ TOAST CONTAINER ═══════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CONFIGURATION
+   ═══════════════════════════════════════════════════════════ */
+const API_BASE = '/sms/api/templates/';
+let allTemplates = [];
+let filteredTemplates = [];
+let deleteTargetId = null;
+
+// Pagination state
+let currentPage = 1;
+let pageSize = 10;
+let totalCount = 0;
+
+// Notification type lookup (built from server-rendered options)
+const notificationTypesMap = {};
+document.querySelectorAll('#notification_type option').forEach(opt => {
+    if (opt.value) {
+        notificationTypesMap[opt.value] = opt.textContent.trim();
+    }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   LOAD TEMPLATES (READ)
+   ═══════════════════════════════════════════════════════════ */
+async function loadTemplates() {
+    try {
+        const response = await fetch(API_BASE);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Handle both paginated and non-paginated responses
+        if (data.results !== undefined) {
+            // DRF paginated response
+            allTemplates = data.results;
+            totalCount = data.count || data.results.length;
+        } else {
+            // Non-paginated response (fallback)
+            allTemplates = data;
+            totalCount = data.length;
+        }
+        
+        filteredTemplates = [...allTemplates];
+        
+        renderTable();
+        renderPagination();
+        
+    } catch (error) {
+        console.error('Load error:', error);
+        showToast('error', 'Error', 'Failed to load templates');
+        renderEmptyState('Failed to load templates');
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER TABLE
+   ═══════════════════════════════════════════════════════════ */
+function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    const count = document.getElementById('tableCount');
+    
+    // Apply pagination to filtered templates
+    const totalFiltered = filteredTemplates.length;
+    const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+    
+    // Ensure current page is valid
+    if (currentPage > totalPages) {
+        currentPage = totalPages;
+    }
+    
+    const startIdx = (currentPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, totalFiltered);
+    const pageItems = filteredTemplates.slice(startIdx, endIdx);
+    
+    count.textContent = totalFiltered > 0 
+        ? `${startIdx + 1}–${endIdx} of ${totalFiltered}`
+        : `0 of 0`;
+    
+    if (filteredTemplates.length === 0) {
+        renderEmptyState(
+            allTemplates.length === 0
+                ? 'No templates yet'
+                : 'No matching templates'
+        );
+        // Still render pagination info (shows 0 items)
+        renderPagination();
+        return;
+    }
+    
+    tbody.innerHTML = pageItems.map(t => `
+        <tr>
+            <td>
+                <span style="font-family: monospace; color: var(--gray);">#${t.id}</span>
+            </td>
+            <td>
+                <div style="font-weight: 500;">${escapeHtml(t.name)}</div>
+            </td>
+            <td>
+                <span class="badge-custom badge-info">${escapeHtml(t.template_id)}</span>
+            </td>
+            <td>
+                ${renderNotificationType(t.notification_type)}
+            </td>
+            <td class="hide-mobile">
+                <div style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--gray); font-size: 13px;">
+                    ${escapeHtml(t.content)}
+                </div>
+            </td>
+            <td class="hide-mobile">
+                ${renderVariables(t.variables)}
+            </td>
+            <td>
+                ${t.is_active
+                    ? '<span class="badge-custom badge-success"><i class="bi bi-check-circle-fill"></i> Active</span>'
+                    : '<span class="badge-custom badge-danger"><i class="bi bi-x-circle-fill"></i> Inactive</span>'
+                }
+            </td>
+            <td>
+                <div class="actions">
+                    <button class="action-btn edit" onclick="openEditModal(${t.id})" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="action-btn delete" onclick="openDeleteModal(${t.id})" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+    
+    renderPagination();
+}
+
+function renderNotificationType(notificationTypeId) {
+    if (!notificationTypeId) {
+        return '<span style="color: var(--gray); font-size: 12px;">—</span>';
+    }
+    
+    const label = notificationTypesMap[notificationTypeId];
+    if (label) {
+        return `<span class="badge-custom badge-notification">${escapeHtml(label)}</span>`;
+    }
+    
+    return `<span class="badge-custom" style="background: var(--light-gray); color: var(--gray);">ID: ${escapeHtml(String(notificationTypeId))}</span>`;
+}
+
+function renderVariables(variables) {
+    if (!variables) return '<span style="color: var(--gray); font-size: 12px;">—</span>';
+    
+    const vars = variables.split(',').map(v => v.trim()).filter(Boolean);
+    if (vars.length === 0) return '<span style="color: var(--gray); font-size: 12px;">—</span>';
+    
+    const shown = vars.slice(0, 2);
+    const remaining = vars.length - shown.length;
+    
+    return `
+        ${shown.map(v => `<span class="badge-custom badge-info" style="margin: 2px; font-size: 11px;">${escapeHtml(v)}</span>`).join('')}
+        ${remaining > 0 ? `<span class="badge-custom" style="background: var(--light-gray); color: var(--gray); font-size: 11px;">+${remaining}</span>` : ''}
+    `;
+}
+
+function renderEmptyState(message) {
+    document.getElementById('tableBody').innerHTML = `
+        <tr>
+            <td colspan="8">
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="bi bi-inbox"></i>
+                    </div>
+                    <h3>${escapeHtml(message)}</h3>
+                    <p>Create a new template to get started</p>
+                    <button class="btn-custom btn-primary-custom" onclick="openCreateModal()">
+                        <i class="bi bi-plus-lg"></i>
+                        New Template
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGINATION RENDER
+   ═══════════════════════════════════════════════════════════ */
+function renderPagination() {
+    const infoEl = document.getElementById('paginationInfo');
+    const controlsEl = document.getElementById('paginationControls');
+    
+    const totalFiltered = filteredTemplates.length;
+    const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+    
+    // Info text
+    if (totalFiltered === 0) {
+        infoEl.textContent = 'No items';
+    } else {
+        const start = (currentPage - 1) * pageSize + 1;
+        const end = Math.min(currentPage * pageSize, totalFiltered);
+        infoEl.textContent = `Showing ${start}–${end} of ${totalFiltered} items`;
+    }
+    
+    // Controls
+    controlsEl.innerHTML = '';
+    
+    if (totalPages <= 1) {
+        controlsEl.style.display = 'none';
+        return;
+    }
+    controlsEl.style.display = 'flex';
+    
+    // Helper to create a page button
+    function createPageButton(label, page, disabled = false, isActive = false) {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        if (isActive) {
+            btn.classList.add('active');
+            btn.disabled = true;
+        }
+        if (disabled) {
+            btn.disabled = true;
+        }
+        btn.addEventListener('click', function () {
+            if (!disabled && !isActive) {
+                currentPage = page;
+                renderTable();  // re-render with pagination
+            }
+        });
+        return btn;
+    }
+    
+    // Previous button
+    const prevDisabled = currentPage <= 1;
+    controlsEl.appendChild(
+        createPageButton('«', currentPage - 1, prevDisabled)
+    );
+    
+    // Page numbers (window of pages)
+    const maxVisible = 7;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    
+    // First page + ellipsis
+    if (startPage > 1) {
+        controlsEl.appendChild(createPageButton('1', 1));
+        if (startPage > 2) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '…';
+            ellipsis.className = 'pagination-ellipsis';
+            controlsEl.appendChild(ellipsis);
+        }
+    }
+    
+    // Page numbers
+    for (let i = startPage; i <= endPage; i++) {
+        controlsEl.appendChild(
+            createPageButton(i, i, false, i === currentPage)
+        );
+    }
+    
+    // Last page + ellipsis
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '…';
+            ellipsis.className = 'pagination-ellipsis';
+            controlsEl.appendChild(ellipsis);
+        }
+        controlsEl.appendChild(
+            createPageButton(totalPages, totalPages)
+        );
+    }
+    
+    // Next button
+    const nextDisabled = currentPage >= totalPages;
+    controlsEl.appendChild(
+        createPageButton('»', currentPage + 1, nextDisabled)
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SEARCH & FILTER
+   ═══════════════════════════════════════════════════════════ */
+function handleSearch() {
+    currentPage = 1;  // reset to first page on search
+    applyFilters();
+}
+
+function handleFilter() {
+    currentPage = 1;  // reset to first page on filter
+    applyFilters();
+}
+
+function applyFilters() {
+    const query = document.getElementById('searchInput').value.toLowerCase().trim();
+    const status = document.getElementById('statusFilter').value;
+    const notificationType = document.getElementById('notificationFilter').value;
+    
+    filteredTemplates = allTemplates.filter(t => {
+        // Search match
+        const matchSearch = !query ||
+            t.name.toLowerCase().includes(query) ||
+            t.template_id.toLowerCase().includes(query) ||
+            t.content.toLowerCase().includes(query);
+        
+        // Status match
+        let matchStatus = true;
+        if (status === 'active') matchStatus = t.is_active;
+        if (status === 'inactive') matchStatus = !t.is_active;
+        
+        // Notification type match
+        let matchNotification = true;
+        if (notificationType) {
+            matchNotification = String(t.notification_type) === notificationType;
+        }
+        
+        return matchSearch && matchStatus && matchNotification;
+    });
+    
+    renderTable();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL - CREATE
+   ═══════════════════════════════════════════════════════════ */
+function openCreateModal() {
+    document.getElementById('modalTitle').textContent = 'New Template';
+    document.getElementById('submitText').textContent = 'Create Template';
+    document.getElementById('templateForm').reset();
+    document.getElementById('templateId').value = '';
+    document.getElementById('is_active').checked = true;
+    
+    document.getElementById('templateModal').classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL - EDIT
+   ═══════════════════════════════════════════════════════════ */
+function openEditModal(id) {
+    const template = allTemplates.find(t => t.id === id);
+    if (!template) return;
+    
+    document.getElementById('modalTitle').textContent = 'Edit Template';
+    document.getElementById('submitText').textContent = 'Update Template';
+    document.getElementById('templateId').value = template.id;
+    document.getElementById('name').value = template.name;
+    document.getElementById('template_id').value = template.template_id;
+    document.getElementById('content').value = template.content;
+    document.getElementById('variables').value = template.variables || '';
+    document.getElementById('is_active').checked = template.is_active;
+    document.getElementById('notification_type').value = template.notification_type;
+       
+    document.getElementById('templateModal').classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('templateModal').classList.remove('active');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUTO-DETECT VARIABLES
+   ═══════════════════════════════════════════════════════════ */
+function autoDetectVariables() {
+    const content = document.getElementById('content').value;
+    const matches = content.match(/\{([^}]+)\}/g) || [];
+    const vars = [...new Set(matches.map(m => m.slice(1, -1).trim()).filter(Boolean))];
+    
+    if (vars.length > 0) {
+        document.getElementById('variables').value = vars.join(', ');
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SUBMIT (CREATE / UPDATE)
+   ═══════════════════════════════════════════════════════════ */
+async function handleSubmit(event) {
+    event.preventDefault();
+    
+    const id = document.getElementById('templateId').value;
+    const isEdit = !!id;
+    
+    const data = {
+        name: document.getElementById('name').value.trim(),
+        template_id: document.getElementById('template_id').value.trim().toUpperCase(),
+        content: document.getElementById('content').value.trim(),
+        variables: document.getElementById('variables').value.trim(),
+        notification_type:document.getElementById('notification_type').value,
+        
+        is_active: document.getElementById('is_active').checked,
+    };
+    
+    // Validation
+    if (!data.name || !data.template_id || !data.content) {
+        showToast('error', 'Validation', 'Please fill all required fields');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    
+    try {
+        const url = isEdit ? `${API_BASE}${id}/` : API_BASE;
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(data),
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            const errorMsg = formatErrors(result);
+            throw new Error(errorMsg);
+        }
+        
+        showToast('success', 'Success', isEdit
+            ? `Template "${data.name}" updated`
+            : `Template "${data.name}" created`);
+        
+        closeModal();
+        // Reset to first page on create, keep page on edit
+        if (!isEdit) currentPage = 1;
+        await loadTemplates();
+        
+    } catch (error) {
+        console.error('Submit error:', error);
+        showToast('error', 'Error', error.message || 'Operation failed');
+    } finally {
+        submitBtn.disabled = false;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DELETE
+   ═══════════════════════════════════════════════════════════ */
+function openDeleteModal(id) {
+    const template = allTemplates.find(t => t.id === id);
+    if (!template) return;
+    
+    deleteTargetId = id;
+    document.getElementById('deleteMessage').innerHTML =
+        `Are you sure you want to delete <strong>${escapeHtml(template.name)}</strong>?<br>
+         <span style="font-size: 12px;">(Template ID: ${escapeHtml(template.template_id)})</span>`;
+    
+    document.getElementById('deleteModal').classList.add('active');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('active');
+    deleteTargetId = null;
+}
+
+async function confirmDelete() {
+    if (!deleteTargetId) return;
+    
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_BASE}${deleteTargetId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+        });
+        
+        if (!response.ok && response.status !== 204) {
+            const result = await response.json().catch(() => ({}));
+            throw new Error(result.detail || `HTTP ${response.status}`);
+        }
+        
+        showToast('success', 'Deleted', 'Template deleted successfully');
+        closeDeleteModal();
+        
+        // Adjust current page if we deleted the last item on the last page
+        const totalFiltered = filteredTemplates.length - 1;
+        const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+        if (currentPage > totalPages) {
+            currentPage = totalPages;
+        }
+        
+        await loadTemplates();
+        
+    } catch (error) {
+        console.error('Delete error:', error);
+        showToast('error', 'Cannot Delete', error.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════ */
+function showToast(type, title, message) {
+    const icons = {
+        success: 'bi-check-circle-fill',
+        error: 'bi-exclamation-circle-fill',
+        info: 'bi-info-circle-fill',
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-custom ${type}`;
+    toast.innerHTML = `
+        <div class="toast-icon">
+            <i class="bi ${icons[type] || icons.info}"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">${escapeHtml(title)}</div>
+            <div class="toast-message">${escapeHtml(message)}</div>
+        </div>
+    `;
+    
+    document.getElementById('toastContainer').appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════ */
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+
+function formatErrors(errors) {
+    if (typeof errors === 'string') return errors;
+    
+    if (typeof errors === 'object') {
+        const messages = [];
+        for (const [field, msgs] of Object.entries(errors)) {
+            const fieldMsgs = Array.isArray(msgs) ? msgs.join(', ') : msgs;
+            messages.push(`${field}: ${fieldMsgs}`);
+        }
+        return messages.join(' | ');
+    }
+    
+    return 'Unknown error';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INITIALIZE
+   ═══════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize page size from selector
+    const pageSizeSelect = document.getElementById('pageSizeSelect');
+    pageSize = parseInt(pageSizeSelect.value, 10);
+    
+    // Listen for page size changes
+    pageSizeSelect.addEventListener('change', function () {
+        pageSize = parseInt(this.value, 10);
+        currentPage = 1;  // reset to first page
+        renderTable();
+    });
+    
+    loadTemplates();
+    
+    // Close modal on ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            closeDeleteModal();
+        }
+    });
+    
+    // Close modal on overlay click
+    document.getElementById('templateModal').addEventListener('click', (e) => {
+        if (e.target.id === 'templateModal') closeModal();
+    });
+    
+    document.getElementById('deleteModal').addEventListener('click', (e) => {
+        if (e.target.id === 'deleteModal') closeDeleteModal();
+    });
+});
+</script>
+{% endblock %}

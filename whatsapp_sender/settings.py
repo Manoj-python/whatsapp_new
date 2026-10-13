@@ -53,7 +53,8 @@ INSTALLED_APPS = [
     "notices",
     "special_cases",
      "meghaai_app",
-     "batch_app"
+     "batch_app",
+     "sms_app"
 ]
 
 
@@ -92,21 +93,36 @@ CORS_ALLOW_HEADERS = ['*']   # or specify as needed
 
 # DRF settings
 REST_FRAMEWORK = {
+
+    # Authentication
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+
+    # Permissions
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',   # for internal APIs
+        'rest_framework.permissions.IsAuthenticated',
     ],
+
+    # Throttling
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+
     ],
+
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '1000/hour',   # or '100/day' etc.
+        'anon': '1000/hour',
         'user': '10000/hour',
-    }
+    },
+
+    # Pagination
+    'DEFAULT_PAGINATION_CLASS':
+        'whatsapp_sender.pagination.StandardPagination',
 }
+
+
 
 # File upload limit
 DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
@@ -261,6 +277,7 @@ CELERY_TASK_ROUTES = {
     "financehub.tasks.*": {"queue": "financehub"},
     "special_cases.tasks.*": {"queue": "special_cases"},
     "notices.tasks.*": {"queue": "notices"},
+    "sms_app.tasks.*": {"queue": "sms_app"},
 
     # Batch Processing / execution
     "batch_app.tasks.process_batch_job": {"queue": "batch_app"},

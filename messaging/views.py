@@ -1038,6 +1038,15 @@ def whatsapp_webhook(request):
                         content_type = "text"
                         media_file_data = None
                         button_response = ""
+                        interested_clicked = False
+                        # ======================================
+                        # GET CUSTOMER NAME
+                        # ======================================
+                        customer_name = ""
+                        contacts_data = value.get("contacts", [])
+                        if contacts_data:
+                            customer_name = contacts_data[0].get("profile", {}).get("name", "")
+                            print(f"📛 Customer name: {customer_name}")
 
                         # ======================================
                         # DEBUG - SEE EXACT META PAYLOAD
@@ -1259,11 +1268,11 @@ def whatsapp_webhook(request):
                         # ======================================
                         # GET CUSTOMER NAME
                         # ======================================
-                        customer_name = ""
-                        contacts_data = value.get("contacts", [])
-                        if contacts_data:
-                            customer_name = contacts_data[0].get("profile", {}).get("name", "")
-                            print(f"📛 Customer name: {customer_name}")
+                        # customer_name = ""
+                        # contacts_data = value.get("contacts", [])
+                        # if contacts_data:
+                        #     customer_name = contacts_data[0].get("profile", {}).get("name", "")
+                        #     print(f"📛 Customer name: {customer_name}")
                         last_incoming = SmsWhatsAppLog.objects.filter(mobile=mobile,message_type='Received').order_by('-sent_at').first()
                         send_welcome = False
                         if not last_incoming:
@@ -1298,7 +1307,7 @@ def whatsapp_webhook(request):
                         # AUTO LEAD CREATION FROM INTERESTED BUTTON
                         # ======================================
                         try:
-                            interested_clicked = False
+                            # interested_clicked = False
 
                             if "[Button Click] Interested" in text_body:
                                 interested_clicked = True
@@ -1438,7 +1447,7 @@ def whatsapp_webhook(request):
                                         ).first()
                                     if not marketing_category:
 
-                                        marketing_category = Category.objects.get_or_create(
+                                        marketing_category,_ = Category.objects.get_or_create(
                                                 name="Marketing leads",
                                                 group=sales_group
                                             )
@@ -1723,7 +1732,7 @@ def whatsapp_webhook(request):
                                                         (execution.sent_count or 0) - 1,
                                                         0,
                                                     )
-                                                
+
                                                 execution.failed_count = (
                                                     execution.failed_count or 0
                                                 ) + 1
@@ -1741,7 +1750,7 @@ def whatsapp_webhook(request):
                                                     total_failed=Sum("failed_count"),
                                                     total_skipped=Sum("skipped_count"),
                                                 )
-                                                
+
                                                 job.sent_count = all_stats["total_sent"] or 0
                                                 job.failed_count = all_stats["total_failed"] or 0
                                                 job.skipped_count = all_stats["total_skipped"] or 0
@@ -1847,7 +1856,6 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
-
 
 
 

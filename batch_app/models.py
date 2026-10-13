@@ -117,7 +117,13 @@ class BatchJob(models.Model):
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     next_run_time = models.DateTimeField(null=True, blank=True)
-
+    notification_type = models.ForeignKey(
+    "NotificationType",
+    on_delete=models.PROTECT,
+    null=True,
+    blank=True,
+    related_name="batch_jobs"
+)
     # Metadata
     created_by = models.CharField(max_length=150, blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)

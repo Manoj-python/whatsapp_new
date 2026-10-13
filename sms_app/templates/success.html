@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Campaign Status</title>
+
+    <style>
+
+        /* =========================================================
+           RESET
+        ========================================================= */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+
+        /* =========================================================
+           BODY
+        ========================================================= */
+
+        body {
+            font-family:
+                'Inter',
+                -apple-system,
+                BlinkMacSystemFont,
+                'Segoe UI',
+                Roboto,
+                sans-serif;
+
+            background: #f5f7fb;
+
+            min-height: 100vh;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            padding: 30px 20px;
+
+            color: #0f172a;
+        }
+
+
+        /* =========================================================
+           MAIN CARD
+        ========================================================= */
+
+        .card {
+            width: 100%;
+            max-width: 680px;
+
+            background: #ffffff;
+
+            border-radius: 20px;
+
+            padding: 40px;
+
+            box-shadow:
+                0 20px 50px rgba(15, 23, 42, 0.08),
+                0 4px 14px rgba(15, 23, 42, 0.04);
+
+            border: 1px solid #edf1f5;
+        }
+
+
+        /* =========================================================
+           STATUS HEADER
+        ========================================================= */
+
+        .status-header {
+            text-align: center;
+        }
+
+        .status-icon {
+            width: 76px;
+            height: 76px;
+
+            border-radius: 50%;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            margin: 0 auto 18px;
+
+            font-size: 38px;
+            font-weight: 600;
+
+            transition: all 0.3s ease;
+        }
+
+
+        /* Processing */
+
+        .status-icon.processing {
+            background: #e8f1ff;
+            color: #2563eb;
+        }
+
+
+        /* Success */
+
+        .status-icon.success {
+            background: #e9f9ef;
+            color: #16a34a;
+        }
+
+
+        /* Partial */
+
+        .status-icon.partial {
+            background: #fff8db;
+            color: #ca8a04;
+        }
+
+
+        /* Failed */
+
+        .status-icon.failed {
+            background: #feecec;
+            color: #dc2626;
+        }
+
+
+        /* Spinner */
+
+        .status-icon.processing .spin {
+            display: inline-block;
+
+            animation: spin 1.2s linear infinite;
+        }
+
+        @keyframes spin {
+
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+
+        }
+
+
+        /* =========================================================
+           HEADINGS
+        ========================================================= */
+
+        .card h2 {
+            font-size: 26px;
+            font-weight: 700;
+
+            color: #0f172a;
+
+            margin-bottom: 8px;
+        }
+
+        .subhead {
+            font-size: 14px;
+
+            color: #64748b;
+
+            line-height: 1.6;
+
+            padding-bottom: 24px;
+
+            border-bottom: 1px solid #edf1f5;
+
+            min-height: 24px;
+        }
+
+
+        /* =========================================================
+           ERROR
+        ========================================================= */
+
+        .error-message {
+            display: none;
+
+            margin-top: 20px;
+
+            padding: 14px 16px;
+
+            background: #fff1f2;
+
+            border: 1px solid #fecdd3;
+
+            border-left: 4px solid #dc2626;
+
+            border-radius: 10px;
+
+            color: #991b1b;
+
+            font-size: 13px;
+
+            line-height: 1.5;
+
+            text-align: left;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+
+        /* =========================================================
+           STATISTICS
+        ========================================================= */
+
+        .stats-grid {
+            display: grid;
+
+            grid-template-columns: repeat(4, 1fr);
+
+            gap: 12px;
+
+            margin-top: 24px;
+        }
+
+        .stat-item {
+            background: #f8fafc;
+
+            border: 1px solid #e8edf3;
+
+            border-radius: 12px;
+
+            padding: 18px 10px;
+
+            text-align: center;
+
+            transition: all 0.2s ease;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-2px);
+
+            border-color: #d7dee8;
+
+            box-shadow:
+                0 6px 18px rgba(15, 23, 42, 0.05);
+        }
+
+        .stat-number {
+            font-size: 26px;
+
+            font-weight: 700;
+
+            line-height: 1.2;
+
+            margin-bottom: 6px;
+        }
+
+        .stat-number.total {
+            color: #0f172a;
+        }
+
+        .stat-number.sent {
+            color: #16a34a;
+        }
+
+        .stat-number.failed {
+            color: #dc2626;
+        }
+
+        .stat-number.skipped {
+            color: #ca8a04;
+        }
+
+        .stat-label {
+            font-size: 12px;
+
+            font-weight: 500;
+
+            color: #64748b;
+        }
+
+
+        /* Counter animation */
+
+        .stat-number.bump {
+            animation: bump 0.3s ease;
+        }
+
+        @keyframes bump {
+
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.12);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+
+        }
+
+
+        /* =========================================================
+           PROGRESS
+        ========================================================= */
+
+        .progress-wrapper {
+            margin-top: 22px;
+
+            padding: 18px 20px;
+
+            background: #f8fafc;
+
+            border: 1px solid #e8edf3;
+
+            border-radius: 12px;
+        }
+
+        .progress-top {
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            margin-bottom: 10px;
+        }
+
+        .progress-title {
+            font-size: 13px;
+
+            font-weight: 600;
+
+            color: #334155;
+        }
+
+        .progress-percentage {
+            font-size: 13px;
+
+            font-weight: 700;
+
+            color: #2563eb;
+        }
+
+        .progress-bar {
+            width: 100%;
+
+            height: 9px;
+
+            background: #e8edf3;
+
+            border-radius: 50px;
+
+            overflow: hidden;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+
+            width: 0%;
+
+            border-radius: 50px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #2563eb,
+                    #16a34a
+                );
+
+            transition: width 0.7s ease;
+        }
+
+        .progress-bottom {
+            display: flex;
+
+            justify-content: space-between;
+
+            margin-top: 9px;
+
+            font-size: 12px;
+
+            color: #64748b;
+        }
+
+
+        /* =========================================================
+           DETAILS
+        ========================================================= */
+
+        .section-title {
+            margin-top: 26px;
+
+            margin-bottom: 12px;
+
+            font-size: 13px;
+
+            font-weight: 700;
+
+            color: #334155;
+
+            text-transform: uppercase;
+
+            letter-spacing: 0.04em;
+        }
+
+        .details-grid {
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 8px;
+        }
+
+        .detail-row {
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            gap: 20px;
+
+            padding: 12px 15px;
+
+            background: #f8fafc;
+
+            border: 1px solid #edf1f5;
+
+            border-radius: 9px;
+        }
+
+        .detail-row .label {
+            font-size: 13px;
+
+            font-weight: 500;
+
+            color: #64748b;
+
+            flex-shrink: 0;
+        }
+
+        .detail-row .value {
+            font-size: 13px;
+
+            font-weight: 600;
+
+            color: #0f172a;
+
+            text-align: right;
+
+            max-width: 65%;
+
+            word-break: break-word;
+        }
+
+
+        /* =========================================================
+           STATUS BADGES
+        ========================================================= */
+
+        .badge {
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 5px;
+
+            padding: 5px 11px;
+
+            border-radius: 50px;
+
+            font-size: 11px;
+
+            font-weight: 700;
+        }
+
+        .badge.completed {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .badge.processing {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .badge.pending {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .badge.failed {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+
+        /* =========================================================
+           ACTION BUTTONS
+        ========================================================= */
+
+        .action-group {
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            gap: 10px;
+
+            flex-wrap: wrap;
+
+            margin-top: 26px;
+        }
+
+        .btn {
+            min-width: 145px;
+
+            height: 44px;
+
+            padding: 0 20px;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            gap: 7px;
+
+            border-radius: 10px;
+
+            font-size: 13px;
+
+            font-weight: 600;
+
+            text-decoration: none;
+
+            cursor: pointer;
+
+            transition: all 0.2s ease;
+        }
+
+
+        /* Back */
+
+        .btn-back {
+            background: #0f172a;
+
+            color: #ffffff;
+
+            border: 1px solid #0f172a;
+        }
+
+        .btn-back:hover {
+            background: #1e293b;
+
+            color: #ffffff;
+
+            transform: translateY(-2px);
+
+            box-shadow:
+                0 5px 14px rgba(15, 23, 42, 0.16);
+        }
+
+
+        /* Report */
+
+        .btn-report {
+            background: #16a34a;
+
+            color: #ffffff;
+
+            border: 1px solid #16a34a;
+        }
+
+        .btn-report:hover {
+            background: #15803d;
+
+            color: #ffffff;
+
+            transform: translateY(-2px);
+
+            box-shadow:
+                0 5px 14px rgba(22, 163, 74, 0.18);
+        }
+
+
+        /* Retry */
+
+        .btn-retry {
+            background: #ffffff;
+
+            color: #dc2626;
+
+            border: 1px solid #dc2626;
+        }
+
+        .btn-retry:hover {
+            background: #dc2626;
+
+            color: #ffffff;
+
+            transform: translateY(-2px);
+
+            box-shadow:
+                0 5px 14px rgba(220, 38, 38, 0.15);
+        }
+
+
+        /* =========================================================
+           REFRESH INDICATOR
+        ========================================================= */
+
+        .refresh-indicator {
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            gap: 7px;
+
+            margin-top: 22px;
+
+            padding-top: 16px;
+
+            border-top: 1px solid #edf1f5;
+
+            font-size: 12px;
+
+            color: #94a3b8;
+        }
+
+        .refresh-indicator .dot {
+            width: 7px;
+            height: 7px;
+
+            border-radius: 50%;
+
+            background: #22c55e;
+
+            display: inline-block;
+
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .refresh-indicator .dot.idle {
+            animation: none;
+
+            background: #94a3b8;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+
+        }
+
+
+        /* =========================================================
+           RESPONSIVE
+        ========================================================= */
+
+        @media (max-width: 600px) {
+
+            body {
+                padding: 15px;
+            }
+
+            .card {
+                padding: 28px 18px;
+
+                border-radius: 16px;
+            }
+
+            .card h2 {
+                font-size: 22px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .stat-number {
+                font-size: 24px;
+            }
+
+            .detail-row {
+                align-items: flex-start;
+
+                flex-direction: column;
+
+                gap: 5px;
+            }
+
+            .detail-row .value {
+                max-width: 100%;
+
+                text-align: left;
+            }
+
+            .action-group {
+                flex-direction: column;
+
+                width: 100%;
+            }
+
+            .btn {
+                width: 100%;
+
+                min-width: 0;
+            }
+
+        }
+
+
+        @media (max-width: 360px) {
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+    <div class="card">
+
+
+        <!-- =====================================================
+             STATUS HEADER
+        ====================================================== -->
+
+        <div class="status-header">
+
+            <div
+                class="status-icon processing"
+                id="statusIcon"
+            >
+                <span class="spin">⟳</span>
+            </div>
+
+
+            <h2 id="headingText">
+                Campaign Started
+            </h2>
+
+
+            <div
+                class="subhead"
+                id="subheadText"
+            >
+                Your SMS campaign is being processed in the background.
+            </div>
+
+        </div>
+
+
+        <!-- =====================================================
+             ERROR
+        ====================================================== -->
+
+        <div
+            class="error-message"
+            id="errorMessage"
+        >
+            <strong>Error:</strong>
+            <span id="errorText"></span>
+        </div>
+
+
+        <!-- =====================================================
+             STATISTICS
+        ====================================================== -->
+
+        <div class="stats-grid">
+
+            <div class="stat-item">
+
+                <div
+                    class="stat-number total"
+                    id="totalCount"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Total
+                </div>
+
+            </div>
+
+
+            <div class="stat-item">
+
+                <div
+                    class="stat-number sent"
+                    id="sentCount"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Sent
+                </div>
+
+            </div>
+
+
+            <div class="stat-item">
+
+                <div
+                    class="stat-number failed"
+                    id="failedCount"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Failed
+                </div>
+
+            </div>
+
+
+            <div class="stat-item">
+
+                <div
+                    class="stat-number skipped"
+                    id="skippedCount"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Skipped
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================================
+             PROGRESS
+        ====================================================== -->
+
+        <div class="progress-wrapper">
+
+            <div class="progress-top">
+
+                <span class="progress-title">
+                    Campaign Progress
+                </span>
+
+                <span
+                    class="progress-percentage"
+                    id="progressPercent"
+                >
+                    0%
+                </span>
+
+            </div>
+
+
+            <div class="progress-bar">
+
+                <div
+                    class="fill"
+                    id="progressFill"
+                ></div>
+
+            </div>
+
+
+            <div class="progress-bottom">
+
+                <span>
+                    Processed
+                </span>
+
+                <span id="progressText">
+                    0 / 0
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================================
+             CAMPAIGN DETAILS
+        ====================================================== -->
+
+        <div class="section-title">
+            Campaign Details
+        </div>
+
+
+        <div class="details-grid">
+
+
+            <div class="detail-row">
+
+                <span class="label">
+                    Campaign ID
+                </span>
+
+                <span class="value">
+                    #{{ campaign.id }}
+                </span>
+
+            </div>
+
+
+            <div class="detail-row">
+
+                <span class="label">
+                    Template
+                </span>
+
+                <span class="value">
+                    {{ campaign.template.name }}
+                </span>
+
+            </div>
+
+
+            <div class="detail-row">
+
+                <span class="label">
+                    Status
+                </span>
+
+                <span
+                    class="value"
+                    id="statusText"
+                >
+                    <span class="badge processing">
+                        ⏳ Processing
+                    </span>
+                </span>
+
+            </div>
+
+
+            <div
+                class="detail-row"
+                id="processedRow"
+            >
+
+                <span class="label">
+                    Processed
+                </span>
+
+                <span
+                    class="value"
+                    id="processedCount"
+                >
+                    0
+                </span>
+
+            </div>
+
+
+        </div>
+
+
+        <!-- =====================================================
+             ACTION BUTTONS
+        ====================================================== -->
+
+        <div class="action-group">
+
+
+            <!-- Back -->
+
+            <a
+                href="{% url 'upload_excel' %}"
+                class="btn btn-back"
+            >
+                ← Go Back
+            </a>
+
+
+            <!-- Excel Report -->
+
+            <a
+                href="{% url 'download_sms_campaign_report' campaign.id %}"
+                class="btn btn-report"
+            >
+                📊 Download Report
+            </a>
+
+
+            <!-- Retry -->
+
+            <button
+                class="btn btn-retry"
+                id="retryBtn"
+                style="display:none;"
+                onclick="location.href='/sms/retry/{{ campaign.id }}/'"
+            >
+                🔄 Retry Failed
+            </button>
+
+
+        </div>
+
+
+        <!-- =====================================================
+             REFRESH INDICATOR
+        ====================================================== -->
+
+        <div class="refresh-indicator">
+
+            <span
+                class="dot"
+                id="refreshDot"
+            ></span>
+
+            <span id="refreshText">
+                Auto-refreshing...
+            </span>
+
+        </div>
+
+
+    </div>
+
+
+    <!-- =========================================================
+         JAVASCRIPT
+    ========================================================= -->
+
+    <script>
+
+        /* =====================================================
+           CAMPAIGN
+        ====================================================== */
+
+        const CAMPAIGN_ID = {{ campaign.id }};
+
+        let refreshInterval = null;
+
+        let previousSent = 0;
+        let previousFailed = 0;
+        let previousSkipped = 0;
+
+
+        /* =====================================================
+           DOM ELEMENTS
+        ====================================================== */
+
+        const totalEl =
+            document.getElementById('totalCount');
+
+        const sentEl =
+            document.getElementById('sentCount');
+
+        const failedEl =
+            document.getElementById('failedCount');
+
+        const skippedEl =
+            document.getElementById('skippedCount');
+
+        const processedEl =
+            document.getElementById('processedCount');
+
+        const progressFill =
+            document.getElementById('progressFill');
+
+        const progressPercent =
+            document.getElementById('progressPercent');
+
+        const progressText =
+            document.getElementById('progressText');
+
+        const statusText =
+            document.getElementById('statusText');
+
+        const headingText =
+            document.getElementById('headingText');
+
+        const subheadText =
+            document.getElementById('subheadText');
+
+        const statusIcon =
+            document.getElementById('statusIcon');
+
+        const retryBtn =
+            document.getElementById('retryBtn');
+
+        const refreshText =
+            document.getElementById('refreshText');
+
+        const refreshDot =
+            document.getElementById('refreshDot');
+
+        const errorMessage =
+            document.getElementById('errorMessage');
+
+        const errorText =
+            document.getElementById('errorText');
+
+
+        /* =====================================================
+           UPDATE UI
+        ====================================================== */
+
+        function updateUI(data) {
+
+            /* -------------------------------------------------
+               COUNTS
+            ------------------------------------------------- */
+
+            const total =
+                Number(data.total || 0);
+
+            const sent =
+                Number(data.sent || 0);
+
+            const failed =
+                Number(data.failed || 0);
+
+            const skipped =
+                Number(data.skipped || 0);
+
+            const processed =
+                Number(data.processed || 0);
+
+
+            totalEl.textContent = total;
+
+            sentEl.textContent = sent;
+
+            failedEl.textContent = failed;
+
+            skippedEl.textContent = skipped;
+
+            processedEl.textContent = processed;
+
+
+            /* -------------------------------------------------
+               SENT ANIMATION
+            ------------------------------------------------- */
+
+            if (sent !== previousSent) {
+
+                sentEl.classList.remove('bump');
+
+                void sentEl.offsetWidth;
+
+                sentEl.classList.add('bump');
+
+                previousSent = sent;
+
+            }
+
+
+            /* -------------------------------------------------
+               FAILED ANIMATION
+            ------------------------------------------------- */
+
+            if (failed !== previousFailed) {
+
+                failedEl.classList.remove('bump');
+
+                void failedEl.offsetWidth;
+
+                failedEl.classList.add('bump');
+
+                previousFailed = failed;
+
+            }
+
+
+            /* -------------------------------------------------
+               SKIPPED ANIMATION
+            ------------------------------------------------- */
+
+            if (skipped !== previousSkipped) {
+
+                skippedEl.classList.remove('bump');
+
+                void skippedEl.offsetWidth;
+
+                skippedEl.classList.add('bump');
+
+                previousSkipped = skipped;
+
+            }
+
+
+            /* -------------------------------------------------
+               PROGRESS
+            ------------------------------------------------- */
+
+            const percent =
+                total > 0
+                    ? Math.min(
+                        Math.round(
+                            (processed / total) * 100
+                        ),
+                        100
+                    )
+                    : 0;
+
+
+            progressFill.style.width =
+                percent + '%';
+
+            progressPercent.textContent =
+                percent + '%';
+
+            progressText.textContent =
+                `${processed} / ${total}`;
+
+
+            /* -------------------------------------------------
+               STATUS BADGE
+            ------------------------------------------------- */
+
+            let badgeHtml = '';
+
+
+            if (data.status === 'COMPLETED') {
+
+                badgeHtml =
+                    '<span class="badge completed">✓ Completed</span>';
+
+            }
+
+            else if (data.status === 'PROCESSING') {
+
+                badgeHtml =
+                    '<span class="badge processing">⏳ Processing</span>';
+
+            }
+
+            else if (data.status === 'PENDING') {
+
+                badgeHtml =
+                    '<span class="badge pending">⏳ Pending</span>';
+
+            }
+
+            else if (data.status === 'FAILED') {
+
+                badgeHtml =
+                    '<span class="badge failed">✕ Failed</span>';
+
+            }
+
+
+            statusText.innerHTML = badgeHtml;
+
+
+            /* -------------------------------------------------
+               ERROR
+            ------------------------------------------------- */
+
+            if (data.error_message) {
+
+                errorMessage.classList.add('show');
+
+                errorText.textContent =
+                    data.error_message;
+
+            }
+
+            else {
+
+                errorMessage.classList.remove('show');
+
+            }
+
+
+            /* -------------------------------------------------
+               COMPLETED
+            ------------------------------------------------- */
+
+            if (data.is_completed) {
+
+                if (refreshInterval) {
+
+                    clearInterval(refreshInterval);
+
+                    refreshInterval = null;
+
+                }
+
+
+                refreshText.textContent =
+                    '✓ Processing completed';
+
+                refreshDot.className =
+                    'dot idle';
+
+
+                /* =============================================
+                   FAILED CAMPAIGN
+                ============================================= */
+
+                if (data.status === 'FAILED') {
+
+                    headingText.textContent =
+                        'Campaign Failed';
+
+                    subheadText.textContent =
+                        'An error occurred while processing the campaign.';
+
+                    statusIcon.className =
+                        'status-icon failed';
+
+                    statusIcon.innerHTML =
+                        '✕';
+
+                    retryBtn.style.display =
+                        'inline-flex';
+
+                }
+
+
+                /* =============================================
+                   ALL SUCCESS
+                ============================================= */
+
+                else if (
+                    failed === 0 &&
+                    sent > 0
+                ) {
+
+                    headingText.textContent =
+                        'Campaign Completed';
+
+                    subheadText.textContent =
+                        'All messages were processed successfully.';
+
+                    statusIcon.className =
+                        'status-icon success';
+
+                    statusIcon.innerHTML =
+                        '✓';
+
+                    retryBtn.style.display =
+                        'none';
+
+                }
+
+
+                /* =============================================
+                   PARTIAL
+                ============================================= */
+
+                else if (
+                    failed > 0 &&
+                    sent > 0
+                ) {
+
+                    headingText.textContent =
+                        'Campaign Completed';
+
+                    subheadText.textContent =
+                        `${failed} message${failed !== 1 ? 's' : ''} failed to send.`;
+
+                    statusIcon.className =
+                        'status-icon partial';
+
+                    statusIcon.innerHTML =
+                        '⚠';
+
+                    retryBtn.style.display =
+                        'inline-flex';
+
+                }
+
+
+                /* =============================================
+                   ALL FAILED
+                ============================================= */
+
+                else if (
+                    failed > 0 &&
+                    sent === 0
+                ) {
+
+                    headingText.textContent =
+                        'Campaign Completed';
+
+                    subheadText.textContent =
+                        'No messages were sent successfully.';
+
+                    statusIcon.className =
+                        'status-icon failed';
+
+                    statusIcon.innerHTML =
+                        '✕';
+
+                    retryBtn.style.display =
+                        'inline-flex';
+
+                }
+
+
+                /* =============================================
+                   EMPTY / OTHER
+                ============================================= */
+
+                else {
+
+                    headingText.textContent =
+                        'Campaign Completed';
+
+                    subheadText.textContent =
+                        'Campaign processing has finished.';
+
+                    statusIcon.className =
+                        'status-icon success';
+
+                    statusIcon.innerHTML =
+                        '✓';
+
+                    retryBtn.style.display =
+                        'none';
+
+                }
+
+            }
+
+
+            /* -------------------------------------------------
+               STILL PROCESSING
+            ------------------------------------------------- */
+
+            else {
+
+                refreshText.textContent =
+                    'Auto-refreshing...';
+
+                refreshDot.className =
+                    'dot';
+
+
+                if (data.status === 'PENDING') {
+
+                    headingText.textContent =
+                        'Campaign Queued';
+
+                    subheadText.textContent =
+                        'Your campaign is waiting to start...';
+
+                }
+
+                else {
+
+                    headingText.textContent =
+                        'Processing Campaign';
+
+                    subheadText.textContent =
+                        `Processing ${processed} of ${total} messages...`;
+
+                }
+
+
+                statusIcon.className =
+                    'status-icon processing';
+
+                statusIcon.innerHTML =
+                    '<span class="spin">⟳</span>';
+
+            }
+
+        }
+
+
+        /* =====================================================
+           FETCH CAMPAIGN STATUS
+        ====================================================== */
+
+        function fetchStatus() {
+
+            fetch(
+                `/sms/campaign-status/${CAMPAIGN_ID}/`
+            )
+
+                .then(response => {
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            `HTTP ${response.status}`
+                        );
+
+                    }
+
+                    return response.json();
+
+                })
+
+                .then(data => {
+
+                    if (data.error) {
+
+                        console.error(
+                            'Campaign status error:',
+                            data.error
+                        );
+
+                        return;
+
+                    }
+
+                    updateUI(data);
+
+                })
+
+                .catch(error => {
+
+                    console.error(
+                        'Status fetch error:',
+                        error
+                    );
+
+                });
+
+        }
+
+
+        /* =====================================================
+           INITIAL LOAD
+        ====================================================== */
+
+        fetchStatus();
+
+
+        /* =====================================================
+           AUTO REFRESH
+        ====================================================== */
+
+        refreshInterval =
+            setInterval(
+                fetchStatus,
+                2000
+            );
+
+
+        /* =====================================================
+           CLEANUP
+        ====================================================== */
+
+        window.addEventListener(
+            'beforeunload',
+            function () {
+
+                if (refreshInterval) {
+
+                    clearInterval(
+                        refreshInterval
+                    );
+
+                }
+
+            }
+        );
+
+    </script>
+
+</body>
+
+</html>
