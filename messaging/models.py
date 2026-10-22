@@ -228,8 +228,7 @@ class Case(models.Model):
     
     # Assignment
     assigned_to = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True, related_name='app1_assigned_cases')
-    assigned_to_name = models.CharField(max_length=255, blank=True, null=True)
-    
+    assigned_to_name = models.CharField(max_length=255, blank=True, null=True)    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -278,7 +277,24 @@ class Case(models.Model):
             models.Index(fields=['current_level']),
             models.Index(fields=['status']),
             models.Index(fields=['priority']),
+            models.Index(
+                fields=['current_level', 'status', 'created_at'],
+                name='idx_case_pendings',
+            ),
+            models.Index(
+                fields=['resolved_at_level', 'status', 'resolved_at'],
+                name='idx_case_resolveds',
+            ),
+            models.Index(
+                fields=['previous_level', 'updated_at'],
+                name='idx_case_escalateds',
+            ),
+            models.Index(
+                fields=['group', 'subgroup', 'category'],
+                name='idx_case_scopes',
+            ),
         ]
+        
     
     def __str__(self):
         return f"{self.case_id} - {self.current_level} - {self.status}"

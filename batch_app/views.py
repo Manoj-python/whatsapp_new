@@ -149,22 +149,22 @@ def get_job_data(job):
         # ============================================================
         # Logs have the most accurate status information from webhooks
         from .app_discovery import get_app_log_model
-        
+
         LogModel = get_app_log_model(job.target_app)
-        
+
         if LogModel:
             logs = LogModel.objects.filter(job_id=job)
             total_logs = logs.count()
-            
+
             if total_logs > 0:
                 # Success = Sent, Delivered, Read
                 success_statuses = ['Sent', 'Delivered', 'Read']
                 sent_count = logs.filter(status__in=success_statuses).count()
-                
+
                 # Skipped = SKIPPED, PAID, SEIZED
                 skipped_statuses = ['SKIPPED', 'PAID', 'SEIZED']
                 skipped_count = logs.filter(status__in=skipped_statuses).count()
-                
+
                 # Failed = Total - Sent - Skipped (captures ALL failures)
                 failed_count = total_logs - sent_count - skipped_count
             else:
@@ -458,15 +458,15 @@ def get_job_data(job):
 def dashboard(request):
     try:
         from .app_discovery import get_app_log_model
-        
+
         # ✅ Get accurate counts from logs for all jobs
         total_sent = 0
         total_skipped = 0
         total_failed = 0
-        
+
         success_statuses = ['Sent', 'Delivered', 'Read']
         skipped_statuses = ['SKIPPED', 'PAID', 'SEIZED']
-        
+
         for job in BatchJob.objects.all():
             LogModel = get_app_log_model(job.target_app)
             if LogModel:
@@ -476,11 +476,11 @@ def dashboard(request):
                     sent = logs.filter(status__in=success_statuses).count()
                     skipped = logs.filter(status__in=skipped_statuses).count()
                     failed = total - sent - skipped
-                    
+
                     total_sent += sent
                     total_skipped += skipped
                     total_failed += failed
-        
+
         context = {
             'total_jobs': BatchJob.objects.count(),
             'running_jobs': BatchJob.objects.filter(status='running').count(),
@@ -541,7 +541,7 @@ def job_count_api(request):
 def batch_job_list(request):
     try:
         from .app_discovery import get_app_log_model
-        
+
         jobs = BatchJob.objects.all().order_by('-created_at')
         status_filter = request.GET.get('status', '')
         if status_filter:
@@ -550,7 +550,7 @@ def batch_job_list(request):
         # ✅ Update counts for each job from logs
         success_statuses = ['Sent', 'Delivered', 'Read']
         skipped_statuses = ['SKIPPED', 'PAID', 'SEIZED']
-        
+
         for job in jobs:
             LogModel = get_app_log_model(job.target_app)
             if LogModel:
@@ -560,7 +560,7 @@ def batch_job_list(request):
                     sent_count = logs.filter(status__in=success_statuses).count()
                     skipped_count = logs.filter(status__in=skipped_statuses).count()
                     failed_count = total - sent_count - skipped_count
-                    
+
                     # Update job object (not saving to DB)
                     job.sent_count = sent_count
                     job.skipped_count = skipped_count
@@ -602,18 +602,16 @@ def batch_job_create(request):
             template_id = request.POST.get('template_id')
             excel_path = request.POST.get('excel_path', '').strip()
             # notification_type_id = request.POST.get("notification_type")
-            notification_type_id = request.POST.get("notification_type")   #s_ms
-            if not notification_type_id:
-                messages.error(request, '❌ Please select Notification Type')
-                return redirect('batch_job_create')
-            try:
-                notification_type = NotificationType.objects.get(
-                    id=notification_type_id,
-                    is_active=True
-                )
-            except NotificationType.DoesNotExist:
-                messages.error(request, '❌ Invalid Notification Type selected')
-                return redirect('batch_job_create')
+            notification_type_id = request.POST.get("notification_type") or None#s_ms
+            if notification_type_id:
+                try:
+                    notification_type = NotificationType.objects.get(
+                        id=notification_type_id,
+                        is_active=True
+                    )
+                except (NotificationType.DoesNotExist, ValueError):
+                    messages.error(request, '❌ Invalid Notification Type selected')
+                    return redirect('batch_job_create')
 
             if not excel_path:
                 messages.error(request, '❌ Excel file path is required')

@@ -1597,12 +1597,7 @@ def whatsapp_webhook(request):
                             continue
 
                         obj = SmsWhatsAppLog.objects.filter(message_id=msg_id).first()
-                        if not obj and len(msg_id) > 30:
-                            partial = msg_id[:30]
-                            obj = SmsWhatsAppLog.objects.filter(message_id__startswith=partial).first()
-                            if obj:
-                                SmsWhatsAppLog.objects.filter(id=obj.id).update(message_id=msg_id)
-                                obj.refresh_from_db()
+                        # EXACT MATCH ONLY (SM Square, 17 Oct 2026): message_id is indexed and 255 wide, so a miss is a message sent elsewhere. Its 30-char prefix is only the phone number - the old fallback scanned the whole table and overwrote another message's id.
 
                         if not obj:
                             continue

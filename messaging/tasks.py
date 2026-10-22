@@ -1,3 +1,4 @@
+
 import io
 import time
 import logging
@@ -453,6 +454,13 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
             elif template_choice == "51":
                 image_filename = row.get("ganesh_image")
                 folder = "ganesh_images"
+            elif template_choice == "53":
+                pdf_filename = row.get("dasara_offer")
+                folder = "ganesh_images"
+            elif template_choice == "54":
+                pdf_filename = row.get("dasara_offer")
+                folder = "ganesh_images"
+
             elif template_choice == "19":
                 pdf_filename = (
                     row.get("borrower_pdf_file")

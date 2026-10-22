@@ -1236,14 +1236,7 @@ def whatsapp_webhook2(request):
                         # Message should already exist with real ID
                         obj = SmsWhatsAppLog2.objects.filter(message_id=msg_id).first()
                         # If not found, try to find by partial match (temp ID might still be there)
-                        if not obj and len(msg_id) > 30:
-                            # Try to find by the real ID pattern in any message
-                            partial = msg_id[:30]
-                            obj = SmsWhatsAppLog2.objects.filter(message_id__startswith=partial).first()
-                            if obj:
-                                # print(f"✅ Found by partial match, updating full ID")
-                                SmsWhatsAppLog2.objects.filter(id=obj.id).update(message_id=msg_id)
-                                obj.refresh_from_db()
+                        # EXACT MATCH ONLY (SM Square, 17 Oct 2026): message_id is indexed and 255 wide, so a miss is a message sent elsewhere. Its 30-char prefix is only the phone number - the old fallback scanned the whole table and overwrote another message's id.
                         # Also try to find by looking for messages with status "Sending"
                         if not obj:
                             # print(f"❌ Message not found: {msg_id}")

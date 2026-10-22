@@ -404,6 +404,23 @@ class Case(models.Model):
             models.Index(fields=['current_level']),
             models.Index(fields=['status']),
             models.Index(fields=['priority']),
+            models.Index(
+                fields=['current_level', 'status', 'created_at'],
+                name='idx_case_pending',
+            ),
+            models.Index(
+                fields=['resolved_at_level', 'status', 'resolved_at'],
+                name='idx_case_resolved',
+            ),
+            models.Index(
+                fields=['previous_level', 'updated_at'],
+                name='idx_case_escalated',
+            ),
+            models.Index(
+                fields=['group', 'subgroup', 'category'],
+                name='idx_case_scope',
+            ),
+        
         ]
     
     def __str__(self):

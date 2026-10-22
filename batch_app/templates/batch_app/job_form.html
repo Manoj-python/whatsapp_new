@@ -70,7 +70,7 @@
                                 <i class="fas fa-bell me-1"></i>
                                 Notification Type <span class="text-danger">*</span>
                             </label>
-                            <select name="notification_type" id="notificationType" class="form-select" required>
+                            <select name="notification_type" id="notificationType" class="form-select">
                                 <option value="">-- Select Notification Type --</option>
                                 {% for notification in notification_types %}
                                 <option value="{{ notification.id }}">

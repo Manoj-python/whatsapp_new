@@ -52,6 +52,8 @@ TEMPLATE_CHOICES = [
     ("50", "Unauthorized Payment by Collection fraud_executive-[50]"),
     ("51", "vinayaka_chavithi (English)-[51]"),
     ("52", "Noc available Message (English)-[52]"),
+    ("53", "Dasara Offer (English)-[53]"),
+    ("54", "Dasara Offer (Telugu)-[54]"),
  
 ]
 

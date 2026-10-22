@@ -1,5 +1,6 @@
 
 
+
 import re
 import requests
 from datetime import datetime
@@ -22,7 +23,7 @@ from financehub.models import Lcc
 # ============================================================
 
 API_CHECK_TEMPLATES = [
-   "1", "3", "7", "11", "19", "20", "35", "37", "44", "45", "46", "47"
+   "1", "3", "7", "11", "19", "20", "35",  "44", "45", "46", "47"
 ]
 
 def needs_api_check(template_id):
@@ -1479,7 +1480,7 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                         "type": "text",
                         "text": str(row.get("customer_name", ""))
                     },
-                   
+
                     {
                         "type": "text",
                         "text": str(row.get("vehicle_number", ""))
@@ -1492,9 +1493,21 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 ],
             ),
 
+            "53": (
+                "smsq_dealer_dasara_offer",
+                "en",
+                []
+            ),
+
+            "54": (
+                "smsq_dealer_dasara_offer",
+                "te",
+                []
+            ),
+
 
     }
-    
+
     template_name, lang, parameters = templates.get(choice, templates["8"])
 
     mobile = format_mobile(
@@ -1503,15 +1516,40 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
     if not mobile:
         raise ValueError("Mobile number missing")
-
     # ============================================================
     # TEMPLATE 51 - VINAYAKA CHAVITHI - IMAGE HEADER
+    # TEMPLATE 53 - DASARA OFFER (ENGLISH) - IMAGE HEADER
+    # TEMPLATE 54 - DASARA OFFER (TELUGU) - IMAGE HEADER
     # ============================================================
-    if choice == "51":
+    if choice in ("51", "53", "54"):
 
         if not media_id:
             raise ValueError(
-                "media_id is required for Vinayaka Chavithi image template"
+                f"media_id is required for image template {choice}"
+            )
+
+        components = [
+            {
+                "type": "header",
+                "parameters": [
+                    {
+                        "type": "image",
+                        "image": {
+                            "id": media_id
+                        }
+                    }
+                ]
+            }
+        ]
+
+        # Template 51 may require body parameters, such as cust_name.
+        # Templates 53 and 54 use a static body, so parameters can be empty.
+        if parameters:
+            components.append(
+                {
+                    "type": "body",
+                    "parameters": parameters
+                }
             )
 
         payload = {
@@ -1524,27 +1562,10 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                     "policy": "deterministic",
                     "code": lang
                 },
-                "components": [
-                    {
-                        "type": "header",
-                        "parameters": [
-                            {
-                                "type": "image",
-                                "image": {
-                                    "id": media_id
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "type": "body",
-                        "parameters": parameters
-                    }
-                ]
+                "components": components
             }
         }
-
-    # ============================================================
+        # ============================================================
     # TEMPLATES WITH DOCUMENT HEADER
     # ============================================================
     elif choice in (
