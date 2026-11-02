@@ -54,7 +54,8 @@ INSTALLED_APPS = [
     "special_cases",
      "meghaai_app",
      "batch_app",
-     "sms_app"
+     "sms_app",
+     "email_app",
 ]
 
 
@@ -278,6 +279,7 @@ CELERY_TASK_ROUTES = {
     "special_cases.tasks.*": {"queue": "special_cases"},
     "notices.tasks.*": {"queue": "notices"},
     "sms_app.tasks.*": {"queue": "sms_app"},
+    "email_app.tasks.*": {"queue": "email_app"},
 
     # Batch Processing / execution
     "batch_app.tasks.process_batch_job": {"queue": "batch_app"},

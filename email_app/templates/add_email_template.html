@@ -1,0 +1,431 @@
+
+{% extends 'email_base.html' %}
+{% load static %}
+
+{% block title %}Email Templates{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<style>
+.email-page { max-width:1400px; margin:auto; padding:24px; color:#1e293b; }
+.email-header { display:flex; justify-content:space-between; align-items:center; gap:15px; margin-bottom:24px; }
+.email-header h1 { font-size:24px; font-weight:700; margin:0; }
+.email-header p { color:#64748b; margin:5px 0 0; font-size:14px; }
+.email-btn { border:0; border-radius:8px; padding:11px 18px; cursor:pointer; font-weight:500; }
+.email-primary { background:#4361ee; color:white; }
+.email-secondary { background:white; color:#1e293b; border:1px solid #e2e8f0; }
+.email-toolbar { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.email-input { width:100%; padding:11px 13px; border:1px solid #e2e8f0; border-radius:8px; font:inherit; box-sizing:border-box; }
+.email-search { flex:1; min-width:220px; }
+.email-toolbar select { width:auto; min-width:140px; }
+.email-card { background:white; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+.email-card-title { padding:18px 22px; border-bottom:1px solid #e2e8f0; font-weight:600; }
+.email-table-wrap { overflow-x:auto; }
+.email-table { width:100%; border-collapse:collapse; }
+.email-table th { background:#f1f5f9; color:#64748b; font-size:12px; text-align:left; text-transform:uppercase; padding:14px; }
+.email-table td { padding:14px; border-bottom:1px solid #e2e8f0; font-size:14px; vertical-align:top; }
+.email-badge { display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; background:#eef2ff; color:#3a56d4; }
+.email-active { background:#d1fae5; color:#065f46; }
+.email-inactive { background:#fee2e2; color:#991b1b; }
+.email-actions { display:flex; gap:6px; }
+.email-action { border:1px solid #e2e8f0; background:white; border-radius:7px; padding:8px 10px; cursor:pointer; }
+.email-empty { text-align:center; padding:35px; color:#64748b; }
+.email-pagination { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:16px 20px; }
+.email-modal { display:none; position:fixed; inset:0; background:#0f172a88; z-index:1000; align-items:center; justify-content:center; padding:15px; }
+.email-modal.open { display:flex; }
+.email-modal-box { width:100%; max-width:650px; max-height:90vh; overflow:auto; background:white; border-radius:12px; }
+.email-modal-head,.email-modal-foot { padding:18px 22px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; gap:10px; }
+.email-modal-foot { border-bottom:0; border-top:1px solid #e2e8f0; justify-content:flex-end; }
+.email-modal-body { padding:22px; }
+.email-field { margin-bottom:18px; }
+.email-field label { display:block; font-size:13px; font-weight:600; margin-bottom:7px; }
+.email-field textarea { min-height:180px; resize:vertical; }
+.email-hint { color:#64748b; font-size:12px; margin-top:5px; }
+.email-toast { display:none; position:fixed; top:20px; right:20px; z-index:2000; padding:14px 18px; border-radius:8px; background:white; box-shadow:0 5px 25px #0002; max-width:90%; }
+@media(max-width:700px) {
+ .email-page {padding:14px}
+ .email-header {align-items:flex-start; flex-direction:column}
+ .email-toolbar {flex-direction:column}
+ .email-search,.email-toolbar select {width:100%; box-sizing:border-box}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="email-page">
+    <div class="email-header">
+        <div>
+            <h1><i class="bi bi-envelope-paper"></i> Email Templates</h1>
+            <p>Create and manage reusable email subjects and message bodies.</p>
+        </div>
+        <button class="email-btn email-primary" onclick="openCreate()">
+            <i class="bi bi-plus-lg"></i> New Template
+        </button>
+    </div>
+
+    <div class="email-toolbar">
+        <input class="email-input email-search" id="emailSearch"
+               placeholder="Search by name, subject or content..."
+               oninput="applyFilters()">
+        <select class="email-input" id="emailStatus" onchange="applyFilters()">
+            <option value="">All Status</option>
+            <option value="active">Active only</option>
+            <option value="inactive">Inactive only</option>
+        </select>
+        <select class="email-input" id="emailNotify" onchange="applyFilters()">
+            <option value="">All Notification Types</option>
+            {% for n in notification_types %}
+            <option value="{{ n.id }}">{{ n.code }} - {{ n.name }}</option>
+            {% endfor %}
+        </select>
+        <button class="email-btn email-secondary" onclick="loadTemplates()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+
+    <div class="email-card">
+        <div class="email-card-title">
+            Templates <span id="emailCount" style="color:#64748b;font-size:13px"></span>
+        </div>
+        <div class="email-table-wrap">
+            <table class="email-table">
+                <thead>
+                    <tr>
+                        <th>ID</th><th>Name / Subject</th><th>Body Preview</th>
+                        <th>Variables</th><th>Status</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="emailRows">
+                    <tr><td colspan="6" class="email-empty">Loading templates...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="email-pagination">
+            <span id="emailPageInfo"></span>
+            <div>
+                <button class="email-btn email-secondary" onclick="changePage(-1)">Previous</button>
+                <span id="emailPageNumber"></span>
+                <button class="email-btn email-secondary" onclick="changePage(1)">Next</button>
+            </div>
+            <select id="emailPageSize" class="email-input" style="width:auto" onchange="applyFilters()">
+                <option value="5">5 per page</option>
+                <option value="10" selected>10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="email-modal" id="emailModal">
+    <div class="email-modal-box">
+        <div class="email-modal-head">
+            <strong id="emailModalTitle">New Email Template</strong>
+            <button class="email-action" onclick="closeModal()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <form id="emailForm" onsubmit="saveTemplate(event)">
+            <div class="email-modal-body">
+                <input type="hidden" id="emailId">
+
+                <div class="email-field">
+                    <label for="emailName">Template Name *</label>
+                    <input class="email-input" id="emailName" maxlength="100" required
+                           placeholder="e.g. Payment Reminder">
+                </div>
+
+                <div class="email-field">
+                    <label for="emailSubject">Email Subject *</label>
+                    <input class="email-input" id="emailSubject" maxlength="255" required
+                           placeholder="Payment reminder for {customer_name}">
+                </div>
+
+                <div class="email-field">
+                    <label for="emailNotification">Notification Type</label>
+                    <select class="email-input" id="emailNotification">
+                        <option value="">-- Select Notification --</option>
+                        {% for n in notification_types %}
+                        <option value="{{ n.id }}">{{ n.code }} - {{ n.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="email-field">
+                    <label for="emailContent">Email Body *</label>
+                    <textarea class="email-input" id="emailContent" required
+                              oninput="detectVariables()"
+                              placeholder="Dear {customer_name},&#10;&#10;Your reference number is {loan_id}.&#10;&#10;Regards,&#10;SMSquare Team"></textarea>
+                    <div class="email-hint">Use {variable_name} placeholders. Example: {customer_name}</div>
+                </div>
+
+                <div class="email-field">
+                    <label for="emailVariables">Variables</label>
+                    <input class="email-input" id="emailVariables" maxlength="500"
+                           placeholder="customer_name, loan_id">
+                    <div class="email-hint">Automatically detected from subject and body. You can edit this list.</div>
+                </div>
+
+                <label style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+                    <input type="checkbox" id="emailActive" checked>
+                    <span><strong>Active</strong> — available for campaigns</span>
+                </label>
+            </div>
+            <div class="email-modal-foot">
+                <button type="button" class="email-btn email-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="email-btn email-primary" id="emailSaveBtn">Save Template</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="email-modal" id="emailDeleteModal">
+    <div class="email-modal-box" style="max-width:420px">
+        <div class="email-modal-head"><strong>Delete Email Template?</strong></div>
+        <div class="email-modal-body">
+            This action cannot be undone.
+        </div>
+        <div class="email-modal-foot">
+            <button class="email-btn email-secondary" onclick="closeDelete()">Cancel</button>
+            <button class="email-btn" style="background:#ef476f;color:white" onclick="deleteTemplate()">Delete</button>
+        </div>
+    </div>
+</div>
+<div class="email-toast" id="emailToast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const EMAIL_API = "/email/api/templates/";
+let emailTemplates = [];
+let visibleTemplates = [];
+let emailPage = 1;
+let deleteId = null;
+
+const notificationNames = {};
+document.querySelectorAll("#emailNotification option").forEach(o => {
+    if (o.value) notificationNames[o.value] = o.textContent.trim();
+});
+
+function escapeEmail(value) {
+    const div = document.createElement("div");
+    div.textContent = value == null ? "" : String(value);
+    return div.innerHTML;
+}
+
+function csrfToken() {
+    const match = document.cookie.match(/(?:^|; )csrftoken=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : "";
+}
+
+function toast(message, error=false) {
+    const el = document.getElementById("emailToast");
+    el.textContent = message;
+    el.style.borderLeft = error ? "4px solid #ef476f" : "4px solid #06d6a0";
+    el.style.display = "block";
+    setTimeout(() => { el.style.display = "none"; }, 3500);
+}
+
+async function loadTemplates() {
+    try {
+        const response = await fetch(EMAIL_API, {
+            headers: {"Accept": "application/json"}
+        });
+        if (!response.ok) throw new Error("Unable to load templates (HTTP " + response.status + ")");
+        const data = await response.json();
+        emailTemplates = Array.isArray(data) ? data : (data.results || []);
+        applyFilters();
+    } catch (err) {
+        document.getElementById("emailRows").innerHTML =
+            `<tr><td colspan="6" class="email-empty">${escapeEmail(err.message)}</td></tr>`;
+        toast(err.message, true);
+    }
+}
+
+function applyFilters() {
+    const query = document.getElementById("emailSearch").value.toLowerCase().trim();
+    const status = document.getElementById("emailStatus").value;
+    const notify = document.getElementById("emailNotify").value;
+
+    visibleTemplates = emailTemplates.filter(t => {
+        const text = [t.name, t.subject, t.content, t.variables].join(" ").toLowerCase();
+        const matchesText = !query || text.includes(query);
+        const matchesStatus = !status ||
+            (status === "active" ? t.is_active : !t.is_active);
+        const matchesNotify = !notify || String(t.notification_type || "") === notify;
+        return matchesText && matchesStatus && matchesNotify;
+    });
+
+    emailPage = 1;
+    renderTemplates();
+}
+
+function renderTemplates() {
+    const size = Number(document.getElementById("emailPageSize").value);
+    const total = visibleTemplates.length;
+    const pages = Math.max(1, Math.ceil(total / size));
+    emailPage = Math.min(emailPage, pages);
+    const start = (emailPage - 1) * size;
+    const items = visibleTemplates.slice(start, start + size);
+
+    document.getElementById("emailCount").textContent = `(${total})`;
+    document.getElementById("emailPageInfo").textContent =
+        total ? `Showing ${start + 1}–${Math.min(start + size, total)} of ${total}` : "No items";
+    document.getElementById("emailPageNumber").textContent = `${emailPage} / ${pages}`;
+
+    document.getElementById("emailRows").innerHTML = items.length ? items.map(t => `
+        <tr>
+            <td>${t.id}</td>
+            <td>
+                <strong>${escapeEmail(t.name)}</strong>
+                <div style="color:#64748b;margin-top:5px">${escapeEmail(t.subject)}</div>
+                ${t.notification_type ? `<div style="margin-top:5px"><span class="email-badge">${escapeEmail(notificationNames[t.notification_type] || ("ID: " + t.notification_type))}</span></div>` : ""}
+            </td>
+            <td style="min-width:220px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere">${escapeEmail((t.content || "").slice(0,180))}${(t.content || "").length > 180 ? "…" : ""}</td>
+            <td>${escapeEmail(t.variables || "—")}</td>
+            <td><span class="email-badge ${t.is_active ? "email-active" : "email-inactive"}">${t.is_active ? "Active" : "Inactive"}</span></td>
+            <td><div class="email-actions">
+                <button class="email-action" title="Edit" onclick="editTemplate(${t.id})"><i class="bi bi-pencil"></i></button>
+                <button class="email-action" title="Delete" onclick="confirmDelete(${t.id})"><i class="bi bi-trash"></i></button>
+            </div></td>
+        </tr>`).join("") :
+        `<tr><td colspan="6" class="email-empty">No matching email templates. Create a new template to get started.</td></tr>`;
+}
+
+function changePage(direction) {
+    const size = Number(document.getElementById("emailPageSize").value);
+    const pages = Math.max(1, Math.ceil(visibleTemplates.length / size));
+    emailPage = Math.max(1, Math.min(pages, emailPage + direction));
+    renderTemplates();
+}
+
+function openCreate() {
+    document.getElementById("emailForm").reset();
+    document.getElementById("emailId").value = "";
+    document.getElementById("emailActive").checked = true;
+    document.getElementById("emailModalTitle").textContent = "New Email Template";
+    document.getElementById("emailModal").classList.add("open");
+}
+
+function editTemplate(id) {
+    const t = emailTemplates.find(x => x.id === id);
+    if (!t) return;
+
+    document.getElementById("emailForm").reset();
+    document.getElementById("emailId").value = t.id;
+    document.getElementById("emailName").value = t.name || "";
+    document.getElementById("emailSubject").value = t.subject || "";
+    document.getElementById("emailContent").value = t.content || "";
+    document.getElementById("emailVariables").value = t.variables || "";
+    document.getElementById("emailNotification").value = t.notification_type || "";
+    document.getElementById("emailActive").checked = !!t.is_active;
+    document.getElementById("emailModalTitle").textContent = "Edit Email Template";
+    document.getElementById("emailModal").classList.add("open");
+}
+
+function closeModal() {
+    document.getElementById("emailModal").classList.remove("open");
+}
+
+function detectVariables() {
+    const text = document.getElementById("emailSubject").value + "\n" +
+                 document.getElementById("emailContent").value;
+    const matches = text.match(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+    const vars = [...new Set(matches.map(x => x.slice(1, -1)))];
+    document.getElementById("emailVariables").value = vars.join(", ");
+}
+
+document.getElementById("emailSubject").addEventListener("input", detectVariables);
+
+async function saveTemplate(event) {
+    event.preventDefault();
+    const id = document.getElementById("emailId").value;
+    const payload = {
+        name: document.getElementById("emailName").value.trim(),
+        subject: document.getElementById("emailSubject").value.trim(),
+        content: document.getElementById("emailContent").value.trim(),
+        variables: document.getElementById("emailVariables").value.trim(),
+        notification_type: document.getElementById("emailNotification").value || null,
+        is_active: document.getElementById("emailActive").checked
+    };
+
+    if (!payload.name || !payload.subject || !payload.content) {
+        toast("Please fill in template name, subject and body.", true);
+        return;
+    }
+
+    const btn = document.getElementById("emailSaveBtn");
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(id ? `${EMAIL_API}${id}/` : EMAIL_API, {
+            method: id ? "PUT" : "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = response.status === 204 ? {} : await response.json();
+        if (!response.ok) {
+            const detail = Object.entries(result).map(([k,v]) =>
+                `${k}: ${Array.isArray(v) ? v.join(", ") : JSON.stringify(v)}`
+            ).join(" | ");
+            throw new Error(detail || `HTTP ${response.status}`);
+        }
+
+        closeModal();
+        toast(id ? "Email template updated." : "Email template created.");
+        await loadTemplates();
+    } catch (err) {
+        toast(err.message || "Unable to save template.", true);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function confirmDelete(id) {
+    deleteId = id;
+    document.getElementById("emailDeleteModal").classList.add("open");
+}
+
+function closeDelete() {
+    deleteId = null;
+    document.getElementById("emailDeleteModal").classList.remove("open");
+}
+
+async function deleteTemplate() {
+    if (!deleteId) return;
+    try {
+        const response = await fetch(`${EMAIL_API}${deleteId}/`, {
+            method: "DELETE",
+            headers: {"X-CSRFToken": csrfToken()}
+        });
+        if (!response.ok && response.status !== 204) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || `HTTP ${response.status}`);
+        }
+        closeDelete();
+        toast("Email template deleted.");
+        await loadTemplates();
+    } catch (err) {
+        toast(err.message || "Unable to delete template.", true);
+    }
+}
+
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+        closeModal();
+        closeDelete();
+    }
+});
+
+document.getElementById("emailModal").addEventListener("click", e => {
+    if (e.target.id === "emailModal") closeModal();
+});
+document.getElementById("emailDeleteModal").addEventListener("click", e => {
+    if (e.target.id === "emailDeleteModal") closeDelete();
+});
+
+loadTemplates();
+</script>
+{% endblock %}

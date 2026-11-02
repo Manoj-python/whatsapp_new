@@ -599,7 +599,10 @@ class EmployeeMaster(models.Model):
     notice_period = models.TextField(null=True, blank=True)
     date = models.CharField(max_length=100, null=True, blank=True)
     notice_status = models.CharField(max_length=100, null=True, blank=True)
-
+    bank_name=models.CharField(max_length=100,null=True,blank=True)
+    ifsc_code=models.CharField(max_length=100,null=True,blank=True)
+    account_number=models.CharField(max_length=100,null=True,blank=True)
+    emergency_contact_number=models.CharField(max_length=100,null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -713,12 +713,16 @@
                             <th>Notice Period</th>
                             <th>Date</th>
                             <th>Notice Status</th>
+                            <th>Bank Name</th>
+                            <th>IFSC Code</th>
+                            <th>Account Number</th>
+                            <th>Emergency Contact</th>
                             <th style="text-align: center;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="employeeTableBody">
                         <tr>
-                            <td colspan="35" class="loading">
+                            <td colspan="39" class="loading">
                                 <i class="fas fa-spinner"></i>
                                 <div style="margin-top: 10px;">Loading employees...</div>
                             </td>
@@ -915,6 +919,29 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- ======== SECTION 6: Bank & Emergency Information ======== -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;"><i class="fas fa-university"></i> Bank & Emergency Information</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label><i class="fas fa-university"></i> Bank Name</label>
+                                <input type="text" id="editBankName" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-code"></i> IFSC Code</label>
+                                <input type="text" id="editIfscCode" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-credit-card"></i> Account Number</label>
+                                <input type="text" id="editAccountNumber" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-phone-alt"></i> Emergency Contact Number</label>
+                                <input type="text" id="editEmergencyContactNumber" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -978,7 +1005,7 @@
             
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="35" class="loading">
+                    <td colspan="39" class="loading">
                         <i class="fas fa-spinner"></i>
                         <div style="margin-top: 10px;">Searching...</div>
                     </td>
@@ -1001,7 +1028,7 @@
                     if (data.length === 0) {
                         tbody.innerHTML = `
                             <tr>
-                                <td colspan="35" class="no-results">
+                                <td colspan="39" class="no-results">
                                     <div class="no-results">
                                         <i class="fas fa-search"></i>
                                         <h3>No employees found</h3>
@@ -1025,7 +1052,7 @@
                     console.error('Error:', error);
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="35" style="text-align: center; padding: 40px; color: #dc3545;">
+                            <td colspan="39" style="text-align: center; padding: 40px; color: #dc3545;">
                                 <i class="fas fa-exclamation-circle" style="font-size: 30px;"></i>
                                 <div style="margin-top: 10px;">Error loading employees. Please try again.</div>
                                 <div style="margin-top: 5px; font-size: 12px; color: #6c757d;">${error.message}</div>
@@ -1086,6 +1113,10 @@
                         <td>${safeDisplay(emp.notice_period)}</td>
                         <td>${safeDisplay(emp.date)}</td>
                         <td>${safeDisplay(emp.notice_status)}</td>
+                        <td>${safeDisplay(emp.bank_name)}</td>
+                        <td>${safeDisplay(emp.ifsc_code)}</td>
+                        <td><span class="phone-number">${safeDisplay(emp.account_number)}</span></td>
+                        <td><span class="phone-number">${safeDisplay(emp.emergency_contact_number)}</span></td>
                         <td>
                             <div class="action-buttons">
                                 <button class="edit-btn" onclick="openEditModal(${emp.id})" title="Edit All Details">
@@ -1171,7 +1202,8 @@
                 'editReportingToSales', 'editGross', 'editTa', 'editErepf',
                 'editEresi', 'editCtc', 'editStatus', 'editLwd', 'editTenthMemo',
                 'editInterMemo', 'editCheque', 'editBond', 'editNoticePeriod',
-                'editDate', 'editNoticeStatus'
+                'editDate', 'editNoticeStatus',
+                'editBankName', 'editIfscCode', 'editAccountNumber', 'editEmergencyContactNumber'
             ];
             fieldIds.forEach(id => {
                 const el = document.getElementById(id);
@@ -1237,6 +1269,10 @@
                         document.getElementById('editNoticePeriod').value = safeDisplay(emp.notice_period);
                         document.getElementById('editDate').value = safeDisplay(emp.date);
                         document.getElementById('editNoticeStatus').value = safeDisplay(emp.notice_status);
+                        document.getElementById('editBankName').value = safeDisplay(emp.bank_name);
+                        document.getElementById('editIfscCode').value = safeDisplay(emp.ifsc_code);
+                        document.getElementById('editAccountNumber').value = safeDisplay(emp.account_number);
+                        document.getElementById('editEmergencyContactNumber').value = safeDisplay(emp.emergency_contact_number);
                         
                         // Update current value hints
                         document.getElementById('currentPhone').textContent = safeDisplay(emp.phone, 'Not set');
@@ -1309,7 +1345,11 @@
                 bond: document.getElementById('editBond').value.trim(),
                 notice_period: document.getElementById('editNoticePeriod').value.trim(),
                 date: document.getElementById('editDate').value.trim(),
-                notice_status: document.getElementById('editNoticeStatus').value.trim()
+                notice_status: document.getElementById('editNoticeStatus').value.trim(),
+                bank_name: document.getElementById('editBankName').value.trim(),
+                ifsc_code: document.getElementById('editIfscCode').value.trim(),
+                account_number: document.getElementById('editAccountNumber').value.trim(),
+                emergency_contact_number: document.getElementById('editEmergencyContactNumber').value.trim()
             };
 
             console.log('Saving all fields:', data);

@@ -3016,7 +3016,11 @@ def search_employees(request):
             'notice_period': emp.notice_period or '',
             'date': emp.date or '',
             'notice_status': emp.notice_status or '',
-            'gender':emp.gender or ''
+            'gender':emp.gender or '',
+            "bank_name":emp.bank_name or "",
+            "ifsc_code":emp.ifsc_code or "",
+            "account_number":emp.account_number or "",
+            "emergency_contact_number":emp.emergency_contact_number or ""
         })
     
     return JsonResponse(result, safe=False)
@@ -3051,7 +3055,8 @@ def edit_employee_phone(request):
             'father_name', 'present_address', 'aadhaar_number',
             'curr_organisation', 'gross', 'ta', 'erepf', 'eresi', 'ctc',
             'status', 'lwd', 'tenth_memo', 'inter_memo', 'cheque',
-            'bond', 'notice_period', 'date', 'notice_status', 'blood_group','gender'
+            'bond', 'notice_period', 'date', 'notice_status', 'blood_group','gender','bank_name','ifsc_code','account_number','emergency_contact_number'
+
         ]
         
         for field in fields_to_update:
@@ -3099,7 +3104,11 @@ def edit_employee_phone(request):
                 'date': employee.date,
                 'notice_status': employee.notice_status,
                 'blood_group': employee.blood_group,
-                'gender':employee.gender
+                'gender':employee.gender,
+                "bank_name":employee.bank_name or "",
+                "ifsc_code":employee.ifsc_code or "",
+                "account_number":employee.account_number or "",
+                "emergency_contact_number":employee.emergency_contact_number or ""
             }
         })
     except json.JSONDecodeError as e:

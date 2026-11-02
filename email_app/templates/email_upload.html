@@ -1,0 +1,980 @@
+{% extends "email_base.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+    :root {
+        --primary: #4f46e5;
+        --primary-hover: #4338ca;
+        --bg-main: #f8fafc;
+        --card-bg: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+    }
+
+    .email-page {
+        padding: 32px;
+        color: var(--text-main);
+        background-color: var(--bg-main);
+        min-height: 100vh;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    .email-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 32px;
+    }
+
+    .email-header h2 {
+        margin: 0 0 6px 0;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        color: var(--text-main);
+    }
+
+    .email-header p {
+        color: var(--text-muted);
+        font-size: 15px;
+        margin: 0;
+    }
+
+    .email-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 28px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+        transition: all 0.2s ease;
+    }
+
+    .email-card h3 {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-main);
+        margin: 0 0 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        background: #ffffff;
+        color: var(--text-main);
+        font-size: 14px;
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 20px;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background: #f1f5f9;
+        color: #334155;
+        border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+        background: #e2e8f0;
+    }
+
+    .btn-success {
+        background: #10b981;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    .btn-danger {
+        background: #ef4444;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+
+    .btn-delete {
+        background: #b91c1c;
+        color: white;
+    }
+
+    .btn-delete:hover {
+        background: #991b1b;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+    .message {
+        display: none;
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        font-weight: 500;
+        font-size: 14px;
+        overflow-wrap: anywhere;
+    }
+
+    .message.error {
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+    }
+
+    .message.success {
+        background: #f0fdf4;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+        margin: 20px 0;
+    }
+
+    .stat {
+        padding: 20px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
+    }
+
+    .stat-label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .stat-value {
+        margin-top: 10px;
+        font-size: 28px;
+        font-weight: 800;
+        color: var(--text-main);
+    }
+
+    .progress-track {
+        height: 10px;
+        border-radius: 9999px;
+        background: #f1f5f9;
+        overflow: hidden;
+        margin: 16px 0;
+    }
+
+    .progress-fill {
+        height: 100%;
+        width: 0;
+        background: #10b981;
+        border-radius: 9999px;
+        transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .progress-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+
+    .table-wrap {
+        overflow-x: auto;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 900px;
+        background: white;
+    }
+
+    th, td {
+        padding: 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 14px;
+    }
+
+    th {
+        background: #f8fafc;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+    }
+
+    tbody tr:hover {
+        background-color: #f8fafc;
+    }
+
+    .status {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.025em;
+    }
+
+    .status-PENDING {
+        background: #fef3c7;
+        color: #b45309;
+    }
+
+    .status-PROCESSING {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+
+    .status-COMPLETED {
+        background: #dcfce7;
+        color: #15803d;
+    }
+
+    .status-FAILED {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .report-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .empty-message {
+        color: var(--text-muted);
+        padding: 32px 0;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    /* ===== PAGINATION ===== */
+    .pagination-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .pagination-info {
+        font-size: 13px;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .page-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: #ffffff;
+        color: var(--text-main);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .page-btn:hover:not(:disabled) {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+    }
+
+    .page-btn.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+
+    .page-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .page-ellipsis {
+        padding: 0 6px;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .page-size-select {
+        padding: 8px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-main);
+        cursor: pointer;
+    }
+
+    @media (max-width: 1024px) {
+        .stats-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .email-page {
+            padding: 16px;
+        }
+
+        .pagination-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .pagination-controls {
+            justify-content: center;
+        }
+    }
+</style>
+
+<div class="email-page">
+
+    <div class="email-header">
+        <div>
+            <h2>Bulk Email Campaigns</h2>
+            <p>Upload Excel file, manage templates, track live delivery status, and export reports easily.</p>
+        </div>
+    </div>
+
+    <div id="pageMessage" class="message"></div>
+
+    <!-- UPLOAD FORM -->
+    <div class="email-card">
+        <h3>🚀 Create New Campaign</h3>
+
+        <form id="campaignForm" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="campaignName">Campaign Name</label>
+                    <input
+                        type="text"
+                        id="campaignName"
+                        name="name"
+                        placeholder="Example: October Customer Newsletter"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="templateId">Email Template *</label>
+                    <select id="templateId" name="template_id" required>
+                        <option value="">Select template</option>
+                        {% for template in templates %}
+                            {% if template.is_active %}
+                            <option value="{{ template.id }}">
+                                {{ template.name }} — {{ template.subject }}
+                            </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group" style="grid-column: span 2;">
+                    <label for="excelFile">Excel File (.xlsx) *</label>
+                    <input
+                        type="file"
+                        id="excelFile"
+                        name="excel_file"
+                        accept=".xlsx"
+                        required
+                    >
+                    <small style="color:var(--text-muted); margin-top:6px; display:block;">
+                        💡 First row must contain column headers including recipient email and variables.
+                    </small>
+                </div>
+            </div>
+
+            <div style="margin-top:24px;">
+                <button class="btn btn-primary" id="uploadBtn" type="submit">
+                    ✨ Upload & Start Campaign
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- LIVE PROGRESS -->
+    <div class="email-card" id="progressCard" style="display:none;">
+        <h3 id="progressTitle">📊 Campaign Progress</h3>
+
+        <div class="progress-info">
+            <span id="progressStatus" class="status status-PROCESSING">Waiting...</span>
+            <strong id="progressPercent" style="font-size: 16px; color: var(--primary);">0%</strong>
+        </div>
+
+        <div
+            class="progress-track"
+            role="progressbar"
+            aria-label="Email campaign progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="progressTrack"
+        >
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat">
+                <div class="stat-label">Total</div>
+                <div class="stat-value" id="totalCount">0</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-label">Processed</div>
+                <div class="stat-value" id="processedCount">0</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-label">Sent</div>
+                <div class="stat-value" style="color:#10b981;" id="sentCount">0</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-label">Failed</div>
+                <div class="stat-value" style="color:#ef4444;" id="failedCount">0</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-label">Skipped</div>
+                <div class="stat-value" style="color:#f59e0b;" id="skippedCount">0</div>
+            </div>
+        </div>
+
+        <p id="campaignError" style="color:#ef4444; font-weight:500; white-space:pre-wrap; margin-top:12px;"></p>
+
+        <div class="report-actions" style="margin-top: 20px;">
+            <a id="allReportBtn" class="btn btn-success" href="#" style="display:none;">
+                📥 Download All CSV
+            </a>
+
+            <a id="failedReportBtn" class="btn btn-danger" href="#" style="display:none;">
+                📥 Download Failed CSV
+            </a>
+        </div>
+    </div>
+
+    <!-- CAMPAIGN HISTORY -->
+    <div class="email-card">
+        <h3>📋 Campaign History</h3>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Campaign</th>
+                        <th>Template</th>
+                        <th>Total</th>
+                        <th>Sent</th>
+                        <th>Failed</th>
+                        <th>Skipped</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody id="campaignTable">
+                    {% for campaign in campaigns %}
+                    <tr data-campaign-id="{{ campaign.id }}">
+                        <td style="font-weight: 600;">#{{ campaign.id }}</td>
+                        <td style="font-weight: 600; color: var(--text-main);">{{ campaign.name|default:"Email Campaign" }}</td>
+                        <td>{{ campaign.template.name }}</td>
+                        <td>{{ campaign.total }}</td>
+                        <td style="color: #10b981; font-weight: 600;">{{ campaign.sent }}</td>
+                        <td style="color: #ef4444; font-weight: 600;">{{ campaign.failed }}</td>
+                        <td>{{ campaign.skipped }}</td>
+                        <td>
+                            <span class="status status-{{ campaign.status }}">
+                                {{ campaign.status }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="report-actions">
+                                <button
+                                    class="btn btn-secondary"
+                                    type="button"
+                                    style="padding: 6px 12px; font-size: 12px;"
+                                    onclick="trackCampaign({{ campaign.id }})"
+                                >
+                                    View
+                                </button>
+                                <a
+                                    class="btn btn-success"
+                                    style="padding: 6px 12px; font-size: 12px;"
+                                    href="{% url 'email_campaign_report' campaign.id %}"
+                                >All CSV</a>
+                                <a
+                                    class="btn btn-danger"
+                                    style="padding: 6px 12px; font-size: 12px;"
+                                    href="{% url 'email_campaign_failed_report' campaign.id %}"
+                                >Failed CSV</a>
+                                {% if campaign.status != "PROCESSING" %}
+                                <button
+                                    class="btn btn-delete"
+                                    type="button"
+                                    style="padding: 6px 12px; font-size: 12px;"
+                                    onclick="deleteCampaign({{ campaign.id }}, '{{ campaign.name|escapejs }}')"
+                                >
+                                    🗑 Delete
+                                </button>
+                                {% else %}
+                                <button
+                                    class="btn btn-delete"
+                                    type="button"
+                                    disabled
+                                    style="padding: 6px 12px; font-size: 12px;"
+                                    title="Cannot delete while processing"
+                                >
+                                    🗑 Delete
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr id="emptyCampaignRow">
+                        <td colspan="9" class="empty-message">
+                            No campaigns created yet. Start by uploading an excel file above!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- PAGINATION -->
+        <div class="pagination-bar" id="paginationBar" style="display:none;">
+            <div class="pagination-info" id="paginationInfo"></div>
+            <div class="pagination-controls">
+                <select class="page-size-select" id="pageSizeSelect" aria-label="Rows per page">
+                    <option value="5">5 / page</option>
+                    <option value="10" selected>10 / page</option>
+                    <option value="25">25 / page</option>
+                    <option value="50">50 / page</option>
+                </select>
+                <button class="page-btn" id="prevPageBtn" type="button" aria-label="Previous page">‹</button>
+                <div id="pageNumbers" style="display:flex; align-items:center; gap:6px;"></div>
+                <button class="page-btn" id="nextPageBtn" type="button" aria-label="Next page">›</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const uploadUrl = "{% url 'upload_email_campaign' %}";
+    const progressUrlTemplate = "{% url 'email_campaign_progress' 999999 %}";
+    const allReportTemplate = "{% url 'email_campaign_report' 999999 %}";
+    const failedReportTemplate = "{% url 'email_campaign_failed_report' 999999 %}";
+    const deleteUrlTemplate = "{% url 'delete_email_campaign' 999999 %}";
+
+    const form = document.getElementById("campaignForm");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const pageMessage = document.getElementById("pageMessage");
+
+    let pollingTimer = null;
+    let activeCampaignId = null;
+
+    // ===== PAGINATION STATE =====
+    let currentPage = 1;
+    let pageSize = 10;
+
+    function urlFor(template, id) {
+        return template.replace("999999", String(id));
+    }
+
+    function showMessage(text, type) {
+        pageMessage.textContent = text;
+        pageMessage.className = "message " + type;
+        pageMessage.style.display = "block";
+    }
+
+    function getCsrfToken() {
+        const input = document.querySelector("[name=csrfmiddlewaretoken]");
+        if (input) return input.value;
+        const cookie = document.cookie.split("; ").find(row => row.startsWith("csrftoken="));
+        return cookie ? decodeURIComponent(cookie.split("=")[1]) : "";
+    }
+
+    function setText(id, value) {
+        document.getElementById(id).textContent = value ?? "";
+    }
+
+    // ===== PAGINATION LOGIC =====
+    function getCampaignRows() {
+        return Array.from(
+            document.querySelectorAll("#campaignTable tr[data-campaign-id]")
+        );
+    }
+
+    function buildPageList(current, totalPages) {
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+
+        const pages = [1];
+
+        if (current > 3) pages.push("...");
+
+        const start = Math.max(2, current - 1);
+        const end = Math.min(totalPages - 1, current + 1);
+
+        for (let p = start; p <= end; p++) pages.push(p);
+
+        if (current < totalPages - 2) pages.push("...");
+
+        pages.push(totalPages);
+        return pages;
+    }
+
+    function renderPagination() {
+        const rows = getCampaignRows();
+        const total = rows.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+
+        rows.forEach((row, index) => {
+            row.style.display = (index >= start && index < end) ? "" : "none";
+        });
+
+        const bar = document.getElementById("paginationBar");
+
+        if (total === 0) {
+            bar.style.display = "none";
+            return;
+        }
+
+        bar.style.display = "flex";
+
+        document.getElementById("paginationInfo").textContent =
+            `Showing ${start + 1}–${Math.min(end, total)} of ${total} campaign${total === 1 ? "" : "s"}`;
+
+        document.getElementById("prevPageBtn").disabled = currentPage <= 1;
+        document.getElementById("nextPageBtn").disabled = currentPage >= totalPages;
+
+        const pageNumbers = document.getElementById("pageNumbers");
+        pageNumbers.innerHTML = "";
+
+        buildPageList(currentPage, totalPages).forEach(p => {
+            if (p === "...") {
+                const span = document.createElement("span");
+                span.className = "page-ellipsis";
+                span.textContent = "…";
+                pageNumbers.appendChild(span);
+            } else {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "page-btn" + (p === currentPage ? " active" : "");
+                btn.textContent = String(p);
+                btn.addEventListener("click", () => {
+                    currentPage = p;
+                    renderPagination();
+                });
+                pageNumbers.appendChild(btn);
+            }
+        });
+    }
+
+    document.getElementById("prevPageBtn").addEventListener("click", () => {
+        if (currentPage > 1) {
+            currentPage--;
+            renderPagination();
+        }
+    });
+
+    document.getElementById("nextPageBtn").addEventListener("click", () => {
+        currentPage++;
+        renderPagination();
+    });
+
+    document.getElementById("pageSizeSelect").addEventListener("change", (e) => {
+        pageSize = parseInt(e.target.value, 10) || 10;
+        currentPage = 1;
+        renderPagination();
+    });
+
+    // ===== PROGRESS =====
+    function updateProgress(data) {
+        document.getElementById("progressCard").style.display = "block";
+
+        setText("progressTitle", "📊 Campaign Progress — #" + data.id);
+        setText("progressStatus", data.status);
+        setText("progressPercent", data.progress + "%");
+
+        setText("totalCount", data.total);
+        setText("processedCount", data.processed);
+        setText("sentCount", data.sent);
+        setText("failedCount", data.failed);
+        setText("skippedCount", data.skipped);
+
+        setText("campaignError", data.error_message || "");
+
+        const percent = Math.max(0, Math.min(100, Number(data.progress) || 0));
+        document.getElementById("progressFill").style.width = percent + "%";
+        document.getElementById("progressTrack").setAttribute("aria-valuenow", String(percent));
+
+        const allReport = document.getElementById("allReportBtn");
+        const failedReport = document.getElementById("failedReportBtn");
+
+        allReport.href = urlFor(allReportTemplate, data.id);
+        failedReport.href = urlFor(failedReportTemplate, data.id);
+
+        allReport.style.display = "inline-flex";
+        failedReport.style.display = "inline-flex";
+
+        const row = document.querySelector('[data-campaign-id="' + data.id + '"]');
+        if (row) {
+            const cells = row.querySelectorAll("td");
+            if (cells.length >= 8) {
+                cells[3].textContent = data.total;
+                cells[4].textContent = data.sent;
+                cells[5].textContent = data.failed;
+                cells[6].textContent = data.skipped;
+
+                const badge = cells[7].querySelector(".status");
+                if (badge) {
+                    badge.textContent = data.status;
+                    badge.className = "status status-" + data.status;
+                }
+            }
+        }
+    }
+
+    async function pollProgress(campaignId) {
+        try {
+            const response = await fetch(urlFor(progressUrlTemplate, campaignId), {
+                headers: {"X-Requested-With": "XMLHttpRequest"},
+                credentials: "same-origin"
+            });
+
+            if (!response.ok) throw new Error("Could not fetch campaign progress.");
+
+            const data = await response.json();
+            updateProgress(data);
+
+            if (data.completed) {
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+                showMessage(
+                    data.status === "COMPLETED" ? "Campaign processing completed successfully!" : "Campaign processing failed. Check error details.",
+                    data.status === "COMPLETED" ? "success" : "error"
+                );
+            }
+        } catch (error) {
+            showMessage(error.message, "error");
+        }
+    }
+
+    window.trackCampaign = function (campaignId) {
+        activeCampaignId = campaignId;
+        if (pollingTimer) clearInterval(pollingTimer);
+
+        document.getElementById("progressCard").style.display = "block";
+        document.getElementById("allReportBtn").href = urlFor(allReportTemplate, campaignId);
+        document.getElementById("failedReportBtn").href = urlFor(failedReportTemplate, campaignId);
+
+        pollProgress(campaignId);
+        pollingTimer = setInterval(() => {
+            if (activeCampaignId) pollProgress(activeCampaignId);
+        }, 2500);
+
+        document.getElementById("progressCard").scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    // ===== DELETE =====
+    window.deleteCampaign = async function (campaignId, campaignName) {
+        const confirmed = window.confirm(
+            'Delete campaign "' + (campaignName || "Email Campaign") + '" (#' + campaignId + ')?\n\n' +
+            'This will permanently remove the campaign, its Excel file, and all email logs. ' +
+            'This action cannot be undone.'
+        );
+        if (!confirmed) return;
+
+        try {
+            const response = await fetch(urlFor(deleteUrlTemplate, campaignId), {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCsrfToken(),
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                credentials: "same-origin"
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "Failed to delete campaign.");
+
+            if (activeCampaignId === campaignId) {
+                if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
+                activeCampaignId = null;
+                document.getElementById("progressCard").style.display = "none";
+            }
+
+            const row = document.querySelector('[data-campaign-id="' + campaignId + '"]');
+            if (row) row.remove();
+
+            if (getCampaignRows().length === 0) {
+                const tbody = document.getElementById("campaignTable");
+                tbody.innerHTML =
+                    '<tr id="emptyCampaignRow"><td colspan="9" class="empty-message">' +
+                    'No campaigns created yet. Start by uploading an excel file above!' +
+                    '</td></tr>';
+            }
+
+            renderPagination();
+
+            showMessage(data.message || "Campaign deleted successfully.", "success");
+        } catch (error) {
+            showMessage(error.message, "error");
+        }
+    };
+
+    // ===== UPLOAD =====
+    form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = "Uploading & Queuing...";
+        showMessage("Uploading Excel file and initializing campaign...", "success");
+
+        try {
+            const response = await fetch(uploadUrl, {
+                method: "POST",
+                body: new FormData(form),
+                headers: {
+                    "X-CSRFToken": getCsrfToken(),
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                credentials: "same-origin"
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Campaign upload failed.");
+
+            showMessage(data.message, "success");
+            window.location.reload();
+        } catch (error) {
+            showMessage(error.message, "error");
+        } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = "✨ Upload & Start Campaign";
+        }
+    });
+
+    // ===== INITIAL LOAD =====
+    renderPagination();
+
+    const firstRow = document.querySelector("#campaignTable tr[data-campaign-id]");
+    if (firstRow) {
+        const initialId = firstRow.getAttribute("data-campaign-id");
+        if (initialId) trackCampaign(initialId);
+    }
+})();
+</script>
+{% endblock %}

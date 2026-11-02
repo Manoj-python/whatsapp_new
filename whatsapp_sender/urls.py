@@ -31,7 +31,7 @@ urlpatterns = [
     path('meghaai/', include('meghaai_app.urls')),    
     path('batch/', include('batch_app.urls')),
     path('sms/', include('sms_app.urls')),  
-
+    path('email/', include('email_app.urls')),
 
 ]
 
