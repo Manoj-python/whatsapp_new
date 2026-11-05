@@ -142,6 +142,7 @@ def process_bulk_whatsapp(self, excel_s3_path, template_choice, job_id,user_id=N
 # ==================================================
 # BATCH WORKER (UPDATED WITH REAL-TIME AMOUNT FOR BUCKET TEMPLATES)
 # ==================================================
+
 @shared_task(bind=True, queue="messaging")
 def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, start, end, agent_name="System"):
     from django.db import close_old_connections
@@ -237,8 +238,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
                 SmsWhatsAppLog.objects.create(
                     job_id=job_id,
-                    customer_name=agent_name,
-                    sender_name=name,
+                    customer_name=name,
+                    sender_name=agent_name,
                     mobile=mobile,
                     template_name=template_choice,
                     status=status_value,
@@ -305,8 +306,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                 local_skipped += 1
                 SmsWhatsAppLog.objects.create(
                     job_id=job_id,
-                    customer_name=agent_name,
-                    sender_name=name,
+                    customer_name=name,
+                    sender_name=agent_name,
                     mobile=mobile,
                     template_name=template_choice,
                     status='SEIZED',
@@ -347,8 +348,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     local_skipped += 1
                     SmsWhatsAppLog.objects.create(
                         job_id=job_id,
-                        customer_name=agent_name,
-                        sender_name=name,
+                        customer_name=name,
+                        sender_name=agent_name,
                         mobile=mobile,
                         template_name=template_choice,
                         status='SKIPPED',
@@ -367,8 +368,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
                     # ✅ CREATE A LOG ENTRY FOR SKIPPED CUSTOMER
                     SmsWhatsAppLog.objects.create(
                         job_id=job_id,
-                        customer_name=agent_name,
-                        sender_name=name,
+                        customer_name=name,
+                        sender_name=agent_name,
                         mobile=mobile,
                         template_name=template_choice,
                         status='PAID',
@@ -573,8 +574,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
             log = SmsWhatsAppLog.objects.create(
                 job_id=job_id,
-                customer_name=agent_name,
-                sender_name=name,
+                customer_name=name,
+                sender_name=agent_name,
                 mobile=mobile,
                 template_name=template_choice,
                 sent_text_message=log_text,
@@ -769,8 +770,8 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
 
             SmsWhatsAppLog.objects.create(
                 job_id=job_id,
-                customer_name=agent_name,
-                sender_name=name,
+                customer_name=name,
+                sender_name=agent_name,
                 mobile=mobile,
                 template_name=template_choice,
                 status=status_value,
@@ -807,6 +808,11 @@ def process_bulk_whatsapp_batch(self, excel_s3_path, template_choice, job_id, st
         logger.info(f"✅ Job {job_id} COMPLETED!")
     else:
         logger.info(f"⏳ Job {job_id} in progress: {processed}/{job.total_customers}")
+
+
+
+
+
 # ==================================================
 # FINALIZER - COMPLETE UPDATED VERSION
 # ==================================================
