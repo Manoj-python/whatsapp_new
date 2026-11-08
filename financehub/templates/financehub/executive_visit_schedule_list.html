@@ -113,6 +113,24 @@
   .filter-card .d-flex.gap-1 > .btn { width: auto !important; flex: 1 1 auto; white-space: nowrap; padding: 6px 14px; }
   /* status totals as pills */
   .badge { border-radius: 999px; padding: 5px 10px; font-weight: 700; }
+
+  /* 9 Nov 2026: summary tiles, one-line buttons, soft badges */
+  .evs-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 6px 0 12px; }
+  .evs-tile { display: flex; flex-direction: column; gap: 2px; background: #fff; border: 1px solid #e1e7ee;
+    border-left: 4px solid #12355b; border-radius: 10px; padding: 10px 14px; text-decoration: none !important; color: #17263a; }
+  .evs-tile:hover { border-color: #0e9494; }
+  .evs-tile.on { background: #eef7f7; border-color: #0e9494; }
+  .evs-tile b { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .evs-tile span { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #5f6f82; }
+  .evs-tile.t-closed { border-left-color: #64748b; } .evs-tile.t-repo { border-left-color: #7c3aed; }
+  .evs-tile.t-paid { border-left-color: #16a34a; } .evs-tile.t-partly { border-left-color: #d97706; }
+  .evs-tile.t-not { border-left-color: #dc2626; }
+  @media (max-width: 900px) { .evs-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .filter-card .col-lg-3.d-flex { flex: 0 0 auto !important; width: auto !important; flex-wrap: nowrap !important; }
+  .badge.bg-secondary { background: #e2e8f0 !important; color: #334155 !important; }
+  .badge.bg-dark { background: #ede9fe !important; color: #5b21b6 !important; }
+  .badge.bg-info { background: #e0f2fe !important; color: #075985 !important; }
+  .pagination .page-link { border-radius: 8px; margin: 0 3px; }
 </style>
 
 </head>
@@ -134,13 +152,31 @@
 
     <!-- HEADER -->
     <!-- HEADER -->
-<div class="d-flex flex-wrap gap-2 my-2 small">
-    <strong>Total:</strong> {{ total_count }}
-    <span class="badge bg-secondary">CLOSED {{ status_counts.CLOSED|default:0 }}</span>
-    <span class="badge bg-dark">REPO {{ status_counts.REPO|default:0 }}</span>
-    <span class="badge bg-success">PAID {{ status_counts.PAID|default:0 }}</span>
-    <span class="badge bg-warning text-dark">PARTLY PAID {{ status_counts.PARTLY_PAID|default:0 }}</span>
-    <span class="badge bg-danger">NOT PAID {{ status_counts.NOT_PAID|default:0 }}</span>
+<div class="evs-tiles">
+    {% with cur=request.GET.loan_status|default:"" %}
+    <a class="evs-tile {% if not cur %}on{% endif %}" data-status="" href="#"><b class="n">{{ total_count }}</b><span>Total</span></a>
+    <a class="evs-tile t-closed {% if cur == 'CLOSED' %}on{% endif %}" data-status="CLOSED" href="#"><b class="n">{{ status_counts.CLOSED|default:0 }}</b><span>Closed</span></a>
+    <a class="evs-tile t-repo {% if cur == 'REPO' %}on{% endif %}" data-status="REPO" href="#"><b class="n">{{ status_counts.REPO|default:0 }}</b><span>Repo</span></a>
+    <a class="evs-tile t-paid {% if cur == 'PAID' %}on{% endif %}" data-status="PAID" href="#"><b class="n">{{ status_counts.PAID|default:0 }}</b><span>Paid</span></a>
+    <a class="evs-tile t-partly {% if cur == 'PARTLY_PAID' %}on{% endif %}" data-status="PARTLY_PAID" href="#"><b class="n">{{ status_counts.PARTLY_PAID|default:0 }}</b><span>Partly paid</span></a>
+    <a class="evs-tile t-not {% if cur == 'NOT_PAID' %}on{% endif %}" data-status="NOT_PAID" href="#"><b class="n">{{ status_counts.NOT_PAID|default:0 }}</b><span>Not paid</span></a>
+    {% endwith %}
+<script>
+  (function () {
+    document.querySelectorAll('.evs-tile .n').forEach(function (b) {
+      var v = Number(b.textContent.trim()); if (!isNaN(v)) b.textContent = v.toLocaleString('en-IN');
+    });
+    document.querySelectorAll('.evs-tile').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        var u = new URL(window.location.href);
+        if (a.dataset.status) u.searchParams.set('loan_status', a.dataset.status); else u.searchParams.delete('loan_status');
+        u.searchParams.set('page', '1');
+        window.location.href = u.toString();
+      });
+    });
+  })();
+</script>
 
 </div>
 
