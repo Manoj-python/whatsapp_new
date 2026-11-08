@@ -35,6 +35,11 @@ urlpatterns = [
         views.executive_visit_schedule_edit,
         name="executive_visit_schedule_edit",
     ),
+    path(
+        "executive-visit-schedule/new/",
+        views.executive_visit_schedule_create,
+        name="executive_visit_schedule_create",
+    ),
 
     # ---------------- EXECUTIVE ----------------
     path(

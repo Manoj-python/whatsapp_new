@@ -2099,6 +2099,34 @@ def executive_visit_schedule_list(request):
     return render(request, "financehub/executive_visit_schedule_list.html", context)
 
 
+def _evs_next(request):
+    """Back to the list with the user's filters (only a FinanceHub path is accepted)."""
+    nxt = request.POST.get("next") or request.GET.get("next") or ""
+    return nxt if nxt.startswith("/financehub/") else "executive_visit_schedule_list"
+
+
+@financehub_required
+def executive_visit_schedule_create(request):
+    """9 Nov 2026: schedule one loan from the Executive Visit Schedule (before, only by Excel upload)."""
+    import types
+    loan = (request.POST.get("loanno") or request.GET.get("loan") or "").strip()
+    if request.method == "POST":
+        empid = (request.POST.get("empid") or "").strip()
+        when = (request.POST.get("visit_schedule_date") or "").strip()
+        if not (loan and empid and when):
+            messages.error(request, "Loan number, employee ID and visit date are all needed.")
+        elif not Lcc.objects.filter(loan_number=loan).exists():
+            messages.error(request, "Loan %s is not in the loan list." % loan)
+        else:
+            ExecutiveVisitScheduling.objects.create(loanno=loan, empid=empid, visit_schedule_date=when)
+            messages.success(request, "Visit scheduled for %s on %s" % (loan, when))
+            return redirect(_evs_next(request))
+    return render(request, "financehub/executive_visit_schedule_edit.html", {
+        "obj": types.SimpleNamespace(loanno=loan, empid=request.POST.get("empid", ""), visit_schedule_date=None),
+        "is_new": True,
+    })
+
+
 @financehub_required
 def executive_visit_schedule_edit(request, pk):
     obj = ExecutiveVisitScheduling.objects.get(pk=pk)
@@ -2110,7 +2138,7 @@ def executive_visit_schedule_edit(request, pk):
         obj.save()
 
         messages.success(request, "Visit schedule updated successfully")
-        return redirect("executive_visit_schedule_list")
+        return redirect(_evs_next(request))
 
     return render(request, "financehub/executive_visit_schedule_edit.html", {
         "obj": obj

@@ -606,8 +606,15 @@
                         class="btn btn-primary btn-sm">
                             Respond
                         </a>
+                        <a href="{% url 'executive_visit_schedule_edit' r.obj.id %}?next={{ request.get_full_path|urlencode }}"
+                        class="btn btn-outline-primary btn-sm">
+                            Edit
+                        </a>
                     {% else %}
-                        —
+                        <a href="{% url 'executive_visit_schedule_create' %}?loan={{ r.loan_number|urlencode }}&next={{ request.get_full_path|urlencode }}"
+                        class="btn btn-success btn-sm">
+                            Schedule
+                        </a>
                     {% endif %}
                 </td>
             </tr>

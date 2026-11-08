@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Edit Visit Schedule</title>
+    <title>{% if is_new %}Schedule a Visit{% else %}Edit Visit Schedule{% endif %}</title>
 
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -114,12 +114,13 @@
     <div class="card shadow-sm edit-card">
 
         <div class="card-header bg-primary text-white text-center">
-            <h5 class="mb-0">✏️ Edit Executive Visit Schedule</h5>
+            <h5 class="mb-0">{% if is_new %}📅 Schedule a Visit{% else %}✏️ Edit Executive Visit Schedule{% endif %}</h5>
         </div>
 
         <div class="card-body">
 
             <form method="post">
+                <input type="hidden" name="next" value="{{ request.GET.next }}">
                 {% csrf_token %}
 
                 <!-- Loan Number -->
