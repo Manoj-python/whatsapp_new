@@ -1872,7 +1872,34 @@ def executive_visit_schedule_list(request):
         if v.loanno not in all_visits:
             all_visits[v.loanno] = v
 
-    all_allocs = {a.loan_number: a for a in CollectionAllocations.objects.filter(loan_number__in=current_page_loans)}
+    # 9 Nov 2026: some loans have two allocations on purpose (non-starters: sales + collection executive).
+    # Keep them all; the collection row is primary, and EXEC lists everyone with a department tag.
+    _alloc_rows = {}
+    for _a in CollectionAllocations.objects.filter(loan_number__in=current_page_loans).order_by("id"):
+        _alloc_rows.setdefault(_a.loan_number, []).append(_a)
+    _emp_ids = {(_a.employee_id or "").strip() for _l in _alloc_rows.values() for _a in _l if len(_l) > 1}
+    _dept = dict(EmployeeMaster.objects.filter(employee_number__in=_emp_ids)
+                 .values_list("employee_number", "curr_department")) if _emp_ids else {}
+
+    def _alloc_tag(_a):
+        d = (_dept.get((_a.employee_id or "").strip()) or "").upper()
+        return "Sales" if "SALES" in d and "COLL" not in d else "Coll" if "COLL" in d else \
+            "Auction" if "AUCTION" in d else ""
+
+    all_allocs, all_exec_text = {}, {}
+    for _l, _rows in _alloc_rows.items():
+        _coll = [_a for _a in _rows if _alloc_tag(_a) == "Coll"] if len(_rows) > 1 else []
+        all_allocs[_l] = (_coll or _rows)[-1]
+        if len(_rows) > 1:
+            _seen, _parts = set(), []
+            for _a in sorted(_rows, key=lambda x: _alloc_tag(x) != "Coll"):
+                _key = ((_a.employee_id or "").strip(), (_a.executive_name or "").strip().upper())
+                if _key in _seen:
+                    continue  # the same person allocated twice
+                _seen.add(_key)
+                _t = _alloc_tag(_a)
+                _parts.append("%s (%s)" % (_a.executive_name or _a.employee_id, _t) if _t else (_a.executive_name or _a.employee_id or ""))
+            all_exec_text[_l] = " · ".join(p for p in _parts if p)
 
     all_notices = {}
     for n in DueNotice.objects.filter(loan_number__in=current_page_loans).order_by('loan_number', '-notice_date', '-id'):
@@ -1991,7 +2018,7 @@ def executive_visit_schedule_list(request):
             "not_visited_reason": visit.not_visited_reason if visit else "",
             "cm": alloc.cm if alloc else "",
             "tl": alloc.tl if alloc else "",
-            "exec": alloc.executive_name if alloc else "",
+            "exec": all_exec_text.get(loan_num) or (alloc.executive_name if alloc else ""),
             "alloc_empid": (alloc.employee_id or "") if alloc else "",  # 9 Nov 2026: popup default
             "empid": visit.empid if visit else "",
             "latest_visited_on": visit.visit_schedule_date if visit else "",
