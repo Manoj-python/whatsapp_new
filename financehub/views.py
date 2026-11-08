@@ -627,21 +627,9 @@ def feedback_create(request):
 
 
     dialer_row = {
-        "Dialer_PTP": "",
-        "Dialer_PTP_Date": "",
-        "Dialer_PTP_Remarks": "",
 
-        "Dialer_RTP": "",
-        "Dialer_RTP_Date": "",
-        "Dialer_RTP_Remarks": "",
 
-        "Dialer_Thirdparty": "",
-        "Dialer_Thirdparty_Date": "",
-        "Dialer_Thirdparty_Remarks": "",
 
-        "Dialer_other": "",
-        "Dialer_other_Date": "",
-        "Dialer_other_Remarks": "",
     }
 
     cust_mobile_norm = normalize_mobile(cust_mobile)
@@ -655,27 +643,18 @@ def feedback_create(request):
         obj = base_qs.filter(disp__iexact="PTP").order_by("-created_at").first()
         if obj:
             dialer_row.update({
-                "Dialer_PTP": obj.disp,
-                "Dialer_PTP_Date": obj.ptp_date,
-                "Dialer_PTP_Remarks": obj.remarks,
             })
 
         # RTP
         obj = base_qs.filter(disp__iexact="RTP").order_by("-created_at").first()
         if obj:
             dialer_row.update({
-                "Dialer_RTP": obj.disp,
-                "Dialer_RTP_Date": obj.ptp_date,
-                "Dialer_RTP_Remarks": obj.remarks,
             })
 
         # THIRD PARTY
         obj = base_qs.filter(disp__iexact="THIRD PARTY").order_by("-created_at").first()
         if obj:
             dialer_row.update({
-                "Dialer_Thirdparty": obj.disp,
-                "Dialer_Thirdparty_Date": obj.ptp_date,
-                "Dialer_Thirdparty_Remarks": obj.remarks,
             })
 
         # OTHER
@@ -684,9 +663,6 @@ def feedback_create(request):
         ).order_by("-created_at").first()
         if obj:
             dialer_row.update({
-                "Dialer_other": obj.disp,
-                "Dialer_other_Date": obj.ptp_date,
-                "Dialer_other_Remarks": obj.remarks,
             })
 
 
@@ -1935,11 +1911,37 @@ def executive_visit_schedule_list(request):
         if v.loan_number not in all_visitors:
             all_visitors[v.loan_number] = v
 
+    # 8 Nov 2026: Freshdesk is replaced by our WhatsApp ticketing (it ran ~100 text searches a load)
     all_freshdesk = {}
-    for loan_num in current_page_loans[:100]:
-        fd_list = Freshdesk.objects.filter(subject__icontains=loan_num).order_by('-created_time')[:1]
-        if fd_list:
-            all_freshdesk[loan_num] = fd_list[0]
+    all_tickets = {}
+    try:
+        from messaging.models import Case as _SmsCase
+        from messaging2.models import Case as _PsfCase
+        _page = list(current_page_loans)
+        for _M, _book in ((_PsfCase, "PSF"), (_SmsCase, "SMS")):
+            for _c in (_M.objects.filter(loan_number__in=_page).select_related("group")
+                       .order_by("-created_at").only("case_id", "loan_number", "status", "current_level",
+                                                     "created_at", "group__name")):
+                _k = (_c.loan_number or "").strip()
+                _prev = all_tickets.get(_k)
+                if _prev is None or (_c.created_at and _prev["at"] and _c.created_at > _prev["at"]):
+                    all_tickets[_k] = {"id": _c.case_id, "status": _c.status, "level": _c.current_level,
+                                       "dept": _c.group.name if _c.group else "", "at": _c.created_at, "book": _book}
+    except Exception:
+        logger.exception("evs tickets lookup failed")
+
+    # Dialer is replaced by our own calling app: latest outcome per loan from the SMSquare portal
+    all_calls = {}
+    _key = os.getenv("SMSQUARE_CALL_FEEDBACK_KEY", "")
+    if _key and current_page_loans:
+        try:
+            import requests as _rq
+            _r = _rq.get(os.getenv("SMSQUARE_CALL_FEEDBACK_URL", "https://smsquare.info/api/call-feedback"),
+                         params={"loans": ",".join(current_page_loans)}, headers={"X-Api-Key": _key}, timeout=4)
+            if _r.status_code == 200:
+                all_calls = _r.json().get("feedback", {})
+        except Exception:
+            logger.exception("evs call feedback fetch failed")
 
     all_dialer = {}
     all_mobiles = {}
@@ -2011,22 +2013,14 @@ def executive_visit_schedule_list(request):
             "notice_return_date": notice.return_date if notice else "",
             "visitor_purpose": visitor.purpose if visitor else "",
             "visitor_remark": visitor.remarks if visitor else "",
-            "Freshdesk_Description": freshdesk.description if freshdesk else "",
-            "Freshdesk_Status": freshdesk.status if freshdesk else "",
-            "Freshdesk_Group": freshdesk.group if freshdesk else "",
-            "Freshdesk_Createdtime": freshdesk.created_time if freshdesk else "",
-            "Dialer_PTP": dialer.ptp_date if dialer else "",
-            "Dialer_PTP_Date": dialer.ptp_date if dialer else "",
-            "Dialer_PTP_Remarks": dialer.remarks if dialer else "",
-            "Dialer_RTP": dialer.disp if dialer else "",
-            "Dialer_RTP_Date": dialer.last_received_date if dialer else "",
-            "Dialer_RTP_Remarks": dialer.remarks if dialer else "",
-            "Dialer_Thirdparty": dialer.executive if dialer else "",
-            "Dialer_Thirdparty_Date": str(dialer.created_at)[:10] if dialer and dialer.created_at else "",
-            "Dialer_Thirdparty_Remarks": dialer.customer_address if dialer else "",
-            "Dialer_other": dialer.service_name if dialer else "",
-            "Dialer_other_Date": dialer.call_start_time if dialer else "",
-            "Dialer_other_Remarks": dialer.call_end_time if dialer else "",
+            "Ticket_ID": (all_tickets.get(loan_num) or {}).get("id", ""),
+            "Ticket_Status": (all_tickets.get(loan_num) or {}).get("status", ""),
+            "Ticket_Level": " · ".join(x for x in ((all_tickets.get(loan_num) or {}).get("dept", ""), (all_tickets.get(loan_num) or {}).get("level", "")) if x),
+            "Ticket_Time": (all_tickets.get(loan_num) or {}).get("at") or "",
+            "Call_Outcome": (all_calls.get(loan_num.upper()) or {}).get("label", ""),
+            "Call_Note": (all_calls.get(loan_num.upper()) or {}).get("note", ""),
+            "Call_By": (all_calls.get(loan_num.upper()) or {}).get("by", ""),
+            "Call_Time": ((all_calls.get(loan_num.upper()) or {}).get("at", "") or "")[:16].replace("T", " "),
             "payment_source": dialer.disp if dialer else "",
             "payment_status": "PTP" if dialer and dialer.ptp_date else "",
             "payment_date": dialer.ptp_date if dialer else "",

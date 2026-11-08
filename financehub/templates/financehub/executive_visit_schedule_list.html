@@ -342,22 +342,14 @@
         <th class="sortable" data-field="blc_case">BLC Case</th>
         <th class="sortable" data-field="emi_due_2">EMI</th>
         <th class="sortable" data-field="loan_status">Loan Status</th>
-        <th class="sortable" data-field="Freshdesk_Description">FD Desc</th>
-        <th class="sortable" data-field="Freshdesk_Status">FD Status</th>
-        <th class="sortable" data-field="Freshdesk_Group">FD Group</th>
-        <th class="sortable" data-field="Freshdesk_Createdtime">FD Time</th>
-        <th class="sortable" data-field="Dialer_PTP">PTP</th>
-        <th class="sortable" data-field="Dialer_PTP_Date">PTP Date</th>
-        <th class="sortable" data-field="Dialer_PTP_Remarks">PTP Remarks</th>
-        <th class="sortable" data-field="Dialer_RTP">RTP</th>
-        <th class="sortable" data-field="Dialer_RTP_Date">RTP Date</th>
-        <th class="sortable" data-field="Dialer_RTP_Remarks">RTP Remarks</th>
-        <th class="sortable" data-field="Dialer_Thirdparty">Third Party</th>
-        <th class="sortable" data-field="Dialer_Thirdparty_Date">TP Date</th>
-        <th class="sortable" data-field="Dialer_Thirdparty_Remarks">TP Remarks</th>
-        <th class="sortable" data-field="Dialer_other">Other</th>
-        <th class="sortable" data-field="Dialer_other_Date">Other Date</th>
-        <th class="sortable" data-field="Dialer_other_Remarks">Other Remarks</th>
+        <th class="sortable" data-field="Ticket_ID">Ticket</th>
+        <th class="sortable" data-field="Ticket_Status">Ticket Status</th>
+        <th class="sortable" data-field="Ticket_Level">Ticket Dept · Level</th>
+        <th class="sortable" data-field="Ticket_Time">Ticket Raised</th>
+        <th class="sortable" data-field="Call_Outcome">Call Outcome</th>
+        <th class="sortable" data-field="Call_Note">Call Note</th>
+        <th class="sortable" data-field="Call_By">Called By</th>
+        <th class="sortable" data-field="Call_Time">Call Time</th>
         <th class="sortable" data-field="notice_send_to">Send To</th>
         <th class="sortable" data-field="notice_bar_number">Bar No</th>
         <th class="sortable" data-field="notice_date">Notice Date</th>
@@ -429,26 +421,14 @@
                         {{ r.loan_status }}
                     </span>
                 </td>
-                <td class="remarks-col">{{ r.Freshdesk_Description }}</td>
-                <td>{{ r.Freshdesk_Status }}</td>
-                <td>{{ r.Freshdesk_Group }}</td>
-                <td>{{ r.Freshdesk_Createdtime }}</td>
-
-                <td>{{ r.Dialer_PTP }}</td>
-                <td>{{ r.Dialer_PTP_Date }}</td>
-                <td class="remarks-col">{{ r.Dialer_PTP_Remarks }}</td>
-
-                <td>{{ r.Dialer_RTP }}</td>
-                <td>{{ r.Dialer_RTP_Date }}</td>
-                <td class="remarks-col">{{ r.Dialer_RTP_Remarks }}</td>
-
-                <td>{{ r.Dialer_Thirdparty }}</td>
-                <td>{{ r.Dialer_Thirdparty_Date }}</td>
-                <td class="remarks-col">{{ r.Dialer_Thirdparty_Remarks }}</td>
-
-                <td>{{ r.Dialer_other }}</td>
-                <td>{{ r.Dialer_other_Date }}</td>
-                <td class="remarks-col">{{ r.Dialer_other_Remarks }}</td>
+                <td>{{ r.Ticket_ID|default:"—" }}</td>
+                <td>{{ r.Ticket_Status }}</td>
+                <td>{{ r.Ticket_Level }}</td>
+                <td>{{ r.Ticket_Time|date:"d-m-Y H:i"|default:"" }}</td>
+                <td>{{ r.Call_Outcome|default:"—" }}</td>
+                <td class="remarks-col">{{ r.Call_Note }}</td>
+                <td>{{ r.Call_By }}</td>
+                <td>{{ r.Call_Time }}</td>
 
                 <td>{{ r.notice_send_to|default:"—" }}</td>
 
