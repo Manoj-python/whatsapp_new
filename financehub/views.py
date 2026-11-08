@@ -1571,6 +1571,78 @@ def get_loan_status(lcc, paid_amount, repo_set, closed_set):
     else:
         return "NOT_PAID"
 
+
+# ---- 8 Nov 2026: global sort for the Executive Visit Schedule (was: only the 200 rows on the page) ----
+_EVS_LCC = {"loan_number": "loan_number", "customer_name": "customer_name", "vehicle_no": "vehicle_no",
+            "cust_mobile": "cust_mobile", "company": "company", "division": "division", "branch": "branch",
+            "blc_case": "blc_cases", "suitcase": "suitcase", "emi_due_2": "emi_due_2", "bucket_position": "emi_due_2"}
+_EVS_ALLOC = {"cm": "cm", "tl": "tl", "exec": "executive_name"}
+_EVS_VISIT = {"id": "id", "has_schedule": "id", "visit_status": "visit_status", "empid": "empid",
+              "latest_visited_on": "visit_schedule_date", "visit_date": "visit_schedule_date",
+              "not_visited_reason": "not_visited_reason"}
+_EVS_NOTICE = {"notice_send_to": "send_to", "notice_bar_number": "bar_number", "notice_date": "notice_date",
+               "notice_type": "type_of_notice", "notice_status": "notice_status",
+               "notice_delivery_date": "delivery_date", "notice_return_date": "return_date"}
+_EVS_VISITOR = {"visitor_purpose": "purpose", "visitor_remark": "remarks"}
+_EVS_STATUS_RANK = {"PAID": 1, "PARTLY_PAID": 2, "PARTLY PAID": 2, "NOT_PAID": 3, "REPO": 4, "CLOSED": 5}
+
+
+def _evs_first(qs):
+    out = {}
+    for k, v in qs:
+        if k not in out:
+            out[k] = v
+    return out
+
+
+def _evs_global_sort(loans, field, order, status_map, loan_sub):
+    from django.db.models import Max
+    if field == "loan_number" and order != "desc":
+        return loans  # already in loan-number order
+    if field == "loan_status":
+        vals = status_map
+    elif field in _EVS_LCC:
+        vals = dict(Lcc.objects.filter(loan_number__in=loan_sub).values_list("loan_number", _EVS_LCC[field]))
+    elif field in _EVS_ALLOC:
+        vals = dict(CollectionAllocations.objects.filter(loan_number__in=loan_sub)
+                    .values_list("loan_number", _EVS_ALLOC[field]))
+    elif field in _EVS_VISIT:
+        vals = _evs_first(ExecutiveVisitScheduling.objects.filter(loanno__in=loan_sub)
+                          .order_by("loanno", "-visit_schedule_date").values_list("loanno", _EVS_VISIT[field]))
+        if field == "has_schedule":
+            vals = {k: 1 for k in vals}
+    elif field in _EVS_NOTICE:
+        vals = _evs_first(DueNotice.objects.filter(loan_number__in=loan_sub)
+                          .order_by("loan_number", "-notice_date", "-id").values_list("loan_number", _EVS_NOTICE[field]))
+    elif field in _EVS_VISITOR:
+        vals = _evs_first(Visiter.objects.filter(loan_number__in=loan_sub)
+                          .order_by("loan_number", "-created_at").values_list("loan_number", _EVS_VISITOR[field]))
+    elif field == "received_date":
+        vals = dict(Paid.objects.filter(loan_number__in=loan_sub, received_date__isnull=False)
+                    .values("loan_number").annotate(m=Max("received_date")).values_list("loan_number", "m"))
+    else:
+        return loans  # Freshdesk / Dialer columns: page-only sort, as before
+
+    def key(loan):
+        v = vals.get(loan)
+        if field == "loan_status":
+            return (1, _EVS_STATUS_RANK.get(str(v or "NOT_PAID").upper(), 99))
+        if v is None or v == "":
+            return (0, 0)
+        if field in ("emi_due_2", "bucket_position"):
+            try:
+                return (1, float(str(v).lower().replace("sez", "999999")))
+            except ValueError:
+                return (1, 999999.0)
+        if field in ("id", "has_schedule"):
+            return (1, float(v))
+        if hasattr(v, "isoformat"):
+            return (1, 0, v.isoformat())
+        return (1, 0, str(v).lower())
+
+    return sorted(loans, key=key, reverse=(order == "desc"))
+# ---- end global sort ----
+
 @financehub_required
 def executive_visit_schedule_list(request):
     from django.core.paginator import Paginator
@@ -1818,6 +1890,9 @@ def executive_visit_schedule_list(request):
     # ==========================================================
     # PAGINATION - Get current page data
     # ==========================================================
+
+    # 8 Nov 2026: sort the whole filtered list before paging (it used to sort only the 200 rows on the page)
+    all_loan_numbers = _evs_global_sort(all_loan_numbers, sort_field, sort_order, loan_status_map, loan_sub)
 
     # Create paginator
     paginator = Paginator(all_loan_numbers, 200)
