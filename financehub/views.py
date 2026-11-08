@@ -2099,6 +2099,19 @@ def executive_visit_schedule_list(request):
     return render(request, "financehub/executive_visit_schedule_list.html", context)
 
 
+def _evs_ajax(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _evs_json(obj):
+    from django.urls import reverse
+    d = obj.visit_schedule_date
+    d = d if isinstance(d, str) else d.strftime("%Y-%m-%d")
+    return JsonResponse({"ok": True, "id": obj.id, "loanno": obj.loanno, "empid": obj.empid, "date": d,
+                         "edit_url": reverse("executive_visit_schedule_edit", args=[obj.id]),
+                         "respond_url": reverse("executive_visit_response", args=[obj.id])})
+
+
 def _evs_next(request):
     """Back to the list with the user's filters (only a FinanceHub path is accepted)."""
     nxt = request.POST.get("next") or request.GET.get("next") or ""
@@ -2118,9 +2131,15 @@ def executive_visit_schedule_create(request):
         elif not Lcc.objects.filter(loan_number=loan).exists():
             messages.error(request, "Loan %s is not in the loan list." % loan)
         else:
-            ExecutiveVisitScheduling.objects.create(loanno=loan, empid=empid, visit_schedule_date=when)
+            obj = ExecutiveVisitScheduling.objects.create(loanno=loan, empid=empid, visit_schedule_date=when)
+            if _evs_ajax(request):
+                return _evs_json(obj)
             messages.success(request, "Visit scheduled for %s on %s" % (loan, when))
             return redirect(_evs_next(request))
+        if _evs_ajax(request):
+            return JsonResponse({"ok": False, "error": "Employee ID and visit date are both needed."
+                                 if loan and Lcc.objects.filter(loan_number=loan).exists()
+                                 else "Loan %s is not in the loan list." % loan}, status=400)
     return render(request, "financehub/executive_visit_schedule_edit.html", {
         "obj": types.SimpleNamespace(loanno=loan, empid=request.POST.get("empid", ""), visit_schedule_date=None),
         "is_new": True,
@@ -2132,10 +2151,18 @@ def executive_visit_schedule_edit(request, pk):
     obj = ExecutiveVisitScheduling.objects.get(pk=pk)
 
     if request.method == "POST":
-        obj.loanno = request.POST.get("loanno")
-        obj.empid = request.POST.get("empid")
-        obj.visit_schedule_date = request.POST.get("visit_schedule_date")
+        new_loan = (request.POST.get("loanno") or obj.loanno or "").strip()
+        new_emp = (request.POST.get("empid") or "").strip()
+        new_date = (request.POST.get("visit_schedule_date") or "").strip()
+        if not (new_loan and new_emp and new_date):  # 9 Nov 2026: a blank field used to save as empty
+            if _evs_ajax(request):
+                return JsonResponse({"ok": False, "error": "Employee ID and visit date are both needed."}, status=400)
+            messages.error(request, "Loan number, employee ID and visit date are all needed.")
+            return redirect(request.path)
+        obj.loanno, obj.empid, obj.visit_schedule_date = new_loan, new_emp, new_date
         obj.save()
+        if _evs_ajax(request):
+            return _evs_json(obj)
 
         messages.success(request, "Visit schedule updated successfully")
         return redirect(_evs_next(request))
