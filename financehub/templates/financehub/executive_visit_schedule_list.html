@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta charset="UTF-8">
     <title>Executive Visit Schedule</title>
 
@@ -1117,6 +1118,87 @@
     document.addEventListener('click', function (e) { if (!ms.contains(e.target)) open(false); });
     label();
   });
+})();
+</script>
+
+<!-- 9 Nov 2026: phone layout - one card per loan instead of the 44-column table -->
+<style>
+  #evs-cards { display: none; }
+  @media (max-width: 767.98px) {
+    body { font-size: 14px; }
+    .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
+    .evs-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+    .evs-tile { padding: 8px 10px; } .evs-tile b { font-size: 18px; }
+    .filter-card [class*="col-"] { flex: 0 0 100% !important; max-width: 100% !important; width: 100% !important; }
+    .filter-card .col-lg-3.d-flex { flex-wrap: wrap !important; }
+    .filter-card .d-flex.gap-1 > .btn { flex: 1 1 40%; }
+    .ms-panel { width: 100%; }
+    .table-responsive { display: none !important; }
+    #evs-cards { display: block; }
+    .evc { background: #fff; border: 1px solid #e1e7ee; border-left: 4px solid #12355b; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .evc.st-PAID { border-left-color: #16a34a; } .evc.st-NOT_PAID { border-left-color: #dc2626; }
+    .evc.st-REPO { border-left-color: #7c3aed; } .evc.st-CLOSED { border-left-color: #64748b; } .evc.st-PARTLY_PAID { border-left-color: #d97706; }
+    .evc-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .evc-top a { font-weight: 700; color: #12355b; text-decoration: none; }
+    .evc-name { font-weight: 600; margin: 2px 0 6px; }
+    .evc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 13px; }
+    .evc-grid span { color: #5f6f82; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; display: block; }
+    .evc-wide { grid-column: 1 / -1; }
+    .evc-act { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .evc-act .btn { flex: 1 1 auto; }
+    .pagination { flex-wrap: wrap; }
+    .filter-card .card-header { cursor: pointer; }
+    .filter-card .card-header::after { content: ' BE'; }
+    .filter-card.fold .card-body { display: none; }
+  }
+</style>
+<script>
+(function () {
+  // filters fold away on a phone unless one is in use; tap the Filters bar to open
+  var fc = document.querySelector('.filter-card'), fh = fc && fc.querySelector('.card-header');
+  if (fc && fh && window.matchMedia('(max-width: 767.98px)').matches) {
+    var inUse = Array.prototype.some.call(new URLSearchParams(location.search).entries(), function (kv) { return kv[0] !== 'page' && kv[1]; });
+    if (!inUse) fc.classList.add('fold');
+    fh.addEventListener('click', function () { fc.classList.toggle('fold'); });
+  }
+  var table = document.querySelector('.table-responsive table');
+  if (!table) return;
+  var holder = document.createElement('div'); holder.id = 'evs-cards';
+  table.closest('.table-responsive').after(holder);
+  var ths = Array.prototype.slice.call(table.querySelectorAll('thead tr:not(.evs-groups) th'));
+  var at = {}; ths.forEach(function (th, i) { if (th.dataset.field) at[th.dataset.field] = i; });
+  var actIdx = ths.length - 1;
+  function cell(tr, f) { var i = at[f]; return i === undefined ? null : tr.children[i]; }
+  function txt(tr, f) { var c = cell(tr, f); var t = c ? c.innerText.trim() : ''; return t === '—' || t === '-' ? '' : t; }
+  function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  function item(label, value, wide) { return value ? '<div' + (wide ? ' class="evc-wide"' : '') + '><span>' + label + '</span>' + esc(value) + '</div>' : ''; }
+  var html = [];
+  table.querySelectorAll('tbody tr').forEach(function (tr) {
+    var loanCell = cell(tr, 'loan_number'); if (!loanCell) return;
+    var link = loanCell.querySelector('a');
+    var status = txt(tr, 'loan_status');
+    var call = txt(tr, 'Call_Outcome'), note = txt(tr, 'Call_Note');
+    var ticket = txt(tr, 'Ticket_ID') ? txt(tr, 'Ticket_ID') + ' · ' + txt(tr, 'Ticket_Status') : '';
+    var visit = txt(tr, 'latest_visited_on');
+    var vstat = txt(tr, 'has_schedule');
+    var act = tr.children[actIdx];
+    html.push('<div class="evc st-' + esc(status) + '">' +
+      '<div class="evc-top">' + (link ? '<a href="' + link.getAttribute('href') + '">' + esc(link.innerText.trim()) + '</a>' : esc(loanCell.innerText.trim())) +
+      '<span class="badge ' + (status === 'PAID' ? 'bg-success' : status === 'NOT_PAID' ? 'bg-danger' : 'bg-secondary') + '">' + esc(status.replace('_', ' ')) + '</span></div>' +
+      '<div class="evc-name">' + esc(txt(tr, 'customer_name')) + (txt(tr, 'vehicle_no') ? ' · ' + esc(txt(tr, 'vehicle_no')) : '') + '</div>' +
+      '<div class="evc-grid">' +
+        item('EMIs due', txt(tr, 'emi_due_2')) + item('Division', txt(tr, 'division')) +
+        item('Executive', txt(tr, 'exec'), true) + item('TL · CM', [txt(tr, 'tl'), txt(tr, 'cm')].filter(Boolean).join(' · ')) +
+        item('BLC', txt(tr, 'blc_case')) +
+        item('Last call', call ? call + (note ? ' — ' + note : '') : '', true) +
+        item('Ticket', ticket, true) +
+        item('Visit', visit ? visit + (vstat ? ' · ' + vstat : '') : vstat) +
+      '</div>' +
+      '<div class="evc-act">' + (act ? act.innerHTML : '') + '</div></div>');
+  });
+  holder.innerHTML = html.join('') || '<p class="text-muted">No loans match these filters.</p>';
+  // on a phone the buttons open the Schedule / Edit page (the popup updates a table row, which a card is not)
+  holder.querySelectorAll('a.evs-pop').forEach(function (a) { a.classList.remove('evs-pop'); });
 })();
 </script>
 </body>
