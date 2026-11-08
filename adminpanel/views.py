@@ -718,17 +718,17 @@ def create_category(request):
 
         if not name:
             messages.error(request, "Category name is required")
-            return redirect('create_category')
+            return redirect('manage_categories')
 
         if not group_id:
             messages.error(request, "Please select a department (group)")
-            return redirect('create_category')
+            return redirect('manage_categories')
 
         try:
             parent_group = SupportGroup.objects.get(id=group_id)
         except SupportGroup.DoesNotExist:
             messages.error(request, "Selected group does not exist")
-            return redirect('create_category')
+            return redirect('manage_categories')
 
         # Check duplicate Category under same group (case-insensitive)
         if Category.objects.filter(name__iexact=name, group=parent_group).exists():
@@ -737,9 +737,9 @@ def create_category(request):
             Category.objects.create(name=name, group=parent_group)
             messages.success(request, f"Category '{name}' created under group '{parent_group.name}'")
 
-        return redirect('create_category')
+        return redirect('manage_categories')
 
-    return render(request, 'adminpanel/create_category.html', {'groups': groups})
+    return redirect('manage_categories')  # create_category.html never existed: GET and every save ended in a 500
 
 
 
