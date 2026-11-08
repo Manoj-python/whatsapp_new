@@ -1634,7 +1634,8 @@ def executive_visit_schedule_list(request):
     # ==========================================================
     # GET PARAMS
     # ==========================================================
-    division = request.GET.get("division", "").strip()
+    division_list = [d.strip() for d in request.GET.getlist("division") if d.strip() and d.strip() not in ("undefined", "null", "None")]
+    division = division_list[0] if len(division_list) == 1 else ""  # 9 Nov 2026: several allowed
     blc_case = request.GET.get("blc_case", "").strip()
     loanno = request.GET.get("loanno", "").strip()
     empid = request.GET.get("empid", "").strip()
@@ -1671,8 +1672,8 @@ def executive_visit_schedule_list(request):
     )
 
     # Apply all filters (your existing filters)
-    if valid_filter(division):
-        qs = qs.filter(division=division)
+    if division_list:
+        qs = qs.filter(division__in=division_list)
     if valid_filter(branch):
         qs = qs.filter(branch=branch)
     if valid_filter(centre_name):
@@ -1778,10 +1779,10 @@ def executive_visit_schedule_list(request):
     total_before_status = qs.count()
 
     if total_before_status == 0:
-        dropdowns = cache.get('dropdowns_final_v4')
+        dropdowns = cache.get('dropdowns_final_v5')
         if not dropdowns:
             dropdowns = {
-                'branches': [], 'centres': [], 'notice_types': [], 'blc_cases': [], 'companies': [], 'suitcases':[],
+                'branches': [], 'divisions': [], 'centres': [], 'notice_types': [], 'blc_cases': [], 'companies': [], 'suitcases':[],
             }
         context = {
             "data": [], "page_obj": None, "total_count": 0,
@@ -2082,17 +2083,18 @@ def executive_visit_schedule_list(request):
     # ==========================================================
     # GET DROPDOWNS
     # ==========================================================
-    dropdowns = cache.get('dropdowns_final_v4')
+    dropdowns = cache.get('dropdowns_final_v5')
     if not dropdowns:
         dropdowns = {
             'branches': list(Lcc.objects.filter(branch__isnull=False).exclude(branch='').values_list('branch', flat=True).distinct().order_by('branch')[:200]),
+            'divisions': list(Lcc.objects.filter(division__isnull=False).exclude(division='').values_list('division', flat=True).distinct().order_by('division')[:100]),
             'centres': list(Lcc.objects.filter(centre_name__isnull=False).exclude(centre_name='').values_list('centre_name', flat=True).distinct().order_by('centre_name')[:200]),
             'notice_types': list(DueNotice.objects.filter(type_of_notice__isnull=False).exclude(type_of_notice='').values_list('type_of_notice', flat=True).distinct().order_by('type_of_notice')[:100]),
             'blc_cases': list(Lcc.objects.filter(blc_cases__isnull=False).exclude(blc_cases='').values_list('blc_cases', flat=True).distinct().order_by('blc_cases')[:100]),
             'companies': list(Lcc.objects.filter(company__isnull=False).exclude(company='').values_list('company', flat=True).distinct().order_by('company')[:200]),
             'suitcases':list(Lcc.objects.filter(suitcase__isnull=False).exclude(suitcase='').values_list('suitcase', flat=True).distinct().order_by('suitcase')[:200])
         }
-        cache.set('dropdowns_final_v4', dropdowns, 3600)
+        cache.set('dropdowns_final_v5', dropdowns, 3600)
 
     elapsed_time = time.time() - start_time
     print(f"✅ Page {page} of {paginator.num_pages} | Total: {total_count} records | Status: CLOSED={status_counts['CLOSED']}, REPO={status_counts['REPO']}, PAID={status_counts['PAID']}, PARTLY={status_counts['PARTLY_PAID']}, NOT_PAID={status_counts['NOT_PAID']} | Loaded in {elapsed_time:.2f}s")
@@ -2106,7 +2108,7 @@ def executive_visit_schedule_list(request):
         "total_count": total_count,
         "status_counts": status_counts,
         **dropdowns,
-        "division": division, "loanno": loanno, "empid": empid,
+        "division": division, "division_list": division_list, "loanno": loanno, "empid": empid,
         "from_date": from_date, "to_date": to_date, "role": role,
         "search_empid": search_empid, "loan_status": loan_status_filter,
         "remove_zeros": remove_zeros, "remove_sez": remove_sez,

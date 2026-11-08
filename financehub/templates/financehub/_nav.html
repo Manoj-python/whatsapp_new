@@ -1,0 +1,48 @@
+{% comment %}9 Nov 2026: one FinanceHub menu for every page (Dilip: "menu links missing for other pages").
+   The current page is highlighted. Include it in place of a page's own <nav>.{% endcomment %}
+{% with here=request.resolver_match.url_name %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#fhNav"
+                aria-controls="fhNav" aria-expanded="false" aria-label="Menu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="fhNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link {% if here == 'executive_visit_schedule_list' %}active{% endif %}" href="{% url 'executive_visit_schedule_list' %}">Visit Schedule</a></li>
+                <li class="nav-item"><a class="nav-link {% if here == 'lcc_list' %}active{% endif %}" href="{% url 'lcc_list' %}">LCC Data</a></li>
+                <li class="nav-item"><a class="nav-link {% if here == 'due_notice_list' %}active{% endif %}" href="{% url 'due_notice_list' %}">Due Notices</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if here in 'feedback_list feedback_create' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Feedback</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'feedback_list' %}">Feedback List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'feedback_create' %}">Add Feedback</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if here in 'openrepo_list collection_allocations_list' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Allocations</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'collection_allocations_list' %}">Collection Allocations</a></li>
+                        <li><a class="dropdown-item" href="{% url 'openrepo_list' %}">Open Repo</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if here in 'employee_list employee_report employee_monthly_attendance executive_my_visits' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Employees</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'employee_list' %}">Employee List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'employee_report' %}">Employee Report</a></li>
+                        <li><a class="dropdown-item" href="{% url 'employee_monthly_attendance' %}">Monthly Attendance</a></li>
+                        <li><a class="dropdown-item" href="{% url 'executive_my_visits' %}">My Visit Schedules</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item"><a class="nav-link {% if here == 'upload_loan_data' %}active{% endif %}" href="{% url 'upload_loan_data' %}">Upload</a></li>
+            </ul>
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-white small">👤 {{ request.user.username }}</span>
+                <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
+            </div>
+        </div>
+    </div>
+</nav>
+{% endwith %}

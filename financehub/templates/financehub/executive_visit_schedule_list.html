@@ -141,15 +141,7 @@
 <body class="bg-light">
 
 <!-- NAVBAR -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
-        <div class="d-flex align-items-center gap-2">
-            <span class="text-white small">👤 {{ request.user.username }}</span>
-            <a href="{% url 'fh_logout' %}" class="btn btn-light btn-sm">Logout</a>
-        </div>
-    </div>
-</nav>
+{% include "financehub/_nav.html" %}
 
 <div class="container-fluid px-2">
 
@@ -196,7 +188,21 @@
 
                     <div class="col-lg-2 col-md-3 col-sm-6">
                         <label>Division</label>
-                        <input type="text" name="division" class="form-control" value="{{ division }}">
+                        <div class="ms" id="ms-division">
+                            <button type="button" class="form-select ms-btn text-start" aria-haspopup="true" aria-expanded="false">All</button>
+                            <div class="ms-panel" hidden>
+                                <input type="search" class="form-control form-control-sm ms-search" placeholder="Type to search, e.g. Nach">
+                                <div class="ms-tools">
+                                    <a href="#" class="ms-all">Select all shown</a> · <a href="#" class="ms-none">Clear</a>
+                                </div>
+                                <div class="ms-list">
+                                    {% for d in divisions %}
+                                    <label class="ms-item"><input type="checkbox" name="division" value="{{ d }}" {% if d in division_list %}checked{% endif %}> <span>{{ d }}</span></label>
+                                    {% endfor %}
+                                </div>
+                                <div class="ms-empty" hidden>No division matches</div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="col-lg-2 col-md-3 col-sm-6">
@@ -1029,6 +1035,55 @@
         bootstrap.Toast.getOrCreateInstance(document.getElementById('evs-toast')).show();
       })
       .catch(function () { err.textContent = 'No connection. Try again.'; err.classList.remove('d-none'); save.disabled = false; save.textContent = 'Save'; });
+  });
+})();
+</script>
+
+<!-- 9 Nov 2026: multi-select with tick boxes and keyword search (Division) -->
+<style>
+  .ms { position: relative; }
+  .ms-btn { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; height: 32px; }
+  .ms-panel { position: absolute; z-index: 30; top: 100%; left: 0; min-width: 100%; width: 280px; margin-top: 4px;
+              background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(16,38,63,.15); padding: 8px; }
+  .ms-tools { font-size: 12px; margin: 6px 2px; color: #5f6f82; }
+  .ms-tools a { color: #0b7a7a; font-weight: 600; text-decoration: none; }
+  .ms-list { max-height: 240px; overflow-y: auto; }
+  .ms-item { display: flex; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; font-size: 13px; cursor: pointer; margin: 0; font-weight: 400 !important; color: #17263a !important; }
+  .ms-item:hover { background: #eef7f7; }
+  .ms-empty { font-size: 12px; color: #5f6f82; padding: 6px; }
+</style>
+<script>
+(function () {
+  document.querySelectorAll('.ms').forEach(function (ms) {
+    var btn = ms.querySelector('.ms-btn'), panel = ms.querySelector('.ms-panel'), search = ms.querySelector('.ms-search');
+    var items = Array.prototype.slice.call(ms.querySelectorAll('.ms-item')), empty = ms.querySelector('.ms-empty');
+    function label() {
+      var on = items.filter(function (i) { return i.querySelector('input').checked; })
+                    .map(function (i) { return i.textContent.trim(); });
+      btn.textContent = !on.length ? 'All' : on.length <= 2 ? on.join(', ') : on.slice(0, 2).join(', ') + ' +' + (on.length - 2);
+      btn.title = on.join(', ');
+    }
+    function filter() {
+      var q = search.value.trim().toLowerCase(), shown = 0;
+      items.forEach(function (i) {
+        var hit = !q || q.split(/\s+/).every(function (w) { return i.textContent.toLowerCase().indexOf(w) > -1; });
+        i.hidden = !hit; if (hit) shown++;
+      });
+      empty.hidden = shown > 0;
+    }
+    function open(v) { panel.hidden = !v; btn.setAttribute('aria-expanded', v ? 'true' : 'false'); if (v) { search.value = ''; filter(); search.focus(); } }
+    btn.addEventListener('click', function () { open(panel.hidden); });
+    search.addEventListener('input', filter);
+    search.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); } if (e.key === 'Escape') open(false); });
+    ms.querySelector('.ms-all').addEventListener('click', function (e) {
+      e.preventDefault(); items.forEach(function (i) { if (!i.hidden) i.querySelector('input').checked = true; }); label();
+    });
+    ms.querySelector('.ms-none').addEventListener('click', function (e) {
+      e.preventDefault(); items.forEach(function (i) { i.querySelector('input').checked = false; }); label();
+    });
+    items.forEach(function (i) { i.querySelector('input').addEventListener('change', label); });
+    document.addEventListener('click', function (e) { if (!ms.contains(e.target)) open(false); });
+    label();
   });
 })();
 </script>
