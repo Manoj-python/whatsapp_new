@@ -1659,6 +1659,19 @@ def executive_visit_schedule_list(request):
     page = int(request.GET.get("page", 1))
     login_empid = request.user.username.strip()
 
+    # 9 Nov 2026: tick-box filters. One value keeps the old single-value code below; two or more are
+    # applied by the multi block before "Allocated to".
+    _ML = {}
+    for _k in ("branch", "centre_name", "company", "blc_case", "type_of_notice", "suitcase",
+               "emi_bucket", "visit_filter", "loan_status"):
+        _ML[_k] = list(dict.fromkeys(v.strip() for v in request.GET.getlist(_k)
+                                     if v.strip() and v.strip() not in ("undefined", "null", "None")))
+    _one = lambda k: _ML[k][0] if len(_ML[k]) == 1 else ""
+    branch, centre_name, company, blc_case = _one("branch"), _one("centre_name"), _one("company"), _one("blc_case")
+    type_of_notice, suitcase, emi_bucket, visit_filter = _one("type_of_notice"), _one("suitcase"), _one("emi_bucket"), _one("visit_filter")
+    loan_status_filter = _one("loan_status")
+    _status_set = set(_ML["loan_status"])
+
     def valid_filter(v):
         return v and v not in ["undefined", "null", "None", ""]
 
@@ -1723,6 +1736,40 @@ def executive_visit_schedule_list(request):
         qs = qs.exclude(emi_due_2__in=["0", "0.0"])
     if remove_sez:
         qs = qs.exclude(emi_due_2__iexact="sez")
+
+    # ---- several values ticked (9 Nov 2026) ----
+    _many = lambda k: _ML[k] if len(_ML[k]) > 1 else []
+    for _k, _field in (("branch", "branch"), ("centre_name", "centre_name"), ("company", "company"),
+                       ("blc_case", "blc_cases"), ("suitcase", "suitcase")):
+        if _many(_k):
+            qs = qs.filter(**{_field + "__in": _many(_k)})
+    if _many("type_of_notice"):
+        _tq = Q()
+        for _t in _many("type_of_notice"):
+            _tq |= Q(type_of_notice__iexact=_t)
+        qs = qs.filter(loan_number__in=DueNotice.objects.filter(_tq).values_list('loan_number', flat=True))
+    if _many("emi_bucket"):
+        from django.db.models import FloatField as _FF
+        from django.db.models.functions import Cast as _Cast
+        _ranges = {"0_0": Q(emi_f=0), "1_5": Q(emi_f__gte=1, emi_f__lte=5), "6_10": Q(emi_f__gte=6, emi_f__lte=10),
+                   "11_20": Q(emi_f__gte=11, emi_f__lte=20), "21_50": Q(emi_f__gte=21, emi_f__lte=50), "50_plus": Q(emi_f__gt=50)}
+        _eq = Q()
+        for _b in _many("emi_bucket"):
+            _eq |= _ranges.get(_b, Q(pk__in=[]))
+        qs = qs.annotate(emi_f=_Cast('emi_due_2', _FF())).filter(_eq)
+    if _many("visit_filter"):
+        _sched = ExecutiveVisitScheduling.objects.values_list('loanno', flat=True)
+        _vq = Q()
+        for _vf in _many("visit_filter"):
+            if _vf == "visited":
+                _vq |= Q(loan_number__in=ExecutiveVisitScheduling.objects.filter(visit_status__iexact="visited").values_list('loanno', flat=True))
+            elif _vf == "not_visited":
+                _vq |= Q(loan_number__in=ExecutiveVisitScheduling.objects.filter(visit_status__iexact="not_visited").values_list('loanno', flat=True))
+            elif _vf == "scheduled":
+                _vq |= Q(loan_number__in=_sched)
+            elif _vf == "not_scheduled":
+                _vq |= ~Q(loan_number__in=_sched)
+        qs = qs.filter(_vq)
 
     # Allocated to (9 Nov 2026): a role plus an employee ID, blank = the logged-in user. It used to be
     # the logged-in user only, so an admin got nothing, and TL + Hierarchy Emp ID matched only himself.
@@ -1831,8 +1878,8 @@ def executive_visit_schedule_list(request):
         status_counts[status] += 1
 
     # ✅ FIX 3: APPLY LOAN STATUS FILTER (BEFORE PAGINATION)
-    if valid_filter(loan_status_filter):
-        filtered_loan_numbers = [loan for loan, status in loan_status_map.items() if status == loan_status_filter]
+    if _status_set:
+        filtered_loan_numbers = [loan for loan, status in loan_status_map.items() if status in _status_set]
         wanted = set(filtered_loan_numbers)
         all_loan_numbers = [l for l in all_filtered_loans if l in wanted]
 

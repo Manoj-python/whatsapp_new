@@ -218,6 +218,7 @@
                      <div class="col-lg-2 col-md-3 col-sm-6">
                         <label>Company</label>
                         <input type="text" name="company" class="form-control" value="{{ company }}">
+                        {{ companies|json_script:"ms-opt-company" }}
                     </div>
 
                     <div class="col-lg-2 col-md-3 col-sm-6">
@@ -1039,6 +1040,37 @@
 })();
 </script>
 
+
+<!-- 9 Nov 2026: turn every dropdown filter into the tick-box picker (selected values come from the URL) -->
+<script>
+(function () {
+  var NAMES = ['company', 'loan_status', 'branch', 'centre_name', 'type_of_notice', 'suitcase', 'emi_bucket', 'blc_case', 'visit_filter'];
+  var picked = new URLSearchParams(location.search);
+  NAMES.forEach(function (name) {
+    var el = document.querySelector('.filter-card [name="' + name + '"]');
+    if (!el) return;
+    var opts = [];
+    if (el.tagName === 'SELECT') {
+      Array.prototype.forEach.call(el.options, function (o) { if (o.value) opts.push([o.value, o.textContent.trim()]); });
+    } else {
+      var data = document.getElementById('ms-opt-' + name);
+      (data ? JSON.parse(data.textContent) : []).forEach(function (v) { opts.push([v, v]); });
+    }
+    if (!opts.length) return;
+    var chosen = picked.getAll(name);
+    var ms = document.createElement('div'); ms.className = 'ms';
+    var esc = function (t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+    ms.innerHTML = '<button type="button" class="form-select ms-btn text-start" aria-haspopup="true" aria-expanded="false">All</button>' +
+      '<div class="ms-panel" hidden><input type="search" class="form-control form-control-sm ms-search" placeholder="Type to search">' +
+      '<div class="ms-tools"><a href="#" class="ms-all">Select all shown</a> · <a href="#" class="ms-none">Clear</a></div><div class="ms-list">' +
+      opts.map(function (o) {
+        return '<label class="ms-item"><input type="checkbox" name="' + name + '" value="' + esc(o[0]) + '"' +
+               (chosen.indexOf(o[0]) > -1 ? ' checked' : '') + '> <span>' + esc(o[1]) + '</span></label>';
+      }).join('') + '</div><div class="ms-empty" hidden>Nothing matches</div></div>';
+    el.replaceWith(ms);
+  });
+})();
+</script>
 <!-- 9 Nov 2026: multi-select with tick boxes and keyword search (Division) -->
 <style>
   .ms { position: relative; }
