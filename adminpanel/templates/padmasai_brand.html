@@ -1,0 +1,45 @@
+{# 8 Nov 2026: one shared look for every padmasai.info page (navy/teal). Included before </head>; delete the include line to undo a page. #}
+<style id="padmasai-brand">
+  :root {
+    --pb-navy: #12355b; --pb-navy-dark: #0b2440; --pb-teal: #0e9494; --pb-teal-dark: #0b7a7a;
+    --pb-ink: #17263a; --pb-muted: #5f6f82; --pb-line: #e1e7ee; --pb-soft: #f4f7fa;
+    --bs-primary: #12355b; --bs-primary-rgb: 18, 53, 91;
+    --bs-link-color: #0b7a7a; --bs-link-hover-color: #12355b; --bs-link-color-rgb: 11, 122, 122;
+  }
+  body { background-color: var(--pb-soft); color: var(--pb-ink); font-variant-numeric: tabular-nums; }
+  h1, h2, h3, h4 { color: var(--pb-ink); letter-spacing: -.01em; }
+  a { color: var(--bs-link-color); }
+
+  .navbar.bg-dark, .navbar.bg-primary, .navbar-dark.bg-dark, nav.bg-dark { background-color: #0f2a47 !important; }
+  .navbar .nav-link.active { color: #fff !important; border-bottom: 2px solid var(--pb-teal); }
+
+  .btn-primary { background-color: var(--pb-navy); border-color: var(--pb-navy); }
+  .btn-primary:hover, .btn-primary:focus { background-color: var(--pb-navy-dark); border-color: var(--pb-navy-dark); }
+  .btn-success { background-color: var(--pb-teal); border-color: var(--pb-teal); }
+  .btn-success:hover, .btn-success:focus { background-color: var(--pb-teal-dark); border-color: var(--pb-teal-dark); }
+  .btn-outline-primary { color: var(--pb-navy); border-color: var(--pb-navy); }
+  .btn-outline-primary:hover { background-color: var(--pb-navy); color: #fff; }
+  .btn { border-radius: 8px; font-weight: 600; }
+  .bg-primary { background-color: var(--pb-navy) !important; }
+  .text-primary { color: var(--pb-navy) !important; }
+  .badge.bg-primary { background-color: #dbeafe !important; color: #1e40af !important; }
+  .badge.bg-success { background-color: #dcfce7 !important; color: #166534 !important; }
+  .badge.bg-danger { background-color: #fee2e2 !important; color: #991b1b !important; }
+  .badge.bg-warning { background-color: #fef3c7 !important; color: #92400e !important; }
+
+  .card { border: 1px solid var(--pb-line); border-radius: 12px; box-shadow: none; }
+  .card-header { background-color: #fff; border-bottom: 1px solid var(--pb-line); font-weight: 700; color: var(--pb-ink); }
+
+  .table { --bs-table-hover-bg: #eef7f7; }
+  .table > thead > tr > th, .table-dark > tr > th, thead.table-dark th, .table thead.table-dark th {
+    background-color: #f1f5f9 !important; color: var(--pb-muted) !important; border-color: var(--pb-line) !important;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; white-space: nowrap;
+  }
+  .table td { vertical-align: middle; border-color: var(--pb-line); }
+
+  .form-control:focus, .form-select:focus { border-color: var(--pb-teal); box-shadow: 0 0 0 3px rgba(14, 148, 148, .15); }
+  .form-label { font-weight: 600; color: var(--pb-muted); font-size: 13px; }
+  .page-link { color: var(--pb-navy); }
+  .page-item.active .page-link { background-color: var(--pb-navy); border-color: var(--pb-navy); }
+  .alert { border-radius: 10px; }
+</style>

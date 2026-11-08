@@ -405,7 +405,7 @@ def get_all_notice_files_cached():
 
     if not data:
         data = get_all_notice_files()
-        cache.set("notice_files", data, timeout=300)  # 5 minutes
+        cache.set("notice_files", data, timeout=1800)  # 30 min (8 Nov 2026): a cold hit lists every S3 notice, ~12 s
 
     return data
 # -----------------------------------------------------
@@ -2231,12 +2231,16 @@ def due_notice_list(request):
 
 @financehub_required
 def lcc_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
     lcc = Lcc.objects.all()
     lcc.delete()
     return render(request,'financehub/upload.html')
 
 @financehub_required
 def open_repo(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
     closed = OpenRepo.objects.all()
     closed.delete()
     return render(request,'financehub/upload.html')
@@ -2244,24 +2248,32 @@ def open_repo(request):
 
 @financehub_required
 def repo_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
     repo = Repo.objects.all()
     repo.delete()
     return render(request,'financehub/upload.html')
 
 @financehub_required
 def cA_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
     ca = CollectionAllocations.objects.all()
     ca.delete()
     return render(request,'financehub/upload.html')
 
 @financehub_required
 def paid_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
     paid = Paid.objects.all()
     paid.delete()
     return render(request,'financehub/upload.html')
 
 @financehub_required
 def closed_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
     closed = Closed.objects.all()
     closed.delete()
     return render(request,'financehub/upload.html')
@@ -3244,6 +3256,8 @@ logger = logging.getLogger(__name__)
 @require_http_methods(["POST"])
 def delete_all_employees(request):
     """API endpoint to delete ALL employees"""
+    if request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: had no login check at all
+        return JsonResponse({'success': False, 'error': 'Only the admin can delete all employees'}, status=403)
     try:
         logger.info("Delete ALL employees request received")
         
