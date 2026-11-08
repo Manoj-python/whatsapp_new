@@ -1230,5 +1230,72 @@
   window.addEventListener('load', restore);
 })();
 </script>
+
+<!-- 9 Nov 2026: sort and page in place on desktop, no reload (evs-sort-inplace) -->
+<style>
+  .evs-busy tbody { opacity: .45; transition: opacity .15s; }
+  .evs-busy { cursor: progress; }
+</style>
+<script>
+(function () {
+  if (!window.fetch || !window.DOMParser || !history.pushState) return;
+  var box = document.querySelector('.table-responsive');
+  if (!box) return;
+  function phone() { return window.matchMedia('(max-width: 767.98px)').matches; }
+  var busy = false;
+  function swap(url, push) {
+    if (busy) return; busy = true;
+    box.classList.add('evs-busy');
+    var x = box.scrollLeft;
+    fetch(url, {credentials: 'same-origin'}).then(function (r) { return r.text(); }).then(function (html) {
+      var d = new DOMParser().parseFromString(html, 'text/html');
+      var newBody = d.querySelector('.table-responsive tbody'), oldBody = box.querySelector('tbody');
+      if (!newBody || !oldBody) { location.href = url; return; }
+      oldBody.innerHTML = newBody.innerHTML;
+      // header arrows: copy the classes of the plain header row, cell by cell
+      var su = new URL(url, location.href), sf = su.searchParams.get('sort_field') || 'loan_number',
+          so = su.searchParams.get('sort_order') || 'asc';
+      Array.prototype.forEach.call(box.querySelectorAll('thead tr:not(.evs-groups) th.sortable'), function (th) {
+        th.classList.remove('active-asc', 'active-desc');
+        if (th.dataset.field === sf) th.classList.add(so === 'asc' ? 'active-asc' : 'active-desc');
+      });
+      var oldTiles = document.querySelector('.evs-tiles'), newTiles = d.querySelector('.evs-tiles');
+      if (oldTiles && newTiles) {
+        Array.prototype.forEach.call(oldTiles.querySelectorAll('.evs-tile'), function (t, i) {
+          var n = newTiles.querySelectorAll('.evs-tile')[i]; if (!n) return;
+          t.className = n.className;
+          var b = t.querySelector('.n'), nb = n.querySelector('.n');
+          if (b && nb) { var v = Number(nb.textContent.trim()); b.textContent = isNaN(v) ? nb.textContent : v.toLocaleString('en-IN'); }
+        });
+      }
+      var oldPg = document.querySelector('.pagination'), newPg = d.querySelector('.pagination');
+      if (oldPg && newPg) oldPg.innerHTML = newPg.innerHTML;
+      if (push) history.pushState({evs: 1}, '', url);
+      box.scrollTop = 0; box.scrollLeft = x;
+      try { sessionStorage.removeItem('evs-keep-scroll'); } catch (e2) {}
+    }).catch(function () { location.href = url; }).then(function () {
+      busy = false; box.classList.remove('evs-busy');
+    });
+  }
+  document.addEventListener('click', function (e) {
+    if (phone() || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var th = e.target.closest('.table-responsive thead th.sortable');
+    var pg = e.target.closest('.pagination a');
+    if (!th && !pg) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    var url;
+    if (th) {
+      var u = new URL(location.href), f = th.dataset.field;
+      var order = (u.searchParams.get('sort_field') || 'loan_number') === f && (u.searchParams.get('sort_order') || 'asc') === 'asc' ? 'desc' : 'asc';
+      u.searchParams.set('sort_field', f); u.searchParams.set('sort_order', order); u.searchParams.set('page', '1');
+      url = u.toString();
+    } else {
+      url = pg.href;
+    }
+    swap(url, true);
+  }, true);
+  window.addEventListener('popstate', function () { if (!phone()) swap(location.href, false); });
+})();
+</script>
 </body>
 </html>
