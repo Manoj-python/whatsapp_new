@@ -35,6 +35,8 @@ urlpatterns = [
         views.executive_visit_schedule_edit,
         name="executive_visit_schedule_edit",
     ),
+    path("api/portal/schedule-status", views.portal_schedule_status, name="portal_schedule_status"),
+    path("executive-visit-schedule/date-request/", views.evs_date_request_decide, name="evs_date_request_decide"),
     path(
         "executive-visit-schedule/new/",
         views.executive_visit_schedule_create,

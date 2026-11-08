@@ -18,7 +18,7 @@ PROTECTED = (
     "/financehub/employees/", "/financehub/api/",
     "/messaging2/chat/", "/splcases_app/chat3/",
 )
-OPEN = ("/sms/api/", "/email/api/", "/sms/download/")
+OPEN = ("/sms/api/", "/email/api/", "/sms/download/", "/financehub/api/portal/")  # portal: key-checked in the view
 SESSION_KEYS = ("messaging_user", "messaging2_user", "messaging3_user", "financehub_user")
 
 

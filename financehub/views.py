@@ -1932,6 +1932,7 @@ def executive_visit_schedule_list(request):
 
     # Dialer is replaced by our own calling app: latest outcome per loan from the SMSquare portal
     all_calls = {}
+    all_reqs = {}
     _key = os.getenv("SMSQUARE_CALL_FEEDBACK_KEY", "")
     if _key and current_page_loans:
         try:
@@ -1939,7 +1940,20 @@ def executive_visit_schedule_list(request):
             _r = _rq.get(os.getenv("SMSQUARE_CALL_FEEDBACK_URL", "https://smsquare.info/api/call-feedback"),
                          params={"loans": ",".join(current_page_loans)}, headers={"X-Api-Key": _key}, timeout=4)
             if _r.status_code == 200:
-                all_calls = _r.json().get("feedback", {})
+                _body = _r.json()
+                all_calls = _body.get("feedback", {})
+                _portal_visits = _body.get("visits", {})
+                # 9 Nov 2026: a pending schedule closes as Visited once the executive has been there
+                for _ln, _v in all_visits.items():
+                    _seen = _portal_visits.get((_ln or "").strip().upper())
+                    if _v.visit_status in (None, "") and _seen and str(_v.visit_schedule_date) <= _seen:
+                        _v.visit_status = "visited"
+                        _v.responded_at = timezone.now()
+                        _v.save(update_fields=["visit_status", "responded_at"])
+            _rr = _rq.get(_portal_base() + "/api/visit-requests", params={"loans": ",".join(current_page_loans)},
+                          headers={"X-Api-Key": _key}, timeout=4)
+            if _rr.status_code == 200:
+                all_reqs = _rr.json().get("requests", {})
         except Exception:
             logger.exception("evs call feedback fetch failed")
 
@@ -2022,6 +2036,7 @@ def executive_visit_schedule_list(request):
             "Call_Note": (all_calls.get(loan_num.upper()) or {}).get("note", ""),
             "Call_By": (all_calls.get(loan_num.upper()) or {}).get("by", ""),
             "Call_Time": ((all_calls.get(loan_num.upper()) or {}).get("at", "") or "")[:16].replace("T", " "),
+            "date_req": all_reqs.get(loan_num.upper()),
             "payment_source": dialer.disp if dialer else "",
             "payment_status": "PTP" if dialer and dialer.ptp_date else "",
             "payment_date": dialer.ptp_date if dialer else "",
@@ -2111,6 +2126,74 @@ def _evs_json(obj):
     return JsonResponse({"ok": True, "id": obj.id, "loanno": obj.loanno, "empid": obj.empid, "date": d,
                          "edit_url": reverse("executive_visit_schedule_edit", args=[obj.id]),
                          "respond_url": reverse("executive_visit_response", args=[obj.id])})
+
+
+def _portal_base():
+    return os.getenv("SMSQUARE_CALL_FEEDBACK_URL", "https://smsquare.info/api/call-feedback").rsplit("/api/", 1)[0]
+
+
+def _portal_key():
+    return os.getenv("SMSQUARE_CALL_FEEDBACK_KEY", "")
+
+
+from django.views.decorators.csrf import csrf_exempt as _csrf_exempt
+
+
+@_csrf_exempt
+def portal_schedule_status(request):
+    """9 Nov 2026: the SMSquare executive app reports "not visited" (or visited) on a schedule."""
+    import json as _json
+    from django.utils import timezone as _tz
+    key = _portal_key()
+    if not key or request.headers.get("X-Api-Key") != key:
+        return JsonResponse({"ok": False, "error": "X-Api-Key required"}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST only"}, status=405)
+    try:
+        body = _json.loads(request.body or b"{}")
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "invalid JSON"}, status=400)
+    action = body.get("action")
+    if action not in ("not_visited", "visited"):
+        return JsonResponse({"ok": False, "error": "action must be not_visited or visited"}, status=400)
+    obj = ExecutiveVisitScheduling.objects.filter(pk=body.get("schedule_id")).first()
+    if obj is None or str(obj.empid).strip() != str(body.get("empid") or "").strip():
+        return JsonResponse({"ok": False, "error": "That visit is not scheduled for this employee."}, status=404)
+    obj.visit_status = action
+    obj.not_visited_reason = (str(body.get("reason") or "")[:500] or None) if action == "not_visited" else None
+    obj.responded_at = _tz.now()
+    obj.save(update_fields=["visit_status", "not_visited_reason", "responded_at"])
+    return JsonResponse({"ok": True})
+
+
+@financehub_required
+def evs_date_request_decide(request):
+    """9 Nov 2026: Approve (reschedule to the asked date) or Reject an executive's date-change request."""
+    import requests as _rq
+    if request.method != "POST":
+        return redirect("executive_visit_schedule_list")
+    decision = request.POST.get("decision")
+    rid = request.POST.get("req_id")
+    obj = ExecutiveVisitScheduling.objects.filter(pk=request.POST.get("schedule_id")).first()
+    new_date = (request.POST.get("new_date") or "").strip()
+    if decision not in ("approved", "rejected") or not rid or obj is None:
+        messages.error(request, "That request could not be read.")
+        return redirect(_evs_next(request))
+    try:
+        r = _rq.post("%s/api/visit-requests/%s/decide" % (_portal_base(), rid), timeout=6,
+                     json={"decision": decision, "by": request.user.username}, headers={"X-Api-Key": _portal_key()})
+        ok = r.status_code == 200
+    except Exception:
+        ok = False
+    if not ok:
+        messages.error(request, "Could not reach the SMSquare app. Nothing was changed; try again.")
+        return redirect(_evs_next(request))
+    if decision == "approved":
+        ExecutiveVisitScheduling.objects.create(loanno=obj.loanno, empid=obj.empid, visit_schedule_date=new_date)
+        messages.success(request, "Approved: %s moved to %s" % (obj.loanno, new_date))
+    else:
+        messages.success(request, "Refused the date change for %s" % obj.loanno)
+    return redirect(_evs_next(request))
 
 
 def _evs_next(request):
