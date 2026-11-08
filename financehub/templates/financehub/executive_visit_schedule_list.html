@@ -89,7 +89,7 @@
     </style>
 {% include "padmasai_brand.html" %}
 <style id="evs-look">
-  tbody td:nth-child(7) { max-width: 360px; }  /* exec column fits two names (9 Nov) */
+  tbody td:nth-child(6) { max-width: 360px; }  /* exec column fits two names (9 Nov) */
   .evs-req { margin-top: 6px; padding: 6px 8px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; white-space: normal; min-width: 210px; text-align: left; }
   .evs-req .btn { padding: 2px 10px; margin-top: 4px; }
   /* 8 Nov 2026: .sortable{position:relative} came after the sticky rule and un-pinned the header */
@@ -405,7 +405,6 @@
         <table class="table table-bordered table-hover table-sm mb-0">
              <thead>
     <tr class="text-center">
-        <th class="sortable" data-field="id">ID</th>
         <th class="sortable" data-field="loan_number">Loan No</th>
         <th class="sortable" data-field="customer_name">Customer</th>
         <th class="sortable" data-field="vehicle_no">Vehicle</th>
@@ -453,7 +452,6 @@
             <tbody id="tableBody">
             {% for r in data %}
             <tr class="{% if r.has_schedule %}row-scheduled{% endif %}">
-                <td class="text-center">{% if r.obj %}{{ r.obj.id }}{% else %}-{% endif %}</td>
 
                 <td>
                      <a href="{% url 'feedback_create' %}?loan={{ r.loan_number }}&name={{ r.customer_name }}&vehicle={{ r.vehicle_no }}"
@@ -1251,9 +1249,22 @@
     if (frozen) return; frozen = true;
     var table = box.querySelector('table'), ths = box.querySelectorAll('thead tr:not(.evs-groups) th');
     var widths = Array.prototype.map.call(ths, function (th) { return th.getBoundingClientRect().width; });
-    table.style.width = table.getBoundingClientRect().width + 'px';
+    [165, 200, 110].forEach(function (m, i) { if (widths[i] < m) widths[i] = m; });  // room for loan no, name, vehicle
+    // the group band is the first row and spans columns; in a fixed table it would set the widths,
+    // so the widths are declared on <col> elements, which win
+    var cg = table.querySelector('colgroup.evs-cols') || document.createElement('colgroup');
+    cg.className = 'evs-cols';
+    cg.innerHTML = widths.map(function (w) { return '<col style="width:' + w + 'px">'; }).join('');
+    table.insertBefore(cg, table.firstChild);
+    table.style.width = widths.reduce(function (a, b) { return a + b; }, 0) + 'px';
     Array.prototype.forEach.call(ths, function (th, i) { th.style.width = th.style.minWidth = th.style.maxWidth = widths[i] + 'px'; });
     table.style.tableLayout = 'fixed';
+    table.classList.add('evs-fixed');
+    // the first three columns stay on the left: offsets from the locked widths
+    var drawn = Array.prototype.map.call(ths, function (th) { return th.getBoundingClientRect().width; });
+    table.style.setProperty('--evs-l2', drawn[0] + 'px');
+    table.style.setProperty('--evs-l3', (drawn[0] + drawn[1]) + 'px');
+    setTimeout(evsTitles, 0);
   }
   function evsTitles() {
     Array.prototype.forEach.call(box.querySelectorAll('tbody td'), function (td) {
@@ -1317,5 +1328,21 @@
   window.addEventListener('popstate', function () { if (!phone()) swap(location.href, false); });
 })();
 </script>
+
+<style id="evs-freeze3">
+  /* 9 Nov 2026: Loan No, Customer, Vehicle frozen on the left */
+  .evs-fixed tbody td { max-width: none !important; }
+  .table-responsive thead tr:not(.evs-groups) th:nth-child(1) { min-width: 165px; }
+  .table-responsive thead tr:not(.evs-groups) th:nth-child(2) { min-width: 200px; }
+  .table-responsive thead tr:not(.evs-groups) th:nth-child(3) { min-width: 110px; }
+  .evs-fixed tbody td:nth-child(-n+3),
+  .evs-fixed thead tr:not(.evs-groups) th:nth-child(-n+3) { position: sticky; z-index: 2; }
+  .evs-fixed tbody td:nth-child(-n+3) { background-color: #fff; }
+  .evs-fixed tbody tr.row-scheduled td:nth-child(-n+3) { background-color: #effaf6; }
+  .evs-fixed thead tr:not(.evs-groups) th:nth-child(-n+3) { z-index: 6; }
+  .evs-fixed tbody td:nth-child(1), .evs-fixed thead tr:not(.evs-groups) th:nth-child(1) { left: 0; }
+  .evs-fixed tbody td:nth-child(2), .evs-fixed thead tr:not(.evs-groups) th:nth-child(2) { left: var(--evs-l2); }
+  .evs-fixed tbody td:nth-child(3), .evs-fixed thead tr:not(.evs-groups) th:nth-child(3) { left: var(--evs-l3); box-shadow: 4px 0 6px -3px rgba(16,38,63,.25); }
+</style>
 </body>
 </html>
