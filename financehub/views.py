@@ -2000,6 +2000,7 @@ def executive_visit_schedule_list(request):
             "cm": alloc.cm if alloc else "",
             "tl": alloc.tl if alloc else "",
             "exec": alloc.executive_name if alloc else "",
+            "alloc_empid": (alloc.employee_id or "") if alloc else "",  # 9 Nov 2026: popup default
             "empid": visit.empid if visit else "",
             "latest_visited_on": visit.visit_schedule_date if visit else "",
             "received_date": all_received.get(loan_num, ""),

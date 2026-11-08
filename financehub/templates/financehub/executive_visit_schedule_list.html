@@ -608,12 +608,14 @@
                         </a>
                         <a href="{% url 'executive_visit_schedule_edit' r.obj.id %}?next={{ request.get_full_path|urlencode }}"
                         class="btn btn-outline-primary btn-sm evs-pop" data-mode="edit" data-loan="{{ r.loan_number }}"
-                        data-empid="{{ r.empid }}" data-date="{{ r.visit_date|date:'Y-m-d' }}">
+                        data-empid="{{ r.empid }}" data-date="{{ r.visit_date|date:'Y-m-d' }}"
+                        data-alloc="{{ r.alloc_empid }}" data-alloc-name="{{ r.exec }}">
                             Edit
                         </a>
                     {% else %}
                         <a href="{% url 'executive_visit_schedule_create' %}?loan={{ r.loan_number|urlencode }}&next={{ request.get_full_path|urlencode }}"
-                        class="btn btn-success btn-sm evs-pop" data-mode="new" data-loan="{{ r.loan_number }}" data-empid="" data-date="">
+                        class="btn btn-success btn-sm evs-pop" data-mode="new" data-loan="{{ r.loan_number }}" data-empid="{{ r.alloc_empid }}" data-date=""
+                        data-alloc="{{ r.alloc_empid }}" data-alloc-name="{{ r.exec }}">
                             Schedule
                         </a>
                     {% endif %}
@@ -924,6 +926,7 @@
         <div class="mb-3">
           <label class="form-label" for="evs-f-emp">Employee ID</label>
           <input type="text" class="form-control" name="empid" id="evs-f-emp" placeholder="e.g. 5512" required>
+          <div class="form-text" id="evs-f-alloc"></div>
         </div>
         <div class="mb-1">
           <label class="form-label" for="evs-f-date">Visit date</label>
@@ -964,6 +967,8 @@
     document.getElementById('evs-f-loan').value = a.dataset.loan;
     document.getElementById('evs-f-emp').value = a.dataset.empid || '';
     document.getElementById('evs-f-date').value = a.dataset.date || '';
+    var hint = document.getElementById('evs-f-alloc');
+    hint.textContent = a.dataset.alloc ? ('Allocated executive: ' + (a.dataset.allocName || '') + ' (' + a.dataset.alloc + ')') : 'No allocated executive for this loan';
     err.classList.add('d-none'); save.disabled = false; save.textContent = 'Save';
     modal.show();
     setTimeout(function () { document.getElementById('evs-f-emp').focus(); }, 300);
@@ -985,7 +990,9 @@
           var next = encodeURIComponent(location.pathname + location.search);
           current.parentNode.innerHTML = '<a class="btn btn-primary btn-sm" href="' + d.respond_url + '?next=' + next + '">Respond</a> ' +
             '<a class="btn btn-outline-primary btn-sm evs-pop" data-mode="edit" href="' + d.edit_url + '?next=' + next + '">Edit</a>';
+          var keep = {alloc: current.dataset.alloc || '', name: current.dataset.allocName || ''};
           current = tr.querySelector('a.evs-pop');
+          current.dataset.alloc = keep.alloc; current.dataset.allocName = keep.name;
         }
         current.dataset.loan = d.loanno; current.dataset.empid = d.empid; current.dataset.date = d.date;
         modal.hide();
