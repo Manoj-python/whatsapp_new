@@ -2027,6 +2027,12 @@ def executive_visit_schedule_list(request):
             "payment_amount": dialer.total_dues if dialer else "",
         })
 
+    # 8 Nov 2026: pandas imports left the text "nan" in empty cells; show them empty
+    for _row in all_rows:
+        for _k, _v in list(_row.items()):
+            if isinstance(_v, str) and _v.strip().lower() in ("nan", "none", "null"):
+                _row[_k] = ""
+
     # Apply sorting
     reverse_sort = sort_order == "desc"
 

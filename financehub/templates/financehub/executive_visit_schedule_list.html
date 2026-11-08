@@ -87,6 +87,34 @@
     }
     </style>
 {% include "padmasai_brand.html" %}
+<style id="evs-look">
+  /* 8 Nov 2026: .sortable{position:relative} came after the sticky rule and un-pinned the header */
+  .table-responsive { max-height: calc(100vh - 230px); border: 1px solid #e1e7ee; border-radius: 12px; }
+  .table-responsive thead th, .table-responsive thead th.sortable {
+    position: sticky !important; top: 0; z-index: 3;
+    background: #12355b !important; color: #fff !important; border-color: #0f2a47 !important;
+    font-size: 11px; letter-spacing: .03em; text-transform: uppercase; padding: 8px 10px;
+  }
+  .table-responsive thead th.sortable:hover { background: #0e9494 !important; }
+  .arrow-up, .arrow-down { color: rgba(255,255,255,.45); }
+  .sortable.active-asc .arrow-up, .sortable.active-desc .arrow-down { color: #5eead4; }
+  /* one line per row: long text is cut with … and shown in full on hover */
+  tbody td, tbody td.remarks-col { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+    padding: 6px 10px; vertical-align: middle; }
+  tbody tr:nth-child(even) td { background-color: #fafcfd; }
+  tbody tr.row-scheduled td { background-color: #effaf6; }
+  tbody tr:hover td { background-color: #e6f4f4 !important; }
+  tbody td a.fw-bold { color: #12355b !important; text-decoration: none; }
+  /* filter panel */
+  .card-header.bg-dark, .card > .card-header { background: #12355b !important; color: #fff !important; border: 0; }
+  .filter-card .form-control, .filter-card .form-select { height: 32px; border-radius: 8px; }
+  .filter-card label { color: #5f6f82; }
+  .filter-card .d-flex.gap-1 { flex-wrap: wrap; gap: 6px !important; }
+  .filter-card .d-flex.gap-1 > .btn { width: auto !important; flex: 1 1 auto; white-space: nowrap; padding: 6px 14px; }
+  /* status totals as pills */
+  .badge { border-radius: 999px; padding: 5px 10px; font-weight: 700; }
+</style>
+
 </head>
 
 <body class="bg-light">
