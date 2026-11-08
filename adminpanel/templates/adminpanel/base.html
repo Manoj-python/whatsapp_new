@@ -187,6 +187,16 @@
             color: white;
             font-weight: bold;
         }
+        /* ===== 8 Nov 2026 restyle: navy/teal brand, flatter chrome ===== */
+        body { background: #f4f7fa; }
+        .sidebar { background: #0f2a47; }
+        .sidebar-item { border-radius: 8px; }
+        .sidebar-item.active { background: #0e9494; }
+        .top-navbar { box-shadow: none; border-bottom: 1px solid #e1e7ee; }
+        .app-btn.active { background: #12355b; border-color: #12355b; }
+        .app-btn:hover:not(.active) { border-color: #0e9494; }
+        .user-avatar { background: #12355b; border-radius: 10px; }
+        /* ===== end restyle ===== */
     </style>
     {% block extra_css %}{% endblock %}
 </head>

@@ -1799,7 +1799,10 @@ def failed_messages(request, app_key):
         return export_csv(qs, f"failed_logs_{app_key}")
     paginator = Paginator(qs, 50)
     page_obj = paginator.get_page(request.GET.get('page'))
-    templates = LogModel.objects.values_list("template_name", flat=True).distinct()
+    # order_by() first: the model's default -sent_at ordering made DISTINCT return every row (8 Nov 2026)
+    templates = (LogModel.objects.filter(status="Failed").exclude(template_name__isnull=True)
+                 .exclude(template_name="").order_by("template_name")
+                 .values_list("template_name", flat=True).distinct())
     return render(request, 'adminpanel/failed_messages.html', {
         'page_obj': page_obj,
         'templates': templates,
@@ -1811,12 +1814,12 @@ def failed_messages(request, app_key):
 # Legacy redirects for old URLs
 @login_required
 def failed_messages_legacy_sms(request):
-    return redirect(f"{request.path}?app=sms")
+    return redirect('failed_messages_unified', app_key='sms')  # used to redirect to itself forever
 
 
 @login_required
 def failed_messages_legacy_psf(request):
-    return redirect(f"{request.path}?app=psf")
+    return redirect('failed_messages_unified', app_key='psf')
 
 
 import pandas as pd
@@ -1921,15 +1924,16 @@ def user_list(request):
     if agent.role != 'ADMIN':
         messages.error(request, "Access denied. Admin only.")
         return redirect('agent_dashboard')
+    # 8 Nov 2026: 256 of 309 logins have no agent profile and buried the team; show the team unless ?all=1
+    show_all = request.GET.get('all') == '1'
     users = User.objects.all().order_by('id')
-    users_with_agents = []
-    for user in users:
-        try:
-            user_agent = Agent.objects.get(user=user)
-        except Agent.DoesNotExist:
-            user_agent = None
-        users_with_agents.append({'user': user, 'agent': user_agent})
-    return render(request, 'adminpanel/user_list.html', {'users_with_agents': users_with_agents})
+    if not show_all:
+        users = users.filter(agent_profile__isnull=False)
+    agents = {a.user_id: a for a in Agent.objects.filter(user__in=users).prefetch_related('groups', 'subgroup')}
+    users_with_agents = [{'user': u, 'agent': agents.get(u.id)} for u in users]
+    return render(request, 'adminpanel/user_list.html', {
+        'users_with_agents': users_with_agents, 'show_all': show_all,
+        'hidden_count': 0 if show_all else User.objects.filter(agent_profile__isnull=True).count()})
 
 import re
 

@@ -9,14 +9,14 @@
 <!-- 🔥 NAVBAR -->
 <nav class="navbar navbar-dark bg-dark">
     <div class="container">
-        <a class="navbar-brand">Messaging Dashboard</a>
+        <a class="navbar-brand" href="{% url 'admin_dashboard' %}">&larr; Admin Dashboard</a>
         <a href="{% url 'chat_dashboard2' %}" class="btn btn-light">Chat</a>
     </div>
 </nav>
 
 <div class="container mt-4">
 
-    <h3 class="text-danger">Failed Messages (System 1)</h3>
+    <h3 class="text-danger">Failed Messages ({{ app_name }})</h3>
 
     <!-- 🔥 FILTERS -->
     <form method="GET" class="row g-2 mb-3">
