@@ -1243,6 +1243,24 @@
   if (!box) return;
   function phone() { return window.matchMedia('(max-width: 767.98px)').matches; }
   var busy = false;
+  var frozen = false;
+  // evsFreezeCols on load: lock widths before the first click, not during it
+  window.addEventListener('load', function () { if (!phone()) setTimeout(evsFreezeCols, 50); });
+  // 9 Nov 2026: keep column widths still when new rows come in (they used to re-size and shift 1-3 inches)
+  function evsFreezeCols() {
+    if (frozen) return; frozen = true;
+    var table = box.querySelector('table'), ths = box.querySelectorAll('thead tr:not(.evs-groups) th');
+    var widths = Array.prototype.map.call(ths, function (th) { return th.getBoundingClientRect().width; });
+    table.style.width = table.getBoundingClientRect().width + 'px';
+    Array.prototype.forEach.call(ths, function (th, i) { th.style.width = th.style.minWidth = th.style.maxWidth = widths[i] + 'px'; });
+    table.style.tableLayout = 'fixed';
+  }
+  function evsTitles() {
+    Array.prototype.forEach.call(box.querySelectorAll('tbody td'), function (td) {
+      if (!td.title && td.scrollWidth > td.clientWidth) td.title = td.innerText.trim();
+    });
+  }
+  evsTitles();
   function swap(url, push) {
     if (busy) return; busy = true;
     box.classList.add('evs-busy');
@@ -1251,7 +1269,9 @@
       var d = new DOMParser().parseFromString(html, 'text/html');
       var newBody = d.querySelector('.table-responsive tbody'), oldBody = box.querySelector('tbody');
       if (!newBody || !oldBody) { location.href = url; return; }
+      evsFreezeCols();
       oldBody.innerHTML = newBody.innerHTML;
+      evsTitles();
       // header arrows: copy the classes of the plain header row, cell by cell
       var su = new URL(url, location.href), sf = su.searchParams.get('sort_field') || 'loan_number',
           so = su.searchParams.get('sort_order') || 'asc';
