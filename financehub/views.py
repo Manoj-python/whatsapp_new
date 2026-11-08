@@ -1767,25 +1767,27 @@ def executive_visit_schedule_list(request):
     # ==========================================================
     # ✅ FIX 2: GET ALL LOAN NUMBERS FOR STATUS CALCULATION
     # ==========================================================
-    all_filtered_loans = list(qs.values_list('loan_number', flat=True))
+    # 8 Nov 2026 speed-up: read the filtered loans once, match Closed/Repo/Paid by subquery
+    # (it was 3 reads of ~30k loans, two of them as 30k-value IN lists: ~4 s a load).
+    # order_by loan_number: the old loan-number-only read came back in that (index) order; keep the page order
+    lcc_rows = list(qs.only('loan_number', 'emi_due_2', 'month_tbc', 'total_dues').order_by('loan_number'))
+    all_filtered_loans = [l.loan_number for l in lcc_rows]
+    loan_sub = qs.values('loan_number')
 
     # Get closed and repo in bulk
-    closed_dict = set(Closed.objects.filter(loan_number__in=all_filtered_loans).values_list('loan_number', flat=True))
-    repo_dict = set(Repo.objects.filter(agreement_number__in=all_filtered_loans).values_list('agreement_number', flat=True))
+    closed_dict = set(Closed.objects.filter(loan_number__in=loan_sub).values_list('loan_number', flat=True))
+    repo_dict = set(Repo.objects.filter(agreement_number__in=loan_sub).values_list('agreement_number', flat=True))
 
     # Get paid amounts in bulk
     paid_dict = dict(
-        Paid.objects.filter(loan_number__in=all_filtered_loans)
+        Paid.objects.filter(loan_number__in=loan_sub)
         .values('loan_number')
         .annotate(total=Sum('received_amount'))
         .values_list('loan_number', 'total')
     )
 
     # Get LCC data in bulk
-    lcc_dict = {
-        l.loan_number: l for l in Lcc.objects.filter(loan_number__in=all_filtered_loans)
-        .only('loan_number', 'emi_due_2', 'month_tbc', 'total_dues')
-    }
+    lcc_dict = {l.loan_number: l for l in lcc_rows}
 
     # Calculate status for each loan
     loan_status_map = {}
@@ -1804,18 +1806,18 @@ def executive_visit_schedule_list(request):
     # ✅ FIX 3: APPLY LOAN STATUS FILTER (BEFORE PAGINATION)
     if valid_filter(loan_status_filter):
         filtered_loan_numbers = [loan for loan, status in loan_status_map.items() if status == loan_status_filter]
-        qs = qs.filter(loan_number__in=filtered_loan_numbers)
-        
+        wanted = set(filtered_loan_numbers)
+        all_loan_numbers = [l for l in all_filtered_loans if l in wanted]
+
         # Recalculate total after status filter
         total_count = len(filtered_loan_numbers)
     else:
         total_count = total_before_status
+        all_loan_numbers = all_filtered_loans
 
     # ==========================================================
     # PAGINATION - Get current page data
     # ==========================================================
-    # Get all loan numbers for pagination
-    all_loan_numbers = list(qs.values_list('loan_number', flat=True))
 
     # Create paginator
     paginator = Paginator(all_loan_numbers, 200)
