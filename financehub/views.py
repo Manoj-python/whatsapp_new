@@ -1584,7 +1584,7 @@ def _evs_global_sort(loans, field, order, status_map, loan_sub):
                     .values_list("loan_number", _EVS_ALLOC[field]))
     elif field in _EVS_VISIT:
         vals = _evs_first(ExecutiveVisitScheduling.objects.filter(loanno__in=loan_sub)
-                          .order_by("loanno", "-visit_schedule_date").values_list("loanno", _EVS_VISIT[field]))
+                          .order_by("loanno", "-id").values_list("loanno", _EVS_VISIT[field]))
         if field == "has_schedule":
             vals = {k: 1 for k in vals}
     elif field in _EVS_NOTICE:
@@ -1890,7 +1890,7 @@ def executive_visit_schedule_list(request):
     )
 
     all_visits = {}
-    for v in ExecutiveVisitScheduling.objects.filter(loanno__in=current_page_loans).order_by('loanno', '-visit_schedule_date'):
+    for v in ExecutiveVisitScheduling.objects.filter(loanno__in=current_page_loans).order_by('loanno', '-id'):  # newest schedule is current (9 Nov 2026)
         if v.loanno not in all_visits:
             all_visits[v.loanno] = v
 
@@ -2160,10 +2160,19 @@ def executive_visit_schedule_edit(request, pk):
                 return JsonResponse({"ok": False, "error": "Employee ID and visit date are both needed."}, status=400)
             messages.error(request, "Loan number, employee ID and visit date are all needed.")
             return redirect(request.path)
-        obj.loanno, obj.empid, obj.visit_schedule_date = new_loan, new_emp, new_date
-        obj.save()
+        old_date = obj.visit_schedule_date.strftime("%Y-%m-%d") if hasattr(obj.visit_schedule_date, "strftime") else str(obj.visit_schedule_date)
+        rescheduled = new_date != old_date
+        if rescheduled:
+            # 9 Nov 2026: a new date is a new schedule (Pending); the old one stays as history with its result
+            obj = ExecutiveVisitScheduling.objects.create(loanno=new_loan, empid=new_emp, visit_schedule_date=new_date)
+        else:
+            obj.loanno, obj.empid = new_loan, new_emp
+            obj.save()
         if _evs_ajax(request):
-            return _evs_json(obj)
+            resp = _evs_json(obj)
+            import json as _json
+            body = _json.loads(resp.content); body["rescheduled"] = rescheduled
+            return JsonResponse(body)
 
         messages.success(request, "Visit schedule updated successfully")
         return redirect(_evs_next(request))
