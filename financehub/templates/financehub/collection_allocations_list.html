@@ -65,29 +65,7 @@
 <body class="bg-light">
 
 <!-- NAVBAR -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-    <div class="container-fluid">
-
-        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">FinanceHub</a>
-
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarNav">
-
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link active" href="{% url 'collection_allocations_list' %}">Collection Allocations</a></li>
-            </ul>
-
-            <div class="d-flex align-items-center">
-                <span class="text-white me-3">👤 {{ request.user.username }}</span>
-            </div>
-
-        </div>
-    </div>
-</nav>
+{% include "financehub/_nav.html" %}
 
 <div class="container-fluid mt-4">
 

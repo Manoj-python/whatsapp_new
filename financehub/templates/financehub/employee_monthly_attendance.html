@@ -281,58 +281,7 @@
 <body>
 
 <!-- Navbar -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow fixed-top">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="{% url 'upload_loan_data' %}">
-            <i class="fas fa-chart-line me-2"></i>FinanceHub
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'upload_loan_data' %}">
-                        <i class="fas fa-upload me-1"></i> Upload
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'lcc_list' %}">
-                        <i class="fas fa-database me-1"></i> LCC Data
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'feedback_list' %}">
-                        <i class="fas fa-comment me-1"></i> Feedback
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'executive_visit_schedule_list' %}">
-                        <i class="fas fa-calendar me-1"></i> Visits
-                    </a>
-                </li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle active" href="#" role="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-chart-bar me-1"></i> Reports
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item active" href="{% url 'employee_monthly_attendance' %}">
-                            <i class="fas fa-calendar-check me-2"></i>Monthly Attendance
-                        </a></li>
-                    </ul>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center ms-3">
-                <span class="text-white me-3">
-                    <i class="fas fa-user-circle me-1"></i>{{ request.user.username }}
-                </span>
-                <a href="{% url 'fh_logout' %}" class="btn btn-dark btn-sm">
-                    <i class="fas fa-sign-out-alt me-1"></i>Logout
-                </a>
-            </div>
-        </div>
-    </div>
-</nav>
+{% include "financehub/_nav.html" %}
 
 <div class="container main-container fade-in">
     <!-- Search Section -->
