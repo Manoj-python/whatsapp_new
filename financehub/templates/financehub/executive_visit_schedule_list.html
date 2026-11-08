@@ -1201,5 +1201,34 @@
   holder.querySelectorAll('a.evs-pop').forEach(function (a) { a.classList.remove('evs-pop'); });
 })();
 </script>
+
+<!-- 9 Nov 2026: keep the table where it was across a sort or page change (evs-keep-scroll) -->
+<script>
+(function () {
+  var KEY = 'evs-keep-scroll';
+  var box = document.querySelector('.table-responsive');
+  function save() {
+    try {
+      sessionStorage.setItem(KEY, JSON.stringify({x: box ? box.scrollLeft : 0, ty: box ? box.scrollTop : 0,
+                                                  y: window.scrollY, path: location.pathname}));
+    } catch (e) {}
+  }
+  // capture phase: runs before the page's own sort / pager handlers navigate away
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('th.sortable') || e.target.closest('.pagination a')) save();
+  }, true);
+  var raw = null;
+  try { raw = sessionStorage.getItem(KEY); sessionStorage.removeItem(KEY); } catch (e) {}
+  if (!raw) return;
+  var p; try { p = JSON.parse(raw); } catch (e) { return; }
+  if (!p || p.path !== location.pathname) return;
+  function restore() {
+    if (box) { box.scrollLeft = p.x || 0; box.scrollTop = 0; }
+    window.scrollTo(0, p.y || 0);
+  }
+  restore();
+  window.addEventListener('load', restore);
+})();
+</script>
 </body>
 </html>
