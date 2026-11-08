@@ -162,6 +162,17 @@ def get_role_display_name(role):
     return role_names.get(role, role)
 
 
+def _login_json(view):
+    """8 Nov 2026: case APIs answered anonymous callers."""
+    from functools import wraps
+    @wraps(view)
+    def inner(request, *a, **k):
+        if not request.user.is_authenticated:
+            return JsonResponse({'success': False, 'error': 'Login required'}, status=401)
+        return view(request, *a, **k)
+    return inner
+
+
 def get_agent_from_user(user):
     """Get or create agent profile for user (uses messaging2.Agent)"""
     try:
@@ -1297,6 +1308,10 @@ def get_case_detail_api(request, case_id):
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
     case = get_object_or_404(CaseModel, case_id=case_id)
+    from messaging2.views import _case_read_denied
+    denied = _case_read_denied(request, case)
+    if denied:
+        return denied
     return JsonResponse({
         'success': True,
         'case': {
@@ -1345,7 +1360,7 @@ from channels.layers import get_channel_layer
 logger = logging.getLogger(__name__)
 
 
-@csrf_exempt
+@_login_json
 @require_http_methods(["POST"])
 def close_case_api(request, case_id):
     try:
@@ -1449,7 +1464,7 @@ def close_case_api(request, case_id):
             status=500
         )
 
-@csrf_exempt
+@_login_json
 @require_http_methods(["POST"])
 def reopen_case_api(request, case_id):
     agent = get_agent_from_user(request.user)
@@ -1502,7 +1517,7 @@ def reopen_case_api(request, case_id):
 
 from messaging2.tasks import send_ticket_close_message   # import the task
 
-@csrf_exempt
+@_login_json
 @require_http_methods(["POST"])
 def resolve_case_api(request, case_id):
     if request.method != 'POST':
@@ -1519,6 +1534,10 @@ def resolve_case_api(request, case_id):
             )
 
         case = CaseModel.objects.get(case_id=case_id)
+        from messaging2.views import _case_read_denied
+        denied = _case_read_denied(request, case)
+        if denied:
+            return denied
 
         if case.status in ['Resolved', 'Closed']:
             return JsonResponse(
@@ -1592,6 +1611,10 @@ def get_case_timeline_api(request, case_id):
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
     case = get_object_or_404(CaseModel, case_id=case_id)
+    from messaging2.views import _case_read_denied
+    denied = _case_read_denied(request, case)
+    if denied:
+        return denied
     logs = case.escalation_logs.all().order_by('-created_at')[:50]
     return JsonResponse({
         'logs': [{
@@ -1607,7 +1630,7 @@ def get_case_timeline_api(request, case_id):
 import logging
 logger = logging.getLogger(__name__)
 
-@csrf_exempt
+@_login_json
 @require_http_methods(["POST"])
 def edit_case_api(request, case_id):
     try:

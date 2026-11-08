@@ -215,7 +215,7 @@ class Agent(models.Model):
         if self.role == 'ADMIN':
             return True
         return (case.current_level == self.level and
-                (case.group in self.groups.all() or case.subgroup in self.subgroups.all()))
+                (case.group in self.groups.all() or case.subgroup in self.subgroup.all()))
     
     def assign_to_agent(self, agent, assigned_by=None):
         # This method is used when an agent assigns a case to another agent?
@@ -461,6 +461,7 @@ class Case(models.Model):
     def resolve(self, agent, resolution_notes=None):
         if self.status == 'Closed':
             raise ValueError("Cannot resolve a closed case")
+        from_level = self.current_level
         self.resolved_at_level = self.current_level
         self.resolved_by_role = agent.role if agent else 'System'
         self.status = 'Resolved'
@@ -474,7 +475,7 @@ class Case(models.Model):
             agent.increment_resolved_cases()
         CaseEscalationLog.objects.create(
             case=self,
-            from_level=self.current_level,
+            from_level=from_level,
             to_level='RESOLVED',
             escalated_by=agent.name if agent else 'System',
             reason=resolution_notes or 'Case resolved'
@@ -502,6 +503,8 @@ class Case(models.Model):
         return True
     
     def reopen(self, agent, reopen_reason=None, new_level=None):
+        if new_level not in ('ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5'):
+            new_level = None  # #15: an arbitrary level from the request used to be stored as-is
         if self.status == 'Closed':
             if agent.role != 'ADMIN':
                 raise PermissionError("Only Admin can reopen closed cases")
@@ -511,6 +514,9 @@ class Case(models.Model):
             self.reopened_at = timezone.now()
             self.status = 'Reopened'
             self.current_level = target_level
+            if self.assigned_to_id and self.assigned_to.level != target_level:
+                self.assigned_to = None  # #14: back at a level the old assignee does not work at
+                self.assigned_to_name = None
             self.previous_level = 'CLOSED'
             self.closed_at = None
             self.closed_by = None
@@ -537,6 +543,9 @@ class Case(models.Model):
             self.reopened_at = timezone.now()
             self.status = 'Reopened'
             self.current_level = target_level
+            if self.assigned_to_id and self.assigned_to.level != target_level:
+                self.assigned_to = None  # #14: back at a level the old assignee does not work at
+                self.assigned_to_name = None
             self.previous_level = 'RESOLVED'
             self.resolved_at = None
             self.resolved_by = None
@@ -563,7 +572,7 @@ class Case(models.Model):
         return agent.is_active
     
     def can_close(self, agent):
-        return agent.role == 'ADMIN' and self.status == 'Resolved'
+        return agent.has_close_permission() and self.status == 'Resolved'
     
     def can_escalate(self, agent, target_level):
         if self.status in ['Resolved', 'Closed']:

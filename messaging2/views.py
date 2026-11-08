@@ -1670,7 +1670,9 @@ def auto_assign(case):
         is_active=True
     )
 
-    agent = agents.first()
+    open_now = ['Open', 'In Progress', 'Reopened']
+    agent = min(agents.distinct(), default=None, key=lambda a: (
+        type(case).objects.filter(assigned_to=a, status__in=open_now).count(), a.id))
 
     if agent:
         case.assign_to_agent(agent, assigned_by="System")
@@ -2647,15 +2649,9 @@ def manager_cases_api(request):
     manager_subgroups = agent.subgroup.all()
 
     # ─── Build permission filter (OR) ──────────────────────────
-    case_filter = Q()
-    if manager_groups.exists():
-        case_filter |= Q(group__in=manager_groups)
-    if manager_subgroups.exists():
-        case_filter |= Q(subgroup__in=manager_subgroups)
-
-    # If no permissions, return empty
-    if not case_filter:
+    if not manager_groups.exists() and not manager_subgroups.exists():
         return JsonResponse({'cases': []})
+    case_filter = build_case_permission_filter(agent)
 
     # ─── Base queryset (ESC3 pending only) ──────────────────────
     base_qs = (
@@ -2745,7 +2741,7 @@ def head_dashboard2(request):
     # ─── Base queryset: all ESC4 cases (no group/subgroup restriction) ──
     base_qs = CaseModel.objects.filter(
         current_level='ESC4'
-    ).exclude(status='Closed').select_related('group', 'subgroup', 'category')
+    ).exclude(status='Closed').filter(build_case_permission_filter(agent)).select_related('group', 'subgroup', 'category')
 
     # Apply optional filters if present
     if category_id:
@@ -2835,7 +2831,7 @@ def head_cases_api(request):
     base_qs = CaseModel.objects.filter(
         current_level='ESC4',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').select_related('group', 'subgroup', 'category')
+    ).exclude(status='Closed').filter(build_case_permission_filter(agent)).select_related('group', 'subgroup', 'category')
 
     # Apply filters
     if department != 'all':
@@ -2924,10 +2920,47 @@ def api_categories(request):
     ]
     return JsonResponse({'categories': data})
 
+
+
+def _login_json(view):
+    """#3: case write APIs answered anonymous callers with a 500; now a clean 401."""
+    from functools import wraps
+    @wraps(view)
+    def inner(request, *a, **k):
+        if not request.user.is_authenticated:
+            return JsonResponse({'success': False, 'error': 'Login required'}, status=401)
+        return view(request, *a, **k)
+    return inner
+
+
+def _server_error(e):
+    """#16: log the exception, do not hand Python's error text to the browser."""
+    logger.exception("case api error: %s", e)
+    return JsonResponse({'error': 'Server error - please retry'}, status=500)
+
+
+def _case_read_denied(request, case):
+    """None if this signed-in agent may read the case, else a 403/401 response.
+    Added 8 Nov 2026: these three read APIs answered anyone on the internet."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Login required'}, status=401)
+    try:
+        agent = request.user.agent_profile
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Agent not found'}, status=403)
+    if agent.role in ('ADMIN', 'HEAD'):
+        return None
+    if type(case).objects.filter(pk=case.pk).filter(build_case_permission_filter(agent)).exists():
+        return None
+    return JsonResponse({'success': False, 'error': 'Not your department'}, status=403)
+
 def get_case_detail_api2(request, case_id):
     CaseModel = get_case_model_for_app(request)
     try:
         case = CaseModel.objects.get(case_id=case_id)
+        denied = _case_read_denied(request, case)
+        if denied:
+            return denied
         return JsonResponse({
             'success': True,
             'case': {
@@ -2967,6 +3000,9 @@ def case_description_history_api(request, case_id):
     app_key = get_app_from_request(request)
     CaseModel = APP_CONFIG[app_key]['case_model']
     case = get_object_or_404(CaseModel, case_id=case_id)
+    denied = _case_read_denied(request, case)
+    if denied:
+        return denied
     logs = case.description_logs.all().order_by('-changed_at')  # newest first
     data = [{
         'changed_at': log.changed_at.isoformat(),
@@ -2978,7 +3014,7 @@ def case_description_history_api(request, case_id):
     } for log in logs]
     return JsonResponse({'success': True, 'logs': data})
 
-@csrf_exempt
+@_login_json
 def escalate_case_api2(request, case_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -3025,7 +3061,7 @@ def escalate_case_api2(request, case_id):
     except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return _server_error(e)
 
 
 
@@ -3033,7 +3069,7 @@ def escalate_case_api2(request, case_id):
 
 from .tasks import send_ticket_close_message   # import the task
 
-@csrf_exempt
+@_login_json
 def resolve_case_api2(request, case_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -3049,6 +3085,9 @@ def resolve_case_api2(request, case_id):
             )
 
         case = CaseModel.objects.get(case_id=case_id)
+        denied = _case_read_denied(request, case)
+        if denied:
+            return denied
 
         if case.status in ['Resolved', 'Closed']:
             return JsonResponse(
@@ -3118,7 +3157,7 @@ def resolve_case_api2(request, case_id):
             status=500
         )
 
-@csrf_exempt
+@_login_json
 def reopen_case_api2(request, case_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -3140,9 +3179,9 @@ def reopen_case_api2(request, case_id):
     except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return _server_error(e)
 
-@csrf_exempt
+@_login_json
 def assign_case_api2(request, case_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -3157,10 +3196,17 @@ def assign_case_api2(request, case_id):
         target_agent_id = data.get('agent_id')
         notes = data.get('notes', '')
 
+        if case.status in ['Resolved', 'Closed']:
+            return JsonResponse({'error': f'Case is {case.status} - reopen it first'}, status=400)
         target_agent = Agent.objects.get(id=target_agent_id)
+        if not (target_agent.is_active and target_agent.can_login):
+            return JsonResponse({'error': 'That agent is inactive or cannot log in'}, status=400)
         # Check if target agent belongs to the same group as the case
         if case.group not in target_agent.groups.all():
             return JsonResponse({'error': f'Agent must be a member of {case.group.name} department'}, status=400)
+        zones = target_agent.subgroup.filter(group=case.group)
+        if case.subgroup and zones.exists() and case.subgroup not in zones:
+            return JsonResponse({'error': f'Agent is not in {case.subgroup.name}'}, status=400)
 
         case.assigned_to = target_agent
         case.assigned_to_name = target_agent.name
@@ -3178,11 +3224,14 @@ def assign_case_api2(request, case_id):
 
         return JsonResponse({'success': True})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return _server_error(e)
 
 def get_case_timeline_api2(request, case_id):
     CaseModel = get_case_model_for_app(request)
     case = get_object_or_404(CaseModel, case_id=case_id)
+    denied = _case_read_denied(request, case)
+    if denied:
+        return denied
     logs = case.escalation_logs.all()[:50]
     return JsonResponse({
         'logs': [{
@@ -3205,7 +3254,7 @@ def get_case_action_permissions2(request, case_id):
             'can_resolve': case.can_resolve(agent),
             'can_close': case.can_close(agent),
             'can_reopen': case.status == 'Resolved' and (agent.role == 'ADMIN' or agent.can_view_case(case)),
-            'can_assign': agent.role in ['LEAD', 'ADMIN'] and case.status not in ['Resolved', 'Closed'],
+            'can_assign': agent.role in ['MANAGER', 'ADMIN'] and case.status not in ['Resolved', 'Closed'],
         }
         escalation_options = []
         if agent.role != 'ADMIN' and case.status not in ['Resolved', 'Closed']:
@@ -3257,8 +3306,8 @@ def get_dashboard_stats_api2(request):
         })
     elif agent.role == 'MANAGER':
         stats.update({
-            'my_level_cases': CaseModel.objects.filter(current_level='ESC4', status__in=['Open', 'In Progress']).count(),
-            'resolved_at_my_level': CaseModel.objects.filter(resolved_at_level='ESC4').count(),
+            'my_level_cases': CaseModel.objects.filter(current_level='ESC3', status__in=['Open', 'In Progress']).count(),
+            'resolved_at_my_level': CaseModel.objects.filter(resolved_at_level='ESC3').count(),
         })
     elif agent.role == 'LEAD':
         stats.update({
@@ -3475,7 +3524,7 @@ def create_case_from_chat_api2(request):
     except Exception as e:
         import traceback
         print(traceback.format_exc())
-        return JsonResponse({'error': str(e)}, status=500)
+        return _server_error(e)
     
 @login_required
 def get_description_history_api(request, case_id):
@@ -3608,7 +3657,7 @@ def export_group_cases_excel(request):
     response['Content-Disposition'] = f'attachment; filename="{group_name}_all_cases_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
     return response
 
-@csrf_exempt
+@_login_json
 def close_case_api2(request, case_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -3637,7 +3686,7 @@ def close_case_api2(request, case_id):
     except CaseModel.DoesNotExist:
         return JsonResponse({'error': 'Case not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return _server_error(e)
 
 
 
