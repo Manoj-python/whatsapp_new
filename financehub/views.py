@@ -1723,36 +1723,14 @@ def executive_visit_schedule_list(request):
     if remove_sez:
         qs = qs.exclude(emi_due_2__iexact="sez")
 
-    # Role filter
-    if role == "CM":
-        cm_loans = CollectionAllocations.objects.filter(
-            manager_employee_id__iexact=login_empid
-        ).values_list('loan_number', flat=True)
-        qs = qs.filter(loan_number__in=cm_loans)
-        if valid_filter(search_empid):
-            search_loans = CollectionAllocations.objects.filter(
-                Q(tl_employee_id__iexact=search_empid) | Q(employee_id__iexact=search_empid)
-            ).values_list('loan_number', flat=True)
-            qs = qs.filter(loan_number__in=search_loans)
-    elif role == "TL":
-        tl_loans = CollectionAllocations.objects.filter(
-            tl_employee_id__iexact=login_empid
-        ).values_list('loan_number', flat=True)
-        qs = qs.filter(loan_number__in=tl_loans)
-        if valid_filter(search_empid):
-            search_loans = CollectionAllocations.objects.filter(
-                tl_employee_id__iexact=search_empid
-            ).values_list('loan_number', flat=True)
-            qs = qs.filter(loan_number__in=search_loans)
-    elif role == "EXEC":
-        exec_loans = CollectionAllocations.objects.filter(
-            employee_id__iexact=login_empid
-        ).values_list('loan_number', flat=True)
-        qs = qs.filter(loan_number__in=exec_loans)
-        if valid_filter(search_empid):
-            qs = qs.filter(loan_number__in=CollectionAllocations.objects.filter(
-                employee_id__iexact=search_empid
-            ).values_list('loan_number', flat=True))
+    # Allocated to (9 Nov 2026): a role plus an employee ID, blank = the logged-in user. It used to be
+    # the logged-in user only, so an admin got nothing, and TL + Hierarchy Emp ID matched only himself.
+    _alloc_field = {"CM": "manager_employee_id__iexact", "TL": "tl_employee_id__iexact",
+                    "EXEC": "employee_id__iexact"}.get(role)
+    if _alloc_field:
+        _who = search_empid if valid_filter(search_empid) else login_empid
+        qs = qs.filter(loan_number__in=CollectionAllocations.objects.filter(
+            **{_alloc_field: _who}).values_list('loan_number', flat=True))
 
     # Visit filters
     if valid_filter(empid):

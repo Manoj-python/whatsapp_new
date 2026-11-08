@@ -224,7 +224,7 @@
                     </div>
 
                     <div class="col-md-2">
-                        <label class="form-label small">Role</label>
+                        <label class="form-label small">Allocated to (role)</label>
                         <select name="role" class="form-select form-select-sm">
                             <option value="">-- Select --</option>
                             <option value="CM" {% if role == "CM" %}selected{% endif %}>CM</option>
@@ -234,8 +234,8 @@
                     </div>
 
                     <div class="col-md-2">
-                        <label class="form-label small">Hierarchy Emp ID</label>
-                        <input type="text" name="search_empid" class="form-control form-control-sm"
+                        <label class="form-label small">Employee ID <span class="text-muted">(blank = you)</span></label>
+                        <input type="text" name="search_empid" class="form-control form-control-sm" placeholder="e.g. 5512"
                                value="{{ search_empid }}">
                     </div>
 
