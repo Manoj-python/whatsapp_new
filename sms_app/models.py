@@ -178,6 +178,39 @@ class SMSLog(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True
     )
+    fallback_key = models.CharField(
+    max_length=255,
+    unique=True,
+    null=True,
+    blank=True
+)
 
     def __str__(self):
         return f"{self.mobile} - {self.status}"
+
+import secrets
+
+
+def generate_sms_document_token():
+    return secrets.token_urlsafe(32)
+
+
+class SMSDocumentLink(models.Model):
+
+    mobile = models.CharField(max_length=15)
+
+    s3_key = models.CharField(max_length=500)
+
+    token = models.CharField(
+        max_length=100,
+        unique=True,
+        default=generate_sms_document_token,
+        db_index=True
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.mobile} - {self.s3_key}"

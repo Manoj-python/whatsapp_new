@@ -72,6 +72,11 @@ PORTAL_BASE_URL = "https://smsquare.info"
 
 MIN_PART_PAYMENT = 100.0
 
+
+SMS_PDF_BASE_URL = "https://padmasai.info/sms/download/"
+SMS_PDF_S3_FOLDER = "sms"
+
+
 # -------------------------------------------------------
 # MIDDLEWARE
 # -------------------------------------------------------
@@ -93,17 +98,16 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 CORS_ALLOW_HEADERS = ['*']   # or specify as needed
 
-DEFAULT_FROM_EMAIL = "donotreply@smsquare.info"
+DEFAULT_FROM_EMAIL = "legal@smsquare.co.in"
 
 # AWS SES SMTP Details (Mumbai Region)
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "n7f27za2tztf.hkph.mail-manager-smtp.amazonaws.com"  
+EMAIL_HOST = "w5yxg9fztgcj.hkph.mail-manager-smtp.amazonaws.com"  
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
-EMAIL_HOST_USER = "inp-vzgr55fnyb5gshpfqgbve7ff"
+EMAIL_HOST_USER = "inp-kdhzai4udwintnk5q4gyuxn5"
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-
 
 
 # DRF settings

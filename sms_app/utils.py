@@ -195,3 +195,118 @@ def send_sms(
     except Exception as exc:
 
         return False, str(exc)
+
+
+from pathlib import Path
+from django.conf import settings
+from botocore.exceptions import ClientError
+from messaging.utils import get_s3_client
+from .models import SMSDocumentLink
+import logging
+
+logger = logging.getLogger(__name__)
+
+def open_sms_pdf_from_s3(filename):
+    """
+    Fetch SMS PDF directly from S3.
+    Does not modify or depend on open_legal_pdf().
+    """
+
+    from pathlib import Path
+    from botocore.exceptions import ClientError
+
+    filename = Path(str(filename)).name.strip()
+
+    if not filename:
+        raise ValueError("SMS PDF filename is empty")
+
+    # Supports both "sms" and BASE_DIR / "sms"
+    folder = Path(
+        str(getattr(settings, "SMS_PDF_S3_FOLDER", "sms"))
+    ).name
+
+    key = f"{folder}/{filename}"
+
+    logger.info(
+        "SMS PDF S3 FETCH | bucket=%s | key=%s",
+        settings.AWS_STORAGE_BUCKET_NAME,
+        key,
+    )
+
+    try:
+        s3 = get_s3_client()
+
+        obj = s3.get_object(
+            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+            Key=key,
+        )
+
+        pdf_bytes = obj["Body"].read()
+
+        logger.info(
+            "SMS PDF LOADED | key=%s | size=%s",
+            key,
+            len(pdf_bytes),
+        )
+
+        return pdf_bytes
+
+    except ClientError as e:
+        logger.exception(
+            "SMS PDF S3 FETCH FAILED | key=%s",
+            key,
+        )
+
+        error_code = e.response.get("Error", {}).get("Code")
+
+        if error_code in ("404", "NoSuchKey", "NotFound"):
+            raise FileNotFoundError(
+                f"SMS PDF not found in S3: {key}"
+            ) from e
+
+        raise
+
+
+
+def generate_sms_pdf_link(mobile, filename):
+
+    filename = Path(str(filename)).name.strip()
+
+    if not filename or not filename.lower().endswith(".pdf"):
+        raise ValueError("Invalid PDF filename.")
+
+    s3 = get_s3_client()
+
+    s3_key = (
+        f"{settings.SMS_PDF_S3_FOLDER}/{filename}"
+    )
+
+    # Check PDF exists in private S3
+    try:
+        s3.head_object(
+            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+            Key=s3_key
+        )
+
+    except ClientError as exc:
+        error_code = exc.response.get(
+            "Error", {}
+        ).get("Code")
+
+        if error_code in ("404", "NoSuchKey", "NotFound"):
+            raise FileNotFoundError(
+                f"PDF not found in S3: {s3_key}"
+            )
+
+        raise
+
+    # Create unique customer download token
+    document = SMSDocumentLink.objects.create(
+        mobile=mobile,
+        s3_key=s3_key
+    )
+
+    return (
+        f"{settings.SMS_PDF_BASE_URL}"
+        f"?token={document.token}"
+    )

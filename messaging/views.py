@@ -994,6 +994,8 @@ from messaging2.tasks import send_welcome_message,clear_button_clicked,was_butto
 
 from django.db.models import Max, Count, Q, F, Sum
 from batch_app.models import BatchLog,BatchExecution,BatchJob
+from django.db.models import Max, Count, Q, F, Sum
+from batch_app.models import BatchLog,BatchExecution,BatchJob
 @csrf_exempt
 def whatsapp_webhook(request):
     from channels.layers import get_channel_layer
@@ -1604,6 +1606,8 @@ def whatsapp_webhook(request):
 
                         mobile = obj.mobile
                         errors = status.get("errors", [])
+                        error_code = None
+                        error_reason = ""
 
                         if status_type == "sent":
                             norm = "Sent"
@@ -1615,7 +1619,24 @@ def whatsapp_webhook(request):
                             norm = "Failed"
                             if errors:
                                 err = errors[0]
-                                code = int(err.get("code", 0))
+
+                                try:
+                                    error_code = int(err.get("code", 0))
+                                except (TypeError, ValueError):
+                                    error_code = None
+
+                                code = error_code or 0
+
+                                error_data = err.get("error_data") or {}
+                                if not isinstance(error_data, dict):
+                                    error_data = {}
+
+                                error_reason = (
+                                    err.get("title")
+                                    or err.get("message")
+                                    or error_data.get("details", "")
+                                    or ""
+                                )
 
                                 error_map = {
                                     131047: "24H_WINDOW_EXPIRED", 131026: "NOT_ON_WHATSAPP",
@@ -1626,6 +1647,7 @@ def whatsapp_webhook(request):
                                     132000: "TEMPLATE_PARAM_ERROR", 132001: "TEMPLATE_NOT_FOUND",
                                     132015: "TEMPLATE_PAUSED", 132016: "TEMPLATE_DISABLED",
                                     130429: "RATE_LIMIT", 131056: "TOO_MANY_MESSAGES",130472: "USER_IN_EXPERIMENT",
+                                    131008: "MISSING_REQUIRED_PARAMETER",
                                 }
                                 norm = error_map.get(code, f"Failed_{code}")
                         else:
@@ -1667,10 +1689,14 @@ def whatsapp_webhook(request):
                                     obj.error_message = (
                                         json.dumps(errors) if errors else ""
                                     )
+                                    obj.error_code = error_code
+                                    obj.error_reason = error_reason
                                     obj.save(
                                         update_fields=[
                                             "status",
                                             "error_message",
+                                            "error_code",
+                                            "error_reason",
                                         ]
                                     )
 
@@ -1701,6 +1727,7 @@ def whatsapp_webhook(request):
                                         "RATE_LIMIT",
                                         "TOO_MANY_MESSAGES",
                                         "USER_IN_EXPERIMENT",
+                                        "MISSING_REQUIRED_PARAMETER",
                                     }
 
                                     old_is_failure = old_status in failure_statuses
@@ -1773,11 +1800,50 @@ def whatsapp_webhook(request):
                                                 f"message_id={msg_id} | "
                                                 f"mobile={obj.mobile}"
                                             )
+                                        # ============================================
+                                        # WEBHOOK SMS FALLBACK
+                                        # ============================================
+                                        if obj.execution_id and error_code is not None:
+
+                                            from batch_app.tasks import (
+                                                SMS_FALLBACK_CODES,
+                                                send_webhook_sms_fallback,
+                                            )
+
+                                            if error_code in SMS_FALLBACK_CODES:
+
+                                                fallback_args = (
+                                                    "messaging",
+                                                    obj.pk,
+                                                    msg_id,
+                                                    error_code,
+                                                )
+
+                                                def enqueue_sms_fallback(args):
+                                                    try:
+                                                        send_webhook_sms_fallback.delay(*args)
+                                                    except Exception:
+                                                        logger.exception(
+                                                            "SMS fallback enqueue failed | message_id=%s",
+                                                            args[2],
+                                                        )
+
+                                                transaction.on_commit(
+                                                    lambda args=fallback_args:
+                                                        enqueue_sms_fallback(args)
+                                                )
+
+                                                logger.info(
+                                                    f"SMS FALLBACK QUEUED | "
+                                                    f"app=messaging | message_id={msg_id} | "
+                                                    f"error_code={error_code}"
+                                                )
 
                                     # ------------------------------------
                                     # DUPLICATE FAILURE WEBHOOK
                                     # ------------------------------------
                                     elif new_is_failure and old_is_failure:
+                                        
                                         logger.info(
                                             f"⏭️ Duplicate failure webhook ignored | "
                                             f"message_id={msg_id} | "
@@ -1851,7 +1917,6 @@ def whatsapp_webhook(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return HttpResponseBadRequest("Unsupported method")
-
 
 
 from django.http import JsonResponse

@@ -27,5 +27,11 @@ urlpatterns = [
     batch_sms_fallback_report,
     name="batch_sms_fallback_report",
 ),
+   path(
+        "download/",
+        sms_pdf_download,
+        name="sms_pdf_download"
+    ),
+
 
 ] 

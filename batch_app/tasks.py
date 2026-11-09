@@ -578,7 +578,7 @@ def get_actual_template_name(target_app, template_id):
 # ============================================================
 # 📱 AUTO SMS FALLBACK
 # ============================================================   s_ms
-def send_auto_sms_fallback(job, row, mobile):
+def send_auto_sms_fallback(job, row, mobile, fallback_key=None):
     """
     Send SMS automatically when WhatsApp gets a definite rejection.
 
@@ -594,6 +594,7 @@ def send_auto_sms_fallback(job, row, mobile):
     """
 
     sms_session = None
+    sms_log = None
 
     try:
         # ========================================================
@@ -693,7 +694,32 @@ def send_auto_sms_fallback(job, row, mobile):
             )
 
         # ========================================================
-        # 7. CREATE SMS SESSION
+        # 7. RESERVE FALLBACK LOG (WEBHOOK IDEMPOTENCY)
+        # ========================================================
+        # fallback_key is supplied only for asynchronous webhook failures.
+        # SMSLog.fallback_key must be a UNIQUE nullable field (see migration).
+        if fallback_key:
+            sms_log, created = SMSLog.objects.get_or_create(
+                fallback_key=fallback_key,
+                defaults={
+                    "campaign": None,
+                    "mobile": mobile,
+                    "notification_type_id": job.notification_type_id,
+                    "batch_job": job,
+                    "message": sms_message,
+                    "status": "pending",
+                    "response": "SMS fallback reserved; sending started",
+                },
+            )
+            if not created:
+                logger.warning(
+                    f"⏭️ SMS FALLBACK ALREADY PROCESSED | "
+                    f"fallback_key={fallback_key} | mobile={mobile}"
+                )
+                return
+
+        # ========================================================
+        # 8. CREATE SMS SESSION
         # ========================================================
         sms_session = create_sms_session()
 
@@ -710,15 +736,21 @@ def send_auto_sms_fallback(job, row, mobile):
         # ========================================================
         # 9. SAVE SMS LOG
         # ========================================================
-        SMSLog.objects.create(
-            campaign=None,
-            mobile=mobile,
-            notification_type_id=job.notification_type_id,  #s_ms
-            batch_job=job, #s_ms
-            message=sms_message,
-            status="sent" if sms_success else "failed",
-            response=str(sms_response),
-        )
+        if sms_log:
+            sms_log.status = "sent" if sms_success else "failed"
+            sms_log.response = str(sms_response)
+            sms_log.save(update_fields=["status", "response"])
+        else:
+            # Preserve existing immediate API-failure fallback behavior.
+            SMSLog.objects.create(
+                campaign=None,
+                mobile=mobile,
+                notification_type_id=job.notification_type_id,
+                batch_job=job,
+                message=sms_message,
+                status="sent" if sms_success else "failed",
+                response=str(sms_response),
+            )
 
         # ========================================================
         # 10. LOG RESULT
@@ -739,6 +771,19 @@ def send_auto_sms_fallback(job, row, mobile):
             )
 
     except Exception as sms_error:
+        # If a webhook fallback log was reserved, retain the failed outcome.
+        if sms_log is not None:
+            try:
+                SMSLog.objects.filter(pk=sms_log.pk).update(
+                    status="failed",
+                    response=str(sms_error)[:2000],
+                )
+            except Exception:
+                logger.exception(
+                    f"❌ Could not update SMS fallback log "
+                    f"for mobile={mobile}"
+                )
+
         # SMS failure must NOT affect the existing
         # WhatsApp/batch processing logic.
         logger.exception(
@@ -754,13 +799,84 @@ def send_auto_sms_fallback(job, row, mobile):
             except Exception:
                 pass
 
+@shared_task(queue="batch_app")
+def send_webhook_sms_fallback(app_name, log_id, message_id, error_code):
+    """Send SMS fallback for a WhatsApp message rejected asynchronously by Meta."""
+    try:
+        error_code = int(error_code)
+        if error_code not in SMS_FALLBACK_CODES:
+            logger.info(
+                f"ℹ️ Webhook SMS fallback not eligible | "
+                f"app={app_name} | code={error_code}"
+            )
+            return
+
+        if app_name == "messaging":
+            from messaging.models import SmsWhatsAppLog as LogModel
+        elif app_name == "messaging2":
+            from messaging2.models import SmsWhatsAppLog2 as LogModel
+        else:
+            logger.warning(
+                f"⚠️ Unsupported app for webhook SMS fallback: {app_name}"
+            )
+            return
+
+        wa_log = (
+            LogModel.objects
+            .select_related("execution__job")
+            .filter(pk=log_id, message_id=message_id)
+            .first()
+        )
+        if not wa_log:
+            logger.warning(
+                f"⚠️ WhatsApp log not found for webhook fallback | "
+                f"app={app_name} | log_id={log_id} | message_id={message_id}"
+            )
+            return
+
+        execution = getattr(wa_log, "execution", None)
+        if not execution:
+            logger.warning(
+                f"⚠️ No BatchExecution linked to WhatsApp log "
+                f"{log_id}; SMS fallback skipped"
+            )
+            return
+
+        row = wa_log.excel_data or {}
+        if not isinstance(row, dict) or not row:
+            logger.warning(
+                f"⚠️ Excel row missing in WhatsApp log {log_id}; "
+                f"SMS fallback skipped"
+            )
+            return
+
+        mobile = format_mobile(wa_log.mobile or "")
+        if not mobile:
+            logger.warning(
+                f"⚠️ Invalid mobile in WhatsApp log {log_id}; "
+                f"SMS fallback skipped"
+            )
+            return
+
+        fallback_key = f"whatsapp:{app_name}:{message_id}"
+        send_auto_sms_fallback(
+            job=execution.job,
+            row=row,
+            mobile=mobile,
+            fallback_key=fallback_key,
+        )
+
+    except Exception:
+        logger.exception(
+            f"❌ Webhook SMS fallback task failed | "
+            f"app={app_name} | log_id={log_id} | "
+            f"message_id={message_id} | error_code={error_code}"
+        )
+
+
 # ============================================================
 # 👤 SINGLE CUSTOMER PROCESSOR - WITH DYNAMIC EXCEL FIELDS
 # ============================================================
-
-
-
-
 
 def process_single_customer(
     row, job, execution_id, LogModel, ContactModel, url, headers,
@@ -1259,6 +1375,10 @@ def process_single_customer(
                     message_id=msg_id,
                     message_type="Sent",
                     content_type="text",
+                    excel_data={
+                        str(key): ("" if value is None else str(value))
+                        for key, value in row.items()
+                    },
                     error_message=(
                         f"Job Template: {job.template_id} | "
                         f"Actual Template: {actual_template_id} | "

@@ -163,10 +163,12 @@ def upload_excel(request):
         # =================================================
 
         required_columns = [
-            "mobile",
-            *variables,
-        ]
-
+    "mobile",
+    *[
+        "pdf_filename" if variable == "pdf_url" else variable
+        for variable in variables
+    ],
+]
         missing_columns = [
             column
             for column in required_columns
@@ -445,3 +447,65 @@ def batch_sms_fallback_report(request, job_id):
 
 def add_notification(request):
     return render(request, 'add_notification.html')
+
+
+from django.http import (
+    HttpResponse,
+    HttpResponseRedirect,
+)
+
+from django.shortcuts import get_object_or_404
+from django.conf import settings
+
+from botocore.exceptions import ClientError
+
+from .models import SMSDocumentLink
+from messaging.utils import get_s3_client
+
+
+def sms_pdf_download(request):
+
+    token = request.GET.get("token")
+
+    if not token:
+        return HttpResponse(
+            "Invalid download link.",
+            status=400
+        )
+
+    document = get_object_or_404(
+        SMSDocumentLink,
+        token=token,
+        is_active=True
+    )
+
+    try:
+
+        s3 = get_s3_client()
+
+        # Verify the PDF still exists
+        s3.head_object(
+            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+            Key=document.s3_key
+        )
+
+        # Generate a fresh temporary URL
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                "Key": document.s3_key,
+                "ResponseContentType": "application/pdf",
+                "ResponseContentDisposition": "inline",
+            },
+            ExpiresIn=900
+        )
+
+        return HttpResponseRedirect(presigned_url)
+
+    except ClientError:
+
+        return HttpResponse(
+            "Sorry, this document is currently unavailable.",
+            status=404
+        )
