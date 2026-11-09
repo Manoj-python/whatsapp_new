@@ -109,6 +109,7 @@
                         <option value="{{ val }}">{{ label }}</option>
                     {% endfor %}
                 </select>
+                <a id="sampleLink" class="small d-inline-block mt-1" style="display:none" href="#">&#11015; Download sample for this file type</a>
             </div>
 
             <div class="mb-3">
@@ -210,6 +211,11 @@ function pollProgress(upload_id) {
   var t = new URLSearchParams(location.search).get('type');
   if (sel && t) sel.value = t;
   function show() { if (help) help.style.display = sel && sel.value === 'executive_visit_scheduling' ? 'block' : 'none'; }
+  var sample = document.getElementById('sampleLink');
+  function showSample() { if (!sample) return; var v = sel && sel.value;
+    sample.style.display = v ? 'inline-block' : 'none';
+    if (v) sample.href = '/financehub/upload-sample/' + encodeURIComponent(v) + '/'; }
+  if (sel) sel.addEventListener('change', showSample); showSample();
   if (sel) sel.addEventListener('change', show); show();
 })();
 </script>

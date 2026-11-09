@@ -3616,3 +3616,27 @@ def collection_allocations_list(request):
     }
     
     return render(request, 'financehub/collection_allocations_list.html', context)
+
+
+@financehub_required
+def upload_sample(request, file_type):
+    """9 Nov 2026: sample .xlsx for an Upload file type (header row only)."""
+    from openpyxl import Workbook
+    from django.http import Http404
+    from .utils import sample_heads
+    heads = sample_heads(file_type)
+    if not heads:
+        raise Http404("Unknown file type")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Upload"
+    ws.append(heads)
+    for i, h in enumerate(heads, start=1):
+        ws.cell(row=1, column=i).font = Font(bold=True)
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(12, len(h) + 2)
+    buf = BytesIO()
+    wb.save(buf)
+    resp = HttpResponse(buf.getvalue(),
+                        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = 'attachment; filename="%s_sample.xlsx"' % file_type.lower()
+    return resp

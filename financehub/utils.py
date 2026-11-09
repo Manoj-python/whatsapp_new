@@ -812,3 +812,23 @@ def get_unique_field(model):
             return p
 
     return None
+
+
+# 9 Nov 2026: Upload page "Download sample" - one header per field the uploader fills, each checked to map
+# back to its field through clean_header()
+def sample_heads(file_type):
+    if file_type == "executive_visit_scheduling":
+        return ["LoanNo", "EmpID", "VisitScheduleDate"]
+    Model = get_model_by_type(file_type)
+    if not Model:
+        return None
+    heads = []
+    for f in Model._meta.fields:
+        if f.primary_key or getattr(f, "auto_now", False) or getattr(f, "auto_now_add", False):
+            continue
+        for cand in ("".join(w.title() for w in f.name.split("_")), f.name.replace("_", " ").title(),
+                     f.name, f.name.replace("_", "")):
+            if clean_header(cand, Model.__name__) == f.name:
+                heads.append(cand)
+                break
+    return heads

@@ -9,6 +9,7 @@ urlpatterns = [
 
     # ---------------- UPLOAD ----------------
     path("upload-loan-data/", views.upload_loan_data, name="upload_loan_data"),
+    path("upload-sample/<str:file_type>/", views.upload_sample, name="upload_sample"),
     path("upload-progress/<int:upload_id>/", views.upload_progress, name="upload_progress"),
 
     # ---------------- LCC ----------------
