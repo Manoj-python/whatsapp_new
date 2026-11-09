@@ -95,9 +95,15 @@
         <form id="uploadForm" method="post" enctype="multipart/form-data">
             {% csrf_token %}
 
+            <div id="evsHelp" class="alert alert-info py-2 small" style="display:none">
+                <strong>Visit schedules:</strong> columns <code>LoanNo</code>, <code>EmpID</code>, <code>VisitScheduleDate</code> (DD-MM-YYYY, today or later).
+                Blank EmpID = the allocated executive. A loan already scheduled on another date is rescheduled (the old date stays in history).
+                Every row is checked first; if any row is wrong, nothing is saved.
+                <a download="visit_schedule_template.csv" href="data:text/csv;charset=utf-8,LoanNo%2CEmpID%2CVisitScheduleDate%0A">Download template</a>
+            </div>
             <div class="mb-3">
                 <label class="form-label"><strong>Select File Type</strong></label>
-                <select name="file_type" class="form-select" required>
+                <select name="file_type" id="fileType" class="form-select" required>
                     <option value="">-- Select File Type --</option>
                     {% for val, label in file_types %}
                         <option value="{{ val }}">{{ label }}</option>
@@ -185,6 +191,7 @@ function pollProgress(upload_id) {
                     bar.style.width = "100%";
                     bar.innerText = "Completed 100%";
                     document.getElementById("completeNote").style.display = "block";
+                    if (data.error) document.getElementById("completeNote").innerText = "✅ " + data.error;
                 }
 
                 if (data.status === "error") {
@@ -197,6 +204,14 @@ function pollProgress(upload_id) {
             });
     }, 2000);
 }
+// 9 Nov 2026: ?type=... pre-selects the file type; visit schedules show their help
+(function () {
+  var sel = document.getElementById('fileType'), help = document.getElementById('evsHelp');
+  var t = new URLSearchParams(location.search).get('type');
+  if (sel && t) sel.value = t;
+  function show() { if (help) help.style.display = sel && sel.value === 'executive_visit_scheduling' ? 'block' : 'none'; }
+  if (sel) sel.addEventListener('change', show); show();
+})();
 </script>
 
 </body>

@@ -162,6 +162,10 @@ def process_universal_file(self, upload_id, tmp_path, ext, file_type):
         model_fields = {f.name for f in Model._meta.fields}
         processed_rows = 0
         model_name = Model.__name__
+        if model_name == "ExecutiveVisitScheduling":  # 9 Nov 2026: checked rows, reschedules keep history
+            from .evs_bulk import run as evs_bulk_run
+            evs_bulk_run(upload, tmp_path, ext)
+            return
 
         # ================= UNIQUE LOGIC =================
         unique_field = None
