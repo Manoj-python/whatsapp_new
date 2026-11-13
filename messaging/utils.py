@@ -972,8 +972,9 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
             {"type": "text", "text": str(row.get("CustomerName", ""))},
             {"type": "text", "text": str(row.get("VehicleNo", ""))},
         ]),
-        "3": ("cibil", "en", [
+        "3": ("cibil_new", "te", [
             {"type": "text", "text": str(row.get("customer_name", ""))},
+             {"type": "text", "text": str(row.get("loan_number", ""))},
         ]),
         "4": ("vehicle_registration_slot", "te", [
             {"type": "text", "text": str(row.get("CustomerName", ""))},
@@ -1514,6 +1515,29 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
                 "te",
                 []
             ),
+           "55": (
+                    "guarantor_due_notice",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("guarantor_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+    
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        }
+                    ]
+                ),
 
 
     }
@@ -1590,7 +1614,8 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
         "35",
         "37",
         "41",
-        "48"
+        "48",
+        "55"
     ):
 
         if not media_id:
@@ -1631,6 +1656,8 @@ def build_payload(choice: str, row: dict, media_id: Optional[str] = None) -> Tup
 
         elif choice == "48":
             pdf_source = row.get("doc_sms_portal_pdf")
+        elif choice == "55":
+            pdf_source = row.get("guarantor_due_notice_pdf")
 
         else:  # choice == "19"
             pdf_source = (

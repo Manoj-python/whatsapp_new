@@ -54,6 +54,7 @@ TEMPLATE_CHOICES = [
     ("52", "Noc available Message (English)-[52]"),
     ("53", "Dasara Offer (English)-[53]"),
     ("54", "Dasara Offer (Telugu)-[54]"),
+    ("55", "Guarantor DueNotice (English)-[55]"),
  
 ]
 

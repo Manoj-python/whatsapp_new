@@ -304,8 +304,12 @@
             color: #dee2e6;
         }
 
-        /* Edit Modal */
-        .modal-overlay {
+        /* ============================================================
+           EDIT MODAL — renamed from .modal / .modal-overlay to
+           .fh-modal / .fh-modal-overlay to avoid Bootstrap's
+           .modal { display: none; } collision.
+           ============================================================ */
+        .fh-modal-overlay {
             display: none;
             position: fixed;
             top: 0;
@@ -320,7 +324,7 @@
             animation: fadeIn 0.3s;
         }
 
-        .modal-overlay.active {
+        .fh-modal-overlay.active {
             display: flex;
         }
 
@@ -329,7 +333,7 @@
             to { opacity: 1; transform: scale(1); }
         }
 
-        .modal {
+        .fh-modal {
             background: white;
             border-radius: 16px;
             padding: 35px;
@@ -337,6 +341,9 @@
             width: 90%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             animation: slideUp 0.3s;
+            position: relative;
+            display: block;
+            z-index: 1001;
         }
 
         @keyframes slideUp {
@@ -344,7 +351,7 @@
             to { transform: translateY(0); opacity: 1; }
         }
 
-        .modal-header {
+        .fh-modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -353,31 +360,40 @@
             border-bottom: 2px solid #f1f3f5;
         }
 
-        .modal-header h2 {
+        .fh-modal-header h2 {
             font-size: 22px;
             color: #2d3748;
         }
 
-        .modal-header h2 i {
+        .fh-modal-header h2 i {
             color: #667eea;
             margin-right: 10px;
         }
 
-        .modal-close {
+        .fh-modal-close {
             background: none;
             border: none;
             font-size: 28px;
             color: #adb5bd;
             cursor: pointer;
             transition: color 0.2s;
+            line-height: 1;
         }
 
-        .modal-close:hover {
+        .fh-modal-close:hover {
             color: #dc3545;
         }
 
-        .modal-body {
+        .fh-modal-body {
             margin-bottom: 25px;
+        }
+
+        .fh-modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding-top: 20px;
+            border-top: 2px solid #f1f3f5;
         }
 
         .employee-info {
@@ -455,14 +471,6 @@
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .modal-footer {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-            padding-top: 20px;
-            border-top: 2px solid #f1f3f5;
         }
 
         .btn {
@@ -630,7 +638,7 @@
                 flex-wrap: wrap;
             }
 
-            .modal {
+            .fh-modal {
                 padding: 25px 20px;
             }
 
@@ -736,14 +744,16 @@
         </div>
     </div>
 
-    <!-- Edit Modal -->
-    <div class="modal-overlay" id="editModal">
-        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
-            <div class="modal-header">
+    <!-- ============================================================
+         Edit Modal  (renamed classes: fh-modal-* instead of modal-*)
+         ============================================================ -->
+    <div class="fh-modal-overlay" id="editModal">
+        <div class="fh-modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="fh-modal-header">
                 <h2><i class="fas fa-edit"></i> Edit Employee Details</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <button class="fh-modal-close" onclick="closeModal()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="fh-modal-body">
                 <form id="editForm" onsubmit="event.preventDefault(); saveEmployeeChanges();">
                     <input type="hidden" id="editEmployeeId">
 
@@ -947,7 +957,7 @@
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
+            <div class="fh-modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="saveEmployeeChanges()" id="saveBtn">
                     <i class="fas fa-save"></i> Save All Changes

@@ -70,7 +70,7 @@ TEMPLATE_CHOICES = [
     ("63", "Apolize (English)-[63]"),
     ("64", "Unauthorized Payment by Collection fraud_executive-[64]"),
     ("65", "Final settlement (Telugu)-[65]"),
-
+    ("66", "Guarantor DueNotice (English)-[66]"),
 
    
 ]

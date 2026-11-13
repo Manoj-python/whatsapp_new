@@ -3904,14 +3904,6 @@ document.addEventListener('contextmenu', function(e) {
   fetchCategories();
 
 </script>
-{# ----- Session Timeout (only for logged‑in users) ----- #}
-{% if user.is_authenticated %}
-    <script>
-        const LOGOUT_URL = "{% url 'admin_logout' %}?inactivity=1";
-    </script>
-    {% load static %}           <!-- ✅ Loaded only once in base.html -->
-    <script src="{% static 'js/session_timeout.js' %}"></script>
-{% endif %}
 
 </body>
 </html>

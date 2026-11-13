@@ -873,8 +873,10 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             {"type": "text", "text": str(row.get("CustomerName", ""))},
             {"type": "text", "text": str(row.get("VehicleNo", ""))},
         ]),
-        "3": ("cibil_report", "en", [
+        "3": ("cibil_new", "te", [
             {"type": "text", "text": str(row.get("customer_name", ""))},
+            {"type": "text", "text": str(row.get("loan_number", ""))},
+
         ]),
         "4": ("vehicle_registration_slot", "te", [
             {"type": "text", "text": str(row.get("CustomerName", ""))},
@@ -1618,6 +1620,29 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
 
                     ],
                 ),
+          "66": (
+                    "due_notice_guarantor",
+                    "en",
+                    [
+                        {
+                            "type": "text",
+                            "text": str(row.get("guarantor_name", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("customer_name", ""))
+                        },
+    
+                        {
+                            "type": "text",
+                            "text": str(row.get("loan_number", ""))
+                        },
+                        {
+                            "type": "text",
+                            "text": str(row.get("vehicle_number", ""))
+                        }
+                    ]
+                ),
 
 
     }
@@ -1636,7 +1661,7 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
     # TEMPLATES WITH DOCUMENT HEADER (FIXED - UPLOADS PDF HERE)
     # --------------------------------------------------
     if choice in (
-        "13","14","21","22","23","24","30","31","32","33","34","35","36","37","38","39","40","41","42","44","45","49"
+        "13","14","21","22","23","24","30","31","32","33","34","35","36","37","38","39","40","41","42","44","45","49","66"
     ):
         # ==================================================
         # 📄 SELECT PDF FILE
@@ -1658,6 +1683,9 @@ def build_payload2(choice: str, row: dict, media_id: Optional[str] = None) -> Tu
             pdf_filename = row.get("psf_guarantor_pdf_file")
         elif choice == "30":
             pdf_filename=row.get("writeoff_pdf_file")
+        elif choice == "66":
+            pdf_filename = row.get("due_notice_guarantor_pdf")
+
         elif choice == "31":
             pdf_filename = row.get("doc_noc_pdf_file")
             folder = "noc_pdfs"
