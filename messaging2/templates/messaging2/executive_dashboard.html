@@ -1,46 +1,68 @@
 {% extends "messaging2/base_dashboard.html" %}
-{% block title %}Executive Dashboard - ESC2{% endblock %}
+{% block title %}Executive Dashboard{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<style>
+/* MANAGER PAGE IN THE ADMIN LOOK (Dilip, 14 Nov 2026: "redesign managers login - similar to admin"; ESC2 page same, 14 Nov) */
+:root { --primary: #4361ee; --secondary: #4cc9f0; --dark: #1a1a2e; }
+.mgr { background: #f4f6fb; padding: 18px; border-radius: 16px; }
+.mgr .app-btn { padding: 6px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; border: 1px solid #ddd;
+  background: #fff; color: var(--dark); text-decoration: none; display: inline-block; margin-right: 6px; }
+.mgr .app-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr .stat-card { background: #fff; border-radius: 20px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  position: relative; overflow: hidden; height: 100%; }
+.mgr .stat-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--bar, linear-gradient(90deg, var(--primary), var(--secondary))); }
+.mgr .stat-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px; background: rgba(67,97,238,.1); }
+.mgr .stat-icon i { font-size: 22px; color: var(--ic, var(--primary)); }
+.mgr .stat-number { font-size: 32px; font-weight: 800; color: var(--dark); line-height: 1; }
+.mgr .stat-label { color: #6c757d; font-size: 13px; margin-top: 8px; }
+.mgr .section-card, .mgr .tab-content .card, .mgr > .row .card { background: #fff; border: 0; border-radius: 20px; padding: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05); margin-bottom: 22px; }
+.mgr .section-card { padding: 22px; }
+.mgr .section-title { font-size: 17px; font-weight: 700; color: var(--dark); margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 2px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mgr .card-header { background: #fff !important; color: var(--dark) !important; font-weight: 700; border-bottom: 2px solid #e9ecef; border-radius: 20px 20px 0 0 !important; }
+.mgr .filter-card { background: #fff; border-radius: 15px; padding: 14px; margin-bottom: 12px; cursor: pointer; border: 1px solid #e9ecef;
+  transition: all .2s; display: block; color: inherit; text-decoration: none; }
+.mgr .filter-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,.1); }
+.mgr .filter-card.active, .mgr .dept-card.bg-success { border-left: 4px solid var(--primary); background: #eef1ff !important; }
+.mgr .filter-card h4 { margin: 0; font-size: 24px; font-weight: 700; color: var(--dark); }
+.mgr .filter-card p { margin: 0; color: #6c757d; font-size: 12px; }
+.mgr .dept-card.bg-secondary { background: #fff !important; }
+.mgr .nav-tabs { border: 0; gap: 8px; }
+.mgr .nav-tabs .nav-link { border: 1px solid #e0e3eb; border-radius: 30px; background: #fff; color: var(--dark); font-weight: 600; padding: 7px 18px; }
+.mgr .nav-tabs .nav-link.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr table thead th { background: #f8f9fa; font-weight: 600; color: var(--dark); border-bottom: 2px solid #e9ecef; }
+</style>
+
+<div class="container-fluid mgr">
     <!-- App Switcher -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="btn-group">
-                {% for key, cfg in app_list %}
-                <a href="?app={{ key }}" class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                    {{ cfg.name }}
-                </a>
-                {% endfor %}
-            </div>
-        </div>
+    <div class="mb-3">
+        {% for key, cfg in app_list %}
+        <a href="?app={{ key }}" class="app-btn {% if current_app == key %}active{% endif %}">{{ cfg.name }}</a>
+        {% endfor %}
     </div>
 
     <!-- Stats Cards -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card text-white bg-warning">
-                <div class="card-body"><h6>Pending Cases</h6><h2>{{ stats.pending }}</h2></div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white bg-success">
-                <div class="card-body"><h6>Resolved (ESC2)</h6><h2>{{ stats.resolved }}</h2></div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white bg-info">
-                <div class="card-body"><h6>Escalated from ESC2</h6><h2>{{ stats.escalated }}</h2></div>
-            </div>
-        </div>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4 col-6"><div class="stat-card" style="--bar:#ff9800;--ic:#ff9800">
+            <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
+            <div class="stat-number">{{ stats.pending }}</div><div class="stat-label">Pending (ESC2)</div></div></div>
+        <div class="col-md-4 col-6"><div class="stat-card" style="--bar:#4caf50;--ic:#4caf50">
+            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-number">{{ stats.resolved }}</div><div class="stat-label">Resolved at ESC2</div></div></div>
+        <div class="col-md-4 col-6"><div class="stat-card" style="--bar:#2196f3;--ic:#2196f3">
+            <div class="stat-icon"><i class="fas fa-level-up-alt"></i></div>
+            <div class="stat-number">{{ stats.escalated }}</div><div class="stat-label">Escalated from ESC2</div></div></div>
     </div>
 
     <!-- ===== FILTER BAR ===== -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <form method="get" class="row g-3">
+    <div class="section-card">
+        <div class="section-title"><span><i class="fas fa-filter"></i> Filters</span></div>
+            <form method="get" class="row g-3 align-items-end">
                 <input type="hidden" name="app" value="{{ current_app }}">
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label">Category</label>
                     <select name="category" class="form-select">
                         <option value="">All Categories</option>
@@ -51,7 +73,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label">Subgroup</label>
                     <select name="subgroup" class="form-select">
                         <option value="">All Subgroups</option>
@@ -62,12 +84,39 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
+                <div class="col-md-4">
                     <button type="submit" class="btn btn-primary">Apply Filters</button>
                     <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
                 </div>
             </form>
+    </div>
+
+    <!-- Department tiles (display) + Category tiles (click to filter), as on the manager page -->
+    {% if dept_stats %}
+    <div class="section-card">
+    <div class="section-title"><span><i class="fas fa-building"></i> Pending by Department</span></div>
+    <div class="row">
+        {% for dept in dept_stats %}
+        <div class="col-md-2 col-sm-4 col-6"><div class="filter-card text-center" style="cursor:default">
+            <h4>{{ dept.pending }}</h4><p>{{ dept.name }} &middot; today {{ dept.today }}</p></div></div>
+        {% endfor %}
+    </div>
+    </div>
+    {% endif %}
+    <div class="section-card">
+    <div class="section-title"><span><i class="fas fa-tags"></i> Cases by Category</span></div>
+    <div class="row">
+        {% for cat in category_stats %}
+        <div class="col-md-2 col-sm-4 col-6">
+            <a class="filter-card text-center {% if selected_category|add:'0' == cat.id %}active{% endif %}"
+               href="?app={{ current_app }}{% if selected_subgroup %}&subgroup={{ selected_subgroup }}{% endif %}{% if cat.id %}&category={{ cat.id }}{% endif %}">
+                <h4>{{ cat.count }}</h4><p>{{ cat.name }}</p>
+            </a>
         </div>
+        {% empty %}
+        <div class="col-12"><p class="text-muted mb-0">No pending cases.</p></div>
+        {% endfor %}
+    </div>
     </div>
 
     <!-- Tabs -->

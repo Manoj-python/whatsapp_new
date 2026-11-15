@@ -33,8 +33,7 @@ def needs_api_check(template_id):
 
 # SMSquare LCC API Configuration
 SMSQUARE_LCC_URL = "https://prod-api-smsquare.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
-SMSQUARE_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb"
-
+SMSQUARE_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:kaPZTxSi/C6WHQnJI6gBiZRu+5W0Fg1y8Eok2Edo2Z4=:u9UeaPEdWtmmFSFMAYWAHFl88p5x9gkI:27488300:a7aae9e7-5e50-4f7c-87db-032e1d0b4450"
 # ============================================================
 # 🔥 UPDATED: Call Loan Details API (For Bucket Templates)
 # ============================================================

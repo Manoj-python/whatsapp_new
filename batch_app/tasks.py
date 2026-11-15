@@ -1688,7 +1688,7 @@ def process_single_customer(
 # 🚀 SCHEDULER TASK - CREATE EXACTLY ONE SCHEDULED BATCH
 # ============================================================
 @shared_task(queue="batch_scheduler")
-def process_batch_scheduler(job_id):
+def process_batch_scheduler(job_id, force=False):
     """
     Create exactly ONE BatchExecution for the current due schedule.
 
@@ -1714,6 +1714,19 @@ def process_batch_scheduler(job_id):
 
             if job.status in ["cancelled", "completed"]:
                 return None
+            # Force Run / Restart: bypass future schedule time
+            if force:
+                logger.info(
+                    f"🚀 Immediate execution requested: {job_id}"
+                )
+
+                job.next_run_time = now
+                job.status = "scheduled"
+
+                job.save(update_fields=[
+                    "next_run_time",
+                    "status",
+                ])
 
             # Never create two active executions for the same job.
             if BatchExecution.objects.filter(

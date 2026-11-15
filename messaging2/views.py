@@ -1844,6 +1844,7 @@ def normalize_mobile(mobile):
 
 
 def enrich_case_details(cases):
+    budget = [5]   # at most 5 new Lcc scans per page load (14 Nov 2026)
 
     for case in cases:
 
@@ -1859,6 +1860,18 @@ def enrich_case_details(cases):
             continue
 
         mobile = normalize_mobile(case.mobile)
+        # NO RESCAN OF A KNOWN MISS (14 Nov 2026): the Lcc 'endswith' lookup is a
+        # full table scan; unmatched cases repeated it on every page load and the
+        # ESC2 SMS page crawled. A blank mobile matched every row.
+        if not mobile:
+            continue
+        from django.core.cache import cache as _c
+        if _c.get('enrich-miss:' + mobile):
+            continue
+        if budget[0] <= 0:
+            continue
+        budget[0] -= 1
+        _c.set('enrich-miss:' + mobile, 1, 86400)   # looked up: not again today
 
         lcc = Lcc.objects.filter(
             Q(cust_mobile__endswith=mobile) |
@@ -1866,6 +1879,7 @@ def enrich_case_details(cases):
         ).first()
 
         if not lcc:
+            _c.set('enrich-miss:' + mobile, 1, 86400)
             continue
 
         updated_fields = []
@@ -1963,9 +1977,14 @@ def executive_dashboard2(request):
     ).filter(combined_filter).select_related('group', 'subgroup', 'category').order_by('-updated_at')
 
     # ─── Enrich with names ──────────────────────────────────────
-    enrich_case_details(pending_cases)
-    enrich_case_details(resolved_cases)
-    enrich_case_details(escalated_cases)
+    pending_shown = list(pending_cases[:300])   # newest 300 drawn (14 Nov 2026)
+    enrich_case_details(pending_shown)
+    # NEWEST 200 ONLY (14 Nov 2026): these two lists hold every case ever at ESC2 and
+    # enrich looks each one up - the SMS page timed out. Counts below stay full.
+    resolved_shown = list(resolved_cases[:200])
+    escalated_shown = list(escalated_cases[:200])
+    enrich_case_details(resolved_shown)
+    enrich_case_details(escalated_shown)
 
 
     stats = {
@@ -1973,6 +1992,16 @@ def executive_dashboard2(request):
         'resolved': resolved_cases.count(),
         'escalated': escalated_cases.count(),
     }
+
+    # TILES FROM THE PENDING LIST (Dilip, 14 Nov 2026: ESC2 page "as per managers")
+    from django.db.models import Count
+    _pend = pending_cases.order_by()
+    _t0 = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    _today = dict(_pend.filter(created_at__gte=_t0).values_list('group__name').annotate(n=Count('id')))
+    dept_stats = [{'name': r['group__name'] or 'No department', 'pending': r['n'], 'today': _today.get(r['group__name'], 0)}
+                  for r in _pend.values('group__name').annotate(n=Count('id')).order_by('-n')]
+    category_stats = [{'id': r['category_id'], 'name': r['category__name'] or 'No category', 'count': r['n']}
+                      for r in _pend.values('category_id', 'category__name').annotate(n=Count('id')).order_by('-n')]
 
     current_app = request.GET.get('app', 'psf')
     agent_permissions = {
@@ -1987,10 +2016,12 @@ def executive_dashboard2(request):
     all_categories = Category.objects.select_related('group').order_by('group__name', 'name')
 
     return render(request, 'messaging2/executive_dashboard.html', {
-        'pending_cases': pending_cases,
-        'resolved_cases': resolved_cases,
-        'escalated_cases': escalated_cases,
+        'pending_cases': pending_shown,
+        'resolved_cases': resolved_shown,
+        'escalated_cases': escalated_shown,
         'stats': stats,
+        'dept_stats': dept_stats,
+        'category_stats': category_stats,
         'agent': agent,
         'agentPermissions': agent_permissions,
         'current_app': current_app,
@@ -2329,6 +2360,16 @@ def export_manager_cases(request):
     wb.save(response)
     return response
 
+# MANAGERS SEE ESC2 TOO (Dilip, 13 Nov 2026): ?level=ESC3 (default, as before),
+# ESC2, or ALL (ESC2 + ESC3) - within the manager's own departments/subgroups.
+MANAGER_LEVELS = {"ESC3": ["ESC3"], "ESC2": ["ESC2"], "ALL": ["ESC2", "ESC3"]}
+
+
+def _manager_levels(request):
+    lv = (request.GET.get("level") or "ESC3").upper()
+    return (lv if lv in MANAGER_LEVELS else "ESC3"), MANAGER_LEVELS.get(lv, ["ESC3"])
+
+
 def manager_dashboard2(request):
     # Use the correct Agent model from messaging2 (matching login)
     try:
@@ -2389,10 +2430,11 @@ def manager_dashboard2(request):
     if subgroup_id:
         case_filter &= Q(subgroup_id=subgroup_id)
 
-    # ─── Pending Cases (ESC3) ──────────────────────────────────
+    # ─── Pending Cases (ESC3, or ESC2 / both on ?level=) ────────
+    selected_level, level_list = _manager_levels(request)
     pending_cases = (
         CaseModel.objects.filter(
-            current_level='ESC3',
+            current_level__in=level_list,
             status__in=['Open', 'In Progress', 'Reopened']
         )
         .exclude(status='Closed')
@@ -2485,6 +2527,20 @@ def manager_dashboard2(request):
             'pending': dept_pending,
             'today': dept_today,
         })
+
+    # TILES = THE PENDING LIST (Dilip, 14 Nov 2026): department and category
+    # tiles are counted from pending_cases, so they follow the Level picker
+    # and add up to the total (the old cards counted ESC3 only).
+    from django.db.models import Count
+    _pend = pending_cases.order_by()
+    _today = dict(_pend.filter(created_at__gte=today_start)
+                  .values_list('group__name').annotate(n=Count('id')))
+    dept_stats = [{'name': r['group__name'] or 'No department', 'pending': r['n'],
+                   'today': _today.get(r['group__name'], 0)}
+                  for r in _pend.values('group__name').annotate(n=Count('id')).order_by('-n')]
+    category_stats = [{'id': r['category_id'], 'name': r['category__name'] or 'No category', 'count': r['n']}
+                      for r in _pend.values('category_id', 'category__name').annotate(n=Count('id')).order_by('-n')]
+    level_label = {'ESC2': 'ESC2', 'ALL': 'ESC2 + ESC3'}.get(selected_level, 'ESC3')
 
     # ─── Level Wise Stats (by department) ──────────────────────
     all_levels = ['ESC1', 'ESC2', 'ESC3', 'ESC4', 'ESC5']
@@ -2621,6 +2677,9 @@ def manager_dashboard2(request):
         'all_categories': all_categories,
         'selected_category': category_id,
         'selected_subgroup': subgroup_id,
+        'selected_level': selected_level,
+        'category_stats': category_stats,
+        'level_label': level_label,
     }
 
     return render(request, 'messaging2/manager_dashboard.html', context)
@@ -2654,9 +2713,10 @@ def manager_cases_api(request):
     case_filter = build_case_permission_filter(agent)
 
     # ─── Base queryset (ESC3 pending only) ──────────────────────
+    _lv, level_list = _manager_levels(request)   # ESC2 too on ?level= (13 Nov 2026)
     base_qs = (
         CaseModel.objects.filter(
-            current_level='ESC3',
+            current_level__in=level_list,
             status__in=['Open', 'In Progress', 'Reopened']
         )
         .exclude(status='Closed')
@@ -2669,11 +2729,11 @@ def manager_cases_api(request):
         base_qs = base_qs.filter(group__name=department)
 
     # ─── Apply subgroup filter ──────────────────────────────────
-    if subgroup_id != 'all':
+    if subgroup_id not in ("all", ""):
         base_qs = base_qs.filter(subgroup_id=subgroup_id)
 
     # ─── Apply category filter ──────────────────────────────────
-    if category_id != 'all':
+    if category_id not in ("all", ""):
         base_qs = base_qs.filter(category_id=category_id)
 
     # ─── Order and format ──────────────────────────────────────
@@ -2692,6 +2752,7 @@ def manager_cases_api(request):
         'status': c.status,
         'created_at': c.created_at.isoformat(),
         'issue_description': c.issue_description or '',
+        'level': c.current_level,
     } for c in cases]
 
     return JsonResponse({'cases': case_list})

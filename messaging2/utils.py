@@ -31,7 +31,7 @@ def needs_api_check(template_id):
 # ============================================================
 
 SMSQUARE2_LCC_URL = "https://prod-api-padmasai.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
-SMSQUARE2_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e"
+SMSQUARE2_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:78ab76fd-9ab7-42e3-af86-312c87eb5200"
 
 
 # ============================================================

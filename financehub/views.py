@@ -2220,6 +2220,46 @@ def portal_schedule_status(request):
     return JsonResponse({"ok": True})
 
 
+
+@_csrf_exempt
+def portal_schedule_create(request):
+    """14 Nov 2026: a TL / manager in the SMSquare app plans his team's visits (Team schedule upload).
+    Same key as schedule-status. Body {"rows": [{"loanno", "empid", "date": "YYYY-MM-DD"}], "by": "<emp>"}.
+    Same check as the Schedule popup (loan in the loan list); a loan already scheduled for that employee
+    on that day is skipped. Returns {"ok", "added", "ids", "refused": [[index, reason]]}."""
+    import json as _json
+    key = _portal_key()
+    if not key or request.headers.get("X-Api-Key") != key:
+        return JsonResponse({"ok": False, "error": "X-Api-Key required"}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST only"}, status=405)
+    try:
+        body = _json.loads(request.body or b"{}")
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "invalid JSON"}, status=400)
+    rows = body.get("rows")
+    if not isinstance(rows, list) or len(rows) > 500:
+        return JsonResponse({"ok": False, "error": "rows must be a list of at most 500"}, status=400)
+    loans = {str(r.get("loanno") or "").strip() for r in rows if isinstance(r, dict)}
+    known = {str(x).strip().upper() for x in Lcc.objects.filter(loan_number__in=loans).values_list("loan_number", flat=True)}
+    ids, refused = [], []
+    for i, r in enumerate(rows):
+        r = r if isinstance(r, dict) else {}
+        loan, emp = str(r.get("loanno") or "").strip(), str(r.get("empid") or "").strip()
+        try:
+            when = datetime.date.fromisoformat(str(r.get("date") or "").strip())
+        except ValueError:
+            when = None
+        if not (loan and emp and when):
+            refused.append([i, "loan number, employee ID and date are all needed"])
+        elif loan.upper() not in known:
+            refused.append([i, "loan is not in the loan list"])
+        elif ExecutiveVisitScheduling.objects.filter(loanno=loan, empid=emp, visit_schedule_date=when).exists():
+            refused.append([i, "already scheduled for that day"])
+        else:
+            ids.append(ExecutiveVisitScheduling.objects.create(loanno=loan, empid=emp, visit_schedule_date=when).pk)
+    return JsonResponse({"ok": True, "added": len(ids), "ids": ids, "refused": refused})
+
 @financehub_required
 def evs_date_request_decide(request):
     """9 Nov 2026: Approve (reschedule to the asked date) or Reject an executive's date-change request."""

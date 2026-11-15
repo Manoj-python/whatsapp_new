@@ -1,58 +1,78 @@
 {% extends "messaging2/base_dashboard.html" %}
-{% block title %}Manager Dashboard - ESC3{% endblock %}
+{% block title %}Manager Dashboard{% endblock %}
 
 {% block content %}
 
 <!-- Include shared modals -->
 {% include "messaging2/_case_modals.html" %}
 
-<div class="container-fluid">
+<style>
+/* MANAGER PAGE IN THE ADMIN LOOK (Dilip, 14 Nov 2026: "redesign managers login - similar to admin") */
+:root { --primary: #4361ee; --secondary: #4cc9f0; --dark: #1a1a2e; }
+.mgr { background: #f4f6fb; padding: 18px; border-radius: 16px; }
+.mgr .app-btn { padding: 6px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; border: 1px solid #ddd;
+  background: #fff; color: var(--dark); text-decoration: none; display: inline-block; margin-right: 6px; }
+.mgr .app-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr .stat-card { background: #fff; border-radius: 20px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  position: relative; overflow: hidden; height: 100%; }
+.mgr .stat-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--bar, linear-gradient(90deg, var(--primary), var(--secondary))); }
+.mgr .stat-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px; background: rgba(67,97,238,.1); }
+.mgr .stat-icon i { font-size: 22px; color: var(--ic, var(--primary)); }
+.mgr .stat-number { font-size: 32px; font-weight: 800; color: var(--dark); line-height: 1; }
+.mgr .stat-label { color: #6c757d; font-size: 13px; margin-top: 8px; }
+.mgr .section-card, .mgr .tab-content .card, .mgr > .row .card { background: #fff; border: 0; border-radius: 20px; padding: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05); margin-bottom: 22px; }
+.mgr .section-card { padding: 22px; }
+.mgr .section-title { font-size: 17px; font-weight: 700; color: var(--dark); margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 2px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mgr .card-header { background: #fff !important; color: var(--dark) !important; font-weight: 700; border-bottom: 2px solid #e9ecef; border-radius: 20px 20px 0 0 !important; }
+.mgr .filter-card { background: #fff; border-radius: 15px; padding: 14px; margin-bottom: 12px; cursor: pointer; border: 1px solid #e9ecef;
+  transition: all .2s; display: block; color: inherit; text-decoration: none; }
+.mgr .filter-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,.1); }
+.mgr .filter-card.active, .mgr .dept-card.bg-success { border-left: 4px solid var(--primary); background: #eef1ff !important; }
+.mgr .filter-card h4 { margin: 0; font-size: 24px; font-weight: 700; color: var(--dark); }
+.mgr .filter-card p { margin: 0; color: #6c757d; font-size: 12px; }
+.mgr .dept-card.bg-secondary { background: #fff !important; }
+.mgr .nav-tabs { border: 0; gap: 8px; }
+.mgr .nav-tabs .nav-link { border: 1px solid #e0e3eb; border-radius: 30px; background: #fff; color: var(--dark); font-weight: 600; padding: 7px 18px; }
+.mgr .nav-tabs .nav-link.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr table thead th { background: #f8f9fa; font-weight: 600; color: var(--dark); border-bottom: 2px solid #e9ecef; }
+</style>
+
+<div class="container-fluid mgr">
     <!-- App Switcher -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="btn-group">
-                {% for key, cfg in app_list %}
-                <a href="?app={{ key }}" class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                    {{ cfg.name }}
-                </a>
-                {% endfor %}
-            </div>
-        </div>
+    <div class="mb-3">
+        {% for key, cfg in app_list %}
+        <a href="?app={{ key }}" class="app-btn {% if current_app == key %}active{% endif %}">{{ cfg.name }}</a>
+        {% endfor %}
     </div>
 
     <!-- Stats Cards -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card text-white bg-warning">
-                <div class="card-body"><h6>Pending Cases (ESC3)</h6><h2>{{ stats.pending }}</h2></div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-success">
-                <div class="card-body"><h6>Resolved at ESC3</h6><h2>{{ stats.resolved }}</h2></div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-info">
-                <div class="card-body"><h6>Escalated from ESC3</h6><h2>{{ stats.escalated }}</h2></div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-secondary">
-                <div class="card-body"><h6>Closed</h6><h2>{{ stats.closed }}</h2></div>
-            </div>
-        </div>
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#ff9800;--ic:#ff9800">
+            <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
+            <div class="stat-number">{{ stats.pending }}</div><div class="stat-label">Pending ({{ level_label }})</div></div></div>
+        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#4caf50;--ic:#4caf50">
+            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-number">{{ stats.resolved }}</div><div class="stat-label">Resolved at ESC3</div></div></div>
+        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#2196f3;--ic:#2196f3">
+            <div class="stat-icon"><i class="fas fa-level-up-alt"></i></div>
+            <div class="stat-number">{{ stats.escalated }}</div><div class="stat-label">Escalated from ESC3</div></div></div>
+        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#6c757d;--ic:#6c757d">
+            <div class="stat-icon"><i class="fas fa-lock"></i></div>
+            <div class="stat-number">{{ stats.closed }}</div><div class="stat-label">Closed</div></div></div>
     </div>
 
     <!-- ===== FILTER BAR ===== -->
-
-<div class="card mb-3">
-    <div class="card-body">
+<div class="section-card">
+    <div class="section-title"><span><i class="fas fa-filter"></i> Filters</span>
+        <button type="button" class="btn btn-success btn-sm" onclick="exportAllCases()"><i class="fas fa-file-excel"></i> Export All</button></div>
         <form method="get" class="row g-3 align-items-end">
             <input type="hidden" name="app" value="{{ current_app }}">
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label">Category</label>
-                <select name="category" class="form-select">
+                <select name="category" id="categoryFilter" class="form-select">
                     <option value="">All Categories</option>
                     {% for cat in all_categories %}
                         <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
@@ -63,7 +83,7 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label">Subgroup</label>
-                <select name="subgroup" class="form-select">
+                <select name="subgroup" id="subgroupFilter" class="form-select">
                     <option value="">All Subgroups</option>
                     {% for sg in all_subgroups %}
                         <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
@@ -72,42 +92,55 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4 d-flex align-items-end justify-content-between">
-                <div>
-                    <button type="submit" class="btn btn-primary">Apply Filters</button>
-                    <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
-                </div>
-                <button type="button" class="btn btn-success" onclick="exportAllCases()">
-                    <i class="fas fa-file-excel"></i> Export All
-                </button>
+            <div class="col-md-2">
+                <label class="form-label">Level</label>
+                <select name="level" class="form-select">
+                    <option value="ESC3" {% if selected_level == 'ESC3' or not selected_level %}selected{% endif %}>ESC3 (my level)</option>
+                    <option value="ESC2" {% if selected_level == 'ESC2' %}selected{% endif %}>ESC2 (executives)</option>
+                    <option value="ALL" {% if selected_level == 'ALL' %}selected{% endif %}>ESC2 + ESC3</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
             </div>
         </form>
-    </div>
 </div>
 
-
     <!-- Department Cards -->
-    <div class="row mb-4" id="deptCards">
-        <div class="col-md-3 mb-2">
-            <div class="card text-white bg-primary dept-card" data-dept="all" style="cursor: pointer;">
-                <div class="card-body text-center">
-                    <h5>All Departments</h5>
-                    <h3>{{ stats.pending }}</h3>
-                    <small>Total Pending</small>
-                </div>
+    <div class="section-card">
+    <div class="section-title"><span><i class="fas fa-building"></i> Filter by Department</span></div>
+    <div class="row" id="deptCards">
+        <div class="col-md-2 col-sm-4 col-6">
+            <div class="filter-card text-center bg-success dept-card" data-dept="all">
+                <h4>{{ stats.pending }}</h4><p>All Departments</p>
             </div>
         </div>
         {% for dept in dept_stats %}
-        <div class="col-md-3 mb-2">
-            <div class="card text-white bg-secondary dept-card" data-dept="{{ dept.name }}" style="cursor: pointer;">
-                <div class="card-body text-center">
-                    <h5>{{ dept.name }}</h5>
-                    <h3>{{ dept.pending }}</h3>
-                    <small>Pending | Today: {{ dept.today }}</small>
-                </div>
+        <div class="col-md-2 col-sm-4 col-6">
+            <div class="filter-card text-center bg-secondary dept-card" data-dept="{{ dept.name }}">
+                <h4>{{ dept.pending }}</h4><p>{{ dept.name }} &middot; today {{ dept.today }}</p>
             </div>
         </div>
         {% endfor %}
+    </div>
+    </div>
+
+    <!-- Category tiles (as on the admin page) -->
+    <div class="section-card">
+    <div class="section-title"><span><i class="fas fa-tags"></i> Cases by Category ({{ level_label }})</span></div>
+    <div class="row">
+        {% for cat in category_stats %}
+        <div class="col-md-2 col-sm-4 col-6">
+            <a class="filter-card text-center {% if selected_category|add:'0' == cat.id %}active{% endif %}"
+               href="?app={{ current_app }}&level={{ selected_level }}{% if selected_subgroup %}&subgroup={{ selected_subgroup }}{% endif %}{% if cat.id %}&category={{ cat.id }}{% endif %}">
+                <h4>{{ cat.count }}</h4><p>{{ cat.name }}</p>
+            </a>
+        </div>
+        {% empty %}
+        <div class="col-12"><p class="text-muted mb-0">No pending cases.</p></div>
+        {% endfor %}
+    </div>
     </div>
 
     <!-- Tabs -->
@@ -123,11 +156,21 @@
         <div class="tab-pane fade show active" id="pending" role="tabpanel">
             <div class="card">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-chart-line"></i> Pending ESC3 Cases</span>
+                    <span><i class="fas fa-chart-line"></i> Pending {% if selected_level == 'ESC2' %}ESC2{% elif selected_level == 'ALL' %}ESC2 + ESC3{% else %}ESC3{% endif %} Cases</span>
                     <button class="btn btn-sm btn-light" onclick="refreshCases()"><i class="fas fa-sync-alt"></i> Refresh</button>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
+<style>
+/* ACTIONS ALWAYS IN VIEW (Dilip, 13 Nov 2026: "Resolution option not available" -
+   the buttons sat off the right edge). The last column sticks to the right while
+   the table scrolls; the description column is kept narrower. */
+#pendingTable th:last-child, #pendingTable td:last-child {
+  position: sticky; right: 0; z-index: 2; background: #fff; white-space: nowrap;
+  box-shadow: -6px 0 8px -6px rgba(0,0,0,.25); }
+#pendingTable thead th:last-child { background: #f8f9fa; }
+#pendingTable td:nth-child(8) { max-width: 300px; min-width: 180px; white-space: normal; }
+</style>
                         <table class="table table-hover" id="pendingTable">
                             <thead>
                                 <tr>
@@ -145,7 +188,7 @@
                                 </tr>
                             </thead>
                             <tbody id="pendingTableBody">
-                                {% include "messaging2/_manager_pending_rows.html" with cases=pending_cases %}
+                                {% include "messaging2/_manager_pending_rows.html" with cases=pending_cases|slice:":200" %}
                             </tbody>
                         </table>
                     </div>
@@ -175,7 +218,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for case in resolved_cases %}
+                                {% for case in resolved_cases|slice:":200" %}
                                 <tr>
                                     <td>{{ case.case_id }}</td>
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
@@ -224,7 +267,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for case in escalated_cases %}
+                                {% for case in escalated_cases|slice:":200" %}
                                 <tr>
                                     <td>{{ case.case_id }}</td>
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
@@ -269,7 +312,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for case in closed_cases %}
+                            {% for case in closed_cases|slice:":200" %}
                             <tr>
                                 <td>{{ case.case_id }}</td>
                                 <td>{{ case.customer_name|default:case.mobile }}</td>
@@ -408,7 +451,7 @@
         currentDepartment = department || 'all';
         currentSubgroup = subgroup || 'all';
         currentCategory = category || 'all';
-        const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(currentDepartment)}&subgroup=${encodeURIComponent(currentSubgroup)}&category=${encodeURIComponent(currentCategory)}`;
+        const url = `/messaging2/manager-cases/?app={{ current_app }}&dept=${encodeURIComponent(currentDepartment)}&subgroup=${encodeURIComponent(currentSubgroup)}&category=${encodeURIComponent(currentCategory)}&level={{ selected_level|default:'ESC3' }}`;
         fetch(url)
             .then(res => res.json())
             .then(data => {

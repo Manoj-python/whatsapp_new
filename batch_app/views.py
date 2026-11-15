@@ -24,6 +24,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from django.db import models
 import traceback
+from django.db import transaction
 from django.db.models import Sum
 from .models import BatchJob, BatchLog, BatchExecution
 import logging
@@ -1347,31 +1348,29 @@ def batch_job_edit(request, job_id):
 # ============================================================
 # BATCH JOB ACTIONS
 # ============================================================
+
 @csrf_exempt
 def batch_job_action(request, job_id, action):
-    # ✅ Define is_ajax at the START
+    # Define is_ajax at the START
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     try:
         job = get_object_or_404(BatchJob, job_id=job_id)
 
-        # ❌ REMOVE THIS BLOCK - 'edit' should NOT be handled here
-        # if action == 'edit':
-        #     if is_ajax:
-        #         return JsonResponse({
-        #             'success': True,
-        #             'redirect_url': f'/batch/jobs/{job_id}/edit/'
-        #         })
-        #     else:
-        #         return redirect('batch_job_edit', job_id=job.job_id)
-
+        # --------------------------------------------------
+        # PAUSE
+        # --------------------------------------------------
         if action == 'pause':
             job.status = 'paused'
             job.save(update_fields=['status'])
 
             message = f'⏸️ Job "{job.job_name}" paused!'
 
+        # --------------------------------------------------
+        # RESUME
+        # --------------------------------------------------
         elif action == 'resume':
+
             # Resume without changing the schedule
             job.status = 'scheduled'
 
@@ -1385,99 +1384,203 @@ def batch_job_action(request, job_id, action):
             tasks.schedule_batch_job.delay(job.job_id)
 
             message = f'▶️ Job "{job.job_name}" resumed!'
+
+        # --------------------------------------------------
+        # CANCEL
+        # --------------------------------------------------
         elif action == 'cancel':
             job.status = 'cancelled'
             job.save()
+
             try:
-                from .models import BatchExecution
-                BatchExecution.objects.filter(job=job, status__in=['pending', 'running']).update(status='cancelled')
-            except:
-                pass
+                BatchExecution.objects.filter(
+                    job=job,
+                    status__in=['pending', 'running']
+                ).update(status='cancelled')
+
+            except Exception:
+                logger.exception(
+                    "Failed to update active executions during cancellation"
+                )
+
             tasks.cancel_daily_schedule.delay(job.job_id)
+
             message = f'⛔ Job "{job.job_name}" cancelled!'
 
+        # --------------------------------------------------
+        # RESTART - START FROM BATCH 1 IMMEDIATELY
+        # --------------------------------------------------
         elif action == 'restart':
-            try:
-                from .models import BatchExecution
-                BatchExecution.objects.filter(job=job).delete()
-            except:
-                pass
-            job.current_batch = 0
-            job.completed_batches = 0
-            job.sent_count = 0
-            job.failed_count = 0
-            job.skipped_count = 0
-            job.total_runs = 0
-            job.completed_runs = 0
-            job.status = 'scheduled'
-            job.completed_at = None
 
-            now = timezone.now()
+            with transaction.atomic():
 
-            if job.schedule_type == 'daily':
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=1)
-                job.next_run_time = next_run
+                job = BatchJob.objects.select_for_update().get(
+                    job_id=job_id
+                )
 
-            elif job.schedule_type == 'weekly':
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=7)
-                job.next_run_time = next_run
+                # Do not interrupt an active execution
+                active_exists = BatchExecution.objects.filter(
+                    job=job,
+                    status__in=['pending', 'running']
+                ).exists()
 
-            elif job.schedule_type == 'custom_interval':
-                interval = job.interval_days or 1
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run += timedelta(days=interval)
-                job.next_run_time = next_run
+                if active_exists:
+                    raise ValueError(
+                        'Cannot restart. An execution is already '
+                        'pending or running.'
+                    )
 
-            elif job.schedule_type == 'multiple_daily':
-                next_run = tasks.calculate_next_run_time(job,from_time=now)
-                job.next_run_time = next_run if next_run else job.schedule_datetime
+                # Generate a NEW occurrence token.
+                # Do not reset total_runs to zero.
+                job.total_runs = int(job.total_runs or 0) + 1
 
-            elif job.schedule_type == 'monthly':
-                from dateutil.relativedelta import relativedelta
-                next_run = job.schedule_datetime
-                while next_run <= now:
-                    next_run = next_run + relativedelta(months=1)
-                job.next_run_time = next_run
+                # Reset current run progress
+                job.current_batch = 0
+                job.completed_batches = 0
+                job.sent_count = 0
+                job.failed_count = 0
+                job.skipped_count = 0
 
-            job.save()
-            tasks.schedule_batch_job.delay(job.job_id)
-            message = f'🔄 Job "{job.job_name}" restarted!'
+                job.status = 'scheduled'
+                job.started_at = None
+                job.completed_at = None
 
+                # Restart immediately
+                now = timezone.now()
+                job.next_run_time = now
+
+                job.save(update_fields=[
+                    'total_runs',
+                    'current_batch',
+                    'completed_batches',
+                    'sent_count',
+                    'failed_count',
+                    'skipped_count',
+                    'status',
+                    'started_at',
+                    'completed_at',
+                    'next_run_time',
+                ])
+
+            # Trigger scheduler immediately
+            tasks.process_batch_scheduler.apply_async(
+                args=[job.job_id],
+                kwargs={'force': True},
+                queue='batch_scheduler'
+            )
+
+            message = (
+                f'🔄 Job "{job.job_name}" restarted '
+                f'from Batch 1!'
+            )
+
+        # --------------------------------------------------
+        # FORCE RUN - NEXT INCOMPLETE BATCH IMMEDIATELY
+        # --------------------------------------------------
         elif action == 'force_run':
-            tasks.process_batch_scheduler.delay(job.job_id)
-            message = f'🚀 Job "{job.job_name}" started!'
 
+            with transaction.atomic():
+
+                job = BatchJob.objects.select_for_update().get(
+                    job_id=job_id
+                )
+
+                if job.status in ['cancelled', 'completed']:
+                    raise ValueError(
+                        'This job cannot be force-run. '
+                        'Use Restart to start a new run.'
+                    )
+
+                # Prevent duplicate execution
+                active_exists = BatchExecution.objects.filter(
+                    job=job,
+                    status__in=['pending', 'running']
+                ).exists()
+
+                if active_exists:
+                    raise ValueError(
+                        'Cannot force run. An execution is already '
+                        'pending or running.'
+                    )
+
+                # Preserve current occurrence and progress
+                job.status = 'scheduled'
+                job.next_run_time = timezone.now()
+
+                job.save(update_fields=[
+                    'status',
+                    'next_run_time',
+                ])
+
+            # Trigger scheduler immediately
+            tasks.process_batch_scheduler.apply_async(
+                args=[job.job_id],
+                kwargs={'force': True},
+                queue='batch_scheduler'
+            )
+
+            message = (
+                f'🚀 Job "{job.job_name}" force run requested!'
+            )
+
+        # --------------------------------------------------
+        # UNKNOWN ACTION
+        # --------------------------------------------------
         else:
             if is_ajax:
-                return JsonResponse({'error': f'Unknown action: {action}'}, status=400)
-            messages.error(request, f'❌ Unknown action: {action}')
-            return redirect('batch_job_detail', job_id=job.job_id)
+                return JsonResponse({
+                    'error': f'Unknown action: {action}'
+                }, status=400)
 
+            messages.error(request, f'❌ Unknown action: {action}')
+            return redirect(
+                'batch_job_detail',
+                job_id=job.job_id
+            )
+
+        # --------------------------------------------------
+        # AJAX RESPONSE
+        # --------------------------------------------------
         if is_ajax:
             return JsonResponse({
                 'success': True,
                 'message': message,
                 'status': job.status,
-                'next_run_time': job.next_run_time.strftime('%Y-%m-%d %I:%M %p') if job.next_run_time else None
+                'next_run_time': (
+                    job.next_run_time.strftime('%Y-%m-%d %I:%M %p')
+                    if job.next_run_time else None
+                )
             })
+
         else:
             messages.success(request, message)
-            return redirect('batch_job_detail', job_id=job.job_id)
+            return redirect(
+                'batch_job_detail',
+                job_id=job.job_id
+            )
 
+    # --------------------------------------------------
+    # EXCEPTION HANDLING
+    # --------------------------------------------------
     except Exception as e:
+
+        logger.exception(
+            f"Batch job action failed: job_id={job_id}, action={action}"
+        )
+
         if is_ajax:
             return JsonResponse({
                 'success': False,
                 'error': str(e)
-            }, status=500)
+            }, status=400 if isinstance(e, ValueError) else 500)
+
         else:
             messages.error(request, f'❌ Error: {str(e)}')
-            return redirect('batch_job_detail', job_id=job_id)
+            return redirect(
+                'batch_job_detail',
+                job_id=job_id
+            )
+
 
 @csrf_exempt
 def batch_job_delete(request, job_id):

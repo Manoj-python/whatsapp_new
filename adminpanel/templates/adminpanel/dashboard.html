@@ -979,6 +979,7 @@
 
     function filterByCategory(categoryName) {
         currentCategory = categoryName;
+        currentFilter = { type: 'all', value: null };   // tile counts all levels (14 Nov 2026)
         document.querySelectorAll('#categoryStats .filter-card').forEach(card => {
             card.classList.remove('active');
             if (card.getAttribute('data-category') === categoryName) card.classList.add('active');
