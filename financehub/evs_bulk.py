@@ -6,6 +6,8 @@ EMP = ("empid", "employeeid", "employeeno", "employeenumber", "empno")
 DATE = ("visitscheduledate", "visitdate", "scheduledate", "date")
 FORMATS = ("%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y", "%Y-%m-%d", "%d-%b-%Y", "%d %b %Y", "%Y-%m-%d %H:%M:%S")
 SHOW = 30  # problems listed
+MAX_AHEAD = 10  # 17 Nov 2026: a visit is planned at most 10 days ahead (Dilip; same rule in the SMSquare app)
+MAX_PER_DAY = 12  # 17 Nov 2026: at most 12 visits a day per executive (Dilip; same rule in the SMSquare app)
 
 
 def _text(v):
@@ -68,6 +70,8 @@ def check(table, *, loans, emps, alloc, today):
             bad.append("visit date %r is not a date (use DD-MM-YYYY)" % _text(r[di]))
         elif when < today:
             bad.append("visit date %s is before today" % when.strftime("%d-%m-%Y"))
+        elif when > today + dt.timedelta(days=MAX_AHEAD):
+            bad.append("visit date %s is more than %d days ahead" % (when.strftime("%d-%m-%Y"), MAX_AHEAD))
         if bad:
             problems.append("line %s: %s" % (n, "; ".join(bad)))
         else:
@@ -76,6 +80,18 @@ def check(table, *, loans, emps, alloc, today):
     if not rows and not problems:
         problems.append("the sheet has no rows")
     return rows, problems
+
+
+def over_cap(rows, existing):
+    """Problems for executives the sheet takes over MAX_PER_DAY on a day. rows [(line, loan, emp, date)];
+    existing {(emp, date): visits already planned for OTHER loans}."""
+    load, problems = dict(existing), []
+    for n, _loan, emp, when in rows:
+        load[(emp, when)] = load.get((emp, when), 0) + 1
+        if load[(emp, when)] > MAX_PER_DAY:
+            problems.append("line %s: employee %s would have more than %s visits on %s" % (
+                n, emp, MAX_PER_DAY, when.strftime("%d-%m-%Y")))
+    return problems
 
 
 def _read(path, ext):
@@ -110,6 +126,15 @@ def run(upload, path, ext):
     emps = {_text(e) for e in emps if e}
 
     rows, problems = check(table, loans=loans, emps=emps, alloc=alloc, today=timezone.localdate())
+    if rows and not problems:
+        sheet_loans = {r[1] for r in rows}
+        existing = {}
+        for e, d, ln, st in EVS.objects.filter(empid__in={r[2] for r in rows},
+                                              visit_schedule_date__in={r[3] for r in rows}).values_list(
+                "empid", "visit_schedule_date", "loanno", "visit_status"):
+            if st != "not_visited" and ln not in sheet_loans:
+                existing[(e, d)] = existing.get((e, d), 0) + 1
+        problems = over_cap(rows, existing)
     upload.total_rows = len(rows) + len(problems)
     if problems:
         upload.status = "error"
@@ -153,10 +178,16 @@ if __name__ == "__main__":
                     loans=L, emps={"5436"}, alloc={"AB2": "7001"}, today=t)
     assert bad == [] and ok == [(2, "AB1", "5436", dt.date(2026, 11, 10)), (3, "AB2", "7001", dt.date(2026, 11, 12))], (ok, bad)
     ok, bad = check([["LoanNo", "EmpID", "VisitScheduleDate"], ["ZZ", "1", "x"], ["AB1", "9", "01-11-2026"],
-                     ["AB3", "", "11/11/2026"], ["AB1", "5436", "2026-11-20"], ["AB2", "5436", "2026-11-20"],
-                     ["AB2", "5436", "2026-11-21"]], loans=L, emps={"5436"}, alloc={}, today=t)
+                     ["AB3", "", "11/11/2026"], ["AB1", "5436", "2026-11-18"], ["AB2", "5436", "2026-11-18"],
+                     ["AB2", "5436", "2026-11-19"]], loans=L, emps={"5436"}, alloc={}, today=t)
     assert len(ok) == 2 and [p.split(":")[0] for p in bad] == ["line 2", "line 3", "line 4", "line 7"], bad
     assert "not in the loan list" in bad[0] and "not a date" in bad[0] and "not known" in bad[1] and "before today" in bad[1]
     assert "no allocated executive" in bad[2] and "also on line 6" in bad[3]
+    assert "more than 10 days ahead" in check([["LoanNo", "EmpID", "VisitScheduleDate"], ["AB1", "5436", "20-11-2026"]],
+                                              loans=L, emps={"5436"}, alloc={}, today=t)[1][0]
     assert check([["Loan", "Something"]], loans=L, emps=set(), alloc={}, today=t)[1][0].startswith("the sheet needs")
+    d = dt.date(2026, 11, 20)
+    assert over_cap([(i, "L%s" % i, "5602", d) for i in range(2, 6)], {("5602", d): 10}) == [
+        "line 4: employee 5602 would have more than 12 visits on 20-11-2026",
+        "line 5: employee 5602 would have more than 12 visits on 20-11-2026"]
     print("evs_bulk self-check ok")

@@ -1,0 +1,3689 @@
+
+import os
+import tempfile
+import unicodedata
+import datetime  # This imports the module (use datetime.datetime, datetime.date, etc.)
+import json
+from django.conf import settings
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.contrib.auth import authenticate, login
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.core.cache import cache
+from django.db.models import Sum
+
+import boto3
+import tempfile
+import os
+import uuid
+
+
+from .models import (
+    UploadHistory,
+    Lcc,
+    SalesCollectionAllocations,
+    Feedback,
+    ExecutiveVisitScheduling,
+    Clu,
+    OpenRepo,
+    NocModel,
+    Freshdesk,
+    DueNotice,
+    Visiter,
+    Dialer,
+    Hero,           # ✅ ADD THIS
+    KotakECS,       # ✅ ADD THIS
+    EseBuzz,        # ✅ ADD THIS
+    Smsquare,       # ✅ ADD THIS
+    Upi,            # ✅ ADD THIS
+    Repo,           # ✅ ADD THIS
+    Paid,           # ✅ ADD THIS
+    Closed,         # ✅ ADD THIS
+    CollectionAllocations,  # ✅ ADD THIS
+)
+
+# Forms
+from .forms import FeedbackForm
+from django.conf import settings
+# Celery tasks
+from financehub.tasks import (
+    process_universal_file,
+)
+
+
+from io import BytesIO
+import pandas as pd
+import datetime
+from django.http import HttpResponse
+from openpyxl import load_workbook
+from openpyxl.styles import Font
+
+from .models import EmployeeMaster, Clu
+
+
+# Decorator for session protection
+from django.contrib.auth.decorators import login_required
+
+# ---------------------------------------------------------------------
+# LOGIN
+# ---------------------------------------------------------------------
+def fh_login(request):
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "").strip()
+
+        user = authenticate(request, username=username, password=password)
+
+        if user:
+            login(request, user)
+            request.session["financehub_user"] = user.id
+            return redirect("upload_loan_data")
+        else:
+            messages.error(request, "Invalid username or password")
+
+    return render(request, "financehub/login.html")
+
+
+# ---------------------------------------------------------------------
+# LOGOUT
+# ---------------------------------------------------------------------
+def fh_logout(request):
+    request.session.pop("financehub_user", None)
+    return redirect("fh_login")
+
+
+# ---------------------------------------------------------------------
+# SESSION CHECK DECORATOR
+# ---------------------------------------------------------------------
+def financehub_required(view_func):
+    def wrapper(request, *args, **kwargs):
+        if not request.session.get("financehub_user"):
+            return redirect("fh_login")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 MB
+
+
+# ---------------------------------------------------------------------
+# FILE UPLOAD + CELERY PROCESSING
+# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# UNIVERSAL FILE UPLOAD (WITH DROPDOWN)
+# ---------------------------------------------------------------------
+from financehub.tasks import process_universal_file
+from .models import UploadHistory
+
+FILE_TYPES = [
+    ("lcc", "LCC"),
+    ("collection_allocations", "Collection Allocations"),
+    ("sales_collection_allocations", "Sales Collection Allocations"),
+    ("clu", "CLU"),
+    ("repo", "Repo"),
+    ("paid", "Paid"),
+    ("closed", "Closed"),
+    ("dialer", "Dialer"),
+    ("duenotice", "Due Notice"),
+    ("visiter", "Visiter"),
+    ("employee_master", "Employee Master"),
+    ("freshdesk", "Freshdesk"),
+    ("esebuzz", "EseBuzz"),
+    ("hero", "Hero"),
+    ("kotakecs", "Kotak ECS"),
+    ("smsquare", "SMSquare"),
+    ("upi", "UPI"),
+    ("executive_visit_scheduling", "Executive Visit Scheduling"),
+    ("NocModel","NocModel"),
+    ("OpenRepo","OpenRepo")
+
+
+]
+
+@financehub_required
+def upload_loan_data(request):
+
+    msg = None
+    error = None
+
+    if request.method == "POST":
+
+        file_type = request.POST.get("file_type")
+        file = request.FILES.get("file")
+
+        if not file_type:
+            return render(request, "financehub/upload.html",
+                          {"error": "Please select file type.", "file_types": FILE_TYPES})
+
+        if not file:
+            return render(request, "financehub/upload.html",
+                          {"error": "Please choose a file.", "file_types": FILE_TYPES})
+
+        ext = file.name.split(".")[-1].lower()
+        if ext not in ("csv", "xlsx", "xls"):
+            return render(request, "financehub/upload.html",
+                          {"error": "Only CSV / XLS / XLSX allowed.", "file_types": FILE_TYPES})
+
+        # Create upload record with file saved to S3 (using finance_uploads field)
+        upload = UploadHistory.objects.create(
+            filename=file.name,
+            uploaded_by=request.user.username,
+            file_type=file_type,
+            finance_uploads=file,  # This saves to S3 in 'finance_uploads/' folder
+            status="processing",
+            total_rows=0,
+            processed_rows=0
+        )
+
+        # Download the file from S3 to temp location for Celery processing
+
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_S3_REGION_NAME,
+        )
+
+        # Create unique temp file path
+        tmp_dir = tempfile.gettempdir()
+        tmp_path = os.path.join(
+            tmp_dir,
+            f"{uuid.uuid4()}_{file.name}"
+        )
+
+        # Download from S3 to temp location
+        s3.download_file(
+            settings.AWS_STORAGE_BUCKET_NAME,
+            upload.finance_uploads.name,
+            tmp_path
+        )
+
+        # Launch celery task
+        process_universal_file.delay(upload.id, tmp_path, ext, file_type)
+
+        msg = f"Upload started! Upload ID = {upload.id}"
+
+        return render(request, "financehub/upload.html", {
+            "msg": msg,
+            "file_types": FILE_TYPES,
+            "upload_id": upload.id
+        })
+
+    return render(request, "financehub/upload.html", {
+        "file_types": FILE_TYPES,
+        "ADMIN_USER": settings.ADMIN_USER
+    })
+
+# LCC LIST WITH POWER SEARCH + PAGINATION (100 PER PAGE)
+from django.db.models import Q
+from django.core.paginator import Paginator
+
+
+# ---------------------------------------------------------------------
+# LCC LIST WITH PAGINATION + SEARCH
+# ---------------------------------------------------------------------
+import unicodedata
+from django.db.models import Q
+from django.core.paginator import Paginator
+
+import unicodedata
+from django.db.models import Q
+from django.core.paginator import Paginator
+
+def normalize_excel_text(text):
+    """Clean any hidden characters & normalize Excel-pasted values."""
+    if not text:
+        return ""
+
+    # Normalize Unicode
+    text = unicodedata.normalize("NFKD", text)
+
+    # Remove invisible characters including TAB (%09)
+    INVISIBLE = ["\u200b", "\u200c", "\u200d", "\ufeff", "\t", "\n", "\r"]
+    for ch in INVISIBLE:
+        text = text.replace(ch, "")
+
+    # Normalize various hyphens
+    HYPHENS = ["‐", "-", "‒", "–", "—", "―"]
+    for h in HYPHENS:
+        text = text.replace(h, "-")
+
+    # Keep only alphanumeric and hyphen
+    cleaned = []
+    for c in text:
+        if c.isalnum() or c == "-":
+            cleaned.append(c)
+
+    return "".join(cleaned).strip()
+
+
+
+
+
+
+
+
+import boto3
+from django.conf import settings
+from django.db.models import Q
+from django.core.paginator import Paginator
+from django.shortcuts import render
+from django.core.cache import cache
+
+
+# -----------------------------------------------------
+# ✅ S3 CLIENT
+# -----------------------------------------------------
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+    region_name=settings.AWS_S3_REGION_NAME,
+)
+
+
+# -----------------------------------------------------
+# ✅ FETCH ALL NOTICE FILES (WITH PAGINATION + FIXES)
+# -----------------------------------------------------
+# -----------------------------------------------------
+# ✅ FETCH ALL NOTICE FILES (WITH PAGINATION + FIXES)
+# -----------------------------------------------------
+def get_all_notice_files():
+
+    file_map = {}
+    continuation_token = None
+
+    try:
+        while True:
+            params = {
+                "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                "Prefix": "notices/"
+            }
+
+            if continuation_token:
+                params["ContinuationToken"] = continuation_token
+
+            response = s3.list_objects_v2(**params)
+
+            for obj in response.get("Contents", []):
+                key = obj["Key"]
+
+                # filename extraction
+                filename = key.split("/")[-1].lower().strip()
+
+                # normalize filename
+                filename = filename.replace(" ", "_")
+
+                # ✅ CHECK FOR SIMPLE LOAN NUMBER PDF (no underscore)
+                if "_" not in filename and filename.endswith(".pdf"):
+                    loan_number = filename.replace(".pdf", "").upper()
+                    
+                    if loan_number not in file_map:
+                        file_map[loan_number] = {
+                            "borrower": None,
+                            "guarantor": None,
+                            "co_borrower": None,
+                            "lokadtalt": None,
+                            "arbitration": None  # ✅ ADDED
+                        }
+                    
+                    url = s3.generate_presigned_url(
+                        "get_object",
+                        Params={
+                            "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                            "Key": key
+                        },
+                        ExpiresIn=3600
+                    )
+                    
+                    file_map[loan_number]["lokadtalt"] = url
+                    continue
+
+                # Existing logic for borrower/guarantor/co_borrower
+                if "_" not in filename:
+                    continue
+
+                # safe parsing
+                parts = filename.split("_", 1)
+                loan_number = parts[0].upper()
+                file_type = parts[1].replace(".pdf", "")
+
+                # init map
+                if loan_number not in file_map:
+                    file_map[loan_number] = {
+                        "borrower": None,
+                        "guarantor": None,
+                        "co_borrower": None,
+                        "lokadtalt": None,
+                        "arbitration": None  # ✅ ADDED
+                    }
+
+                # 🔐 secure URL (IMPORTANT)
+                url = s3.generate_presigned_url(
+                    "get_object",
+                    Params={
+                        "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                        "Key": key
+                    },
+                    ExpiresIn=3600
+                )
+
+                # exact matching (no partial bugs)
+                if file_type == "co_borrower":
+                    file_map[loan_number]["co_borrower"] = url
+
+                elif file_type == "guarantor":
+                    file_map[loan_number]["guarantor"] = url
+
+                elif file_type == "borrower":
+                    file_map[loan_number]["borrower"] = url
+
+                elif file_type == "arbitration":  # ✅ ADDED
+                    file_map[loan_number]["arbitration"] = url
+
+            # pagination check
+            if response.get("IsTruncated"):
+                continuation_token = response.get("NextContinuationToken")
+            else:
+                break
+
+    except Exception as e:
+        print("S3 ERROR:", e)
+        return {}
+
+    return file_map
+
+
+
+
+# -----------------------------------------------------
+# ✅ CACHE WRAPPER (VERY IMPORTANT 🚀)
+# -----------------------------------------------------
+def get_all_notice_files_cached():
+    data = cache.get("notice_files")
+
+    if not data:
+        data = get_all_notice_files()
+        cache.set("notice_files", data, timeout=1800)  # 30 min (8 Nov 2026): a cold hit lists every S3 notice, ~12 s
+
+    return data
+# -----------------------------------------------------
+# ✅ MAIN VIEW
+# -----------------------------------------------------
+@financehub_required
+# -----------------------------------------------------
+# ✅ MAIN VIEW
+# -----------------------------------------------------
+@financehub_required
+def lcc_list(request):
+
+    search_raw = request.GET.get("search", "")
+    search_clean = normalize_excel_text(search_raw).strip()
+
+    base_qs = Lcc.objects.all()
+
+    # -----------------------------------------------------
+    # ✅ NO SEARCH
+    # -----------------------------------------------------
+    if not search_clean:
+        qs = base_qs.order_by("id")
+
+    else:
+        # -----------------------------------------------------
+        # ✅ EXACT MATCH
+        # -----------------------------------------------------
+        primary = base_qs.filter(
+            Q(loan_number__iexact=search_clean) |
+            Q(cust_mobile__iexact=search_clean) |
+            Q(guarantor_mobile__iexact=search_clean) |
+            Q(vehicle_no__iexact=search_clean)
+        )
+
+        if primary.exists():
+
+            mobile_set = set(
+                x for x in primary.values_list("cust_mobile", flat=True)
+                if x not in ["", None, "0"]
+            ) | set(
+                x for x in primary.values_list("guarantor_mobile", flat=True)
+                if x not in ["", None, "0"]
+            )
+
+            vehicle_set = set(
+                x for x in primary.values_list("vehicle_no", flat=True)
+                if x not in ["", None]
+            )
+
+            qs = base_qs.filter(
+                Q(cust_mobile__in=mobile_set) |
+                Q(guarantor_mobile__in=mobile_set) |
+                Q(vehicle_no__in=vehicle_set) |
+                Q(id__in=primary.values("id"))
+            ).distinct().order_by("id")
+
+        else:
+            # -----------------------------------------------------
+            # ✅ NAME SEARCH
+            # -----------------------------------------------------
+            qs = base_qs.filter(
+                Q(customer_name__icontains=search_clean) |
+                Q(guarantor__icontains=search_clean)
+            ).order_by("id")
+
+    # -----------------------------------------------------
+    # ✅ PAGINATION
+    # -----------------------------------------------------
+    paginator = Paginator(qs, 50)
+    page = request.GET.get("page")
+    page_obj = paginator.get_page(page)
+
+    # -----------------------------------------------------
+    # ✅ LOAD S3 FILES (CACHED 🚀)
+    # -----------------------------------------------------
+    file_map = get_all_notice_files_cached()
+
+    # -----------------------------------------------------
+    # ✅ ATTACH PDF LINKS
+    # -----------------------------------------------------
+    for obj in page_obj:
+        loan_number = (obj.loan_number or "").strip().upper()
+
+        files = file_map.get(loan_number, {})
+
+        obj.borrower_pdf = files.get("borrower")
+        obj.guarantor_pdf = files.get("guarantor")
+        obj.co_borrower_pdf = files.get("co_borrower")
+        obj.lokadtalt_pdf = files.get("lokadtalt")
+        obj.arbitration_pdf = files.get("arbitration")  # ✅ ADDED
+
+    # -----------------------------------------------------
+    # ✅ QUERY STRING
+    # -----------------------------------------------------
+    params = request.GET.copy()
+    params.pop("page", None)
+    params["search"] = search_clean
+
+    return render(request, "financehub/lcc.html", {
+        "data": page_obj,
+        "search": search_clean,
+        "query_string": params.urlencode(),
+    })
+
+
+
+
+def build_latest_payment_map(loan_numbers):
+    payment_latest_map = {}
+    payment_source_map = {}
+
+    def push_payment(loan, status, date, amount, source):
+        date_parsed = parse_payment_date_safe(date)
+        if not loan:
+            return
+
+        # track all sources
+        payment_source_map.setdefault(loan, set()).add(source)
+
+        # date required to be latest
+        if not date_parsed:
+            return
+
+        current = payment_latest_map.get(loan)
+        if not current or date_parsed > current["date"]:
+            payment_latest_map[loan] = {
+                "status": clean_payment_value(status),
+                "date": date_parsed,
+                "amount": clean_payment_value(amount),
+                "source": source,  # temp
+            }
+
+    # HERO - ✅ FIXED: use reference_number (with underscore)
+    for h in Hero.objects.filter(reference_number__in=loan_numbers):
+        push_payment(h.reference_number, h.status, h.date, h.amount, "HERO")
+
+    # KOTAK - ✅ FIXED: use loan_number and ecs_status
+    for k in KotakECS.objects.filter(loan_number__in=loan_numbers):
+        push_payment(k.loan_number, k.ecs_status, k.ecs_date, k.amount, "KOTAK")
+
+    # ESEBUZZ - ✅ FIXED: use loan_no and initiated_date
+    for e in EseBuzz.objects.filter(loan_no__in=loan_numbers):
+        push_payment(e.loan_no, e.status, e.initiated_date, e.amount, "ESEBUZZ")
+
+    # SMSQUARE - ✅ FIXED: use unique_registration_number
+    for s in Smsquare.objects.filter(unique_registration_number__in=loan_numbers):
+        push_payment(s.unique_registration_number, s.status, s.date, s.amount, "SMSQUARE")
+
+    # UPI - ✅ FIXED: use loan_no_reference and payment_status
+    for u in Upi.objects.filter(loan_no_reference__in=loan_numbers):
+        push_payment(u.loan_no_reference, u.payment_status, u.payment_datetime, u.transaction_amount, "UPI")
+
+    # merge sources
+    for loan, latest in payment_latest_map.items():
+        latest["source"] = " + ".join(sorted(payment_source_map.get(loan, [])))
+
+    return payment_latest_map
+
+# ---------------------------------------------------------------------
+# CREATE FEEDBACK
+# ---------------------------------------------------------------------
+def normalize_mobile(num):
+    if not num:
+        return None
+    s = str(num).strip()
+    if s.startswith("91") and len(s) == 12:
+        return s[2:]
+    return s
+
+@financehub_required
+def feedback_create(request):
+
+    loan_no = request.GET.get("loan", "")
+    emp_id = request.user.username
+
+    # ----------------------------
+    # CASE 1: DIRECT OPEN
+    # ----------------------------
+    if not loan_no:
+
+        if request.method == "POST":
+            form = FeedbackForm(request.POST)
+            if form.is_valid():
+                form.save()
+                return redirect("feedback_list")
+        else:
+            form = FeedbackForm(initial={"EmpID": emp_id})
+
+        return render(request, "financehub/feedback_form.html", {
+            "form": form,
+            "loan_no": "",
+            "combined_rows": [],
+            "freshdesk_tickets": [],   # ✅ SAFE DEFAULT
+        })
+
+    # ----------------------------
+    # CASE 2: OPENED FROM LCC TABLE
+    # ----------------------------
+    try:
+        l = Lcc.objects.get(loan_number=loan_no)
+    except Lcc.DoesNotExist:
+        l = None
+
+    payment = None
+    if loan_no:
+        payment_map = build_latest_payment_map([loan_no])
+        payment = payment_map.get(loan_no)
+
+
+    cust_mobile = l.cust_mobile if l else ""
+    guar_mobile = l.guarantor_mobile if l else ""
+    veh_no = l.vehicle_no if l else ""
+    cust_name = l.customer_name if l else ""
+    guar_name = l.guarantor if l else ""
+
+    # =========================================================
+    # DIALER DATA (LATEST PER DISP)
+    # =========================================================
+
+
+    dialer_row = {
+
+
+
+    }
+
+    cust_mobile_norm = normalize_mobile(cust_mobile)
+
+    if cust_mobile_norm:
+        base_qs = Dialer.objects.filter(
+            mobile=cust_mobile_norm
+        ).exclude(ptp_date__isnull=True).exclude(ptp_date="")
+
+        # PTP
+        obj = base_qs.filter(disp__iexact="PTP").order_by("-created_at").first()
+        if obj:
+            dialer_row.update({
+            })
+
+        # RTP
+        obj = base_qs.filter(disp__iexact="RTP").order_by("-created_at").first()
+        if obj:
+            dialer_row.update({
+            })
+
+        # THIRD PARTY
+        obj = base_qs.filter(disp__iexact="THIRD PARTY").order_by("-created_at").first()
+        if obj:
+            dialer_row.update({
+            })
+
+        # OTHER
+        obj = base_qs.exclude(
+            disp__in=["PTP", "RTP", "THIRD PARTY"]
+        ).order_by("-created_at").first()
+        if obj:
+            dialer_row.update({
+            })
+
+
+    # =========================================================
+    # ✅ NEW: FRESHDESK MATCH (LOAN NUMBER INSIDE SUBJECT)
+    # =========================================================
+    freshdesk_tickets = []
+
+    if loan_no:
+        freshdesk_tickets = Freshdesk.objects.filter(
+            subject__icontains=loan_no
+        ).order_by("-created_at")
+    # =========================================================
+
+    duenotices = []
+    if loan_no:
+        duenotices = DueNotice.objects.filter(
+            loan_number=loan_no
+        ).order_by("-id")
+
+    # =========================================================
+# ✅ CLU VISITS (MATCHED BY LOAN NUMBER)
+# =========================================================
+    clu_visits = []
+
+    if loan_no:
+        clu_visits = Clu.objects.filter(
+            loan_number=loan_no
+        ).order_by("-created_at")
+
+    # VISITERS (MATCH BY LOAN NUMBER)
+    visitors = []
+    if loan_no:
+        visitors = Visiter.objects.filter(
+            loan_number=loan_no
+        ).order_by("-created_at")
+
+
+
+    # ----------------------------
+    # EXACT LOAN FEEDBACK
+    # ----------------------------
+    exact_fb = list(
+        Feedback.objects.filter(LoanNO=loan_no).order_by("-id")
+    )
+
+    # ----------------------------
+    # RELATED LOANS (SAFE LOGIC)
+    # ----------------------------
+    filters = Q()
+
+    if cust_mobile not in ["", None, "0"]:
+        filters |= Q(cust_mobile=cust_mobile)
+
+    if guar_mobile not in ["", None, "0"]:
+        filters |= Q(guarantor_mobile=guar_mobile)
+
+    if veh_no not in ["", None]:
+        filters |= Q(vehicle_no=veh_no)
+
+    if filters:
+        related_qs = Lcc.objects.filter(filters).exclude(loan_number=loan_no)
+    else:
+        related_qs = Lcc.objects.none()
+
+    related_loan_numbers = [x.loan_number for x in related_qs]
+
+    # ----------------------------
+    # RELATED FEEDBACK
+    # ----------------------------
+    related_fb_all = Feedback.objects.filter(
+        LoanNO__in=related_loan_numbers
+    ).order_by("-id")
+
+    related_map = {}
+    for fb in related_fb_all:
+        related_map.setdefault(fb.LoanNO, []).append(fb)
+
+    # ----------------------------
+    # BUILD COMBINED HISTORY TABLE
+    # ----------------------------
+    combined_rows = []
+
+    for fb in exact_fb:
+        combined_rows.append({
+            "loan": fb.LoanNO,
+            "vehicle": veh_no,
+            "cust_mobile": cust_mobile,
+            "guar_mobile": guar_mobile,
+            "cust_name": cust_name,
+            "guar_name": guar_name,
+            "feedback": fb,
+        })
+
+    for rl in related_qs:
+        fblist = related_map.get(rl.loan_number, [])
+        if fblist:
+            for fb in fblist:
+                combined_rows.append({
+                    "loan": rl.loan_number,
+                    "vehicle": rl.vehicle_no,
+                    "cust_mobile": rl.cust_mobile,
+                    "guar_mobile": rl.guarantor_mobile,
+                    "cust_name": rl.customer_name,
+                    "guar_name": rl.guarantor,
+                    "feedback": fb,
+                })
+        else:
+            combined_rows.append({
+                "loan": rl.loan_number,
+                "vehicle": rl.vehicle_no,
+                "cust_mobile": rl.cust_mobile,
+                "guar_mobile": rl.guarantor_mobile,
+                "cust_name": rl.customer_name,
+                "guar_name": rl.guarantor,
+                "feedback": None,
+            })
+
+    # ----------------------------
+    # FORM
+    # ----------------------------
+    initial = {
+        "EmpID": emp_id,
+        "LoanNO": loan_no,
+        "customer_name": cust_name,
+        "vehicle_no": veh_no,
+    }
+
+    if request.method == "POST":
+        form = FeedbackForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("feedback_list")
+    else:
+        form = FeedbackForm(initial=initial)
+
+    return render(request, "financehub/feedback_form.html", {
+        "form": form,
+        "loan_no": loan_no,
+        "combined_rows": combined_rows,
+        "freshdesk_tickets": freshdesk_tickets,
+        "duenotices": duenotices,
+        "clu_visits": clu_visits,  # ✅ NEW
+        "visitors": visitors,  # ✅ NEW
+        "payment": payment,
+        "dialer_row": dialer_row,
+
+    })
+
+
+from django.shortcuts import render
+from django.db.models import Q
+import datetime
+from .models import Feedback
+
+
+
+@login_required
+def openrepo_list(request):
+    """
+    List OpenRepo records with search and pagination
+    """
+    queryset = OpenRepo.objects.all().order_by('-created_at')
+    
+    # Search functionality
+    search = request.GET.get('search', '').strip()
+    if search:
+        queryset = queryset.filter(
+            Q(customer_name__icontains=search) |
+            Q(loan_no__icontains=search) |
+            Q(vehicle_no__icontains=search) |
+            Q(branch__icontains=search) |
+            Q(company__icontains=search) |
+            Q(engine_no__icontains=search) |
+            Q(chassis_no__icontains=search) |
+            Q(remarks__icontains=search)
+        )
+    
+    # Statistics
+    total_records = queryset.count()
+    unique_customers = queryset.values('customer_name').distinct().count()
+    total_vehicles = queryset.exclude(vehicle_no='').count()
+    total_branches = queryset.values('branch').distinct().count()
+    
+    # Pagination
+    paginator = Paginator(queryset, 50)
+    page = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page)
+    
+    # Build query string for pagination
+    query_string = ''
+    if search:
+        query_string = f'search={search}&'
+    
+    context = {
+        'page_obj': page_obj,
+        'search': search,
+        'total_records': total_records,
+        'unique_customers': unique_customers,
+        'total_vehicles': total_vehicles,
+        'total_branches': total_branches,
+        'query_string': query_string,
+    }
+    return render(request, 'financehub/openrepo.html', context)
+
+
+
+
+
+
+
+# ---------------------------------------------------------------------
+# FEEDBACK LIST - POWER SEARCH + PAGINATION (100/page)
+# ---------------------------------------------------------------------
+
+from django.core.paginator import Paginator
+from django.db.models import Q
+import datetime
+
+@financehub_required
+def feedback_list(request):
+
+    # Get filter values - handle 'all' as empty
+    emp = request.GET.get('emp', '')
+    if emp == 'all' or emp == '':
+        emp = None
+    
+    date_str = request.GET.get('date', '')
+    if date_str == '':
+        date_str = None
+    
+    ftype = request.GET.get('ftype', '')
+    if ftype == 'all' or ftype == '':
+        ftype = None
+    
+    ctype = request.GET.get('ctype', '')
+    if ctype == '':
+        ctype = None
+    
+    visiting = request.GET.get('visiting', '')
+    if visiting == '':
+        visiting = None
+    
+    executive = request.GET.get('executive', '')
+    if executive == '':
+        executive = None
+    
+    ptp = request.GET.get('ptp', '')
+    if ptp == '':
+        ptp = None
+    
+    vdate = request.GET.get('vdate', '')
+    if vdate == '':
+        vdate = None
+    
+    search = request.GET.get('search', '')
+    if search == '':
+        search = None
+    
+    export_excel = request.GET.get('export')
+
+    qs = Feedback.objects.all().order_by("-id")
+
+    # Power search
+    if search:
+        qs = qs.filter(
+            Q(LoanNO__icontains=search) |
+            Q(customer_name__icontains=search) |
+            Q(vehicle_no__icontains=search) |
+            Q(Remarks__icontains=search) |
+            Q(EmpID__icontains=search)
+        )
+
+    # Employee filter
+    if emp:
+        qs = qs.filter(EmpID__iexact=emp)
+
+    # Date filter
+    if date_str:
+        try:
+            qs = qs.filter(Date=datetime.datetime.strptime(date_str, "%Y-%m-%d").date())
+        except:
+            pass
+
+    # Feedback type filter
+    if ftype:
+        qs = qs.filter(Dropdown=ftype)
+
+    # Contact type filter
+    if ctype:
+        qs = qs.filter(feedback_dropdwon=ctype)
+
+    # Visiting required filter
+    if visiting:
+        qs = qs.filter(visiting_required=(visiting == "yes"))
+
+    # Executive filter
+    if executive:
+        qs = qs.filter(executive_id=executive)
+
+    # PTP Date filter
+    if ptp:
+        try:
+            qs = qs.filter(PTPDate=datetime.datetime.strptime(ptp, "%Y-%m-%d").date())
+        except:
+            pass
+
+    # Visit Date filter
+    if vdate:
+        try:
+            qs = qs.filter(visit_date=datetime.datetime.strptime(vdate, "%Y-%m-%d").date())
+        except:
+            pass
+
+    # Check if export is requested
+    if export_excel == "excel":
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Feedback Data"
+        
+        headers = [
+            "ID", "Employee ID", "Loan Number", "Date", "Customer Name", 
+            "Vehicle No", "Feedback Type", "Contact Type", "PTP Date", 
+            "Remarks", "Visiting Required", "Executive ID", "Visit Date", "Created At"
+        ]
+        
+        # Style headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Add data
+        for row_idx, f in enumerate(qs, 2):
+            ws.cell(row=row_idx, column=1, value=f.id)
+            ws.cell(row=row_idx, column=2, value=f.EmpID or "")
+            ws.cell(row=row_idx, column=3, value=f.LoanNO or "")
+            ws.cell(row=row_idx, column=4, value=f.Date.strftime("%Y-%m-%d") if f.Date else "")
+            ws.cell(row=row_idx, column=5, value=f.customer_name or "")
+            ws.cell(row=row_idx, column=6, value=f.vehicle_no or "")
+            ws.cell(row=row_idx, column=7, value=f.Dropdown or "")
+            ws.cell(row=row_idx, column=8, value=f.feedback_dropdwon or "")
+            ws.cell(row=row_idx, column=9, value=f.PTPDate.strftime("%Y-%m-%d") if f.PTPDate else "")
+            ws.cell(row=row_idx, column=10, value=f.Remarks or "")
+            ws.cell(row=row_idx, column=11, value="Yes" if f.visiting_required else "No")
+            ws.cell(row=row_idx, column=12, value=f.executive_id or "")
+            ws.cell(row=row_idx, column=13, value=f.visit_date.strftime("%Y-%m-%d") if f.visit_date else "")
+            ws.cell(row=row_idx, column=14, value=f.created_at.strftime("%Y-%m-%d %H:%M:%S") if f.created_at else "")
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"feedback_export_{timestamp}.xlsx"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        
+        wb.save(response)
+        return response
+
+    # Normal view - return HTML
+    paginator = Paginator(qs, 1000)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    params = request.GET.copy()
+    params.pop("page", None)
+
+    filters = {
+        "emp": request.GET.get("emp", ""),
+        "date": date_str or "",
+        "ftype": request.GET.get("ftype", ""),
+        "ctype": ctype or "",
+        "visiting": visiting or "",
+        "executive": executive or "",
+        "ptp": ptp or "",
+        "vdate": vdate or "",
+        "search": search or "",
+    }
+
+    return render(request, "financehub/feedback_list.html", {
+        "data": page_obj,
+        "filters": filters,
+        "query_string": params.urlencode(),
+        "FTYPES": Feedback.DROPDOWN_CHOICES,
+        "CTYPES": Feedback.FEEDBACK_CHOICES,
+    })
+
+
+# ---------------------------------------------------------------
+# AJAX PROGRESS CHECK
+# ---------------------------------------------------------------
+# financehub/views.py (top imports)
+from django.http import JsonResponse
+# ... other imports remain
+
+# upload_progress (already exists), ensure it uses JsonResponse
+def upload_progress(request, upload_id):
+    try:
+        u = UploadHistory.objects.get(id=upload_id)
+        return JsonResponse({
+            "status": u.status,
+            "processed": u.processed_rows,
+            "total": u.total_rows,
+            "percent": u.progress_percentage(),
+            "error": u.error_message or "",
+        })
+    except UploadHistory.DoesNotExist:
+        return JsonResponse({"error": "Invalid Upload ID"}, status=404)
+
+
+
+
+
+
+from openpyxl import Workbook
+from django.http import HttpResponse
+
+
+def export_lcc_excel(final_data):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Loan Status Report"
+
+    # ======================
+    # HEADER ROW
+    # ======================
+    headers = [
+        "Loan Number",
+        "Customer Name",
+        "Company",
+        "Branch",
+        "Division",
+        "EMI",
+        "Loan Status",
+        "Received Date",
+        "CM",
+        "TL",
+        "Executive",
+        "Visit Date",
+        "Visit Status",
+    ]
+    ws.append(headers)
+
+    # ======================
+    # DATA ROWS
+    # ======================
+    for r in final_data:
+        ws.append([
+            r["loan_number"],
+            r["customer_name"],
+            r["company"],
+            r["branch"],
+            r.get("division", ""),
+            r["emi_due_2"],
+            r["loan_status"],
+            r["received_date"],
+            r["cm"],
+            r["tl"],
+            r["exec"],
+            r["visit_date"],
+            r["visit_status"],
+        ])
+
+    # ======================
+    # RESPONSE
+    # ======================
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = (
+        'attachment; filename="loan_status_report.xlsx"'
+    )
+
+    wb.save(response)
+    return response
+
+
+
+
+from django.http import HttpResponse
+from reportlab.lib.pagesizes import legal, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from datetime import date
+
+# ======================================================
+# STYLES
+# ======================================================
+styles = getSampleStyleSheet()
+
+wrap_style = ParagraphStyle(
+    "wrap",
+    parent=styles["Normal"],
+    fontSize=6.5,
+    leading=7.5,
+    wordWrap="CJK",
+)
+
+# ======================================================
+# HELPERS
+# ======================================================
+def clean_colon_zero(value):
+    if not value:
+        return ""
+    value = str(value).strip()
+    if value in ("00:0", "0:00"):
+        return ""
+    return value
+
+
+def wrap_cell(value, max_chars=50):
+    if not value:
+        return Paragraph("", wrap_style)
+
+    text = str(value)
+    lines = [text[i:i + max_chars] for i in range(0, len(text), max_chars)]
+    return Paragraph("<br/>".join(lines), wrap_style)
+
+
+# ======================================================
+# 🔥 FINAL SORT KEY (EMI → DATE)
+# ======================================================
+def lcc_final_sort_key(row):
+    """
+    FINAL SORT ORDER:
+
+    1️⃣ EMI DUE (PRIMARY)
+       - SEZ first
+       - Numeric EMI (higher → lower)
+       - Zero / blank last
+
+    2️⃣ INSTALLMENT DATE (SECONDARY)
+       - Oldest date first
+    """
+
+    # -----------------------
+    # INSTALLMENT DATE
+    # -----------------------
+    inst_date = row.get("installment_date")
+    if not inst_date:
+        inst_date = date.max  # empty dates last
+
+    # -----------------------
+    # EMI PROCESSING
+    # -----------------------
+    emi_raw = str(row.get("emi_due_2", "")).strip().lower()
+
+    # SEZ → TOP PRIORITY
+    if emi_raw == "sez":
+        emi_group = 0
+        emi_value = float("inf")
+
+    # NUMERIC EMI
+    else:
+        try:
+            emi_value = float(emi_raw)
+            if emi_value > 0:
+                emi_group = 1
+            else:
+                emi_group = 2  # zero EMI
+        except Exception:
+            emi_group = 2
+            emi_value = 0
+
+    # -----------------------
+    # SORT TUPLE
+    # -----------------------
+    return (
+        emi_group,      # SEZ → numeric → zero
+        -emi_value,     # BIG EMI FIRST
+        inst_date       # OLDEST DATE FIRST
+    )
+
+
+# ======================================================
+# PDF EXPORT
+# ======================================================
+def export_lcc_pdf(final_data):
+
+    # ✅ APPLY FINAL SORT
+    final_data = sorted(final_data, key=lcc_final_sort_key)
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="lcc_legal_report.pdf"'
+
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=landscape(legal),
+        leftMargin=6,
+        rightMargin=6,
+        topMargin=8,
+        bottomMargin=8,
+    )
+
+    table_data = [[
+        "S/No","Company","Branch","Loan No","Vehicle No","Loan Date",
+        "Customer Name","Mobile","Guarantor","G. Mobile",
+        "Class","Inst Date","Month TBC","Total",
+        "LPC","VAS","EMI","EMI 2","Run EMI",
+        "Paid","Bal","Inst",
+        "Last Rcvd","Seize","Address","Executive"
+    ]]
+
+    for i, r in enumerate(final_data, 1):
+        table_data.append([
+            i,
+            wrap_cell(r.get("company"), 20),
+            wrap_cell(r.get("branch"), 20),
+            wrap_cell(r.get("loan_number"), 20),
+            wrap_cell(r.get("vehicle_no"), 20),
+            wrap_cell(r.get("loan_date"), 15),
+            wrap_cell(r.get("customer_name"), 25),
+            wrap_cell(r.get("cust_mobile"), 15),
+            wrap_cell("" if str(r.get("guarantor")) == "0" else r.get("guarantor"), 25),
+            wrap_cell("" if str(r.get("guarantor_mobile")) == "0" else r.get("guarantor_mobile"), 15),
+            wrap_cell(r.get("vehicle_class"), 15),
+            wrap_cell(r.get("installment_date"), 15),
+            wrap_cell(clean_colon_zero(r.get("month_tbc")), 10),
+            wrap_cell(r.get("total_dues"), 10),
+            wrap_cell(r.get("lpc_dues"), 10),
+            wrap_cell(r.get("vas_hl"), 10),
+            wrap_cell(r.get("emi_due"), 10),
+            wrap_cell(
+                "" if str(r.get("emi_due_2")).strip().lower() == "0"
+                else str(r.get("emi_due_2")).upper(),
+                10
+            ),
+            wrap_cell(r.get("running_emi"), 10),
+            wrap_cell(r.get("paid_inst"), 10),
+            wrap_cell(r.get("balance_inst"), 10),
+            wrap_cell(r.get("inst"), 8),
+            wrap_cell(r.get("last_rcvd_date"), 15),
+            wrap_cell(r.get("seize_date"), 15),
+            wrap_cell(r.get("customer_address"), 50),
+            wrap_cell(r.get("collection_executive"), 20),
+        ])
+
+    col_widths = [
+        18, 38, 40, 48, 48, 40,
+        58, 48, 58, 48,
+        33, 40, 28, 38,
+        28, 28, 28, 28, 28,
+        18, 18, 18,
+        40, 38,
+        100, 60
+    ]
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    table.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
+        ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("ALIGN", (0,0), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("FONT", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,-1), 6),
+        ("LEFTPADDING", (0,0), (-1,-1), 3),
+        ("RIGHTPADDING", (0,0), (-1,-1), 3),
+        ("TOPPADDING", (0,0), (-1,-1), 2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+    ]))
+
+    doc.build([table])
+    return response
+
+
+
+
+
+import datetime
+from collections import Counter
+from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+
+
+from .models import (
+    Lcc,
+    ExecutiveVisitScheduling,
+    Clu,
+    CollectionAllocations,
+    Repo,
+    Paid,
+    Closed,
+    Hero,
+    KotakECS,
+    EseBuzz,
+    Smsquare,
+    Upi,
+    Freshdesk,
+    Dialer,
+    DueNotice,
+)
+
+def parse_emi_bucket(value):
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+EMI_BUCKETS = {
+    "0_0": (0, 0),
+    "1_5": (1, 5),
+    "6_10": (6, 10),
+    "11_20": (11, 20),
+    "21_50": (21, 50),
+    "50_plus": (51, None),
+}
+
+# ------------------------------------------------------------------
+# CLU VISIT DATE PARSER
+# ------------------------------------------------------------------
+def parse_visited_on(value):
+    if not value:
+        return None
+
+    value = value.strip()
+    formats = [
+        "%b %d,%Y, %I:%M:%S %p",
+        "%d-%b-%Y %I:%M %p",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.datetime.strptime(value, fmt)
+        except Exception:
+            continue
+
+    return None
+
+
+# ------------------------------------------------------------------
+# EMI NORMALIZER
+# ------------------------------------------------------------------
+def normalize_emi(value):
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def parse_payment_date_safe(val):
+    if not val:
+        return None
+
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%b %d,%Y, %I:%M:%S %p",
+    ):
+        try:
+            return datetime.datetime.strptime(str(val).strip(), fmt)
+        except Exception:
+            continue
+    return None
+
+def clean_payment_value(val):
+    if not val:
+        return None
+    val = str(val).strip()
+    return None if val.lower() == "nan" else val
+# ------------------------------------------------------------------
+# PAYMENT STATUS LOGIC (MINIMAL SAFE FIX)
+# ------------------------------------------------------------------
+
+
+
+
+
+# ------------------------------------------------------------------
+# EXECUTIVE VISIT SCHEDULE LIST
+# ------------------------------------------------------------------
+import hashlib
+
+
+
+# ------------------------------------------------------------------
+# EXECUTIVE VISIT SCHEDULE LIST
+# ------------------------------------------------------------------
+# views.py
+from django.db import connection
+from django.core.paginator import Paginator
+from django.core.cache import cache
+from collections import Counter, defaultdict
+from django.shortcuts import render
+from django.db.models import Q
+from .models import LoanStatusCache  # Add this import
+from django.db.models import Q, OuterRef, Subquery,Count
+
+from django.core.paginator import Paginator
+from django.core.cache import cache
+from collections import Counter, defaultdict
+from django.shortcuts import render
+from django.db.models import Q
+from .models import Lcc, Paid, Repo, Closed, LoanStatusCache, ExecutiveVisitScheduling, CollectionAllocations, DueNotice, Visiter, Freshdesk, Dialer  # Added Freshdesk and Dialer
+from django.db import connection
+from django.core.paginator import Paginator
+from django.core.cache import cache
+from django.shortcuts import render
+from django.db.models import Q, OuterRef, Subquery, Value, CharField, Case, When, Exists, Count
+from django.db.models.functions import Coalesce
+from django.db import models
+from django.db import connection
+from django.core.paginator import Paginator
+from django.core.cache import cache
+from django.shortcuts import render
+from django.db.models import Q, Count, OuterRef, Exists
+
+
+from django.core.paginator import Paginator
+from django.core.cache import cache
+from django.shortcuts import render
+from django.db.models import Q, Count, OuterRef, Exists
+from .models import Lcc, LoanStatusCache, ExecutiveVisitScheduling, CollectionAllocations, DueNotice, Visiter, Paid, Freshdesk, Dialer
+
+
+
+TOLERANCE = 500
+
+def get_loan_status(lcc, paid_amount, repo_set, closed_set):
+    loan_no = lcc.loan_number
+
+    # 1️⃣ CLOSED
+    if loan_no in closed_set:
+        return "CLOSED"
+
+    # 2️⃣ REPO
+    if loan_no in repo_set:
+        return "REPO"
+
+    # 3️⃣ EMI = 0 / SEZ / NONE
+    if str(lcc.emi_due_2).strip().lower() in ("0", "", "none", "sez"):
+        return "PAID" if paid_amount and paid_amount > 0 else "NOT_PAID"
+
+    # 4️⃣ Parse values
+    try:
+        received = float(paid_amount or 0)
+        month_tbc = float(lcc.month_tbc or 0)
+        total_dues = float(lcc.total_dues or 0)
+        emi_due_2 = float(lcc.emi_due_2)
+    except Exception:
+        return "NOT_PAID"
+
+    # 5️⃣ Calculate revised month TBC
+    if month_tbc == 0:
+        revised_month_tbc = total_dues / emi_due_2 if emi_due_2 else 0
+    else:
+        revised_month_tbc = month_tbc
+
+    # 6️⃣ FINAL DECISION
+    if received > 0 and (
+        received >= revised_month_tbc or
+        (revised_month_tbc - received) <= TOLERANCE
+    ):
+        return "PAID"
+    elif received > 0:
+        return "PARTLY_PAID"
+    else:
+        return "NOT_PAID"
+
+
+# ---- 8 Nov 2026: global sort for the Executive Visit Schedule (was: only the 200 rows on the page) ----
+_EVS_LCC = {"loan_number": "loan_number", "customer_name": "customer_name", "vehicle_no": "vehicle_no",
+            "cust_mobile": "cust_mobile", "company": "company", "division": "division", "branch": "branch",
+            "blc_case": "blc_cases", "suitcase": "suitcase", "emi_due_2": "emi_due_2", "bucket_position": "emi_due_2"}
+_EVS_ALLOC = {"cm": "cm", "tl": "tl", "exec": "executive_name"}
+_EVS_VISIT = {"id": "id", "has_schedule": "id", "visit_status": "visit_status", "empid": "empid",
+              "latest_visited_on": "visit_schedule_date", "visit_date": "visit_schedule_date",
+              "not_visited_reason": "not_visited_reason"}
+_EVS_NOTICE = {"notice_send_to": "send_to", "notice_bar_number": "bar_number", "notice_date": "notice_date",
+               "notice_type": "type_of_notice", "notice_status": "notice_status",
+               "notice_delivery_date": "delivery_date", "notice_return_date": "return_date"}
+_EVS_VISITOR = {"visitor_purpose": "purpose", "visitor_remark": "remarks"}
+_EVS_STATUS_RANK = {"PAID": 1, "PARTLY_PAID": 2, "PARTLY PAID": 2, "NOT_PAID": 3, "REPO": 4, "CLOSED": 5}
+
+
+def _evs_first(qs):
+    out = {}
+    for k, v in qs:
+        if k not in out:
+            out[k] = v
+    return out
+
+
+def _evs_global_sort(loans, field, order, status_map, loan_sub):
+    from django.db.models import Max
+    if field == "loan_number" and order != "desc":
+        return loans  # already in loan-number order
+    if field == "loan_status":
+        vals = status_map
+    elif field in _EVS_LCC:
+        vals = dict(Lcc.objects.filter(loan_number__in=loan_sub).values_list("loan_number", _EVS_LCC[field]))
+    elif field in _EVS_ALLOC:
+        vals = dict(CollectionAllocations.objects.filter(loan_number__in=loan_sub)
+                    .values_list("loan_number", _EVS_ALLOC[field]))
+    elif field in _EVS_VISIT:
+        vals = _evs_first(ExecutiveVisitScheduling.objects.filter(loanno__in=loan_sub)
+                          .order_by("loanno", "-id").values_list("loanno", _EVS_VISIT[field]))
+        if field == "has_schedule":
+            vals = {k: 1 for k in vals}
+    elif field in _EVS_NOTICE:
+        vals = _evs_first(DueNotice.objects.filter(loan_number__in=loan_sub)
+                          .order_by("loan_number", "-notice_date", "-id").values_list("loan_number", _EVS_NOTICE[field]))
+    elif field in _EVS_VISITOR:
+        vals = _evs_first(Visiter.objects.filter(loan_number__in=loan_sub)
+                          .order_by("loan_number", "-created_at").values_list("loan_number", _EVS_VISITOR[field]))
+    elif field == "received_date":
+        vals = dict(Paid.objects.filter(loan_number__in=loan_sub, received_date__isnull=False)
+                    .values("loan_number").annotate(m=Max("received_date")).values_list("loan_number", "m"))
+    else:
+        return loans  # Freshdesk / Dialer columns: page-only sort, as before
+
+    def key(loan):
+        v = vals.get(loan)
+        if field == "loan_status":
+            return (1, _EVS_STATUS_RANK.get(str(v or "NOT_PAID").upper(), 99))
+        if v is None or v == "":
+            return (0, 0)
+        if field in ("emi_due_2", "bucket_position"):
+            try:
+                return (1, float(str(v).lower().replace("sez", "999999")))
+            except ValueError:
+                return (1, 999999.0)
+        if field in ("id", "has_schedule"):
+            return (1, float(v))
+        if hasattr(v, "isoformat"):
+            return (1, 0, v.isoformat())
+        return (1, 0, str(v).lower())
+
+    return sorted(loans, key=key, reverse=(order == "desc"))
+# ---- end global sort ----
+
+@financehub_required
+def executive_visit_schedule_list(request):
+    from django.core.paginator import Paginator
+    from django.core.cache import cache
+    from django.db.models import Q, Sum
+    from collections import defaultdict
+    import hashlib
+    import json
+    import time
+
+    start_time = time.time()
+
+    # ==========================================================
+    # GET PARAMS
+    # ==========================================================
+    division_list = [d.strip() for d in request.GET.getlist("division") if d.strip() and d.strip() not in ("undefined", "null", "None")]
+    division = division_list[0] if len(division_list) == 1 else ""  # 9 Nov 2026: several allowed
+    blc_case = request.GET.get("blc_case", "").strip()
+    loanno = request.GET.get("loanno", "").strip()
+    empid = request.GET.get("empid", "").strip()
+    from_date = request.GET.get("from_date", "").strip()
+    to_date = request.GET.get("to_date", "").strip()
+    role = request.GET.get("role", "").strip()
+    search_empid = request.GET.get("search_empid", "").strip()
+    loan_status_filter = request.GET.get("loan_status", "").strip()
+    emi_bucket = request.GET.get("emi_bucket", "").strip()
+    remove_zeros = request.GET.get("remove_zeros") == "1"
+    remove_sez = request.GET.get("remove_sez") == "1"
+    # 15 Nov 2026 (Dilip): "expired case filter" = last due date before the month's last day (30 Nov 2026 in Nov).
+    expired_only = request.GET.get("expired") == "1"
+    branch = request.GET.get("branch", "").strip()
+    suitcase = request.GET.get("suitcase", "").strip()
+
+    centre_name = request.GET.get("centre_name", "").strip()
+    visit_filter = request.GET.get("visit_filter", "").strip()
+    company = request.GET.get("company", "").strip()
+    type_of_notice = request.GET.get("type_of_notice", "").strip()
+    sort_field = request.GET.get("sort_field", "loan_number")
+    sort_order = request.GET.get("sort_order", "asc")
+    page = int(request.GET.get("page", 1))
+    login_empid = request.user.username.strip()
+
+    # 9 Nov 2026: tick-box filters. One value keeps the old single-value code below; two or more are
+    # applied by the multi block before "Allocated to".
+    _ML = {}
+    for _k in ("branch", "centre_name", "company", "blc_case", "type_of_notice", "suitcase",
+               "emi_bucket", "visit_filter", "loan_status"):
+        _ML[_k] = list(dict.fromkeys(v.strip() for v in request.GET.getlist(_k)
+                                     if v.strip() and v.strip() not in ("undefined", "null", "None")))
+    _one = lambda k: _ML[k][0] if len(_ML[k]) == 1 else ""
+    branch, centre_name, company, blc_case = _one("branch"), _one("centre_name"), _one("company"), _one("blc_case")
+    type_of_notice, suitcase, emi_bucket, visit_filter = _one("type_of_notice"), _one("suitcase"), _one("emi_bucket"), _one("visit_filter")
+    loan_status_filter = _one("loan_status")
+    _status_set = set(_ML["loan_status"])
+
+    def valid_filter(v):
+        return v and v not in ["undefined", "null", "None", ""]
+
+    # ==========================================================
+    # BUILD QUERYSET
+    # ==========================================================
+    qs = Lcc.objects.all().only(
+        'loan_number', 'customer_name', 'vehicle_no', 'cust_mobile',
+        'company', 'division', 'branch', 'centre_name', 'blc_cases',
+        'emi_due_2', 'emi_due', 'month_tbc', 'total_dues', 'id','suitcase'
+    )
+
+    # Apply all filters (your existing filters)
+    if division_list:
+        qs = qs.filter(division__in=division_list)
+    if valid_filter(branch):
+        qs = qs.filter(branch=branch)
+    if valid_filter(centre_name):
+        qs = qs.filter(centre_name=centre_name)
+    if valid_filter(loanno):
+        qs = qs.filter(loan_number__icontains=loanno)
+    if valid_filter(company):
+        qs = qs.filter(company=company)
+    if valid_filter(blc_case):
+        qs = qs.filter(blc_cases=blc_case)
+
+    # ✅ FIX 1: Apply NOTICE FILTER EARLY (before status calculation)
+    if valid_filter(type_of_notice):
+        notice_loans = DueNotice.objects.filter(
+            type_of_notice__iexact=type_of_notice
+        ).values_list('loan_number', flat=True).distinct()
+        qs = qs.filter(loan_number__in=notice_loans)
+
+    if valid_filter(suitcase):
+        suitcases = Lcc.objects.filter(
+            suitcase__iexact=suitcase
+        ).values_list('loan_number', flat=True).distinct()
+        qs = qs.filter(loan_number__in=suitcases)
+
+
+    # EMI Bucket
+    if valid_filter(emi_bucket):
+        from django.db.models import FloatField
+        from django.db.models.functions import Cast
+
+        qs = qs.annotate(emi_float=Cast('emi_due_2', FloatField()))
+
+        if emi_bucket == "0_0":
+            qs = qs.filter(emi_float=0)
+        elif emi_bucket == "1_5":
+            qs = qs.filter(emi_float__gte=1, emi_float__lte=5)
+        elif emi_bucket == "6_10":
+            qs = qs.filter(emi_float__gte=6, emi_float__lte=10)
+        elif emi_bucket == "11_20":
+            qs = qs.filter(emi_float__gte=11, emi_float__lte=20)
+        elif emi_bucket == "21_50":
+            qs = qs.filter(emi_float__gte=21, emi_float__lte=50)
+        elif emi_bucket == "50_plus":
+            qs = qs.filter(emi_float__gt=50)
+
+    if remove_zeros:
+        qs = qs.exclude(emi_due_2__in=["0", "0.0"])
+    if remove_sez:
+        qs = qs.exclude(emi_due_2__iexact="sez")
+    if expired_only:
+        import calendar, datetime as _dt
+        _t = _dt.date.today()
+        _cut = _t.replace(day=calendar.monthrange(_t.year, _t.month)[1]).isoformat()
+        qs = qs.filter(last_due_date__lt=_cut).exclude(last_due_date__isnull=True).exclude(last_due_date="")
+
+    # ---- several values ticked (9 Nov 2026) ----
+    _many = lambda k: _ML[k] if len(_ML[k]) > 1 else []
+    for _k, _field in (("branch", "branch"), ("centre_name", "centre_name"), ("company", "company"),
+                       ("blc_case", "blc_cases"), ("suitcase", "suitcase")):
+        if _many(_k):
+            qs = qs.filter(**{_field + "__in": _many(_k)})
+    if _many("type_of_notice"):
+        _tq = Q()
+        for _t in _many("type_of_notice"):
+            _tq |= Q(type_of_notice__iexact=_t)
+        qs = qs.filter(loan_number__in=DueNotice.objects.filter(_tq).values_list('loan_number', flat=True))
+    if _many("emi_bucket"):
+        from django.db.models import FloatField as _FF
+        from django.db.models.functions import Cast as _Cast
+        _ranges = {"0_0": Q(emi_f=0), "1_5": Q(emi_f__gte=1, emi_f__lte=5), "6_10": Q(emi_f__gte=6, emi_f__lte=10),
+                   "11_20": Q(emi_f__gte=11, emi_f__lte=20), "21_50": Q(emi_f__gte=21, emi_f__lte=50), "50_plus": Q(emi_f__gt=50)}
+        _eq = Q()
+        for _b in _many("emi_bucket"):
+            _eq |= _ranges.get(_b, Q(pk__in=[]))
+        qs = qs.annotate(emi_f=_Cast('emi_due_2', _FF())).filter(_eq)
+    if _many("visit_filter"):
+        _sched = ExecutiveVisitScheduling.objects.values_list('loanno', flat=True)
+        _vq = Q()
+        for _vf in _many("visit_filter"):
+            if _vf == "visited":
+                _vq |= Q(loan_number__in=ExecutiveVisitScheduling.objects.filter(visit_status__iexact="visited").values_list('loanno', flat=True))
+            elif _vf == "not_visited":
+                _vq |= Q(loan_number__in=ExecutiveVisitScheduling.objects.filter(visit_status__iexact="not_visited").values_list('loanno', flat=True))
+            elif _vf == "scheduled":
+                _vq |= Q(loan_number__in=_sched)
+            elif _vf == "not_scheduled":
+                _vq |= ~Q(loan_number__in=_sched)
+        qs = qs.filter(_vq)
+
+    # Allocated to (9 Nov 2026): a role plus an employee ID, blank = the logged-in user. It used to be
+    # the logged-in user only, so an admin got nothing, and TL + Hierarchy Emp ID matched only himself.
+    _alloc_field = {"CM": "manager_employee_id__iexact", "TL": "tl_employee_id__iexact",
+                    "EXEC": "employee_id__iexact"}.get(role)
+    if _alloc_field:
+        _who = search_empid if valid_filter(search_empid) else login_empid
+        qs = qs.filter(loan_number__in=CollectionAllocations.objects.filter(
+            **{_alloc_field: _who}).values_list('loan_number', flat=True))
+
+    # Visit filters
+    if valid_filter(empid):
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            empid__icontains=empid
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+
+    if from_date and to_date:
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_schedule_date__range=[from_date, to_date]
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif from_date:
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_schedule_date__gte=from_date
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif to_date:
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_schedule_date__lte=to_date
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+
+    if visit_filter == "visited":
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_status__iexact="visited"
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif visit_filter == "not_visited":
+        visit_loans = ExecutiveVisitScheduling.objects.filter(
+            visit_status__iexact="not_visited"
+        ).values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif visit_filter == "scheduled":
+        visit_loans = ExecutiveVisitScheduling.objects.all().values_list('loanno', flat=True)
+        qs = qs.filter(loan_number__in=visit_loans)
+    elif visit_filter == "not_scheduled":
+        visit_loans = ExecutiveVisitScheduling.objects.all().values_list('loanno', flat=True)
+        qs = qs.exclude(loan_number__in=visit_loans)
+
+    # ==========================================================
+    # GET TOTAL COUNT (BEFORE LOAN STATUS FILTER)
+    # ==========================================================
+    total_before_status = qs.count()
+
+    if total_before_status == 0:
+        dropdowns = cache.get('dropdowns_final_v5')
+        if not dropdowns:
+            dropdowns = {
+                'branches': [], 'divisions': [], 'centres': [], 'notice_types': [], 'blc_cases': [], 'companies': [], 'suitcases':[],
+            }
+        context = {
+            "data": [], "page_obj": None, "total_count": 0,
+            "status_counts": {'CLOSED':0, 'REPO':0, 'PAID':0, 'PARTLY_PAID':0, 'NOT_PAID':0},
+            **dropdowns
+        }
+        return render(request, "financehub/executive_visit_schedule_list.html", context)
+
+    # ==========================================================
+    # ✅ FIX 2: GET ALL LOAN NUMBERS FOR STATUS CALCULATION
+    # ==========================================================
+    # 8 Nov 2026 speed-up: read the filtered loans once, match Closed/Repo/Paid by subquery
+    # (it was 3 reads of ~30k loans, two of them as 30k-value IN lists: ~4 s a load).
+    # order_by loan_number: the old loan-number-only read came back in that (index) order; keep the page order
+    lcc_rows = list(qs.only('loan_number', 'emi_due_2', 'month_tbc', 'total_dues').order_by('loan_number'))
+    all_filtered_loans = [l.loan_number for l in lcc_rows]
+    loan_sub = qs.values('loan_number')
+
+    # Get closed and repo in bulk
+    closed_dict = set(Closed.objects.filter(loan_number__in=loan_sub).values_list('loan_number', flat=True))
+    repo_dict = set(Repo.objects.filter(agreement_number__in=loan_sub).values_list('agreement_number', flat=True))
+
+    # Get paid amounts in bulk
+    paid_dict = dict(
+        Paid.objects.filter(loan_number__in=loan_sub)
+        .values('loan_number')
+        .annotate(total=Sum('received_amount'))
+        .values_list('loan_number', 'total')
+    )
+
+    # Get LCC data in bulk
+    lcc_dict = {l.loan_number: l for l in lcc_rows}
+
+    # Calculate status for each loan
+    loan_status_map = {}
+    status_counts = {'CLOSED': 0, 'REPO': 0, 'PAID': 0, 'PARTLY_PAID': 0, 'NOT_PAID': 0}
+
+    for loan_num in all_filtered_loans:
+        lcc_obj = lcc_dict.get(loan_num)
+        if not lcc_obj:
+            continue
+
+        paid_amount = float(paid_dict.get(loan_num, 0) or 0)
+        status = get_loan_status(lcc_obj, paid_amount, repo_dict, closed_dict)
+        loan_status_map[loan_num] = status
+        status_counts[status] += 1
+
+    # ✅ FIX 3: APPLY LOAN STATUS FILTER (BEFORE PAGINATION)
+    if _status_set:
+        filtered_loan_numbers = [loan for loan, status in loan_status_map.items() if status in _status_set]
+        wanted = set(filtered_loan_numbers)
+        all_loan_numbers = [l for l in all_filtered_loans if l in wanted]
+
+        # Recalculate total after status filter
+        total_count = len(filtered_loan_numbers)
+    else:
+        total_count = total_before_status
+        all_loan_numbers = all_filtered_loans
+
+    # ==========================================================
+    # PAGINATION - Get current page data
+    # ==========================================================
+
+    # 8 Nov 2026: sort the whole filtered list before paging (it used to sort only the 200 rows on the page)
+    all_loan_numbers = _evs_global_sort(all_loan_numbers, sort_field, sort_order, loan_status_map, loan_sub)
+
+    # Create paginator
+    paginator = Paginator(all_loan_numbers, 200)
+    page_obj = paginator.get_page(page)
+    current_page_loans = page_obj.object_list
+
+    # ==========================================================
+    # FETCH DATA FOR CURRENT PAGE ONLY
+    # ==========================================================
+    page_lcc = {l.loan_number: l for l in Lcc.objects.filter(loan_number__in=current_page_loans)}
+    closed_set = set(Closed.objects.filter(loan_number__in=current_page_loans).values_list('loan_number', flat=True))
+    repo_set = set(Repo.objects.filter(agreement_number__in=current_page_loans).values_list('agreement_number', flat=True))
+
+    paid_aggregate = dict(
+        Paid.objects.filter(loan_number__in=current_page_loans)
+        .values('loan_number')
+        .annotate(total=Sum('received_amount'))
+        .values_list('loan_number', 'total')
+    )
+
+    all_visits = {}
+    for v in ExecutiveVisitScheduling.objects.filter(loanno__in=current_page_loans).order_by('loanno', '-id'):  # newest schedule is current (9 Nov 2026)
+        if v.loanno not in all_visits:
+            all_visits[v.loanno] = v
+
+    # 9 Nov 2026: some loans have two allocations on purpose (non-starters: sales + collection executive).
+    # Keep them all; the collection row is primary, and EXEC lists everyone with a department tag.
+    _alloc_rows = {}
+    for _a in CollectionAllocations.objects.filter(loan_number__in=current_page_loans).order_by("id"):
+        _alloc_rows.setdefault(_a.loan_number, []).append(_a)
+    _emp_ids = {(_a.employee_id or "").strip() for _l in _alloc_rows.values() for _a in _l if len(_l) > 1}
+    _dept = dict(EmployeeMaster.objects.filter(employee_number__in=_emp_ids)
+                 .values_list("employee_number", "curr_department")) if _emp_ids else {}
+
+    def _alloc_tag(_a):
+        d = (_dept.get((_a.employee_id or "").strip()) or "").upper()
+        return "Sales" if "SALES" in d and "COLL" not in d else "Coll" if "COLL" in d else \
+            "Auction" if "AUCTION" in d else ""
+
+    all_allocs, all_exec_text = {}, {}
+    for _l, _rows in _alloc_rows.items():
+        _coll = [_a for _a in _rows if _alloc_tag(_a) == "Coll"] if len(_rows) > 1 else []
+        all_allocs[_l] = (_coll or _rows)[-1]
+        if len(_rows) > 1:
+            _seen, _parts = set(), []
+            for _a in sorted(_rows, key=lambda x: _alloc_tag(x) != "Coll"):
+                _key = ((_a.employee_id or "").strip(), (_a.executive_name or "").strip().upper())
+                if _key in _seen:
+                    continue  # the same person allocated twice
+                _seen.add(_key)
+                _t = _alloc_tag(_a)
+                _parts.append("%s (%s)" % (_a.executive_name or _a.employee_id, _t) if _t else (_a.executive_name or _a.employee_id or ""))
+            all_exec_text[_l] = " · ".join(p for p in _parts if p)
+
+    all_notices = {}
+    for n in DueNotice.objects.filter(loan_number__in=current_page_loans).order_by('loan_number', '-notice_date', '-id'):
+        if n.loan_number not in all_notices:
+            all_notices[n.loan_number] = n
+
+    all_received = {}
+    for p in Paid.objects.filter(loan_number__in=current_page_loans, received_date__isnull=False).order_by('loan_number', '-received_date'):
+        if p.loan_number not in all_received:
+            all_received[p.loan_number] = p.received_date
+
+    all_visitors = {}
+    for v in Visiter.objects.filter(loan_number__in=current_page_loans).order_by('loan_number', '-created_at'):
+        if v.loan_number not in all_visitors:
+            all_visitors[v.loan_number] = v
+
+    # 8 Nov 2026: Freshdesk is replaced by our WhatsApp ticketing (it ran ~100 text searches a load)
+    all_freshdesk = {}
+    all_tickets = {}
+    try:
+        from messaging.models import Case as _SmsCase
+        from messaging2.models import Case as _PsfCase
+        _page = list(current_page_loans)
+        for _M, _book in ((_PsfCase, "PSF"), (_SmsCase, "SMS")):
+            for _c in (_M.objects.filter(loan_number__in=_page).select_related("group")
+                       .order_by("-created_at").only("case_id", "loan_number", "status", "current_level",
+                                                     "created_at", "group__name")):
+                _k = (_c.loan_number or "").strip()
+                _prev = all_tickets.get(_k)
+                if _prev is None or (_c.created_at and _prev["at"] and _c.created_at > _prev["at"]):
+                    all_tickets[_k] = {"id": _c.case_id, "status": _c.status, "level": _c.current_level,
+                                       "dept": _c.group.name if _c.group else "", "at": _c.created_at, "book": _book}
+    except Exception:
+        logger.exception("evs tickets lookup failed")
+
+    # Dialer is replaced by our own calling app: latest outcome per loan from the SMSquare portal
+    all_calls = {}
+    all_reqs = {}
+    _key = os.getenv("SMSQUARE_CALL_FEEDBACK_KEY", "")
+    if _key and current_page_loans:
+        try:
+            import requests as _rq
+            _r = _rq.get(os.getenv("SMSQUARE_CALL_FEEDBACK_URL", "https://smsquare.info/api/call-feedback"),
+                         params={"loans": ",".join(current_page_loans)}, headers={"X-Api-Key": _key}, timeout=4)
+            if _r.status_code == 200:
+                _body = _r.json()
+                all_calls = _body.get("feedback", {})
+                _portal_visits = _body.get("visits", {})
+                # 9 Nov 2026: a pending schedule closes as Visited once the executive has been there
+                for _ln, _v in all_visits.items():
+                    _seen = _portal_visits.get((_ln or "").strip().upper())
+                    if _v.visit_status in (None, "") and _seen and str(_v.visit_schedule_date) <= _seen:
+                        _v.visit_status = "visited"
+                        _v.responded_at = timezone.now()
+                        _v.save(update_fields=["visit_status", "responded_at"])
+            _rr = _rq.get(_portal_base() + "/api/visit-requests", params={"loans": ",".join(current_page_loans)},
+                          headers={"X-Api-Key": _key}, timeout=4)
+            if _rr.status_code == 200:
+                all_reqs = _rr.json().get("requests", {})
+        except Exception:
+            logger.exception("evs call feedback fetch failed")
+
+    all_dialer = {}
+    all_mobiles = {}
+    for lcc_obj in page_lcc.values():
+        if lcc_obj.cust_mobile:
+            all_mobiles[lcc_obj.cust_mobile] = lcc_obj.loan_number
+    if all_mobiles:
+        dialer_list = Dialer.objects.filter(mobile__in=list(all_mobiles.keys())).order_by('mobile', '-created_at')
+        seen_mobiles = set()
+        for dialer in dialer_list:
+            if dialer.mobile not in seen_mobiles:
+                seen_mobiles.add(dialer.mobile)
+                loan_num = all_mobiles.get(dialer.mobile)
+                if loan_num:
+                    all_dialer[loan_num] = dialer
+
+    # ==========================================================
+    # BUILD DATA FOR CURRENT PAGE
+    # ==========================================================
+    notice_status_map = dict(DueNotice.NoticeStatus.choices)
+    all_rows = []
+
+    for loan_num in current_page_loans:
+        lcc_obj = page_lcc.get(loan_num)
+        if not lcc_obj:
+            continue
+
+        # Get status from pre-calculated map
+        status = loan_status_map.get(loan_num, "NOT_PAID")
+
+        visit = all_visits.get(loan_num)
+        alloc = all_allocs.get(loan_num)
+        notice = all_notices.get(loan_num)
+        visitor = all_visitors.get(loan_num)
+        freshdesk = all_freshdesk.get(loan_num)
+        dialer = all_dialer.get(loan_num)
+
+        all_rows.append({
+            "obj": visit,
+            "id": visit.id if visit else 0,
+            "loan_number": lcc_obj.loan_number,
+            "customer_name": lcc_obj.customer_name or "",
+            "suitcase":lcc_obj.suitcase or "",
+            "vehicle_no": lcc_obj.vehicle_no or "",
+            "cust_mobile": lcc_obj.cust_mobile or "",
+            "company": lcc_obj.company or "",
+            "division": lcc_obj.division or "",
+            "branch": lcc_obj.branch or "",
+            "blc_case": lcc_obj.blc_cases or "",
+            "bucket_position": lcc_obj.emi_due_2 or "",
+            "loan_status": status,
+            "has_schedule": bool(visit),
+            "visit_date": visit.visit_schedule_date if visit else "",
+            "visit_status": visit.visit_status if visit else "",
+            "not_visited_reason": visit.not_visited_reason if visit else "",
+            "cm": alloc.cm if alloc else "",
+            "tl": alloc.tl if alloc else "",
+            "exec": all_exec_text.get(loan_num) or (alloc.executive_name if alloc else ""),
+            "alloc_empid": (alloc.employee_id or "") if alloc else "",  # 9 Nov 2026: popup default
+            "empid": visit.empid if visit else "",
+            "latest_visited_on": visit.visit_schedule_date if visit else "",
+            "received_date": all_received.get(loan_num, ""),
+            "notice_send_to": notice.send_to if notice else "",
+            "notice_bar_number": notice.bar_number if notice else "",
+            "notice_date": notice.notice_date if notice else "",
+            "notice_type": notice.type_of_notice if notice else "",
+            "notice_status": notice.notice_status if notice else "",
+            "notice_status_label": notice_status_map.get(notice.notice_status, "") if notice else "",
+            "notice_delivery_date": notice.delivery_date if notice else "",
+            "notice_return_date": notice.return_date if notice else "",
+            "visitor_purpose": visitor.purpose if visitor else "",
+            "visitor_remark": visitor.remarks if visitor else "",
+            "Ticket_ID": (all_tickets.get(loan_num) or {}).get("id", ""),
+            "Ticket_Status": (all_tickets.get(loan_num) or {}).get("status", ""),
+            "Ticket_Level": " · ".join(x for x in ((all_tickets.get(loan_num) or {}).get("dept", ""), (all_tickets.get(loan_num) or {}).get("level", "")) if x),
+            "Ticket_Time": (all_tickets.get(loan_num) or {}).get("at") or "",
+            "Call_Outcome": (all_calls.get(loan_num.upper()) or {}).get("label", ""),
+            "Call_Note": (all_calls.get(loan_num.upper()) or {}).get("note", ""),
+            "Call_By": (all_calls.get(loan_num.upper()) or {}).get("by", ""),
+            "Call_Time": ((all_calls.get(loan_num.upper()) or {}).get("at", "") or "")[:16].replace("T", " "),
+            "date_req": all_reqs.get(loan_num.upper()),
+            "payment_source": dialer.disp if dialer else "",
+            "payment_status": "PTP" if dialer and dialer.ptp_date else "",
+            "payment_date": dialer.ptp_date if dialer else "",
+            "payment_amount": dialer.total_dues if dialer else "",
+        })
+
+    # 8 Nov 2026: pandas imports left the text "nan" in empty cells; show them empty
+    for _row in all_rows:
+        for _k, _v in list(_row.items()):
+            if isinstance(_v, str) and _v.strip().lower() in ("nan", "none", "null"):
+                _row[_k] = ""
+
+    # Apply sorting
+    reverse_sort = sort_order == "desc"
+
+    def get_sort_key(field_name):
+        def sort_key(row):
+            value = row.get(field_name, "")
+            if value is None or value == "":
+                return ("",)
+            if field_name == "id":
+                return (value if value else 0,)
+            elif field_name == "loan_status":
+                status_order = {"PAID": 1, "PARTLY_PAID": 2, "PARTLY PAID": 2, "NOT_PAID": 3, "REPO": 4, "CLOSED": 5}
+                return (status_order.get(str(value).upper(), 99),)
+            elif field_name == "emi_due_2":
+                try:
+                    return (float(str(value).replace("SEZ", "999999").replace("sez", "999999")),)
+                except:
+                    return (999999,)
+            else:
+                return (str(value).lower(),)
+        return sort_key
+
+    all_rows.sort(key=get_sort_key(sort_field), reverse=reverse_sort)
+    page_obj.object_list = all_rows
+
+    # ==========================================================
+    # GET DROPDOWNS
+    # ==========================================================
+    dropdowns = cache.get('dropdowns_final_v5')
+    if not dropdowns:
+        dropdowns = {
+            'branches': list(Lcc.objects.filter(branch__isnull=False).exclude(branch='').values_list('branch', flat=True).distinct().order_by('branch')[:200]),
+            'divisions': list(Lcc.objects.filter(division__isnull=False).exclude(division='').values_list('division', flat=True).distinct().order_by('division')[:100]),
+            'centres': list(Lcc.objects.filter(centre_name__isnull=False).exclude(centre_name='').values_list('centre_name', flat=True).distinct().order_by('centre_name')[:200]),
+            'notice_types': list(DueNotice.objects.filter(type_of_notice__isnull=False).exclude(type_of_notice='').values_list('type_of_notice', flat=True).distinct().order_by('type_of_notice')[:100]),
+            'blc_cases': list(Lcc.objects.filter(blc_cases__isnull=False).exclude(blc_cases='').values_list('blc_cases', flat=True).distinct().order_by('blc_cases')[:100]),
+            'companies': list(Lcc.objects.filter(company__isnull=False).exclude(company='').values_list('company', flat=True).distinct().order_by('company')[:200]),
+            'suitcases':list(Lcc.objects.filter(suitcase__isnull=False).exclude(suitcase='').values_list('suitcase', flat=True).distinct().order_by('suitcase')[:200])
+        }
+        cache.set('dropdowns_final_v5', dropdowns, 3600)
+
+    elapsed_time = time.time() - start_time
+    print(f"✅ Page {page} of {paginator.num_pages} | Total: {total_count} records | Status: CLOSED={status_counts['CLOSED']}, REPO={status_counts['REPO']}, PAID={status_counts['PAID']}, PARTLY={status_counts['PARTLY_PAID']}, NOT_PAID={status_counts['NOT_PAID']} | Loaded in {elapsed_time:.2f}s")
+
+    # ==========================================================
+    # RENDER RESPONSE
+    # ==========================================================
+    context = {
+        "data": all_rows,
+        "page_obj": page_obj,
+        "total_count": total_count,
+        "status_counts": status_counts,
+        **dropdowns,
+        "division": division, "division_list": division_list, "loanno": loanno, "empid": empid,
+        "from_date": from_date, "to_date": to_date, "role": role,
+        "search_empid": search_empid, "loan_status": loan_status_filter,
+        "remove_zeros": remove_zeros, "remove_sez": remove_sez, "expired_only": expired_only,
+        "branch": branch, "centre_name": centre_name, "emi_bucket": emi_bucket,
+        "visit_filter": visit_filter, "selected_blc_case": blc_case,"suitcase":suitcase,
+
+        "type_of_notice": type_of_notice, "company": company,
+        "sort_field": sort_field, "sort_order": sort_order,
+    }
+
+    return render(request, "financehub/executive_visit_schedule_list.html", context)
+
+
+def _evs_ajax(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _evs_json(obj):
+    from django.urls import reverse
+    d = obj.visit_schedule_date
+    d = d if isinstance(d, str) else d.strftime("%Y-%m-%d")
+    return JsonResponse({"ok": True, "id": obj.id, "loanno": obj.loanno, "empid": obj.empid, "date": d,
+                         "edit_url": reverse("executive_visit_schedule_edit", args=[obj.id]),
+                         "respond_url": reverse("executive_visit_response", args=[obj.id])})
+
+
+def _portal_base():
+    return os.getenv("SMSQUARE_CALL_FEEDBACK_URL", "https://smsquare.info/api/call-feedback").rsplit("/api/", 1)[0]
+
+
+def _portal_key():
+    return os.getenv("SMSQUARE_CALL_FEEDBACK_KEY", "")
+
+
+from django.views.decorators.csrf import csrf_exempt as _csrf_exempt
+
+
+@_csrf_exempt
+def portal_schedule_status(request):
+    """9 Nov 2026: the SMSquare executive app reports "not visited" (or visited) on a schedule."""
+    import json as _json
+    from django.utils import timezone as _tz
+    key = _portal_key()
+    if not key or request.headers.get("X-Api-Key") != key:
+        return JsonResponse({"ok": False, "error": "X-Api-Key required"}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST only"}, status=405)
+    try:
+        body = _json.loads(request.body or b"{}")
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "invalid JSON"}, status=400)
+    action = body.get("action")
+    if action not in ("not_visited", "visited"):
+        return JsonResponse({"ok": False, "error": "action must be not_visited or visited"}, status=400)
+    obj = ExecutiveVisitScheduling.objects.filter(pk=body.get("schedule_id")).first()
+    if obj is None or str(obj.empid).strip() != str(body.get("empid") or "").strip():
+        return JsonResponse({"ok": False, "error": "That visit is not scheduled for this employee."}, status=404)
+    obj.visit_status = action
+    obj.not_visited_reason = (str(body.get("reason") or "")[:500] or None) if action == "not_visited" else None
+    obj.responded_at = _tz.now()
+    obj.save(update_fields=["visit_status", "not_visited_reason", "responded_at"])
+    return JsonResponse({"ok": True})
+
+
+
+@_csrf_exempt
+def portal_schedule_create(request):
+    """14 Nov 2026: a TL / manager in the SMSquare app plans his team's visits (Team schedule upload).
+    Same key as schedule-status. Body {"rows": [{"loanno", "empid", "date": "YYYY-MM-DD"}], "by": "<emp>"}.
+    Same check as the Schedule popup (loan in the loan list); a loan already scheduled for that employee
+    on that day is skipped. Returns {"ok", "added", "ids", "refused": [[index, reason]]}."""
+    import json as _json
+    key = _portal_key()
+    if not key or request.headers.get("X-Api-Key") != key:
+        return JsonResponse({"ok": False, "error": "X-Api-Key required"}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST only"}, status=405)
+    try:
+        body = _json.loads(request.body or b"{}")
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "invalid JSON"}, status=400)
+    rows = body.get("rows")
+    if not isinstance(rows, list) or len(rows) > 500:
+        return JsonResponse({"ok": False, "error": "rows must be a list of at most 500"}, status=400)
+    loans = {str(r.get("loanno") or "").strip() for r in rows if isinstance(r, dict)}
+    known = {str(x).strip().upper() for x in Lcc.objects.filter(loan_number__in=loans).values_list("loan_number", flat=True)}
+    ids, refused = [], []
+    for i, r in enumerate(rows):
+        r = r if isinstance(r, dict) else {}
+        loan, emp = str(r.get("loanno") or "").strip(), str(r.get("empid") or "").strip()
+        try:
+            when = datetime.date.fromisoformat(str(r.get("date") or "").strip())
+        except ValueError:
+            when = None
+        if not (loan and emp and when):
+            refused.append([i, "loan number, employee ID and date are all needed"])
+        elif loan.upper() not in known:
+            refused.append([i, "loan is not in the loan list"])
+        elif ExecutiveVisitScheduling.objects.filter(loanno=loan, empid=emp, visit_schedule_date=when).exists():
+            refused.append([i, "already scheduled for that day"])
+        else:
+            ids.append(ExecutiveVisitScheduling.objects.create(loanno=loan, empid=emp, visit_schedule_date=when).pk)
+    return JsonResponse({"ok": True, "added": len(ids), "ids": ids, "refused": refused})
+
+@financehub_required
+def evs_date_request_decide(request):
+    """9 Nov 2026: Approve (reschedule to the asked date) or Reject an executive's date-change request."""
+    import requests as _rq
+    if request.method != "POST":
+        return redirect("executive_visit_schedule_list")
+    decision = request.POST.get("decision")
+    rid = request.POST.get("req_id")
+    obj = ExecutiveVisitScheduling.objects.filter(pk=request.POST.get("schedule_id")).first()
+    new_date = (request.POST.get("new_date") or "").strip()
+    if decision not in ("approved", "rejected") or not rid or obj is None:
+        messages.error(request, "That request could not be read.")
+        return redirect(_evs_next(request))
+    try:
+        r = _rq.post("%s/api/visit-requests/%s/decide" % (_portal_base(), rid), timeout=6,
+                     json={"decision": decision, "by": request.user.username}, headers={"X-Api-Key": _portal_key()})
+        ok = r.status_code == 200
+    except Exception:
+        ok = False
+    if not ok:
+        messages.error(request, "Could not reach the SMSquare app. Nothing was changed; try again.")
+        return redirect(_evs_next(request))
+    if decision == "approved":
+        ExecutiveVisitScheduling.objects.create(loanno=obj.loanno, empid=obj.empid, visit_schedule_date=new_date)
+        messages.success(request, "Approved: %s moved to %s" % (obj.loanno, new_date))
+    else:
+        messages.success(request, "Refused the date change for %s" % obj.loanno)
+    return redirect(_evs_next(request))
+
+
+def _evs_next(request):
+    """Back to the list with the user's filters (only a FinanceHub path is accepted)."""
+    nxt = request.POST.get("next") or request.GET.get("next") or ""
+    return nxt if nxt.startswith("/financehub/") else "executive_visit_schedule_list"
+
+
+@financehub_required
+def executive_visit_schedule_create(request):
+    """9 Nov 2026: schedule one loan from the Executive Visit Schedule (before, only by Excel upload)."""
+    import types
+    loan = (request.POST.get("loanno") or request.GET.get("loan") or "").strip()
+    if request.method == "POST":
+        empid = (request.POST.get("empid") or "").strip()
+        when = (request.POST.get("visit_schedule_date") or "").strip()
+        if not (loan and empid and when):
+            messages.error(request, "Loan number, employee ID and visit date are all needed.")
+        elif not Lcc.objects.filter(loan_number=loan).exists():
+            messages.error(request, "Loan %s is not in the loan list." % loan)
+        else:
+            obj = ExecutiveVisitScheduling.objects.create(loanno=loan, empid=empid, visit_schedule_date=when)
+            if _evs_ajax(request):
+                return _evs_json(obj)
+            messages.success(request, "Visit scheduled for %s on %s" % (loan, when))
+            return redirect(_evs_next(request))
+        if _evs_ajax(request):
+            return JsonResponse({"ok": False, "error": "Employee ID and visit date are both needed."
+                                 if loan and Lcc.objects.filter(loan_number=loan).exists()
+                                 else "Loan %s is not in the loan list." % loan}, status=400)
+    return render(request, "financehub/executive_visit_schedule_edit.html", {
+        "obj": types.SimpleNamespace(loanno=loan, empid=request.POST.get("empid", ""), visit_schedule_date=None),
+        "is_new": True,
+    })
+
+
+@financehub_required
+def executive_visit_schedule_edit(request, pk):
+    obj = ExecutiveVisitScheduling.objects.get(pk=pk)
+
+    if request.method == "POST":
+        new_loan = (request.POST.get("loanno") or obj.loanno or "").strip()
+        new_emp = (request.POST.get("empid") or "").strip()
+        new_date = (request.POST.get("visit_schedule_date") or "").strip()
+        if not (new_loan and new_emp and new_date):  # 9 Nov 2026: a blank field used to save as empty
+            if _evs_ajax(request):
+                return JsonResponse({"ok": False, "error": "Employee ID and visit date are both needed."}, status=400)
+            messages.error(request, "Loan number, employee ID and visit date are all needed.")
+            return redirect(request.path)
+        old_date = obj.visit_schedule_date.strftime("%Y-%m-%d") if hasattr(obj.visit_schedule_date, "strftime") else str(obj.visit_schedule_date)
+        rescheduled = new_date != old_date
+        if rescheduled:
+            # 9 Nov 2026: a new date is a new schedule (Pending); the old one stays as history with its result
+            obj = ExecutiveVisitScheduling.objects.create(loanno=new_loan, empid=new_emp, visit_schedule_date=new_date)
+        else:
+            obj.loanno, obj.empid = new_loan, new_emp
+            obj.save()
+        if _evs_ajax(request):
+            resp = _evs_json(obj)
+            import json as _json
+            body = _json.loads(resp.content); body["rescheduled"] = rescheduled
+            return JsonResponse(body)
+
+        messages.success(request, "Visit schedule updated successfully")
+        return redirect(_evs_next(request))
+
+    return render(request, "financehub/executive_visit_schedule_edit.html", {
+        "obj": obj
+    })
+
+
+
+
+
+@financehub_required
+def executive_my_visits(request):
+    empid = request.user.username  # employee_id
+
+    visits = ExecutiveVisitScheduling.objects.filter(
+        empid=empid
+    ).order_by("visit_schedule_date")
+
+    # collect loan numbers
+    loan_numbers = list(
+        visits.values_list("loanno", flat=True)
+    )
+
+    # fetch LCC data
+    lcc_map = {
+        l.loan_number: l
+        for l in Lcc.objects.filter(loan_number__in=loan_numbers)
+    }
+
+    # merge data
+    data = []
+    for v in visits:
+        lcc = lcc_map.get(v.loanno)
+
+        data.append({
+            "visit": v,                          # IMPORTANT
+            "loan_number": v.loanno,
+            "visit_date": v.visit_schedule_date,
+            "status": v.visit_status,
+            "customer_name": lcc.customer_name if lcc else "",
+            "vehicle_no": lcc.vehicle_no if lcc else "",
+        })
+
+    return render(request, "financehub/executive_my_visits.html", {
+        "data": data
+    })
+
+
+
+
+
+from django.utils import timezone
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+
+from .models import (
+    ExecutiveVisitScheduling,
+    CollectionAllocations,   # ✅ REQUIRED
+)
+
+
+from django.utils import timezone
+@financehub_required
+def executive_visit_response(request, pk):
+
+    visit = get_object_or_404(ExecutiveVisitScheduling, pk=pk)
+    next_url = request.POST.get("next") or request.GET.get("next")
+
+    # EXEC CHECK (unchanged logic)
+    is_exec = CollectionAllocations.objects.filter(
+        employee_id=request.user.username
+    ).exists()
+
+    if request.method == "POST":
+
+        # ---------------- RESPONSE (ALWAYS)
+        visit.visit_status = request.POST.get("visit_status")
+
+        reason = request.POST.get("not_visited_reason", "").strip()
+        if visit.visit_status == "not_visited":
+            visit.not_visited_reason = reason
+        else:
+            visit.not_visited_reason = ""   # clear old reason safely
+
+        # ---------------- SCHEDULING (ONLY IF PROVIDED & NOT EXEC)
+        if not is_exec:
+
+            empid = request.POST.get("empid")
+            visit_date = request.POST.get("visit_schedule_date")
+
+            # ✅ ONLY UPDATE IF USER CHANGED IT
+            if empid:
+                visit.empid = empid
+
+            if visit_date:
+                visit.visit_schedule_date = visit_date
+
+        visit.save()
+        return redirect(next_url or "executive_visit_schedule_list")
+
+    return render(request, "financehub/executive_visit_response.html", {
+        "visit": visit,
+        "next": next_url,
+        "is_exec": is_exec,
+    })
+
+
+
+
+from django.db.models import Q
+from django.core.paginator import Paginator
+from .models import DueNotice
+
+@financehub_required
+def due_notice_list(request):
+
+    query = request.GET.get("q", "").strip()
+    qs = DueNotice.objects.all().order_by("-created_at")
+
+    # 🔍 SEARCH
+    if query:
+        qs = qs.filter(
+            Q(loan_number__icontains=query) |
+            Q(bar_number__icontains=query) |
+            Q(vehicle_no__icontains=query) |
+            Q(customer_name__icontains=query) |
+            Q(company__icontains=query) |
+            Q(branch__icontains=query) |
+            Q(send_to__icontains=query) |
+            Q(type_of_notice__icontains=query) |
+            Q(notice_status__icontains=query)
+        )
+
+    # ✅ AJAX UPDATE
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+
+            notice_id = data.get("notice_id")
+            status = data.get("notice_status")
+            delivery_date = data.get("delivery_date")
+            return_date = data.get("return_date")
+            return_reason = data.get("return_reason", "").strip()
+
+            if not notice_id or not status:
+                return JsonResponse({"success": False, "error": "Missing data"})
+
+            update_data = {"notice_status": status}
+
+            if status == DueNotice.NoticeStatus.DELIVERED:
+                if not delivery_date:
+                    return JsonResponse({"success": False, "error": "Delivery date required"})
+                update_data["delivery_date"] = delivery_date
+                update_data["return_date"] = None
+                update_data["return_reason"] = None
+
+            elif status == DueNotice.NoticeStatus.RETURNED:
+                if not return_date:
+                    return JsonResponse({"success": False, "error": "Return date required"})
+                update_data["return_date"] = return_date
+                update_data["return_reason"] = return_reason
+                update_data["delivery_date"] = None
+
+            else:  # IN TRANSIT
+                update_data["delivery_date"] = None
+                update_data["return_date"] = None
+                update_data["return_reason"] = None  # ✅ FIXED
+
+            DueNotice.objects.filter(id=notice_id).update(**update_data)
+
+            return JsonResponse({"success": True})
+
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)})
+
+    # 📄 PAGINATION
+    paginator = Paginator(qs, 50)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(
+        request,
+        "financehub/due_notice_list.html",
+        {
+            "page_obj": page_obj,
+            "query": query,
+            "status_choices": DueNotice.NoticeStatus.choices,
+        },
+    )
+
+
+
+# ======================== DELETE OPTION FOR LCC, C ALLOCATION, REPO, PAID, CLOSED =========================
+
+@financehub_required
+def lcc_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
+    lcc = Lcc.objects.all()
+    lcc.delete()
+    return render(request,'financehub/upload.html')
+
+@financehub_required
+def open_repo(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
+    closed = OpenRepo.objects.all()
+    closed.delete()
+    return render(request,'financehub/upload.html')
+
+
+@financehub_required
+def repo_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
+    repo = Repo.objects.all()
+    repo.delete()
+    return render(request,'financehub/upload.html')
+
+@financehub_required
+def cA_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
+    ca = CollectionAllocations.objects.all()
+    ca.delete()
+    return render(request,'financehub/upload.html')
+
+@financehub_required
+def paid_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
+    paid = Paid.objects.all()
+    paid.delete()
+    return render(request,'financehub/upload.html')
+
+@financehub_required
+def closed_delete(request):
+    if request.method != 'POST' or request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: was GET-able by anyone
+        return HttpResponse('Only the admin can delete, with the button on the upload page.', status=403)
+    closed = Closed.objects.all()
+    closed.delete()
+    return render(request,'financehub/upload.html')
+
+
+
+
+
+
+
+@financehub_required
+def download_employee_report(request):
+
+    import calendar
+    import datetime
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from openpyxl import load_workbook
+    from openpyxl.styles import Font
+
+    # =====================================================
+    # GET DATE RANGE
+    # =====================================================
+    from_date_param = request.GET.get("from_date", "").strip()
+    to_date_param = request.GET.get("to_date", "").strip()
+
+    # =====================================================
+    # LOAD EMPLOYEE MASTER
+    # =====================================================
+    master_qs = EmployeeMaster.objects.all().values(
+        "employee_number",
+        "employee_name",
+        "joined_on",
+        "curr_designation",
+        "curr_department",
+        "curr_location",
+        "phone",
+        "reporting_to_collections",
+        "status",
+        "lwd"
+    )
+
+    master_df = pd.DataFrame(list(master_qs))
+
+    if master_df.empty:
+        return HttpResponse("No Employee Master data found.")
+
+    master_df["status"] = (
+        master_df["status"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    master_df["joined_on"] = pd.to_datetime(
+        master_df["joined_on"],
+        format="%d-%b-%y",
+        errors="coerce"
+    )
+
+    master_df["lwd"] = pd.to_datetime(
+        master_df["lwd"],
+        format="%d %b %Y",
+        errors="coerce"
+    )
+
+    master_df["phone"] = (
+        master_df["phone"]
+        .astype(str)
+        .str.split(".")
+        .str[0]
+    )
+
+    active_employees = master_df[
+        (master_df["status"] != "LEFT")
+        &
+        (
+            master_df["curr_department"]
+            .str.upper()
+            .isin(["COLLECTIONS", "SALES/COLLECTION"])
+        )
+    ]
+
+    active_employees = active_employees[
+        active_employees["curr_location"].str.upper()
+        != "HEAD OFFICE - RANIGUNJ"
+    ]
+
+    # =====================================================
+    # LOAD CLU
+    # =====================================================
+    clu_qs = Clu.objects.values(
+        "employee_id",
+        "employee_name",
+        "visited_on"
+    )
+
+    clu_df = pd.DataFrame(list(clu_qs))
+
+    if not clu_df.empty:
+
+        clu_df = clu_df[
+            clu_df["employee_id"].notnull()
+        ]
+
+        clu_df["visit_datetime"] = pd.to_datetime(
+            clu_df["visited_on"],
+            format="%b %d,%Y, %I:%M:%S %p",
+            errors="coerce"
+        )
+
+        clu_df["visit_date"] = (
+            clu_df["visit_datetime"]
+            .dt.normalize()
+        )
+
+    # =====================================================
+    # DATE RANGE LOGIC
+    # =====================================================
+    try:
+
+        # ---------------------------------
+        # CUSTOM DATE RANGE
+        # ---------------------------------
+        if from_date_param and to_date_param:
+
+            start_date = datetime.datetime.strptime(
+                from_date_param,
+                "%Y-%m-%d"
+            ).date()
+
+            end_date = datetime.datetime.strptime(
+                to_date_param,
+                "%Y-%m-%d"
+            ).date()
+
+            if start_date > end_date:
+                return HttpResponse(
+                    "From Date cannot be greater than To Date"
+                )
+
+            if not clu_df.empty:
+
+                clu_df = clu_df[
+                    (clu_df["visit_date"] >= pd.Timestamp(start_date))
+                    &
+                    (clu_df["visit_date"] <= pd.Timestamp(end_date))
+                ]
+
+        # ---------------------------------
+        # CURRENT MONTH (OLD LOGIC)
+        # ---------------------------------
+        else:
+
+            if not clu_df.empty:
+
+                max_date = clu_df["visit_date"].max()
+
+                if pd.isna(max_date):
+                    max_date = pd.Timestamp(
+                        datetime.date.today()
+                    )
+
+            else:
+
+                max_date = pd.Timestamp(
+                    datetime.date.today()
+                )
+
+            year = max_date.year
+            month = max_date.month
+
+            start_date = datetime.date(
+                year,
+                month,
+                1
+            )
+
+            end_date = datetime.date(
+                year,
+                month,
+                calendar.monthrange(year, month)[1]
+            )
+
+    except Exception as e:
+
+        return HttpResponse(
+            f"Invalid date range selected. Error: {str(e)}"
+        )
+
+    # =====================================================
+    # GENERATE DATE LIST
+    # =====================================================
+    all_days_list = pd.date_range(
+        start=start_date,
+        end=end_date
+    )
+
+    # =====================================================
+    # CLEAN CLU
+    # =====================================================
+    if not clu_df.empty:
+
+        clu_df = clu_df.sort_values(
+            by=["visit_datetime"]
+        )
+
+        clu_df = clu_df.groupby(
+            ["employee_id", "visit_date"],
+            as_index=False
+        ).first()
+
+    # =====================================================
+    # EMPLOYEE x DAY MATRIX
+    # =====================================================
+    employees = active_employees[
+        [
+            "employee_number",
+            "employee_name",
+            "joined_on"
+        ]
+    ].drop_duplicates()
+
+    all_days = pd.DataFrame(
+        [
+            (eid, ename, jdate, day)
+            for eid, ename, jdate in employees.values
+            for day in all_days_list
+        ],
+        columns=[
+            "employee_id",
+            "employee_name",
+            "joined_on",
+            "visit_date"
+        ]
+    )
+
+    # =====================================================
+    # MERGE VISITS
+    # =====================================================
+    if not clu_df.empty:
+
+        merged = pd.merge(
+            all_days,
+            clu_df[
+                [
+                    "employee_id",
+                    "visit_date",
+                    "visit_datetime"
+                ]
+            ],
+            on=[
+                "employee_id",
+                "visit_date"
+            ],
+            how="left"
+        )
+
+    else:
+
+        merged = all_days.copy()
+        merged["visit_datetime"] = None
+
+    # =====================================================
+    # PIVOT
+    # =====================================================
+    day_df = merged.pivot(
+        index=[
+            "employee_id",
+            "employee_name",
+            "joined_on"
+        ],
+        columns="visit_date",
+        values="visit_datetime"
+    ).reset_index()
+
+    day_df = day_df[
+        [
+            "employee_id",
+            "employee_name",
+            "joined_on"
+        ]
+        + list(all_days_list)
+    ]
+
+    # =====================================================
+    # ATTENDANCE LOGIC
+    # =====================================================
+    for day in all_days_list:
+
+        day_df[day] = day_df.apply(
+            lambda row:
+            (
+                "Not Yet Joined"
+                if (
+                    pd.notna(row["joined_on"])
+                    and row["joined_on"] > day
+                )
+                else (
+                    None
+                    if pd.isna(row[day])
+                    else row[day]
+                )
+            ),
+            axis=1
+        )
+
+    # =====================================================
+    # FINAL MERGE
+    # =====================================================
+    final_df = pd.merge(
+        active_employees,
+        day_df,
+        left_on=[
+            "employee_number",
+            "employee_name",
+            "joined_on"
+        ],
+        right_on=[
+            "employee_id",
+            "employee_name",
+            "joined_on"
+        ],
+        how="left"
+    )
+
+    cols = (
+        list(active_employees.columns)
+        + list(all_days_list)
+    )
+
+    final_df = final_df[cols]
+
+    final_df["joined_on"] = (
+        final_df["joined_on"]
+        .dt.strftime("%Y-%m-%d")
+    )
+
+    final_df["status"] = final_df["status"].replace(
+        ["NULL", None, ""],
+        "NONE"
+    )
+
+    # =====================================================
+    # COLUMN NAMES
+    # =====================================================
+    final_df.columns = [
+        (
+            col.strftime("%d-%b (%a)")
+            if isinstance(col, pd.Timestamp)
+            else col
+        )
+        for col in final_df.columns
+    ]
+
+    # =====================================================
+    # EXCEL EXPORT
+    # =====================================================
+    output = BytesIO()
+    final_df.to_excel(output, index=False)
+    output.seek(0)
+
+    wb = load_workbook(output)
+    ws = wb.active
+
+    day_to_col_index = {
+        day: 11 + idx
+        for idx, day in enumerate(all_days_list)
+    }
+
+    for row_idx in range(2, ws.max_row + 1):
+
+        for day_date, col_idx in day_to_col_index.items():
+
+            cell = ws.cell(
+                row=row_idx,
+                column=col_idx
+            )
+
+            if cell.value == "Not Yet Joined":
+
+                cell.font = Font(color="000000")
+
+            elif cell.value == "Sunday":
+
+                cell.font = Font(color="0000FF")
+
+            elif cell.value == "Absent":
+
+                cell.font = Font(color="000000")
+
+            elif isinstance(
+                cell.value,
+                datetime.datetime
+            ):
+
+                if cell.value.time() > datetime.time(7, 0):
+
+                    cell.font = Font(
+                        color="FF0000"
+                    )
+
+                else:
+
+                    cell.font = Font(
+                        color="000000"
+                    )
+
+                cell.number_format = (
+                    "MMM DD,YYYY, hh:mm:ss AM/PM"
+                )
+
+            elif cell.value is None:
+
+                if day_date.weekday() == 6:
+
+                    cell.value = "Sunday"
+                    cell.font = Font(
+                        color="0000FF"
+                    )
+
+                else:
+
+                    cell.value = "Absent"
+                    cell.font = Font(
+                        color="000000"
+                    )
+
+    final_output = BytesIO()
+    wb.save(final_output)
+    final_output.seek(0)
+
+    # =====================================================
+    # FILE NAME
+    # =====================================================
+    if from_date_param and to_date_param:
+
+        filename = (
+            f"Employee_Report_"
+            f"{from_date_param}"
+            f"_to_"
+            f"{to_date_param}.xlsx"
+        )
+
+    else:
+
+        filename = (
+            f"Employee_Report_"
+            f"{start_date.strftime('%Y-%m')}.xlsx"
+        )
+
+    response = HttpResponse(
+        final_output,
+        content_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        )
+    )
+
+    response["Content-Disposition"] = (
+        f'attachment; filename="{filename}"'
+    )
+
+    return response
+
+@financehub_required
+def employee_report_page(request):
+    return render(request, "financehub/employee_report.html")
+
+
+
+
+import json
+from django.shortcuts import render
+from django.utils import timezone
+import datetime
+from .models import EmployeeMaster, Clu
+
+@financehub_required
+def employee_monthly_attendance(request):
+    """Display monthly attendance with CLU visit timings for selected employee"""
+
+    employee_id = request.GET.get('employee_id', '').strip()
+    year = request.GET.get('year', str(datetime.datetime.now().year))
+    month = request.GET.get('month', str(datetime.datetime.now().month))
+
+    context = {
+        'employee': None,
+        'attendance_data': [],
+        'attendance_data_json': '[]',  # Add this for JSON serialization
+        'year': int(year),
+        'month': int(month),
+        'months': range(1, 13),
+        'years': range(2020, datetime.datetime.now().year + 1),
+        'employee_search': employee_id,
+        'error': None
+    }
+
+    # Get employee details
+    if employee_id:
+        try:
+            employee = EmployeeMaster.objects.get(employee_number=employee_id)
+            context['employee'] = employee
+        except EmployeeMaster.DoesNotExist:
+            context['error'] = f"Employee with ID '{employee_id}' not found"
+            return render(request, "financehub/employee_monthly_attendance.html", context)
+
+        # Get CLU data for the employee for selected month
+        year_int = int(year)
+        month_int = int(month)
+
+        # Create date range for the month
+        start_date = datetime.date(year_int, month_int, 1)
+        if month_int == 12:
+            end_date = datetime.date(year_int + 1, 1, 1) - datetime.timedelta(days=1)
+        else:
+            end_date = datetime.date(year_int, month_int + 1, 1) - datetime.timedelta(days=1)
+
+        # Get ALL CLU visits for this employee in the date range (not just first)
+        clu_visits = Clu.objects.filter(
+            employee_id=employee_id,
+            visited_on__isnull=False
+        ).order_by('visited_on')  # Sort by datetime
+
+        # Parse dates and create attendance map with ALL visits
+        attendance_map = {}  # date -> list of visits
+
+        for visit in clu_visits:
+            try:
+                # Parse visited_on date with multiple formats
+                visited_value = str(visit.visited_on).strip()
+                visited_datetime = None
+
+                # Try different date formats
+                date_formats = [
+                    "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d",
+                    "%d-%b-%Y %H:%M:%S",
+                    "%d-%b-%Y %I:%M %p",
+                    "%b %d,%Y, %I:%M:%S %p",
+                    "%d/%m/%Y",
+                ]
+
+                for fmt in date_formats:
+                    try:
+                        visited_datetime = datetime.datetime.strptime(visited_value, fmt)
+                        break
+                    except (ValueError, TypeError):
+                        continue
+
+                if visited_datetime:
+                    date_key = visited_datetime.date()
+                    # Only include if within selected month
+                    if start_date <= date_key <= end_date:
+                        if date_key not in attendance_map:
+                            attendance_map[date_key] = []
+
+                        # Convert time to string for JSON serialization
+                        time_value = visited_datetime.time()
+                        
+                        attendance_map[date_key].append({
+                            'datetime': visited_datetime.isoformat(),  # Convert to ISO format string
+                            'time': time_value.strftime('%H:%M:%S'),  # Convert time to string
+                            'time_display': time_value.strftime('%I:%M %p'),  # Display format
+                            'remarks': getattr(visit, 'remarks', '') or '',
+                            'customer_name': getattr(visit, 'customer_name', '') or '',
+                            'loan_number': getattr(visit, 'loan_number', '') or '',
+                            'status': getattr(visit, 'status', '') or '',
+                            'type_of_visit': getattr(visit, 'type_of_visit', '') or '',
+                            'employee_name': getattr(visit, 'employee_name', '') or '',
+                            'visit_address': getattr(visit, 'visit_address', '') or '',
+                            'reason_for_visit': getattr(visit, 'reason_for_visit', '') or '',
+                        })
+            except Exception as e:
+                print(f"Error parsing date: {visit.visited_on}, Error: {e}")
+                continue
+
+        # Build attendance data for all days of the month
+        attendance_data = []
+        current_date = start_date
+        while current_date <= end_date:
+            day_visits = attendance_map.get(current_date, [])
+
+            # Sort visits by time to get earliest first
+            day_visits.sort(key=lambda x: x['time'] if x['time'] else '23:59:59')
+
+            # Determine if Saturday is working day (Saturday = 5, Sunday = 6)
+            # Saturday (5) is now a working day, only Sunday (6) is weekend
+            is_weekend = current_date.weekday() == 6  # Only Sunday is weekend
+
+            # Get first visit of the day (if any)
+            first_visit = day_visits[0] if day_visits else None
+
+            day_data = {
+                'date': current_date.isoformat(),  # Convert date to ISO format string
+                'day_name': current_date.strftime('%A'),
+                'day_number': current_date.day,
+                'is_weekend': is_weekend,
+                'has_visit': len(day_visits) > 0,
+                'visit_time': first_visit['time_display'] if first_visit and first_visit.get('time_display') else None,
+                'visit_datetime': first_visit['datetime'] if first_visit else None,
+                'is_late': first_visit and first_visit['time'] and first_visit['time'] > '07:00:00' if first_visit else False,
+                'remarks': first_visit['remarks'] if first_visit else '',
+                'customer_name': first_visit['customer_name'] if first_visit else '',
+                'loan_number': first_visit['loan_number'] if first_visit else '',
+                'status': first_visit['status'] if first_visit else '',
+                'type_of_visit': first_visit['type_of_visit'] if first_visit else '',
+                'visit_count': len(day_visits),
+                'all_visits': day_visits
+            }
+            attendance_data.append(day_data)
+            current_date += datetime.timedelta(days=1)
+
+        # Calculate statistics (working days now include Saturday)
+        total_days = len(attendance_data)
+        working_days = sum(1 for d in attendance_data if not d['is_weekend'])
+        holidays = sum(1 for d in attendance_data if d['is_weekend'])
+        days_present = sum(1 for d in attendance_data if d['has_visit'])
+        days_absent = working_days - days_present
+        late_visits = sum(1 for d in attendance_data if d['is_late'])
+        on_time_visits = days_present - late_visits
+        attendance_percentage = (days_present / working_days * 100) if working_days > 0 else 0
+
+        # Convert attendance_data to JSON for JavaScript
+        attendance_data_json = json.dumps(attendance_data, default=str)
+
+        context.update({
+            'attendance_data': attendance_data,
+            'attendance_data_json': attendance_data_json,  # Add JSON version for JavaScript
+            'total_days': total_days,
+            'working_days': working_days,
+            'holidays': holidays,
+            'days_present': days_present,
+            'days_absent': days_absent,
+            'late_visits': late_visits,
+            'on_time_visits': on_time_visits,
+            'attendance_percentage': round(attendance_percentage, 2),
+            'month_name': start_date.strftime('%B'),
+            'year': year_int,
+            'month': month_int
+        })
+
+    return render(request, "financehub/employee_monthly_attendance.html", context)
+
+
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.db.models import Q
+import json
+import logging
+from .models import EmployeeMaster
+
+logger = logging.getLogger(__name__)
+
+def employee_list_view(request):
+    """View to display employee list with search functionality"""
+    return render(request, 'financehub/employee_list.html')
+
+from django.db.models import Q
+import re
+
+def search_employees(request):
+    """Search employees - handles both text and number searches"""
+    query = request.GET.get('q', '').strip()
+    
+    if query:
+        # Build search filters
+        filters = Q()
+        
+        # 1. Text search (works for letters)
+        filters |= Q(employee_name__icontains=query)
+        filters |= Q(curr_designation__icontains=query)
+        filters |= Q(curr_department__icontains=query)
+        filters |= Q(email__icontains=query)
+        filters |= Q(official_email_ids__icontains=query)
+        filters |= Q(father_name__icontains=query)
+        filters |= Q(curr_location__icontains=query)
+        filters |= Q(curr_organisation__icontains=query)
+        filters |= Q(present_address__icontains=query)
+        filters |= Q(reporting_to_collections__icontains=query)
+        filters |= Q(reporting_to_sales__icontains=query)
+        
+        # 2. Number search (digits)
+        if query.isdigit():
+            # Try exact match on IDs
+            filters |= Q(id=query)
+            
+            # Try exact match on employee_number
+            filters |= Q(employee_number=query)
+            
+            # Try employee_number with common prefixes
+            prefixes = ['EMP-', 'EMP', 'E-', 'E', 'EMP/']
+            for prefix in prefixes:
+                filters |= Q(employee_number=f"{prefix}{query}")
+                filters |= Q(employee_number__icontains=f"{prefix}{query}")
+            
+            # Try phone numbers
+            filters |= Q(phone__icontains=query)
+            filters |= Q(official_mobile_nos__icontains=query)
+            filters |= Q(aadhaar_number__icontains=query)
+        
+        # 3. If query has both letters and numbers, search everything
+        else:
+            filters |= Q(employee_number__icontains=query)
+            filters |= Q(phone__icontains=query)
+            filters |= Q(official_mobile_nos__icontains=query)
+            filters |= Q(aadhaar_number__icontains=query)
+        
+        employees = EmployeeMaster.objects.filter(filters).distinct()
+    else:
+        employees = EmployeeMaster.objects.all()
+    
+    employees = employees.order_by('employee_number')
+    
+    # Return ALL fields
+    result = []
+    for emp in employees:
+        result.append({
+            'id': emp.id,
+            'employee_number': emp.employee_number or '',
+            'employee_name': emp.employee_name or '',
+            'joined_on': emp.joined_on or '',
+            'dob': emp.dob or '',
+            'father_name': emp.father_name or '',
+            'blood_group': emp.blood_group or '',
+            'aadhaar_number': emp.aadhaar_number or '',
+            'curr_designation': emp.curr_designation or '',
+            'curr_department': emp.curr_department or '',
+            'curr_location': emp.curr_location or '',
+            'curr_organisation': emp.curr_organisation or '',
+            'phone': emp.phone or '',
+            'official_mobile_nos': emp.official_mobile_nos or '',
+            'email': emp.email or '',
+            'official_email_ids': emp.official_email_ids or '',
+            'present_address': emp.present_address or '',
+            'reporting_to_collections': emp.reporting_to_collections or '',
+            'reporting_to_sales': emp.reporting_to_sales or '',
+            'gross': emp.gross or '',
+            'ta': emp.ta or '',
+            'erepf': emp.erepf or '',
+            'eresi': emp.eresi or '',
+            'ctc': emp.ctc or '',
+            'status': emp.status or 'ACTIVE',
+            'lwd': emp.lwd or '',
+            'tenth_memo': emp.tenth_memo or '',
+            'inter_memo': emp.inter_memo or '',
+            'cheque': emp.cheque or '',
+            'bond': emp.bond or '',
+            'notice_period': emp.notice_period or '',
+            'date': emp.date or '',
+            'notice_status': emp.notice_status or '',
+            'gender':emp.gender or '',
+            "bank_name":emp.bank_name or "",
+            "ifsc_code":emp.ifsc_code or "",
+            "account_number":emp.account_number or "",
+            "emergency_contact_number":emp.emergency_contact_number or ""
+        })
+    
+    return JsonResponse(result, safe=False)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def edit_employee_phone(request):
+    """API endpoint to edit employee details - ALL FIELDS"""
+    try:
+        logger.info(f"Received POST request to edit_employee_phone")
+        
+        data = json.loads(request.body)
+        logger.info(f"Request data: {data}")
+        
+        employee_id = data.get('id')
+        
+        if not employee_id:
+            return JsonResponse({'error': 'Employee ID is required'}, status=400)
+        
+        try:
+            employee = EmployeeMaster.objects.get(id=employee_id)
+        except EmployeeMaster.DoesNotExist:
+            logger.error(f"Employee with ID {employee_id} not found")
+            return JsonResponse({'error': 'Employee not found'}, status=404)
+        
+        # Update ALL editable fields
+        fields_to_update = [
+            'phone', 'official_mobile_nos', 'reporting_to_collections', 
+            'reporting_to_sales', 'email', 'official_email_ids',
+            'curr_designation', 'curr_department', 'curr_location',
+            'employee_number', 'employee_name', 'joined_on', 'dob',
+            'father_name', 'present_address', 'aadhaar_number',
+            'curr_organisation', 'gross', 'ta', 'erepf', 'eresi', 'ctc',
+            'status', 'lwd', 'tenth_memo', 'inter_memo', 'cheque',
+            'bond', 'notice_period', 'date', 'notice_status', 'blood_group','gender','bank_name','ifsc_code','account_number','emergency_contact_number'
+
+        ]
+        
+        for field in fields_to_update:
+            value = data.get(field, '').strip()
+            setattr(employee, field, value if value else '')
+        
+        employee.save()
+        logger.info(f"Successfully updated employee {employee_id}")
+        
+        # Return all fields
+        return JsonResponse({
+            'success': True,
+            'message': 'Employee details updated successfully',
+            'data': {
+                'id': employee.id,
+                'employee_number': employee.employee_number,
+                'employee_name': employee.employee_name,
+                'phone': employee.phone,
+                'official_mobile_nos': employee.official_mobile_nos,
+                'reporting_to_collections': employee.reporting_to_collections,
+                'reporting_to_sales': employee.reporting_to_sales,
+                'email': employee.email,
+                'official_email_ids': employee.official_email_ids,
+                'curr_designation': employee.curr_designation,
+                'curr_department': employee.curr_department,
+                'curr_location': employee.curr_location,
+                'joined_on': employee.joined_on,
+                'dob': employee.dob,
+                'father_name': employee.father_name,
+                'present_address': employee.present_address,
+                'aadhaar_number': employee.aadhaar_number,
+                'curr_organisation': employee.curr_organisation,
+                'gross': employee.gross,
+                'ta': employee.ta,
+                'erepf': employee.erepf,
+                'eresi': employee.eresi,
+                'ctc': employee.ctc,
+                'status': employee.status or 'ACTIVE',
+                'lwd': employee.lwd,
+                'tenth_memo': employee.tenth_memo,
+                'inter_memo': employee.inter_memo,
+                'cheque': employee.cheque,
+                'bond': employee.bond,
+                'notice_period': employee.notice_period,
+                'date': employee.date,
+                'notice_status': employee.notice_status,
+                'blood_group': employee.blood_group,
+                'gender':employee.gender,
+                "bank_name":employee.bank_name or "",
+                "ifsc_code":employee.ifsc_code or "",
+                "account_number":employee.account_number or "",
+                "emergency_contact_number":employee.emergency_contact_number or ""
+            }
+        })
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {str(e)}")
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in edit_employee_phone: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def toggle_employee_status(request):
+    """API endpoint to toggle employee status between ACTIVE and INACTIVE"""
+    try:
+        logger.info(f"Received POST request to toggle_employee_status")
+        
+        data = json.loads(request.body)
+        logger.info(f"Request data: {data}")
+        
+        employee_id = data.get('id')
+        
+        if not employee_id:
+            return JsonResponse({'error': 'Employee ID is required'}, status=400)
+        
+        try:
+            employee = EmployeeMaster.objects.get(id=employee_id)
+        except EmployeeMaster.DoesNotExist:
+            logger.error(f"Employee with ID {employee_id} not found")
+            return JsonResponse({'error': 'Employee not found'}, status=404)
+        
+        # Toggle status
+        current_status = employee.status or 'ACTIVE'
+        new_status = 'LEFT' if current_status.upper() == 'ACTIVE' else 'ACTIVE'
+        employee.status = new_status
+        employee.save()
+        
+        logger.info(f"Successfully toggled employee {employee_id} status to {new_status}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Employee status updated to {new_status}',
+            'data': {
+                'id': employee.id,
+                'employee_number': employee.employee_number,
+                'employee_name': employee.employee_name,
+                'status': employee.status
+            }
+        })
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {str(e)}")
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in toggle_employee_status: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+import pandas as pd
+from io import BytesIO
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+from .models import CollectionAllocations
+
+@login_required
+def export_collection_allocations_excel(request):
+    """
+    Export Collection Allocations data to Excel
+    """
+    # Get all data (you can add filters if needed)
+    queryset = CollectionAllocations.objects.all().order_by('-created_at')
+    
+    # Prepare data for Excel
+    data = []
+    for obj in queryset:
+        data.append({
+            'ID': obj.id,
+            'Company': obj.company or '',
+            'Loan Number': obj.loan_number or '',
+            'Branch': obj.branch or '',
+            'Manager (CM)': obj.cm or '',
+            'Manager Employee ID': obj.manager_employee_id or '',
+            'Team Lead (TL)': obj.tl or '',
+            'TL Employee ID': obj.tl_employee_id or '',
+            'Executive Name': obj.executive_name or '',
+            'Executive Employee ID': obj.employee_id or '',
+            'Previous Executive ID': obj.previous_employee_id or '',
+            'Reassigned At': obj.reassigned_at.strftime('%d-%m-%Y %H:%M') if obj.reassigned_at else '',
+            'Created At': obj.created_at.strftime('%d-%m-%Y %H:%M') if obj.created_at else '',
+        })
+    
+    # Create DataFrame
+    df = pd.DataFrame(data)
+    
+    # Create Excel file in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Collection Allocations')
+        
+        # Auto-adjust column widths
+        worksheet = writer.sheets['Collection Allocations']
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+    
+    output.seek(0)
+    
+    # Create HTTP response
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="collection_allocations_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+    return response
+
+
+import json
+import logging
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from .models import EmployeeMaster
+
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_all_employees(request):
+    """API endpoint to delete ALL employees"""
+    if request.user.username != settings.ADMIN_USER:  # 8 Nov 2026: had no login check at all
+        return JsonResponse({'success': False, 'error': 'Only the admin can delete all employees'}, status=403)
+    try:
+        logger.info("Delete ALL employees request received")
+        
+        # Count before deletion
+        count = EmployeeMaster.objects.count()
+        
+        if count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No employees found to delete'
+            }, status=400)
+        
+        # Delete all employees
+        EmployeeMaster.objects.all().delete()
+        
+        logger.info(f"Successfully deleted all {count} employees")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Successfully deleted all {count} employees'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in delete_all_employees: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def collection_allocations_list(request):
+    """
+    View to display Collection Allocations with search and pagination.
+    Uses the same UI as Open Repo Data page.
+    """
+    
+    # Base queryset - ordered by created_at descending (latest first)
+    queryset = CollectionAllocations.objects.all().order_by('-created_at', 'loan_number')
+    
+    # Search functionality
+    search_query = request.GET.get('search', '').strip()
+    
+    if search_query:
+        queryset = queryset.filter(
+            Q(loan_number__icontains=search_query) |
+            Q(branch__icontains=search_query) |
+            Q(cm__icontains=search_query) |
+            Q(tl__icontains=search_query) |
+            Q(executive_name__icontains=search_query) |
+            Q(employee_id__icontains=search_query) |
+            Q(company__icontains=search_query) |
+            Q(previous_employee_id__icontains=search_query)
+        )
+    
+    # Statistics (before pagination)
+    total_records = queryset.count()
+    unique_executives = queryset.values('executive_name').distinct().count()
+    unique_managers = queryset.values('cm').distinct().count()
+    total_branches = queryset.values('branch').distinct().count()
+    total_companies = queryset.values('company').distinct().count()
+    
+    # Pagination - 20 records per page (match your UI)
+    paginator = Paginator(queryset, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Preserve search query in pagination links
+    query_string = f"search={search_query}" if search_query else ""
+    
+    context = {
+        'page_obj': page_obj,
+        'search': search_query,
+        'query_string': query_string,
+        'total_records': total_records,
+        'unique_executives': unique_executives,
+        'unique_managers': unique_managers,
+        'total_branches': total_branches,
+        'total_companies': total_companies,
+    }
+    
+    return render(request, 'financehub/collection_allocations_list.html', context)
+
+
+@financehub_required
+def upload_sample(request, file_type):
+    """9 Nov 2026: sample .xlsx for an Upload file type (header row only)."""
+    from openpyxl import Workbook
+    from django.http import Http404
+    from .utils import sample_heads
+    heads = sample_heads(file_type)
+    if not heads:
+        raise Http404("Unknown file type")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Upload"
+    ws.append(heads)
+    for i, h in enumerate(heads, start=1):
+        ws.cell(row=1, column=i).font = Font(bold=True)
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(12, len(h) + 2)
+    buf = BytesIO()
+    wb.save(buf)
+    resp = HttpResponse(buf.getvalue(),
+                        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = 'attachment; filename="%s_sample.xlsx"' % file_type.lower()
+    return resp

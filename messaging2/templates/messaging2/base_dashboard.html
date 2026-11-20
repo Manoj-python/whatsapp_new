@@ -119,13 +119,49 @@
     </style>
     {% block extra_css %}{% endblock %}
 {% include "padmasai_brand.html" %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style id="app-polish">
+/* APP POLISH (15 Nov 2026): calmer navy sidebar, no jumping/sliding on hover
+   (the "zig zag"), sticky header, softer cards and tables. Delete this block to undo. */
+body, .main-content { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.main-content { background: #f4f6fb !important; }
+.sidebar { background: linear-gradient(180deg, #0f2a47 0%, #12355b 60%, #0e4d64 100%) !important;
+  box-shadow: 2px 0 12px rgba(15,42,71,.18); display: flex; flex-direction: column; }
+.sidebar .brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 18px;
+  padding: 6px 8px 18px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.12); }
+.sidebar .brand .logo { width: 36px; height: 36px; border-radius: 10px; background: #0e9494; display: flex;
+  align-items: center; justify-content: center; font-size: 18px; }
+.sidebar .brand small { display: block; font-size: 11px; font-weight: 500; color: rgba(255,255,255,.65); }
+.sidebar .nav-link { color: rgba(255,255,255,.78) !important; margin: 2px 8px !important; padding: 10px 14px !important;
+  border-radius: 10px !important; font-weight: 500; font-size: 14px; transition: background .15s, color .15s !important; }
+.sidebar .nav-link:hover { background: rgba(255,255,255,.10) !important; color: #fff !important; transform: none !important; }
+.sidebar .nav-link.active { background: #0e9494 !important; color: #fff !important; transform: none !important;
+  box-shadow: 0 4px 12px rgba(14,148,148,.35); }
+.sidebar .nav-section { color: rgba(255,255,255,.45); font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; padding: 14px 22px 4px; }
+.sidebar hr { border-color: rgba(255,255,255,.15); opacity: 1; margin: 12px 16px; }
+.navbar { position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,.92) !important;
+  backdrop-filter: blur(8px); box-shadow: 0 1px 0 #e6eaf2 !important; }
+.navbar .navbar-brand { font-weight: 700; font-size: 17px; color: #17263a; }
+.navbar .navbar-brand .badge { background: #e8eefc !important; color: #12355b !important; border-radius: 30px; font-weight: 600; }
+.card, .card:hover { transform: none !important; }
+.card { border: 1px solid #e6eaf2 !important; border-radius: 16px !important; box-shadow: 0 1px 3px rgba(16,24,40,.04) !important; }
+.card:hover { box-shadow: 0 4px 14px rgba(16,24,40,.07) !important; }
+.table > tbody > tr:hover > * { background: #f5f8ff; }
+.btn-sm { border-radius: 8px !important; }
+.form-control, .form-select { border-radius: 10px; border-color: #dfe3ee; }
+.modal-content { border: 0; border-radius: 16px; box-shadow: 0 20px 50px rgba(16,24,40,.25); }
+.modal-header { border-bottom: 1px solid #eef1f6; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #c9d2e0; border-radius: 10px; border: 2px solid #f4f6fb; }
+</style>
 </head>
 <body>
     <div class="sidebar" id="sidebar">
         <div class="p-3">
-            <h4 class="text-white mb-4">
-                <i class="fab fa-whatsapp"></i>
-            </h4>
+            <div class="brand"><span class="logo"><i class="fas fa-headset"></i></span>
+                <span>Padmasai<small>Customer Support</small></span></div>
             <nav class="nav flex-column">
                {% if agent.role == 'AGENT' %}
 <a class="nav-link" href="{% url 'agent_dashboard' %}"><i class="fas fa-tasks"></i> My Cases</a>
@@ -139,6 +175,7 @@
 <a class="nav-link" href="{% url 'admin_dashboard' %}"><i class="fas fa-crown"></i> Admin Dashboard</a>
 {% endif %}
                 
+                <div class="nav-section">Chats</div>
                 <a class="nav-link" href="/messaging2/chat/">
                     <i class="fab fa-whatsapp"></i>PSF Chat
                 </a>
@@ -148,6 +185,7 @@
                 <a class="nav-link" href="/splcases_app/chat3/">
                     <i class="fab fa-whatsapp"></i>SPL Chat
                 </a>
+                <div class="nav-section">Uploads</div>
                 <a class="nav-link" href="{% url 'upload_and_send2' %}">
                     <i class="fas fa-upload"></i>PSF Upload Data
                 </a>
@@ -196,6 +234,15 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <script>
+        // Highlight the page you are on (15 Nov 2026)
+        (function () {   // only the closest match lights up
+            var best = null, len = 0;
+            document.querySelectorAll('.sidebar .nav-link').forEach(function (a) {
+                var p = (a.getAttribute('href') || '').split('?')[0];
+                if (p.length > 1 && (location.pathname === p || (p.length > 12 && location.pathname.indexOf(p) === 0)) && p.length > len) { best = a; len = p.length; }
+            });
+            if (best) best.classList.add('active');
+        })();
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('show');
         }

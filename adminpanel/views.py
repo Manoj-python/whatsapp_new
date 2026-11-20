@@ -1118,7 +1118,15 @@ def get_filtered_cases_api(request):
     dept_counts = queryset.values('group__name').annotate(count=Count('id')).order_by('-count')
     department_counts = [{'name': item['group__name'], 'count': item['count']} for item in dept_counts]
 
-    cases = queryset[:200]
+    # page navigation (15 Nov 2026): 100 per page
+    try:
+        page = max(1, int(request.GET.get('page') or 1))
+    except ValueError:
+        page = 1
+    total = queryset.count()
+    pages = max(1, (total + 99) // 100)
+    page = min(page, pages)
+    cases = queryset[(page - 1) * 100:page * 100]
 
     case_list = [{
         'case_id': c.case_id,
@@ -1138,7 +1146,7 @@ def get_filtered_cases_api(request):
     return JsonResponse({
         'success': True,
         'cases': case_list,
-        'department_counts': department_counts,
+        'total': total, 'page': page, 'pages': pages, 'department_counts': department_counts,
     })
 # Keep original endpoints for backward compatibility
 @login_required

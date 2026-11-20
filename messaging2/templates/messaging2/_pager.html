@@ -1,0 +1,12 @@
+{% if pg.pages > 1 %}
+<div class="d-flex align-items-center justify-content-between gap-2 mt-2 flex-wrap">
+  <small class="text-muted">Showing {{ pg.from }}-{{ pg.to }} of {{ pg.total }}</small>
+  <div class="d-flex gap-1 align-items-center">
+    <a class="btn btn-sm btn-outline-primary {% if pg.page == 1 %}disabled{% endif %}" href="{{ pg.first }}">&laquo; First</a>
+    <a class="btn btn-sm btn-outline-primary {% if pg.page == 1 %}disabled{% endif %}" href="{{ pg.prev }}">&lsaquo; Prev</a>
+    <span class="px-2 small">Page {{ pg.page }} of {{ pg.pages }}</span>
+    <a class="btn btn-sm btn-outline-primary {% if pg.page == pg.pages %}disabled{% endif %}" href="{{ pg.next }}">Next &rsaquo;</a>
+    <a class="btn btn-sm btn-outline-primary {% if pg.page == pg.pages %}disabled{% endif %}" href="{{ pg.last }}">Last &raquo;</a>
+  </div>
+</div>
+{% endif %}

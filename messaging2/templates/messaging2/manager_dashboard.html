@@ -38,109 +38,96 @@
 .mgr .nav-tabs .nav-link { border: 1px solid #e0e3eb; border-radius: 30px; background: #fff; color: var(--dark); font-weight: 600; padding: 7px 18px; }
 .mgr .nav-tabs .nav-link.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .mgr table thead th { background: #f8f9fa; font-weight: 600; color: var(--dark); border-bottom: 2px solid #e9ecef; }
+/* LAYOUT (15 Nov 2026): slim top row, one filter row, chip rows - cases start high */
+.mgr .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.mgr .topbar .app-btn { margin-right: 4px; }
+.mgr .counters { display: flex; gap: 8px; flex-wrap: wrap; }
+.mgr .ctr { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e6eaf2; border-radius: 12px; padding: 6px 14px; }
+.mgr .ctr b { font-size: 18px; color: #1a1a2e; }
+.mgr .ctr span { font-size: 12px; color: #6c757d; }
+.mgr .c-pend i { color: #ff9800; } .mgr .c-res i { color: #4caf50; } .mgr .c-esc i { color: #2196f3; }
+.mgr .filterbar { display: flex; flex-wrap: wrap; gap: 8px; background: #fff; border: 1px solid #e6eaf2; border-radius: 14px; padding: 10px; margin-bottom: 10px; }
+.mgr .filterbar .form-select { flex: 1 1 220px; max-width: 360px; }
+.mgr .chiprow { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; padding: 2px 0 8px; margin-bottom: 6px; align-items: center; }
+.mgr .chiprow .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8a94a6; margin-right: 4px; }
+.mgr .cchip { display: inline-flex; gap: 6px; align-items: center; padding: 5px 12px; border-radius: 30px; background: #fff; border: 1px solid #e0e5ef;
+  color: #1a1a2e; font-size: 13px; text-decoration: none; }
+.mgr .cchip b { background: #eef1f8; border-radius: 20px; padding: 0 7px; font-size: 12px; }
+.mgr .cchip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr .cchip.on b { background: rgba(255,255,255,.25); color: #fff; }
+.mgr .tab-content { margin-top: 10px !important; }
+.mgr .tab-content .card-body { padding: 8px 12px; }
+/* ROWS (15 Nov 2026): one-line rows, thin chip scroll, tighter table */
+.mgr .chiprow { scrollbar-width: thin; }
+.mgr .chiprow::-webkit-scrollbar { height: 4px; }
+#pendingTable td, #pendingTable th { padding: 8px 10px; white-space: nowrap; }
+#pendingTable td:nth-child(3) { white-space: normal; min-width: 140px; }
+#pendingTable .badge { font-size: 11px; }
+.mgr .tab-content .card-header { padding: 8px 14px; }
+.mgr .dept-card.cchip { cursor: pointer; }
+.mgr .dept-card.cchip.bg-success { background: var(--primary) !important; border-color: var(--primary); color: #fff; }
+.mgr .dept-card.cchip.bg-success b { background: rgba(255,255,255,.25); color: #fff; }
+.mgr .dept-card.cchip.bg-secondary { background: #fff !important; }
+.mgr .filterbar .lvl { flex: 0 1 190px; }
 </style>
 
 <div class="container-fluid mgr">
-    <!-- App Switcher -->
-    <div class="mb-3">
-        {% for key, cfg in app_list %}
-        <a href="?app={{ key }}" class="app-btn {% if current_app == key %}active{% endif %}">{{ cfg.name }}</a>
-        {% endfor %}
-    </div>
-
-    <!-- Stats Cards -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#ff9800;--ic:#ff9800">
-            <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
-            <div class="stat-number">{{ stats.pending }}</div><div class="stat-label">Pending ({{ level_label }})</div></div></div>
-        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#4caf50;--ic:#4caf50">
-            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
-            <div class="stat-number">{{ stats.resolved }}</div><div class="stat-label">Resolved at ESC3</div></div></div>
-        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#2196f3;--ic:#2196f3">
-            <div class="stat-icon"><i class="fas fa-level-up-alt"></i></div>
-            <div class="stat-number">{{ stats.escalated }}</div><div class="stat-label">Escalated from ESC3</div></div></div>
-        <div class="col-md-3 col-6"><div class="stat-card" style="--bar:#6c757d;--ic:#6c757d">
-            <div class="stat-icon"><i class="fas fa-lock"></i></div>
-            <div class="stat-number">{{ stats.closed }}</div><div class="stat-label">Closed</div></div></div>
-    </div>
-
-    <!-- ===== FILTER BAR ===== -->
-<div class="section-card">
-    <div class="section-title"><span><i class="fas fa-filter"></i> Filters</span>
-        <button type="button" class="btn btn-success btn-sm" onclick="exportAllCases()"><i class="fas fa-file-excel"></i> Export All</button></div>
-        <form method="get" class="row g-3 align-items-end">
-            <input type="hidden" name="app" value="{{ current_app }}">
-            <div class="col-md-4">
-                <label class="form-label">Category</label>
-                <select name="category" id="categoryFilter" class="form-select">
-                    <option value="">All Categories</option>
-                    {% for cat in all_categories %}
-                        <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
-                            {{ cat.name }} ({{ cat.group.name }})
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Subgroup</label>
-                <select name="subgroup" id="subgroupFilter" class="form-select">
-                    <option value="">All Subgroups</option>
-                    {% for sg in all_subgroups %}
-                        <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
-                            {{ sg.name }} ({{ sg.group.name }})
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Level</label>
-                <select name="level" class="form-select">
-                    <option value="ESC3" {% if selected_level == 'ESC3' or not selected_level %}selected{% endif %}>ESC3 (my level)</option>
-                    <option value="ESC2" {% if selected_level == 'ESC2' %}selected{% endif %}>ESC2 (executives)</option>
-                    <option value="ALL" {% if selected_level == 'ALL' %}selected{% endif %}>ESC2 + ESC3</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <button type="submit" class="btn btn-primary">Apply Filters</button>
-                <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
-            </div>
-        </form>
-</div>
-
-    <!-- Department Cards -->
-    <div class="section-card">
-    <div class="section-title"><span><i class="fas fa-building"></i> Filter by Department</span></div>
-    <div class="row" id="deptCards">
-        <div class="col-md-2 col-sm-4 col-6">
-            <div class="filter-card text-center bg-success dept-card" data-dept="all">
-                <h4>{{ stats.pending }}</h4><p>All Departments</p>
-            </div>
+    <!-- TOP ROW: app switch + counters (15 Nov 2026, same layout as ESC2) -->
+    <div class="topbar">
+        <div class="apps">
+            {% for key, cfg in app_list %}
+            <a href="?app={{ key }}" class="app-btn {% if current_app == key %}active{% endif %}">{{ cfg.name }}</a>
+            {% endfor %}
         </div>
+        <div class="counters">
+            <div class="ctr c-pend"><i class="fas fa-hourglass-half"></i><b>{{ stats.pending }}</b><span>Pending {{ level_label }}</span></div>
+            <div class="ctr c-res"><i class="fas fa-check-circle"></i><b>{{ stats.resolved }}</b><span>Resolved at ESC3</span></div>
+            <div class="ctr c-esc"><i class="fas fa-level-up-alt"></i><b>{{ stats.escalated }}</b><span>Escalated</span></div>
+            <div class="ctr"><i class="fas fa-lock" style="color:#6c757d"></i><b>{{ stats.closed }}</b><span>Closed</span></div>
+        </div>
+    </div>
+
+    <!-- ONE FILTER ROW -->
+    <form method="get" class="filterbar">
+        <input type="hidden" name="app" value="{{ current_app }}">
+        <select name="category" id="categoryFilter" class="form-select">
+            <option value="">All categories</option>
+            {% for cat in all_categories %}
+            <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>{{ cat.name }} ({{ cat.group.name }})</option>
+            {% endfor %}
+        </select>
+        <select name="subgroup" id="subgroupFilter" class="form-select">
+            <option value="">All subgroups</option>
+            {% for sg in all_subgroups %}
+            <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>{{ sg.name }} ({{ sg.group.name }})</option>
+            {% endfor %}
+        </select>
+        <select name="level" class="form-select lvl">
+            <option value="ESC3" {% if selected_level == 'ESC3' or not selected_level %}selected{% endif %}>ESC3 (my level)</option>
+            <option value="ESC2" {% if selected_level == 'ESC2' %}selected{% endif %}>ESC2 (executives)</option>
+            <option value="ALL" {% if selected_level == 'ALL' %}selected{% endif %}>ESC2 + ESC3</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Apply</button>
+        <a href="?app={{ current_app }}" class="btn btn-outline-secondary">Clear</a>
+        <button type="button" class="btn btn-success ms-auto" onclick="exportAllCases()"><i class="fas fa-file-excel"></i> Export All</button>
+    </form>
+
+    <!-- DEPARTMENT CHIPS (click filters the list below) -->
+    <div class="chiprow" id="deptCards">
+        <span class="lbl">Departments</span>
+        <span class="cchip dept-card bg-success" data-dept="all">All <b>{{ stats.pending }}</b></span>
         {% for dept in dept_stats %}
-        <div class="col-md-2 col-sm-4 col-6">
-            <div class="filter-card text-center bg-secondary dept-card" data-dept="{{ dept.name }}">
-                <h4>{{ dept.pending }}</h4><p>{{ dept.name }} &middot; today {{ dept.today }}</p>
-            </div>
-        </div>
+        <span class="cchip dept-card bg-secondary" data-dept="{{ dept.name }}">{{ dept.name }} <b>{{ dept.pending }}</b></span>
         {% endfor %}
     </div>
-    </div>
-
-    <!-- Category tiles (as on the admin page) -->
-    <div class="section-card">
-    <div class="section-title"><span><i class="fas fa-tags"></i> Cases by Category ({{ level_label }})</span></div>
-    <div class="row">
+    <!-- CATEGORY CHIPS (click to filter) -->
+    <div class="chiprow">
+        <span class="lbl">Categories</span>
+        <a class="cchip {% if not selected_category %}on{% endif %}" href="?app={{ current_app }}&level={{ selected_level }}{% if selected_subgroup %}&subgroup={{ selected_subgroup }}{% endif %}">All <b>{{ stats.pending }}</b></a>
         {% for cat in category_stats %}
-        <div class="col-md-2 col-sm-4 col-6">
-            <a class="filter-card text-center {% if selected_category|add:'0' == cat.id %}active{% endif %}"
-               href="?app={{ current_app }}&level={{ selected_level }}{% if selected_subgroup %}&subgroup={{ selected_subgroup }}{% endif %}{% if cat.id %}&category={{ cat.id }}{% endif %}">
-                <h4>{{ cat.count }}</h4><p>{{ cat.name }}</p>
-            </a>
-        </div>
-        {% empty %}
-        <div class="col-12"><p class="text-muted mb-0">No pending cases.</p></div>
+        <a class="cchip {% if selected_category|add:'0' == cat.id %}on{% endif %}"
+           href="?app={{ current_app }}&level={{ selected_level }}{% if selected_subgroup %}&subgroup={{ selected_subgroup }}{% endif %}{% if cat.id %}&category={{ cat.id }}{% endif %}">{{ cat.name }} <b>{{ cat.count }}</b></a>
         {% endfor %}
-    </div>
     </div>
 
     <!-- Tabs -->
@@ -188,10 +175,11 @@
                                 </tr>
                             </thead>
                             <tbody id="pendingTableBody">
-                                {% include "messaging2/_manager_pending_rows.html" with cases=pending_cases|slice:":200" %}
+                                {% include "messaging2/_manager_pending_rows.html" with cases=pending_cases %}
                             </tbody>
                         </table>
                     </div>
+{% include "messaging2/_pager.html" with pg=pending_pager %}
                 </div>
             </div>
         </div>
@@ -218,7 +206,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for case in resolved_cases|slice:":200" %}
+                                {% for case in resolved_cases %}
                                 <tr>
                                     <td>{{ case.case_id }}</td>
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
@@ -240,6 +228,7 @@
                             </tbody>
                         </table>
                     </div>
+{% include "messaging2/_pager.html" with pg=resolved_pager %}
                 </div>
             </div>
         </div>
@@ -267,7 +256,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for case in escalated_cases|slice:":200" %}
+                                {% for case in escalated_cases %}
                                 <tr>
                                     <td>{{ case.case_id }}</td>
                                     <td>{{ case.customer_name|default:case.mobile }}</td>
@@ -287,6 +276,7 @@
                             </tbody>
                         </table>
                     </div>
+{% include "messaging2/_pager.html" with pg=escalated_pager %}
                 </div>
             </div>
         </div>
@@ -312,7 +302,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for case in closed_cases|slice:":200" %}
+                            {% for case in closed_cases %}
                             <tr>
                                 <td>{{ case.case_id }}</td>
                                 <td>{{ case.customer_name|default:case.mobile }}</td>
@@ -333,6 +323,7 @@
                         </tbody>
                     </table>
                 </div>
+{% include "messaging2/_pager.html" with pg=closed_pager %}
             </div>
         </div>
     </div>
@@ -610,4 +601,8 @@
         loadPendingCases('all', '{{ selected_subgroup|default:"all" }}', '{{ selected_category|default:"all" }}');
     });
 </script>
+<script>window.addEventListener('load', function () {   // pager keeps its tab (15 Nov 2026)
+  var tab = '{{ active_tab|escapejs }}';
+  if (tab && tab !== 'pending') { var b = document.getElementById(tab + '-tab'); if (b && window.bootstrap) new bootstrap.Tab(b).show(); }
+});</script>
 {% endblock %}

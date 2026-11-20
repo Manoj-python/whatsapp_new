@@ -890,6 +890,13 @@
         badge.textContent = totalUnreadCount;
         badge.style.display = 'inline';
       }
+          // CLOSE THE CHAT (17 Nov 2026): an open chat marks itself read on its
+      // next refresh or message, so the unread mark vanished. As WhatsApp.
+      selectedMobile = null;
+      document.querySelectorAll('.contact-item.active').forEach(el => el.classList.remove('active'));
+      if (typeof chatArea !== 'undefined' && chatArea) chatArea.style.display = 'none';
+      if (typeof composer !== 'undefined' && composer) composer.style.display = 'none';
+      var sb = document.getElementById('sidebar'); if (sb) sb.classList.remove('hide');
     } else {
       showNotification(data.error || 'Failed to mark unread', 'error');
     }

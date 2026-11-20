@@ -1923,6 +1923,28 @@ def enrich_case_details(cases):
 from adminpanel.models import SupportGroup, Subgroup,Category   # add at top if missing
 
 @messaging2_required
+def _pager(request, key, tab, total, size=100):
+    """Page numbers + links for one list (15 Nov 2026). Returns (start, end, pager)."""
+    try:
+        p = max(1, int(request.GET.get(key) or 1))
+    except ValueError:
+        p = 1
+    pages = max(1, (total + size - 1) // size)
+    p = min(p, pages)
+    def url(n):
+        q = request.GET.copy(); q[key] = n; q['tab'] = tab
+        return '?' + q.urlencode()
+    return (p - 1) * size, p * size, {'page': p, 'pages': pages, 'total': total,
+            'from': (p - 1) * size + 1, 'to': min(p * size, total),
+            'first': url(1), 'prev': url(p - 1), 'next': url(p + 1), 'last': url(pages)}
+
+
+
+from django.core.paginator import Paginator
+from django.db.models import Q, Count
+from django.utils import timezone
+
+@messaging2_required
 def executive_dashboard2(request):
     CaseModel = get_case_model_for_app(request)
     agent = get_agent_from_user(request.user)
@@ -1935,73 +1957,92 @@ def executive_dashboard2(request):
     # ─── Filters from request ──────────────────────────────────
     category_id = request.GET.get('category')
     subgroup_id = request.GET.get('subgroup')
+    search_q = request.GET.get('search', '').strip()   # NEW: server-side search
 
     # ─── Build combined filter (groups/subgroups) ─────────────
     combined_filter = Q()
-# Per‑group logic
     for group in executive_groups:
         group_subgroups = executive_subgroups.filter(group=group)
         if group_subgroups.exists():
             combined_filter |= Q(group=group, subgroup__in=group_subgroups)
         else:
             combined_filter |= Q(group=group)
-# Also include any subgroups that may not have a group in executive_groups
     combined_filter |= Q(subgroup__in=executive_subgroups)
 
     if not combined_filter:
-        combined_filter = Q(pk__in=[])  # no access
+        combined_filter = Q(pk__in=[])
 
     # ─── Apply category filter ─────────────────────────────────
     if category_id:
         combined_filter &= Q(category_id=category_id)
 
-    # ─── Apply subgroup filter (optional, overrides) ──────────
+    # ─── Apply subgroup filter ─────────────────────────────────
     if subgroup_id:
         combined_filter &= Q(subgroup_id=subgroup_id)
 
-    # ─── Pending cases ──────────────────────────────────────────
-    pending_cases = CaseModel.objects.filter(
+    # ─── NEW: server-side vehicle search ───────────────────────
+    if search_q:
+        combined_filter &= (
+            Q(vehicle_number__icontains=search_q) |
+            Q(mobile__icontains=search_q) |
+            Q(loan_number__icontains=search_q) |
+            Q(customer_name__icontains=search_q)
+        )
+    # ─── Pending cases ─────────────────────────────────────────
+    pending_qs = CaseModel.objects.filter(
         current_level='ESC2',
         status__in=['Open', 'In Progress', 'Reopened']
-    ).exclude(status='Closed').filter(combined_filter).select_related('group', 'subgroup', 'category').order_by('-created_at')
+    ).exclude(status='Closed').filter(combined_filter).select_related(
+        'group', 'subgroup', 'category'
+    ).order_by('-created_at')
 
-    # ─── Resolved cases ─────────────────────────────────────────
-    resolved_cases = CaseModel.objects.filter(
+    # ─── Resolved cases ────────────────────────────────────────
+    resolved_qs = CaseModel.objects.filter(
         resolved_at_level='ESC2',
         status='Resolved'
-    ).filter(combined_filter).select_related('group', 'subgroup', 'category').order_by('-resolved_at')
+    ).filter(combined_filter).select_related(
+        'group', 'subgroup', 'category'
+    ).order_by('-resolved_at')
 
-    # ─── Escalated cases ────────────────────────────────────────
-    escalated_cases = CaseModel.objects.filter(
+    # ─── Escalated cases ───────────────────────────────────────
+    escalated_qs = CaseModel.objects.filter(
         previous_level='ESC2'
-    ).filter(combined_filter).select_related('group', 'subgroup', 'category').order_by('-updated_at')
+    ).filter(combined_filter).select_related(
+        'group', 'subgroup', 'category'
+    ).order_by('-updated_at')
 
-    # ─── Enrich with names ──────────────────────────────────────
-    pending_shown = list(pending_cases[:300])   # newest 300 drawn (14 Nov 2026)
-    enrich_case_details(pending_shown)
-    # NEWEST 200 ONLY (14 Nov 2026): these two lists hold every case ever at ESC2 and
-    # enrich looks each one up - the SMS page timed out. Counts below stay full.
-    resolved_shown = list(resolved_cases[:200])
-    escalated_shown = list(escalated_cases[:200])
-    enrich_case_details(resolved_shown)
-    enrich_case_details(escalated_shown)
+    # ─── Pagination (per tab, independent page numbers) ────────
+    PER_PAGE = 50
+    pending_cases   = Paginator(pending_qs,   PER_PAGE).get_page(request.GET.get('pending_page', 1))
+    resolved_cases  = Paginator(resolved_qs,  PER_PAGE).get_page(request.GET.get('resolved_page', 1))
+    escalated_cases = Paginator(escalated_qs, PER_PAGE).get_page(request.GET.get('escalated_page', 1))
 
+    # ─── Enrich only the current page ──────────────────────────
+    enrich_case_details(list(pending_cases))
+    enrich_case_details(list(resolved_cases))
+    enrich_case_details(list(escalated_cases))
 
+    # ─── Stats (full counts, not page counts) ──────────────────
     stats = {
-        'pending': pending_cases.count(),
-        'resolved': resolved_cases.count(),
-        'escalated': escalated_cases.count(),
+        'pending': pending_qs.count(),
+        'resolved': resolved_qs.count(),
+        'escalated': escalated_qs.count(),
     }
 
-    # TILES FROM THE PENDING LIST (Dilip, 14 Nov 2026: ESC2 page "as per managers")
-    from django.db.models import Count
-    _pend = pending_cases.order_by()
+    # ─── Tiles from the pending list ───────────────────────────
+    _pend = pending_qs.order_by()
     _t0 = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    _today = dict(_pend.filter(created_at__gte=_t0).values_list('group__name').annotate(n=Count('id')))
-    dept_stats = [{'name': r['group__name'] or 'No department', 'pending': r['n'], 'today': _today.get(r['group__name'], 0)}
-                  for r in _pend.values('group__name').annotate(n=Count('id')).order_by('-n')]
-    category_stats = [{'id': r['category_id'], 'name': r['category__name'] or 'No category', 'count': r['n']}
-                      for r in _pend.values('category_id', 'category__name').annotate(n=Count('id')).order_by('-n')]
+    _today = dict(
+        _pend.filter(created_at__gte=_t0).values_list('group__name').annotate(n=Count('id'))
+    )
+    dept_stats = [
+        {'name': r['group__name'] or 'No department', 'pending': r['n'], 'today': _today.get(r['group__name'], 0)}
+        for r in _pend.values('group__name').annotate(n=Count('id')).order_by('-n')
+    ]
+    category_stats = [
+        {'id': r['category_id'], 'name': r['category__name'] or 'No category', 'count': r['n']}
+        for r in _pend.values('category_id', 'category__name').annotate(n=Count('id')).order_by('-n')
+    ]
 
     current_app = request.GET.get('app', 'psf')
     agent_permissions = {
@@ -2010,15 +2051,15 @@ def executive_dashboard2(request):
         'can_close': agent.can_close,
     }
 
-    # ─── For filter dropdowns ───────────────────────────────────
+    # ─── For filter dropdowns ──────────────────────────────────
     all_groups = SupportGroup.objects.all().order_by('name')
     all_subgroups = Subgroup.objects.select_related('group').order_by('group__name', 'name')
     all_categories = Category.objects.select_related('group').order_by('group__name', 'name')
 
     return render(request, 'messaging2/executive_dashboard.html', {
-        'pending_cases': pending_shown,
-        'resolved_cases': resolved_shown,
-        'escalated_cases': escalated_shown,
+        'pending_cases': pending_cases,
+        'resolved_cases': resolved_cases,
+        'escalated_cases': escalated_cases,
         'stats': stats,
         'dept_stats': dept_stats,
         'category_stats': category_stats,
@@ -2028,9 +2069,10 @@ def executive_dashboard2(request):
         'app_list': APP_CONFIG.items(),
         'all_groups': all_groups,
         'all_subgroups': all_subgroups,
-        'all_categories': all_categories,   # new
+        'all_categories': all_categories,
         'selected_category': category_id,
         'selected_subgroup': subgroup_id,
+        'search_query': search_q,   # NEW
     })
 
 import openpyxl
@@ -2682,6 +2724,25 @@ def manager_dashboard2(request):
         'level_label': level_label,
     }
 
+    # page navigation per tab (15 Nov 2026): 100 per page, ?pp= ?rp= ?ep= ?cp=
+    def _page(key, tab, qs):
+        try:
+            p = max(1, int(request.GET.get(key) or 1))
+        except ValueError:
+            p = 1
+        total = context['stats'][tab] if tab in context.get('stats', {}) else qs.count()
+        pages = max(1, (total + 99) // 100)
+        p = min(p, pages)
+        def url(n):
+            q = request.GET.copy(); q[key] = n; q['tab'] = tab
+            return '?' + q.urlencode()
+        pager = {'page': p, 'pages': pages, 'total': total, 'from': (p - 1) * 100 + 1, 'to': min(p * 100, total),
+                 'first': url(1), 'prev': url(p - 1), 'next': url(p + 1), 'last': url(pages)}
+        return qs[(p - 1) * 100:p * 100], pager
+    for key, tab, name in (('pp', 'pending', 'pending_cases'), ('rp', 'resolved', 'resolved_cases'),
+                           ('ep', 'escalated', 'escalated_cases'), ('cp', 'closed', 'closed_cases')):
+        context[name], context[tab + '_pager'] = _page(key, tab, context[name])
+    context['active_tab'] = request.GET.get('tab', 'pending')
     return render(request, 'messaging2/manager_dashboard.html', context)
 
 
@@ -2852,6 +2913,8 @@ def head_dashboard2(request):
 
     # ─── Enrich cases ──────────────────────────────────────────
     cases = pending_qs.order_by('-priority', '-created_at')
+    _a, _b, cases_pager = _pager(request, 'pp', 'pending', stats.get('pending', pending_qs.count()) if isinstance(stats, dict) else pending_qs.count())
+    cases = list(cases[_a:_b])   # one page of 100 (15 Nov 2026)
     for case in cases:
         case.group_name = case.group.name if case.group else None
         case.subgroup_name = case.subgroup.name if case.subgroup else None
@@ -2863,7 +2926,7 @@ def head_dashboard2(request):
     all_categories = Category.objects.select_related('group').order_by('group__name', 'name')
 
     context = {
-        'cases': cases,
+        'cases': cases, 'cases_pager': cases_pager,
         'stats': stats,
         'dept_stats': dept_stats,
         'agents_list': agents_list,
@@ -2897,9 +2960,9 @@ def head_cases_api(request):
     # Apply filters
     if department != 'all':
         base_qs = base_qs.filter(group__name=department)
-    if subgroup_id != 'all':
+    if subgroup_id not in ('all', ''):
         base_qs = base_qs.filter(subgroup_id=subgroup_id)
-    if category_id != 'all':
+    if category_id not in ('all', ''):
         base_qs = base_qs.filter(category_id=category_id)
 
     cases = base_qs.order_by('-created_at')
@@ -3877,7 +3940,7 @@ def send_payment_template_view(request):
             }, status=200)
 
         # 3. Generate payment link – returns (full_url, token)
-        payment_url, payment_token = generate_payment_link(app_key, link_mobile_api, amount)
+        payment_url, payment_token = generate_payment_link(app_key, link_mobile_api, amount,details=details)
 
         # 4. Prepare fallback message (uses full URL)
         from adminpanel.views import APP_CONFIG

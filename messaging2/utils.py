@@ -31,7 +31,7 @@ def needs_api_check(template_id):
 # ============================================================
 
 SMSQUARE2_LCC_URL = "https://prod-api-padmasai.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
-SMSQUARE2_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:78ab76fd-9ab7-42e3-af86-312c87eb5200"
+SMSQUARE2_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:4X/p5QhkLVzQX6HMSbr9UL9r4KqTYcfzIYkaRaD9U54=:nzBpHFBAW1kOjxySF5DM8t6WVGxma1Jr:27938231:3f880353-a276-4c87-2117-e5f4086250ee"
 
 
 # ============================================================
@@ -1923,14 +1923,14 @@ PAYMENT_CONFIG = {
     'psf': {
         'app_name': 'Padma Sai Holdings Private Limited',
         'lcc_api': {
-            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e",
+            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:piL4Fa50ZBj0o37+1CjPE1EWZbAQbLFvlK4l0EWThd0=:dAuIBs7yrGb0Kvr7u6RNbs8KTxRODiVD:27937025:3f880353-a276-4c87-2117-e5f4086250ee",
             'base_url': "https://prod-api-padmasai.allcloud.app/api",
            'endpoint':'/voicecall/GetLccDetailsByAgreementNo'
         },
          'loan_api': {
             'base_url': 'https://prod-apiv2-padmasai.allcloud.app/api',
             'endpoint': '/loan/GetLoanAgreementNoAsync',
-            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e',
+            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:piL4Fa50ZBj0o37+1CjPE1EWZbAQbLFvlK4l0EWThd0=:dAuIBs7yrGb0Kvr7u6RNbs8KTxRODiVD:27937025:3f880353-a276-4c87-2117-e5f4086250ee",
         },
         'qr_api': {
             'base_url': 'https://smsquare.info/api',
@@ -1947,18 +1947,39 @@ PAYMENT_CONFIG = {
         },
         'template_name': 'pay_link',
     },
+    'smf': {
+    'app_name': 'SMF',
+
+    'lcc_api': {
+        'base_url': 'https://prod-api-padmasai.allcloud.app/api',
+        'endpoint': '/voicecall/GetLccDetailsByAgreementNo',
+        'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:wAB55NrYaRGMFnmmnhOWUq5olNjxXV0TM2x/4BujgsU=:c7b88c86efeb466887a1b25ac6a2fb70:13688698:204d6163-1bcc-4614-aabb-06d03060739c',
+    },
+
+    'loan_api': {
+        'base_url': 'https://prod-apiv2-padmasai.allcloud.app/api',
+        'endpoint': '/loan/GetLoanAgreementNoAsync',
+        'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:wAB55NrYaRGMFnmmnhOWUq5olNjxXV0TM2x/4BujgsU=:c7b88c86efeb466887a1b25ac6a2fb70:13688698:204d6163-1bcc-4614-aabb-06d03060739c',
+    },
+    'qr_api': {
+                'base_url': 'https://smsquare.info/api',
+                'endpoint': '/payment-link',
+                'api_key': 'uSZPjPUREaJMt8D3dtdz8jq23lFDDT3VLdTD-KvuNXerCK4c1cAkc6qlY1rnvliE',
+                "financier_name":"sreemani"
+            },
+},
     'sms': {   # or whatever app_key you use, e.g. 'psf'
         'app_name': 'SM SQUARE CREDIT SERVICES PRIVATE LIMITED',
         # ----- LCC API (to fetch loan details) -----
         'lcc_api': {
             'base_url': 'https://prod-api-smsquare.allcloud.app/api',
             'endpoint': '/VoiceCall/GetLccDetailsByAgreementNo',
-            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb',
+            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:Zm6vW4IXMNI1ZmDcar7HtRZlEdptjO7NToplTG6ph1o=:gu4vs5fuS0Y0tRF0ls7bfDDp6CzLw5da:27936952:bb75ccd5-06e6-46fc-6a09-31f612d8004e',
         },
         'loan_api': {
             'base_url': 'https://prod-apiv2-smsquare.allcloud.app/api',
             'endpoint': '/loan/GetLoanAgreementNoAsync',
-            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb',
+            'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:Zm6vW4IXMNI1ZmDcar7HtRZlEdptjO7NToplTG6ph1o=:gu4vs5fuS0Y0tRF0ls7bfDDp6CzLw5da:27936952:bb75ccd5-06e6-46fc-6a09-31f612d8004e',
         },
         # ----- QR Code API (to generate payment link) -----
 
@@ -2002,37 +2023,81 @@ import logging
 import requests
 import json
 
+def is_not_found_response(data):
+    """
+    Detect explicit Not Found responses from either company API.
+    """
+
+    if isinstance(data, str):
+        return 'not found' in data.lower()
+
+    if isinstance(data, dict):
+        for value in data.values():
+            if is_not_found_response(value):
+                return True
+
+    if isinstance(data, list):
+        for item in data:
+            if is_not_found_response(item):
+                return True
+
+    return False
+
+
 logger = logging.getLogger(__name__)
 
-def call_allcloud_api(app_key, api_type, method='POST', params=None, payload=None):
-    """
-    Generic AllCloud API caller.
-    api_type: 'lcc_api', 'loan_api', 'qr_api'
-    """
+
+def call_allcloud_api(app_key, api_type, method='POST',
+                      params=None, payload=None):
+
     config = get_payment_config(app_key)
     api_config = config.get(api_type)
+
     if not api_config:
-        raise ValueError(f"API type '{api_type}' not configured for app key '{app_key}'")
+        raise ValueError(
+            f"API type '{api_type}' not configured for '{app_key}'"
+        )
 
     url = api_config['base_url'] + api_config['endpoint']
+
     headers = {
         "Authorization": api_config['auth_token'],
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
+
     try:
         if method.upper() == 'GET':
-            resp = requests.get(url, params=params, headers=headers, timeout=10)
+            resp = requests.get(
+                url, params=params, headers=headers, timeout=15
+            )
         else:
-            resp = requests.post(url, json=payload, headers=headers, timeout=10)
+            resp = requests.post(
+                url, json=payload, headers=headers, timeout=15
+            )
+
+        try:
+            data = resp.json()
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except (ValueError, TypeError):
+                    pass
+        except ValueError:
+            data = resp.text
+
+        # Explicit 404 Not Found is a valid fallback condition
+        if resp.status_code == 404 and is_not_found_response(data):
+            return data
+
         resp.raise_for_status()
-        # Some APIs return double-encoded JSON
-        data = resp.json()
-        if isinstance(data, str):
-            data = json.loads(data)
+
         return data
+
     except requests.exceptions.RequestException as e:
-        logger.error(f"AllCloud API error for {app_key}/{api_type}: {e}")
+        logger.error(
+            f"AllCloud API error for {app_key}/{api_type}: {e}"
+        )
         raise
 
 # messaging2/utils.py
@@ -2112,6 +2177,67 @@ EMI_OVERRIDE = {
 # The cap for late charges (product decision)
 LATE_CHARGES_CAP = 50000.0
 
+
+def get_loan_details_with_fallback(agreement_no):
+
+    lcc_payload = {
+        "AgreementNo": agreement_no,
+        "FinanceId": 0
+    }
+
+    loan_params = {
+        "strAgreementNo": agreement_no
+    }
+
+    # First Padma Sai, then SMF
+    companies = ['psf', 'smf']
+
+    for company in companies:
+
+        logger.info(
+            f"Checking {company} APIs for {agreement_no}"
+        )
+
+        # 1. LCC Details API
+        lcc_data = call_allcloud_api(
+            company,
+            'lcc_api',
+            method='POST',
+            payload=lcc_payload
+        )
+
+        if is_not_found_response(lcc_data):
+            logger.info(
+                f"{company}: LCC details not found"
+            )
+            continue
+
+        # 2. Loan Agreement API
+        loan_data = call_allcloud_api(
+            company,
+            'loan_api',
+            method='GET',
+            params=loan_params
+        )
+
+        if is_not_found_response(loan_data):
+            logger.info(
+                f"{company}: Loan details not found"
+            )
+            continue
+
+        logger.info(
+            f"Loan details successfully fetched from {company}"
+        )
+
+        return lcc_data, loan_data, company
+
+    raise ValueError(
+        f"Loan details not found in Padma Sai and SMF "
+        f"for AgreementNo: {agreement_no}"
+    )
+
+
 def get_payment_details(app_key, mobile):
     """
     Fetch loan details from AllCloud and apply business rules:
@@ -2130,13 +2256,13 @@ def get_payment_details(app_key, mobile):
     """
     agreement_no = get_agreement_no_from_mobile(mobile)
 
-    # 1. LCC API (Current Dues – for overdue, LPI, VAS, due count)
-    lcc_payload = {"AgreementNo": agreement_no, "FinanceId": 0}
-    lcc_data = call_allcloud_api(app_key, 'lcc_api', payload=lcc_payload)
+    # Fetch from Padma Sai first, then SMF if not found
+    lcc_data, loan_data, source_company = get_loan_details_with_fallback(
+    agreement_no
+)
 
-    # 2. Loan API (Loan Amount & Repayment Schedules)
-    loan_params = {"strAgreementNo": agreement_no}
-    loan_data = call_allcloud_api(app_key, 'loan_api', method='GET', params=loan_params)
+# Get financier name based on actual loan source
+    financier_name = get_payment_config(source_company)['qr_api']['financier_name']
 
     # 3. Extract LCC values (these are the most accurate for current dues)
     overdue = float(lcc_data.get('TotalDues', 0.0) or 0.0)
@@ -2222,40 +2348,63 @@ def get_payment_details(app_key, mobile):
         'collection_charges': 0.0,        # Not available from these APIs
         'emi_due_count': emi_due_count,   # For display/debug
         'regular_emi': emi,               # The EMI used for calculation
+        'source_company': source_company,
+    'financier_name': financier_name,
     }
 
 
 
-def generate_payment_link(app_key, mobile, amount):
-    config = get_payment_config(app_key)
-    details = get_payment_details(app_key, mobile)
+def generate_payment_link(app_key, mobile, amount, details=None):
+
+    # Reuse already fetched details to avoid another API lookup
+    if details is None:
+        details = get_payment_details(app_key, mobile)
+
     finance_id = details['finance_id']
 
+    # API URL and API key remain based on the current app
+    config = get_payment_config(app_key)
     qr_api = config['qr_api']
+
     url = qr_api['base_url'] + qr_api['endpoint']
+
     headers = {
         "x-api-key": qr_api['api_key'],
         "Content-Type": "application/json"
     }
+
+    # Financier must come from the actual loan source
+    financier_name = details['financier_name']
+
     payload = {
         "finance_id": finance_id,
         "amount": float(amount),
-        "financier_name": qr_api.get('financier_name', 'padmasai')   # ✅ dynamic
+        "financier_name": financier_name
     }
 
-    # 🔍 LOG THE REQUEST
-    # logger.info(f"🔗 Payment Link Request URL: {url}")
-    # logger.info(f"📦 Payment Link Payload: {payload}")
+    logger.info(
+        "Payment link source company: %s",
+        details.get('source_company')
+    )
+    logger.info("Payment link payload: %s", payload)
 
-    response = requests.post(url, json=payload, headers=headers, timeout=30)
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=30
+    )
+
+    logger.info("PAYMENT LINK STATUS: %s", response.status_code)
+    logger.info("PAYMENT LINK RESPONSE: %s", response.text)
+
     response.raise_for_status()
-    data = response.json()
 
-    # 🔍 LOG THE FULL RESPONSE
-    logger.info(f"✅ Payment Link Response: {json.dumps(data, indent=2)}")
+    data = response.json()
 
     payment_url = data.get('link')
     payment_token = data.get('token')
+
     if not payment_url or not payment_token:
         raise ValueError("Payment link or token not generated")
 

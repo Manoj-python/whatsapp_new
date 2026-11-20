@@ -1647,6 +1647,8 @@ def executive_visit_schedule_list(request):
     emi_bucket = request.GET.get("emi_bucket", "").strip()
     remove_zeros = request.GET.get("remove_zeros") == "1"
     remove_sez = request.GET.get("remove_sez") == "1"
+    # 15 Nov 2026 (Dilip): "expired case filter" = last due date before the month's last day (30 Nov 2026 in Nov).
+    expired_only = request.GET.get("expired") == "1"
     branch = request.GET.get("branch", "").strip()
     suitcase = request.GET.get("suitcase", "").strip()
 
@@ -1736,6 +1738,11 @@ def executive_visit_schedule_list(request):
         qs = qs.exclude(emi_due_2__in=["0", "0.0"])
     if remove_sez:
         qs = qs.exclude(emi_due_2__iexact="sez")
+    if expired_only:
+        import calendar, datetime as _dt
+        _t = _dt.date.today()
+        _cut = _t.replace(day=calendar.monthrange(_t.year, _t.month)[1]).isoformat()
+        qs = qs.filter(last_due_date__lt=_cut).exclude(last_due_date__isnull=True).exclude(last_due_date="")
 
     # ---- several values ticked (9 Nov 2026) ----
     _many = lambda k: _ML[k] if len(_ML[k]) > 1 else []
@@ -1996,10 +2003,12 @@ def executive_visit_schedule_list(request):
                 _body = _r.json()
                 all_calls = _body.get("feedback", {})
                 _portal_visits = _body.get("visits", {})
+                _by_emp = _body.get("visits_by_emp")  # 17 Nov 2026: per person - None = older SMSquare, per loan
                 # 9 Nov 2026: a pending schedule closes as Visited once the executive has been there
                 for _ln, _v in all_visits.items():
-                    _seen = _portal_visits.get((_ln or "").strip().upper())
-                    if _v.visit_status in (None, "") and _seen and str(_v.visit_schedule_date) <= _seen:
+                    _seen = (_by_emp.get((_ln or "").strip().upper(), {}).get(str(_v.empid or "").strip())
+                             if _by_emp is not None else _portal_visits.get((_ln or "").strip().upper()))
+                    if _v.visit_status in (None, "") and _seen and min(str(_v.visit_schedule_date), str(timezone.localtime(_v.created_at).date() if _v.created_at else _v.visit_schedule_date)) <= _seen:  # 17 Nov: early visit counts
                         _v.visit_status = "visited"
                         _v.responded_at = timezone.now()
                         _v.save(update_fields=["visit_status", "responded_at"])
@@ -2158,7 +2167,7 @@ def executive_visit_schedule_list(request):
         "division": division, "division_list": division_list, "loanno": loanno, "empid": empid,
         "from_date": from_date, "to_date": to_date, "role": role,
         "search_empid": search_empid, "loan_status": loan_status_filter,
-        "remove_zeros": remove_zeros, "remove_sez": remove_sez,
+        "remove_zeros": remove_zeros, "remove_sez": remove_sez, "expired_only": expired_only,
         "branch": branch, "centre_name": centre_name, "emi_bucket": emi_bucket,
         "visit_filter": visit_filter, "selected_blc_case": blc_case,"suitcase":suitcase,
 
@@ -2296,6 +2305,15 @@ def _evs_next(request):
     return nxt if nxt.startswith("/financehub/") else "executive_visit_schedule_list"
 
 
+def _evs_too_far(when, days=10):
+    """17 Nov 2026: a visit is planned at most 10 days ahead (Dilip; same rule in the SMSquare app and the sheet)."""
+    import datetime as _d
+    try:
+        return _d.date.fromisoformat(str(when)[:10]) > _d.date.today() + _d.timedelta(days=days)
+    except ValueError:
+        return False
+
+
 @financehub_required
 def executive_visit_schedule_create(request):
     """9 Nov 2026: schedule one loan from the Executive Visit Schedule (before, only by Excel upload)."""
@@ -2308,6 +2326,17 @@ def executive_visit_schedule_create(request):
             messages.error(request, "Loan number, employee ID and visit date are all needed.")
         elif not Lcc.objects.filter(loan_number=loan).exists():
             messages.error(request, "Loan %s is not in the loan list." % loan)
+        elif _evs_too_far(when):
+            msg = "Visit date %s is more than 10 days ahead - pick a nearer day." % when
+            if _evs_ajax(request):
+                return JsonResponse({"ok": False, "error": msg}, status=400)
+            messages.error(request, msg)
+        elif ExecutiveVisitScheduling.objects.filter(empid=empid, visit_schedule_date=when).exclude(
+                visit_status="not_visited").exclude(loanno=loan).count() >= 12:  # 17 Nov 2026: 12 a day at most
+            msg = "Employee %s already has 12 visits on %s - pick another day." % (empid, when)
+            if _evs_ajax(request):
+                return JsonResponse({"ok": False, "error": msg}, status=400)
+            messages.error(request, msg)
         else:
             obj = ExecutiveVisitScheduling.objects.create(loanno=loan, empid=empid, visit_schedule_date=when)
             if _evs_ajax(request):

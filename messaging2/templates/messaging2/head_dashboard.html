@@ -2,104 +2,122 @@
 {% block title %}Head Dashboard - ESC4{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- App Switcher -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="btn-group">
-                {% for key, cfg in app_list %}
-                <a href="?app={{ key }}" class="btn btn-sm {% if current_app == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                    {{ cfg.name }}
-                </a>
-                {% endfor %}
-            </div>
+<style>
+/* MANAGER PAGE IN THE ADMIN LOOK (Dilip, 14 Nov 2026: "redesign managers login - similar to admin"; ESC2 page same, 14 Nov) */
+:root { --primary: #4361ee; --secondary: #4cc9f0; --dark: #1a1a2e; }
+.mgr { background: #f4f6fb; padding: 18px; border-radius: 16px; }
+.mgr .app-btn { padding: 6px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; border: 1px solid #ddd;
+  background: #fff; color: var(--dark); text-decoration: none; display: inline-block; margin-right: 6px; }
+.mgr .app-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr .stat-card { background: #fff; border-radius: 20px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  position: relative; overflow: hidden; height: 100%; }
+.mgr .stat-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--bar, linear-gradient(90deg, var(--primary), var(--secondary))); }
+.mgr .stat-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px; background: rgba(67,97,238,.1); }
+.mgr .stat-icon i { font-size: 22px; color: var(--ic, var(--primary)); }
+.mgr .stat-number { font-size: 32px; font-weight: 800; color: var(--dark); line-height: 1; }
+.mgr .stat-label { color: #6c757d; font-size: 13px; margin-top: 8px; }
+.mgr .section-card, .mgr .tab-content .card, .mgr > .row .card { background: #fff; border: 0; border-radius: 20px; padding: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05); margin-bottom: 22px; }
+.mgr .section-card { padding: 22px; }
+.mgr .section-title { font-size: 17px; font-weight: 700; color: var(--dark); margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 2px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mgr .card-header { background: #fff !important; color: var(--dark) !important; font-weight: 700; border-bottom: 2px solid #e9ecef; border-radius: 20px 20px 0 0 !important; }
+.mgr .filter-card { background: #fff; border-radius: 15px; padding: 14px; margin-bottom: 12px; cursor: pointer; border: 1px solid #e9ecef;
+  transition: all .2s; display: block; color: inherit; text-decoration: none; }
+.mgr .filter-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,.1); }
+.mgr .filter-card.active, .mgr .dept-card.bg-success { border-left: 4px solid var(--primary); background: #eef1ff !important; }
+.mgr .filter-card h4 { margin: 0; font-size: 24px; font-weight: 700; color: var(--dark); }
+.mgr .filter-card p { margin: 0; color: #6c757d; font-size: 12px; }
+.mgr .dept-card.bg-secondary { background: #fff !important; }
+.mgr .nav-tabs { border: 0; gap: 8px; }
+.mgr .nav-tabs .nav-link { border: 1px solid #e0e3eb; border-radius: 30px; background: #fff; color: var(--dark); font-weight: 600; padding: 7px 18px; }
+.mgr .nav-tabs .nav-link.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+/* ESC2 PAGE (15 Nov 2026): chips, age badges, actions always in view */
+.mgr .chip { padding: 5px 14px; border-radius: 30px; border: 1px solid #dfe3ee; background: #fff; color: #1a1a2e;
+  font-size: 13px; font-weight: 600; text-decoration: none; }
+.mgr .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr .age { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 700; background: #e8f5e9; color: #2e7d32; }
+.mgr .age.mid { background: #fff3e0; color: #e65100; }
+.mgr .age.old { background: #ffebee; color: #c62828; }
+#pendingTable th:last-child, #pendingTable td:last-child { position: sticky; right: 0; background: #fff; z-index: 2;
+  white-space: nowrap; box-shadow: -6px 0 8px -6px rgba(0,0,0,.25); }
+#pendingTable thead th:last-child { background: #f8f9fa; }
+.mgr table thead th { background: #f8f9fa; font-weight: 600; color: var(--dark); border-bottom: 2px solid #e9ecef; }
+/* LAYOUT (15 Nov 2026): slim top row, one filter row, chip rows - cases start high */
+.mgr .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.mgr .topbar .app-btn { margin-right: 4px; }
+.mgr .counters { display: flex; gap: 8px; flex-wrap: wrap; }
+.mgr .ctr { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e6eaf2; border-radius: 12px; padding: 6px 14px; }
+.mgr .ctr b { font-size: 18px; color: #1a1a2e; }
+.mgr .ctr span { font-size: 12px; color: #6c757d; }
+.mgr .c-pend i { color: #ff9800; } .mgr .c-res i { color: #4caf50; } .mgr .c-esc i { color: #2196f3; }
+.mgr .filterbar { display: flex; flex-wrap: wrap; gap: 8px; background: #fff; border: 1px solid #e6eaf2; border-radius: 14px; padding: 10px; margin-bottom: 10px; }
+.mgr .filterbar .form-select { flex: 1 1 220px; max-width: 360px; }
+.mgr .chiprow { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; padding: 2px 0 8px; margin-bottom: 6px; align-items: center; }
+.mgr .chiprow .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8a94a6; margin-right: 4px; }
+.mgr .cchip { display: inline-flex; gap: 6px; align-items: center; padding: 5px 12px; border-radius: 30px; background: #fff; border: 1px solid #e0e5ef;
+  color: #1a1a2e; font-size: 13px; text-decoration: none; }
+.mgr .cchip b { background: #eef1f8; border-radius: 20px; padding: 0 7px; font-size: 12px; }
+.mgr .cchip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mgr .cchip.on b { background: rgba(255,255,255,.25); color: #fff; }
+.mgr .tab-content { margin-top: 10px !important; }
+.mgr .tab-content .card-body { padding: 8px 12px; }
+/* ROWS (15 Nov 2026): one-line rows, thin chip scroll, tighter table */
+.mgr .chiprow { scrollbar-width: thin; }
+.mgr .chiprow::-webkit-scrollbar { height: 4px; }
+#pendingTable td, #pendingTable th { padding: 8px 10px; white-space: nowrap; }
+#pendingTable td:nth-child(3) { white-space: normal; min-width: 140px; }
+#pendingTable .badge { font-size: 11px; }
+.mgr .tab-content .card-header { padding: 8px 14px; }
+.mgr .dept-card.cchip { cursor: pointer; }
+.mgr .dept-card.cchip.bg-success { background: var(--primary) !important; border-color: var(--primary); color: #fff; }
+.mgr .dept-card.cchip.bg-success b { background: rgba(255,255,255,.25); color: #fff; }
+.mgr .dept-card.cchip.bg-secondary, .mgr .dept-card.cchip.bg-primary { background: #fff !important; }
+#casesTable td, #casesTable th { padding: 8px 10px; white-space: nowrap; }
+#casesTable th:last-child, #casesTable td:last-child { position: sticky; right: 0; background: #fff; z-index: 2; box-shadow: -6px 0 8px -6px rgba(0,0,0,.25); }
+</style>
+
+<div class="container-fluid mgr">
+    <!-- TOP ROW: app switch + counters (15 Nov 2026, same layout as ESC2) -->
+    <div class="topbar">
+        <div class="apps">
+            {% for key, cfg in app_list %}
+            <a href="?app={{ key }}" class="app-btn {% if current_app == key %}active{% endif %}">{{ cfg.name }}</a>
+            {% endfor %}
+        </div>
+        <div class="counters">
+            <div class="ctr c-pend"><i class="fas fa-hourglass-half"></i><b>{{ stats.pending }}</b><span>Pending ESC4</span></div>
+            <div class="ctr c-res"><i class="fas fa-check-circle"></i><b>{{ stats.resolved }}</b><span>Resolved at ESC4</span></div>
+            <div class="ctr c-esc"><i class="fas fa-level-up-alt"></i><b>{{ stats.escalated_to_admin }}</b><span>To admin</span></div>
         </div>
     </div>
 
-    <!-- Global Stats Cards -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card text-white bg-warning">
-                <div class="card-body">
-                    <h6>Pending Cases (ESC4)</h6>
-                    <h2>{{ stats.pending }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white bg-success">
-                <div class="card-body">
-                    <h6>Resolved at ESC4</h6>
-                    <h2>{{ stats.resolved }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-white bg-info">
-                <div class="card-body">
-                    <h6>Escalated to Admin</h6>
-                    <h2>{{ stats.escalated_to_admin }}</h2>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- ONE FILTER ROW -->
+    <form method="get" class="filterbar">
+        <input type="hidden" name="app" value="{{ current_app }}">
+        <select name="category" id="categoryFilter" class="form-select">
+            <option value="">All categories</option>
+            {% for cat in all_categories %}
+            <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>{{ cat.name }} ({{ cat.group.name }})</option>
+            {% endfor %}
+        </select>
+        <select name="subgroup" id="subgroupFilter" class="form-select">
+            <option value="">All subgroups</option>
+            {% for sg in all_subgroups %}
+            <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>{{ sg.name }} ({{ sg.group.name }})</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Apply</button>
+        <a href="?app={{ current_app }}" class="btn btn-outline-secondary">Clear</a>
+    </form>
 
-    <!-- ===== FILTER BAR ===== -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <form method="get" class="row g-3">
-                <input type="hidden" name="app" value="{{ current_app }}">
-                <div class="col-md-3">
-                    <label class="form-label">Category</label>
-                    <select name="category" class="form-select">
-                        <option value="">All Categories</option>
-                        {% for cat in all_categories %}
-                            <option value="{{ cat.id }}" {% if selected_category|add:"0" == cat.id %}selected{% endif %}>
-                                {{ cat.name }} ({{ cat.group.name }})
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Subgroup</label>
-                    <select name="subgroup" class="form-select">
-                        <option value="">All Subgroups</option>
-                        {% for sg in all_subgroups %}
-                            <option value="{{ sg.id }}" {% if selected_subgroup|add:"0" == sg.id %}selected{% endif %}>
-                                {{ sg.name }} ({{ sg.group.name }})
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary">Apply Filters</button>
-                    <a href="?app={{ current_app }}" class="btn btn-outline-secondary ms-2">Clear</a>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Department-wise Cards (Clickable) -->
-    <div class="row mb-4" id="deptCards">
-        <div class="col-md-3 mb-2">
-            <div class="card text-white bg-primary dept-card" data-dept="all" style="cursor: pointer;">
-                <div class="card-body text-center">
-                    <h5>All Departments</h5>
-                    <h3>{{ stats.pending }}</h3>
-                    <small>Total Pending</small>
-                </div>
-            </div>
-        </div>
+    <!-- DEPARTMENT CHIPS (click filters the list below) -->
+    <div class="chiprow" id="deptCards">
+        <span class="lbl">Departments</span>
+        <span class="cchip dept-card bg-success" data-dept="all">All <b>{{ stats.pending }}</b></span>
         {% for dept in dept_stats %}
-        <div class="col-md-3 mb-2">
-            <div class="card text-white bg-secondary dept-card" data-dept="{{ dept.name }}" style="cursor: pointer;">
-                <div class="card-body text-center">
-                    <h5>{{ dept.name }}</h5>
-                    <h3>{{ dept.pending }}</h3>
-                    <small>Pending | Today: {{ dept.today }}</small>
-                </div>
-            </div>
-        </div>
+        <span class="cchip dept-card bg-secondary" data-dept="{{ dept.name }}">{{ dept.name }} <b>{{ dept.pending }}</b></span>
         {% endfor %}
     </div>
 
@@ -155,6 +173,7 @@
                     </tbody>
                 </table>
             </div>
+{% include "messaging2/_pager.html" with pg=cases_pager %}
         </div>
     </div>
 </div>

@@ -33,7 +33,7 @@ def needs_api_check(template_id):
 
 # SMSquare LCC API Configuration
 SMSQUARE_LCC_URL = "https://prod-api-smsquare.allcloud.app/api/voicecall/GetLccDetailsByAgreementNo"
-SMSQUARE_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:kaPZTxSi/C6WHQnJI6gBiZRu+5W0Fg1y8Eok2Edo2Z4=:u9UeaPEdWtmmFSFMAYWAHFl88p5x9gkI:27488300:a7aae9e7-5e50-4f7c-87db-032e1d0b4450"
+SMSQUARE_LCC_AUTH = "amx 4d53bce03ec34c0a911182d4c228ee6c:tgY188TP3tTdXiWIXKdzwsnJkP0PvrnYg98Ka2Ti4S4=:rx5hlqU3hK9fcYNNCjAGzj0vJiGWOlSz:27938838:bb75ccd5-06e6-46fc-6a09-31f612d8004e"
 # ============================================================
 # 🔥 UPDATED: Call Loan Details API (For Bucket Templates)
 # ============================================================
@@ -1788,7 +1788,7 @@ PTP_CONFIG = {
     'psf': {
         'app_name': 'Padma Sai Holdings Private Limited',
         'smsquare': {
-            'auth_token':"amx 4d53bce03ec34c0a911182d4c228ee6c:CYDfFMxLo52bbKrD68MknG8zyFNozrYVBIGi6Htle00=:7db2c6c008f647178e60039de9e52835:13689192:e52a26ed-9f27-11e8-8cbc-025baaa4258e",
+            'auth_token':"amx 4d53bce03ec34c0a911182d4c228ee6c:piL4Fa50ZBj0o37+1CjPE1EWZbAQbLFvlK4l0EWThd0=:dAuIBs7yrGb0Kvr7u6RNbs8KTxRODiVD:27937025:3f880353-a276-4c87-2117-e5f4086250ee",
             'base_url': "https://prod-apiv2-padmasai.allcloud.app/api",
             'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
             'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
@@ -1805,10 +1805,19 @@ PTP_CONFIG = {
         },
 
     },
+     'smf': {
+    'app_name': 'SMF',
+    'smsquare': {
+        'auth_token': 'amx 4d53bce03ec34c0a911182d4c228ee6c:wAB55NrYaRGMFnmmnhOWUq5olNjxXV0TM2x/4BujgsU=:c7b88c86efeb466887a1b25ac6a2fb70:13688698:204d6163-1bcc-4614-aabb-06d03060739c',
+        'base_url': 'https://prod-apiv2-padmasai.allcloud.app/api',
+        'get_loan_by_mobile': '/loan/GetLoanByMobileNumber',
+        'get_repayment': '/Repayment/GetRepaymentForLoanByLoanId',
+    },
+},
     'sms': {
         'app_name': 'SM SQUARE CREDIT SERVICES PRIVATE LIMITED',
         'smsquare': {
-            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:C1PYBd0XQEW0/sv664yh6+DrKLBtpz9hnKZzUyR6kBI=:8a960f62bdf649778f474a5071a03791:13684346:38cbfcbd-c82e-48fe-ac81-090295f8bdeb",
+            'auth_token': "amx 4d53bce03ec34c0a911182d4c228ee6c:Zm6vW4IXMNI1ZmDcar7HtRZlEdptjO7NToplTG6ph1o=:gu4vs5fuS0Y0tRF0ls7bfDDp6CzLw5da:27936952:bb75ccd5-06e6-46fc-6a09-31f612d8004e",
             'base_url': "https://prod-apiv2-smsquare.allcloud.app/api",
             'get_loan_by_mobile': "/loan/GetLoanByMobileNumber",
             'get_repayment': "/Repayment/GetRepaymentForLoanByLoanId",
@@ -1854,63 +1863,255 @@ def get_ptp_config(app_key):
     return config
 
 
-def call_smsquare_api(app_key, endpoint, method='GET', params=None, payload=None):
+def is_loan_not_found(data):
+
+    if data is None:
+        return True
+
+    if isinstance(data, list):
+        return len(data) == 0
+
+    if isinstance(data, str):
+        return 'not found' in data.lower()
+
+    if isinstance(data, dict):
+
+        for key in ('message', 'Message', 'error', 'Error'):
+            value = data.get(key)
+
+            if isinstance(value, str):
+                if 'not found' in value.lower():
+                    return True
+
+        return False
+
+    return False
+
+
+def call_smsquare_api(
+    app_key,
+    endpoint,
+    method='GET',
+    params=None,
+    payload=None
+):
+
     config = get_ptp_config(app_key)
     sms_config = config['smsquare']
+
     url = sms_config['base_url'] + endpoint
+
     headers = {
         "Authorization": sms_config['auth_token'],
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
+
     try:
+
         if method.upper() == 'GET':
-            response = requests.get(url, params=params, headers=headers, timeout=10)
+
+            response = requests.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=15
+            )
+
         elif method.upper() == 'POST':
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
+
+            response = requests.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=15
+            )
+
         else:
             raise ValueError("Unsupported method")
+
+        try:
+            data = response.json()
+        except ValueError:
+            data = response.text
+
+        # Only explicit 404 Not Found is treated as fallback
+        if (
+            response.status_code == 404
+            and is_loan_not_found(data)
+        ):
+            return data
+
         response.raise_for_status()
-        return response.json()
+
+        return data
+
     except requests.exceptions.RequestException as e:
-        logger.error(f"SMSquare API error for {app_key}: {e}")
+
+        logger.error(
+            "SMSquare API error for %s: %s",
+            app_key,
+            e
+        )
+
         raise
 
+# --------------------------------------------------
+# COMPANY SEARCH ORDER
+# --------------------------------------------------
+
+PTP_COMPANY_ORDER = {
+    'psf': ['psf', 'smf', 'sms'],
+    'sms': ['sms', 'psf', 'smf'],
+}
+
+
+# --------------------------------------------------
+# GET DETAILS WITH COMPANY FALLBACK
+# --------------------------------------------------
+
 def get_details(app_key, mobile):
-    config = get_ptp_config(app_key)
-    sms_config = config['smsquare']
 
-    params = {"ContactNumber": mobile}
-    loans_data = call_smsquare_api(app_key, sms_config['get_loan_by_mobile'], method='GET', params=params)
-    if not loans_data:
-        raise ValueError("No loans found for this mobile")
+    companies = PTP_COMPANY_ORDER.get(app_key)
 
-    first_loan = loans_data[0]
-    finance_id = first_loan.get('FinanceId')
-    agreement_no = first_loan.get('AgreementNo')
-    customer_name = first_loan.get('BorrowerName', 'Customer')
-    if not finance_id:
-        raise ValueError("FinanceId not found")
+    if not companies:
+        raise ValueError(
+            f"Invalid app key: {app_key}"
+        )
 
-    repayment_params = {"FinanceId": finance_id}
-    repayment_data = call_smsquare_api(app_key, sms_config['get_repayment'], method='GET', params=repayment_params)
+    for company in companies:
 
-    balance_amount = float(repayment_data.get('EMIdues', 0.0) or 0.0)
-    lpi_due = float(repayment_data.get('LPIDue', 0.0) or 0.0)
-    vas_due = float(repayment_data.get('VasDue', 0.0) or 0.0)
-    collection_charges = float(repayment_data.get('CollectionCharges', 0.0) or 0.0)
+        logger.info(
+            "PTP checking mobile %s in %s company",
+            mobile,
+            company
+        )
 
-    return {
-        'customer_name': customer_name,
-        'loan_number': agreement_no,
-        'vehicle_no': first_loan.get('VehicleNo', ''),
-        'due_amount': balance_amount,
-        'finance_id': finance_id,
-        'lpi_due': lpi_due,
-        'vas_due': vas_due,
-        'collection_charges': collection_charges,
-        # No due_date – it comes from UI
-    }
+        config = get_ptp_config(company)
+        sms_config = config['smsquare']
+
+        # ------------------------------------------
+        # 1. GET LOAN BY MOBILE
+        # ------------------------------------------
+
+        loans_data = call_smsquare_api(
+            company,
+            sms_config['get_loan_by_mobile'],
+            method='GET',
+            params={
+                "ContactNumber": mobile
+            }
+        )
+
+        # ------------------------------------------
+        # 2. CHECK LOAN FOUND OR NOT
+        # ------------------------------------------
+
+        if is_loan_not_found(loans_data):
+
+            logger.info(
+                "%s: Loan not found. Checking next company",
+                company
+            )
+
+            continue
+
+        if not isinstance(loans_data, list):
+
+            raise ValueError(
+                f"Unexpected loan API response from {company}"
+            )
+
+        if not loans_data:
+
+            continue
+
+        # ------------------------------------------
+        # 3. GET LOAN INFORMATION
+        # ------------------------------------------
+
+        first_loan = loans_data[0]
+
+        finance_id = first_loan.get('FinanceId')
+        agreement_no = first_loan.get('AgreementNo')
+
+        if not finance_id:
+
+            raise ValueError(
+                f"FinanceId not found in {company} response"
+            )
+
+        customer_name = first_loan.get(
+            'BorrowerName',
+            'Customer'
+        )
+
+        # ------------------------------------------
+        # 4. GET REPAYMENT FROM SAME COMPANY
+        # ------------------------------------------
+
+        repayment_data = call_smsquare_api(
+            company,
+            sms_config['get_repayment'],
+            method='GET',
+            params={
+                "FinanceId": finance_id
+            }
+        )
+
+        if not isinstance(repayment_data, dict):
+
+            raise ValueError(
+                f"Invalid repayment response from {company}"
+            )
+
+        balance_amount = float(
+            repayment_data.get('EMIdues', 0) or 0
+        )
+
+        lpi_due = float(
+            repayment_data.get('LPIDue', 0) or 0
+        )
+
+        vas_due = float(
+            repayment_data.get('VasDue', 0) or 0
+        )
+
+        collection_charges = float(
+            repayment_data.get('CollectionCharges', 0) or 0
+        )
+
+        logger.info(
+            "PTP loan found successfully in %s",
+            company
+        )
+
+        # ------------------------------------------
+        # 5. RETURN LOAN DETAILS
+        # ------------------------------------------
+
+        return {
+            'customer_name': customer_name,
+            'loan_number': agreement_no,
+            'vehicle_no': first_loan.get('VehicleNo', ''),
+            'due_amount': balance_amount,
+            'finance_id': finance_id,
+            'lpi_due': lpi_due,
+            'vas_due': vas_due,
+            'collection_charges': collection_charges,
+
+            # Actual company where loan was found
+            'source_company': company,
+        }
+
+    # ----------------------------------------------
+    # 6. NOT FOUND IN ALL THREE COMPANIES
+    # ----------------------------------------------
+
+    raise ValueError(
+        f"Loan not found in PSF, SMF and SMS "
+        f"for mobile {mobile}"
+    )
 
 
 def send_whatsapp_ptp_template(app_key, to, customer_name, amount, due_date, loan_number, lang='en'):

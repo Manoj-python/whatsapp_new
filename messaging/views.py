@@ -2221,8 +2221,11 @@ def statement_details(request):
 
         agreement_no = payment_details['loan_number']
         finance_id = payment_details.get('finance_id', 0)
-
-        loan = fetch_loan_details(app_key, agreement_no)
+        source_company = payment_details.get('source_company', app_key)
+        loan = fetch_loan_details(
+            source_company,
+            agreement_no
+        )
         if not loan:
             return JsonResponse({'success': False, 'error': 'Loan data not found'}, status=404)
 
